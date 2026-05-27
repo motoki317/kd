@@ -25,6 +25,23 @@
   color: var(--text);
 }
 
+/* Dark mode follows the OS — no toggle. Only the neutrals flip; health hues stay vivid (and node
+   tints adapt automatically since they color-mix with --surface). The log pane is dark in both. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --surface: #171a21;
+    --surface-2: #1d212a;
+    --border: #2a2f3a;
+    --border-strong: #3d4452;
+    --text: #e4e8ef;
+    --text-dim: #98a2b3;
+    --accent: #4d8bf0;
+    --edge-color: #3f4654;
+    color-scheme: dark;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
