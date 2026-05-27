@@ -19,17 +19,30 @@ const VIEWS: { id: View; label: string }[] = [
 
 export default function App() {
   const [namespaces, { refetch: refetchNamespaces }] = createResource(fetchNamespaces)
-  const [namespace, setNamespace] = createSignal<string | null>(null)
-  const [view, setView] = createSignal<View>('ownership')
+  // Seed namespace/view from the URL so a link or reload restores the same place.
+  const params = new URLSearchParams(location.search)
+  const urlView = params.get('view') as View
+  const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
+  const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
   const [connected, setConnected] = createSignal(false)
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
 
-  // Default to the first namespace once the list loads.
+  // Pick a namespace once the list loads: keep a valid URL-seeded one, else fall back to the first
+  // (so a stale/forbidden ?ns= doesn't strand the user on an empty graph).
   createEffect(() => {
     const list = namespaces()
-    if (list && list.length > 0 && namespace() === null) setNamespace(list[0].name)
+    if (!list || list.length === 0) return
+    if (!list.some((n) => n.name === namespace())) setNamespace(list[0].name)
+  })
+
+  // Mirror namespace/view back into the URL (replace, not push, so Back isn't spammed).
+  createEffect(() => {
+    const p = new URLSearchParams()
+    if (namespace()) p.set('ns', namespace()!)
+    p.set('view', view())
+    history.replaceState(null, '', `${location.pathname}?${p}`)
   })
 
   // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
