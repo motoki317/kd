@@ -31,6 +31,8 @@ export default function App() {
   const [connected, setConnected] = createSignal(false)
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
+  // Topology search lives here (not in Topology) so it resets on namespace/view change.
+  const [search, setSearch] = createSignal('')
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
 
@@ -92,6 +94,8 @@ export default function App() {
     const v = view()
     if (!ns) return
     setSelectedId(null)
+    setSearch('') // a stale search/health filter would fade the whole new graph
+    setHealthFilter(null)
     setGraph(reconcile(emptyState()))
     setConnected(false)
     const close = streamGraph(ns, v, {
@@ -173,6 +177,8 @@ export default function App() {
             selectedId={selectedId()}
             healthFilter={healthFilter()}
             connected={connected()}
+            search={search()}
+            onSearch={setSearch}
             onSelect={setSelectedId}
           />
           <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />

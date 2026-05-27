@@ -10,6 +10,8 @@ interface Props {
   selectedId: string | null
   healthFilter?: import('../types').Health | null
   connected: boolean
+  search: string
+  onSearch: (q: string) => void
   onSelect: (id: string) => void
 }
 
@@ -62,8 +64,10 @@ export default function Topology(props: Props) {
   })
 
   // Search dims everything whose name/kind doesn't match the query, so a resource is findable in a
-  // dense namespace without losing its place in the tree. Null when the box is empty.
-  const [query, setQuery] = createSignal('')
+  // dense namespace without losing its place in the tree. Null when the box is empty. The query is
+  // owned by the parent so it resets on namespace/view change.
+  const query = () => props.search
+  const setQuery = (q: string) => props.onSearch(q)
   const matches = createMemo(() => {
     const q = query().trim().toLowerCase()
     if (!q) return null
