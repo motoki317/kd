@@ -53,9 +53,16 @@ export default function DetailDrawer(props: Props) {
                 {node().kind}
               </div>
               <div class="drawer-name">{node().name}</div>
-              <Show when={node().namespace}>
-                <div class="drawer-ns">{node().namespace}</div>
-              </Show>
+              <div class="drawer-meta">
+                <Show when={node().namespace}>
+                  <span>{node().namespace}</span>
+                </Show>
+                <Show when={node().createdAt}>
+                  <span class="drawer-age" title={node().createdAt}>
+                    {relativeAge(node().createdAt!)} old
+                  </span>
+                </Show>
+              </div>
             </div>
             <button class="drawer-close" onClick={props.onClose} title="Close">
               ×

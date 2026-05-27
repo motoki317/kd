@@ -3,6 +3,7 @@ package graph
 import (
 	"cmp"
 	"slices"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -33,6 +34,7 @@ func Build(objs []runtime.Object) *Graph {
 			Labels:     m.GetLabels(),
 			Health:     health(obj),
 			Status:     statusSummary(obj),
+			CreatedAt:  creationTime(m),
 		}
 		for _, or := range m.GetOwnerReferences() {
 			node.OwnerUIDs = append(node.OwnerUIDs, string(or.UID))
@@ -68,6 +70,16 @@ func isHistorical(obj runtime.Object) bool {
 func KindOf(obj runtime.Object) string {
 	kind, _, _, _ := describe(obj)
 	return kind
+}
+
+// creationTime renders an object's creation timestamp as RFC3339, or "" when unset (e.g. fixtures),
+// so the client can show a relative age.
+func creationTime(m metav1.Object) string {
+	t := m.GetCreationTimestamp()
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // nodeID is the object UID, falling back to a stable synthetic id when UID is absent.
