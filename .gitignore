@@ -6,7 +6,7 @@
 coverage.txt
 
 # Node / client build
-web/node_modules/
+node_modules/
 web/dist/
 .pnpm-store/
 
