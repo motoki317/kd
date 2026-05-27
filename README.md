@@ -19,14 +19,19 @@ state at a glance and app developers can jump straight to pod status and logs.
   ConfigMaps/Secrets/PVCs), and RBAC — laid out per connected component and packed to the viewport
   (no horizontal smear in dense namespaces).
 - Status by exception: healthy resources stay calm; Degraded/Progressing/Suspended get a colored
-  border. Select a node to fade everything unrelated; click a legend health to spotlight it.
+  border. Failures that bare counts hide are surfaced too — a Deployment past its rollout deadline, a
+  Service whose selector matches no ready pods. Select a node to fade everything unrelated; click a
+  legend health to spotlight it.
 - Search resources by name, kind, label, or image; the sidebar sorts troubled namespaces first, each
-  with a health dot.
+  with a health dot and a non-ready count (live for the namespace you're viewing).
 
 **Drill into a resource**
 - Detail drawer with Logs / Events / Manifest tabs. Owner chips walk up the tree (Pod → ReplicaSet →
-  Deployment); age, restart count, host, container images, labels, and per-container status inline;
-  one-click copy of the name.
+  Deployment); age, restart count, host, node capacity, container images, labels, and per-container
+  status inline; one-click copy of the name.
+- Each kind surfaces its essential spec without opening the manifest: a Service's cluster IP, ports,
+  and endpoint readiness; an Ingress's host/path → backend routes; a Role's granted resources/verbs;
+  a RoleBinding's role and subjects (including the Users/Groups that aren't graph nodes).
 - Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs,
   a line filter, an optional timestamps toggle, and aggregated logs across all of a controller's pods
   (including pods created mid-rollout). Manifest as YAML (default) or JSON, copyable.
