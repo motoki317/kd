@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import type { NamespaceInfo } from '../api'
-import { healthColor } from '../health'
+import { healthColor, healthSeverity } from '../health'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -16,14 +16,24 @@ interface Props {
 // spots trouble across the cluster without opening each one.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
+  // Troubled namespaces sort to the top (operators look there first); ties break alphabetically.
   const shown = createMemo(() => {
     const f = filter().toLowerCase()
-    return props.namespaces.filter((n) => n.name.toLowerCase().includes(f))
+    return props.namespaces
+      .filter((n) => n.name.toLowerCase().includes(f))
+      .slice()
+      .sort((a, b) => healthSeverity[b.health] - healthSeverity[a.health] || a.name.localeCompare(b.name))
   })
+  const troubled = createMemo(() => props.namespaces.filter((n) => n.health !== 'Healthy').length)
 
   return (
     <nav class="sidebar">
-      <div class="sidebar-title">Namespaces</div>
+      <div class="sidebar-title">
+        Namespaces
+        <Show when={troubled() > 0}>
+          <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled()}</span>
+        </Show>
+      </div>
       <input
         ref={props.filterRef}
         class="sidebar-filter"

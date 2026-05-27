@@ -5,6 +5,15 @@ import type { Health } from './types'
 
 export const HEALTH_ORDER: Health[] = ['Healthy', 'Progressing', 'Degraded', 'Suspended', 'Unknown']
 
+// Attention-worthiness (mirrors the server's graph.severity), for ordering troubled items first.
+export const healthSeverity: Record<Health, number> = {
+  Degraded: 4,
+  Progressing: 3,
+  Unknown: 2,
+  Suspended: 1,
+  Healthy: 0,
+}
+
 export function healthColor(h: Health): string {
   switch (h) {
     case 'Healthy':

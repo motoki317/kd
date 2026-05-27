@@ -177,10 +177,21 @@ body {
   overflow: hidden;
 }
 .sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
+}
+.ns-trouble {
+  background: var(--health-degraded);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
 }
 .sidebar-filter {
   border: 1px solid var(--border);
