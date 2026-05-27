@@ -69,6 +69,17 @@ func (g *Graph) DescendantPodNames(id string) []string {
 	return pods
 }
 
+// NodeID returns the id of the node with the given kind and name, or "" if none — a small helper for
+// API handlers resolving a {kind}/{name} request path to a graph node.
+func (g *Graph) NodeID(kind, name string) string {
+	for _, n := range g.Nodes {
+		if n.Kind == kind && n.Name == name {
+			return n.ID
+		}
+	}
+	return ""
+}
+
 // DescendantIDs returns the given node's id plus every node reachable from it through
 // ownerReference edges (the whole subtree). Used to aggregate a controller's events across its
 // ReplicaSets and Pods, where the actionable events (scheduling, image pull) actually land.

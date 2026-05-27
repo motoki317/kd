@@ -32,13 +32,7 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	snapshot := a.store.SnapshotNamespace(ns)
 	g := graph.Build(snapshot)
-	var rootID string
-	for _, n := range g.Nodes {
-		if n.Kind == kind && n.Name == name {
-			rootID = n.ID
-			break
-		}
-	}
+	rootID := g.NodeID(kind, name)
 	if rootID == "" {
 		http.Error(w, "not found", http.StatusNotFound)
 		return

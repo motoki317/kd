@@ -164,13 +164,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 // so historical/completed pods (which Build drops) are excluded from the aggregate.
 func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 	g := graph.Build(objs)
-	var rootID string
-	for _, n := range g.Nodes {
-		if n.Kind == kind && n.Name == name {
-			rootID = n.ID
-			break
-		}
-	}
+	rootID := g.NodeID(kind, name)
 	if rootID == "" {
 		return nil
 	}
