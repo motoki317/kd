@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
+import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { middleTruncate, relativeName } from '../names'
 import type { EdgeType, KEdge, KNode } from '../types'
@@ -47,7 +48,6 @@ export default function Topology(props: Props) {
   // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
   // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null
   // when nothing is selected, so the whole graph renders at full strength.
-  const edgeKey = (e: { from: string; to: string; type: string }) => `${e.from}|${e.to}|${e.type}`
   const related = createMemo(() => {
     const id = props.selectedId
     if (!id) return null
@@ -87,15 +87,14 @@ export default function Topology(props: Props) {
     const r = related()
     return r ? !r.nodes.has(n.id) : false
   }
-  const edgeFaded = (e: { from: string; to: string; type: string }) => {
+  const edgeFaded = (e: KEdge) => {
     const m = matches()
     if (m) return !(m.has(e.from) && m.has(e.to))
     if (props.healthFilter) return true
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
-  const edgeAdjacent = (e: { from: string; to: string; type: string }) =>
-    !matches() && !props.healthFilter && (related()?.edges.has(edgeKey(e)) ?? false)
+  const edgeAdjacent = (e: KEdge) => !matches() && !props.healthFilter && (related()?.edges.has(edgeKey(e)) ?? false)
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
