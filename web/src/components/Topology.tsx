@@ -8,6 +8,7 @@ interface Props {
   nodes: KNode[]
   edges: KEdge[]
   selectedId: string | null
+  healthFilter?: import('../types').Health | null
   onSelect: (id: string) => void
 }
 
@@ -72,21 +73,24 @@ export default function Topology(props: Props) {
     return m
   })
 
-  // Search takes precedence over selection for the fade; only selection lights edges accent.
-  const nodeFaded = (id: string) => {
+  // Fade precedence: search query > legend health filter > selection neighbors; only a bare
+  // selection lights its edges accent.
+  const nodeFaded = (n: { id: string; health: string }) => {
     const m = matches()
-    if (m) return !m.has(id)
+    if (m) return !m.has(n.id)
+    if (props.healthFilter) return n.health !== props.healthFilter
     const r = related()
-    return r ? !r.nodes.has(id) : false
+    return r ? !r.nodes.has(n.id) : false
   }
   const edgeFaded = (e: { from: string; to: string; type: string }) => {
     const m = matches()
     if (m) return !(m.has(e.from) && m.has(e.to))
+    if (props.healthFilter) return true
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
   const edgeAdjacent = (e: { from: string; to: string; type: string }) =>
-    !matches() && (related()?.edges.has(edgeKey(e)) ?? false)
+    !matches() && !props.healthFilter && (related()?.edges.has(edgeKey(e)) ?? false)
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
@@ -248,7 +252,7 @@ export default function Topology(props: Props) {
                   class="node"
                   classList={{
                     selected: n.id === props.selectedId,
-                    faded: nodeFaded(n.id),
+                    faded: nodeFaded(n),
                     [`h-${n.health.toLowerCase()}`]: true,
                   }}
                   transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}

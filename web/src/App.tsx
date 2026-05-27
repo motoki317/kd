@@ -3,7 +3,7 @@ import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor } from './health'
-import type { KNode, View } from './types'
+import type { Health, KNode, View } from './types'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
@@ -26,6 +26,8 @@ export default function App() {
   const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
   const [connected, setConnected] = createSignal(false)
+  // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
+  const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
 
@@ -122,11 +124,16 @@ export default function App() {
         <div class="legend">
           <For each={shownHealth()}>
             {(h) => (
-              <span class="legend-item">
+              <button
+                class="legend-item"
+                classList={{ active: healthFilter() === h }}
+                onClick={() => setHealthFilter((cur) => (cur === h ? null : h))}
+                title={`Spotlight ${h} resources`}
+              >
                 <span class="dot" style={{ background: healthColor(h) }} />
                 {h}
                 <span class="legend-count">{counts()[h]}</span>
-              </span>
+              </button>
             )}
           </For>
         </div>
@@ -144,7 +151,7 @@ export default function App() {
           filterRef={(el) => (filterEl = el)}
         />
         <main class="main">
-          <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} onSelect={setSelectedId} />
+          <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} healthFilter={healthFilter()} onSelect={setSelectedId} />
           <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />
         </main>
       </div>

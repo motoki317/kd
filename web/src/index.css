@@ -113,6 +113,21 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.legend-item:hover {
+  background: var(--surface-2);
+}
+.legend-item.active {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
 }
 .legend-item.dim {
   opacity: 0.4;
