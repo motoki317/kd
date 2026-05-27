@@ -137,11 +137,18 @@ func TestStatusSummaryService(t *testing.T) {
 
 func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	three := int32(3)
+	suspended := true
 	job := &batchv1.Job{Spec: batchv1.JobSpec{Completions: &three}, Status: batchv1.JobStatus{Succeeded: 1}}
 	if got := statusSummary(job); got != "1/3" {
 		t.Errorf("statusSummary(Job) = %q, want 1/3", got)
 	}
-	suspended := true
+	suspendedJob := &batchv1.Job{Spec: batchv1.JobSpec{Suspend: &suspended, Completions: &three}}
+	if got := statusSummary(suspendedJob); got != "Suspended" {
+		t.Errorf("statusSummary(suspended Job) = %q, want Suspended", got)
+	}
+	if got := health(suspendedJob); got != HealthSuspended {
+		t.Errorf("health(suspended Job) = %q, want Suspended", got)
+	}
 	cj := &batchv1.CronJob{Spec: batchv1.CronJobSpec{Schedule: "*/5 * * * *", Suspend: &suspended}}
 	if got := statusSummary(cj); got != "Suspended" {
 		t.Errorf("statusSummary(suspended CronJob) = %q, want Suspended", got)
