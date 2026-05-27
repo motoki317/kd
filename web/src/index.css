@@ -504,6 +504,19 @@ body {
   font-weight: 700;
   margin-top: 2px;
   word-break: break-all;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+/* Keep the copy affordance quiet until the header is hovered, so the name stays the focus. */
+.drawer-name .copy-btn {
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex: none;
+}
+.drawer-header:hover .drawer-name .copy-btn,
+.drawer-name .copy-btn:focus-visible {
+  opacity: 1;
 }
 .drawer-ns {
   font-size: 12px;

@@ -52,6 +52,11 @@ describe('DetailDrawer', () => {
     expect(vals).toEqual(['shop', 'backend'])
   })
 
+  it('offers a copy-name button in the header', () => {
+    const { getByTitle } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(getByTitle('Copy name')).toBeTruthy()
+  })
+
   it('renders per-container status rows with names and states', () => {
     const pod: KNode = {
       ...configMap,

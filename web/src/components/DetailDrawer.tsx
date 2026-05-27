@@ -78,7 +78,10 @@ export default function DetailDrawer(props: Props) {
                 <span class="dot" style={{ background: healthColor(node().health) }} />
                 {node().kind}
               </div>
-              <div class="drawer-name">{node().name}</div>
+              <div class="drawer-name">
+                {node().name}
+                <CopyButton text={() => node().name} title="Copy name" />
+              </div>
               <div class="drawer-meta">
                 <Show when={node().namespace}>
                   <span>{node().namespace}</span>
