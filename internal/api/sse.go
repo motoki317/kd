@@ -107,8 +107,6 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pods := podsForResource(a.store.SnapshotNamespace(ns), kind, name)
-
 	container := r.URL.Query().Get("container")
 	tail := parseTail(r.URL.Query().Get("tailLines"))
 	// "previous" returns the logs of the prior, crashed container (kubectl --previous) — the place a
@@ -121,18 +119,27 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 	setSSEHeaders(w)
 	flusher.Flush() // commit 200 + headers even before the first line (or when there are no pods)
 
-	// Fan out: one goroutine per pod streams into a shared channel; this loop is the only writer
-	// to w. The channel closes once every pod stream ends (all pods gone, or a non-follow EOF).
+	// This loop is the only writer to w; pod streamers fan into the shared channel.
 	lines := make(chan logLine, 64)
-	var wg sync.WaitGroup
-	for _, pod := range pods {
-		wg.Add(1)
-		go func(pod *corev1.Pod) {
-			defer wg.Done()
-			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, previous, timestamps, tail, lines)
-		}(pod)
+	if follow {
+		// A supervisor keeps streamers running for the live descendant pod set, re-resolving so pods
+		// created mid-rollout join the stream. It never closes `lines`; the writer loop below ends
+		// only when the client disconnects (ctx done), so a momentary zero-pod gap mid-rollout no
+		// longer tears the stream down.
+		go a.superviseLogStreams(r.Context(), ns, kind, name, container, timestamps, tail, lines)
+	} else {
+		// One-shot: resolve the descendant pods once, dump each, and close when all are done.
+		pods := podsForResource(a.store.SnapshotNamespace(ns), kind, name)
+		var wg sync.WaitGroup
+		for _, pod := range pods {
+			wg.Add(1)
+			go func(pod *corev1.Pod) {
+				defer wg.Done()
+				streamPodLogs(r.Context(), a.store.Client(), pod, container, false, previous, timestamps, tail, lines)
+			}(pod)
+		}
+		go func() { wg.Wait(); close(lines) }()
 	}
-	go func() { wg.Wait(); close(lines) }()
 
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
@@ -142,11 +149,9 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case ll, ok := <-lines:
 			if !ok {
-				if follow {
-					return // live stream: all pods gone, let the client reconnect
-				}
-				// One-shot dump finished; hold the connection open (idle) so the browser's
-				// EventSource doesn't auto-reconnect and re-dump. Closing the request ends it.
+				// Only the one-shot path closes `lines` (follow's supervisor never does). The dump
+				// is finished; hold the connection open (idle) so the browser's EventSource doesn't
+				// auto-reconnect and re-dump. Closing the request ends it.
 				lines = nil
 				continue
 			}
@@ -160,6 +165,46 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
+		}
+	}
+}
+
+// superviseLogStreams keeps a follow stream's set of pod streamers in sync with the resource's live
+// descendant pods. It re-resolves on a short interval and starts a streamer for any pod not already
+// being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted StatefulSet
+// member) join the merged stream without the client reconnecting. Each streamer removes itself when
+// its pod's log ends. Runs until ctx is cancelled; never closes out.
+func (a *API) superviseLogStreams(ctx context.Context, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine) {
+	var mu sync.Mutex
+	streaming := make(map[string]bool) // pod names with a live streamer, so we never double-stream
+
+	resolve := func() {
+		for _, pod := range podsForResource(a.store.SnapshotNamespace(ns), kind, name) {
+			mu.Lock()
+			if streaming[pod.Name] {
+				mu.Unlock()
+				continue
+			}
+			streaming[pod.Name] = true
+			mu.Unlock()
+			go func(pod *corev1.Pod) {
+				streamPodLogs(ctx, a.store.Client(), pod, container, true, false, timestamps, tail, out)
+				mu.Lock()
+				delete(streaming, pod.Name)
+				mu.Unlock()
+			}(pod)
+		}
+	}
+
+	resolve() // attach immediately; don't wait a full interval for the first lines
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			resolve()
 		}
 	}
 }
