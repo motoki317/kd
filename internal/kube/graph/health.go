@@ -33,8 +33,25 @@ func health(obj runtime.Object) Health {
 		return HealthHealthy
 	case *corev1.Node:
 		return nodeHealth(o)
+	case *corev1.PersistentVolumeClaim:
+		return pvcHealth(o)
 	default:
 		return HealthHealthy
+	}
+}
+
+// pvcHealth follows the claim phase: Bound is healthy, Pending is still binding (and blocks the pods
+// that mount it, so it's Progressing not green), Lost means the backing volume vanished (Degraded).
+func pvcHealth(p *corev1.PersistentVolumeClaim) Health {
+	switch p.Status.Phase {
+	case corev1.ClaimBound:
+		return HealthHealthy
+	case corev1.ClaimPending:
+		return HealthProgressing
+	case corev1.ClaimLost:
+		return HealthDegraded
+	default:
+		return HealthUnknown
 	}
 }
 
@@ -371,6 +388,19 @@ func ingressStatus(ing *networkingv1.Ingress) string {
 	}
 }
 
+// pvcStatus shows the claim phase plus the bound capacity when known (e.g. "Bound 10Gi"), the
+// at-a-glance answer to "did my storage actually provision, and how big?".
+func pvcStatus(p *corev1.PersistentVolumeClaim) string {
+	phase := string(p.Status.Phase)
+	if phase == "" {
+		return ""
+	}
+	if q, ok := p.Status.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
+		return phase + " " + q.String()
+	}
+	return phase
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {
@@ -390,6 +420,8 @@ func statusSummary(obj runtime.Object) string {
 		return nodeStatusSummary(o)
 	case *networkingv1.Ingress:
 		return ingressStatus(o)
+	case *corev1.PersistentVolumeClaim:
+		return pvcStatus(o)
 	case *batchv1.Job:
 		if o.Spec.Suspend != nil && *o.Spec.Suspend {
 			return "Suspended"

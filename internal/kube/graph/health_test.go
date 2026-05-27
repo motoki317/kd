@@ -7,6 +7,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -151,6 +152,36 @@ func TestStatusSummaryIngress(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if got := statusSummary(tc.ing); got != tc.want {
 				t.Errorf("statusSummary(Ingress) = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPVCHealthAndStatus(t *testing.T) {
+	pvc := func(phase corev1.PersistentVolumeClaimPhase, capacity string) *corev1.PersistentVolumeClaim {
+		p := &corev1.PersistentVolumeClaim{Status: corev1.PersistentVolumeClaimStatus{Phase: phase}}
+		if capacity != "" {
+			p.Status.Capacity = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(capacity)}
+		}
+		return p
+	}
+	tests := []struct {
+		name       string
+		pvc        *corev1.PersistentVolumeClaim
+		wantHealth Health
+		wantStatus string
+	}{
+		{"bound with capacity", pvc(corev1.ClaimBound, "10Gi"), HealthHealthy, "Bound 10Gi"},
+		{"pending", pvc(corev1.ClaimPending, ""), HealthProgressing, "Pending"},
+		{"lost", pvc(corev1.ClaimLost, ""), HealthDegraded, "Lost"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := health(tc.pvc); got != tc.wantHealth {
+				t.Errorf("health(PVC %s) = %q, want %q", tc.name, got, tc.wantHealth)
+			}
+			if got := statusSummary(tc.pvc); got != tc.wantStatus {
+				t.Errorf("statusSummary(PVC %s) = %q, want %q", tc.name, got, tc.wantStatus)
 			}
 		})
 	}
