@@ -3,6 +3,7 @@ import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { healthColor } from '../health'
 import { relativeAge } from '../time'
 import type { KNode } from '../types'
+import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
 
 interface Props {
@@ -157,6 +158,7 @@ export default function DetailDrawer(props: Props) {
                   JSON
                 </button>
               </span>
+              <CopyButton text={() => detail() ?? ''} title="Copy manifest" />
             </div>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               <Show when={detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>

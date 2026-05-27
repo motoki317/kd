@@ -695,10 +695,31 @@ body {
   letter-spacing: 0.05em;
   color: var(--text-dim);
 }
-.logs-error {
+.logs-right {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.logs-error {
   color: var(--health-degraded);
   text-transform: none;
+}
+/* Shared compact action button (copy manifest / logs). */
+.copy-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .logs-container {
   margin-left: 8px;

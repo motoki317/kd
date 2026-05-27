@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { middleTruncate } from '../names'
+import CopyButton from './CopyButton'
 
 interface Props {
   namespace: string
@@ -64,7 +65,12 @@ export default function LogViewer(props: Props) {
             <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
         </Show>
-        {error() && <span class="logs-error">stream interrupted</span>}
+        <span class="logs-right">
+          {error() && <span class="logs-error">stream interrupted</span>}
+          <Show when={lines().length > 0}>
+            <CopyButton text={() => lines().map((l) => l.line).join('\n')} title="Copy logs" />
+          </Show>
+        </span>
       </div>
       <pre ref={pre} class="logs-body" onScroll={onScroll}>
         <For each={lines()}>
