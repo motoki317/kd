@@ -108,6 +108,21 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer')).toBeTruthy()
   })
 
+  it('shows "unavailable" when the manifest fetch fails, without crashing', async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
+          : new Response('nope', { status: 500 }),
+      ),
+    )
+    const { container, findByText } = render(() => (
+      <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    await findByText('unavailable')
+    expect(container.querySelector('.drawer')).toBeTruthy()
+  })
+
   it('renders an age and clickable owner chips', () => {
     const owner: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const navigated: string[] = []

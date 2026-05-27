@@ -304,7 +304,8 @@ export default function DetailDrawer(props: Props) {
               <CopyButton text={() => detail() ?? ''} title="Copy manifest" />
             </div>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
-              <Show when={detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
+              {/* detail() throws if the fetch errored, so check detail.error before reading it. */}
+              <Show when={!detail.error && detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
                 <pre class="manifest">{detail()}</pre>
               </Show>
             </Suspense>
