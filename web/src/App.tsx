@@ -76,9 +76,12 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
       const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
+      const num = Number(e.key)
       if (e.key === '/' && !typing) {
         e.preventDefault()
         filterEl?.focus()
+      } else if (!typing && num >= 1 && num <= VIEWS.length) {
+        setView(VIEWS[num - 1].id) // 1-4 jump between Ownership/Network/Nodes/RBAC
       } else if (e.key === 'Escape') {
         // Progressive back-out: blur a field, else close the drawer, else clear active filters.
         if (typing) (el as HTMLElement).blur()
