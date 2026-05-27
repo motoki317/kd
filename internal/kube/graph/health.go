@@ -204,6 +204,8 @@ func statusSummary(obj runtime.Object) string {
 		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.DaemonSet:
 		return fmt.Sprintf("%d/%d", o.Status.NumberReady, o.Status.DesiredNumberScheduled)
+	case *corev1.Service:
+		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
 	default:
 		return ""
 	}

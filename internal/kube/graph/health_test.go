@@ -77,6 +77,13 @@ func TestPodStatusSummary(t *testing.T) {
 	}
 }
 
+func TestStatusSummaryService(t *testing.T) {
+	svc := &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer}}
+	if got := statusSummary(svc); got != "LoadBalancer" {
+		t.Errorf("statusSummary(Service) = %q, want LoadBalancer", got)
+	}
+}
+
 func TestPodRestarts(t *testing.T) {
 	pod := &corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
 		{RestartCount: 3}, {RestartCount: 5}, // sums across containers
