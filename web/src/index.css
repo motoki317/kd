@@ -430,8 +430,63 @@ body {
   padding: 0;
 }
 .logs-panel.hidden,
+.events-panel.hidden,
 .manifest-section.hidden {
   display: none;
+}
+
+/* Events: kubectl-describe's "why is this degraded" list. Warnings get a red rail + tinted row. */
+.events-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.events-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 14px 16px;
+}
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.event-item {
+  padding: 9px 16px;
+  border-left: 3px solid transparent;
+}
+.event-item + .event-item {
+  border-top: 1px solid var(--border);
+}
+.event-item.warning {
+  border-left-color: var(--health-degraded);
+  background: color-mix(in srgb, var(--health-degraded) 4%, transparent);
+}
+.event-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.event-reason {
+  font-weight: 600;
+  font-size: 13px;
+}
+.event-item.warning .event-reason {
+  color: var(--health-degraded);
+}
+.event-count,
+.event-age {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.event-age {
+  margin-left: auto;
+}
+.event-message {
+  font-size: 12px;
+  margin-top: 2px;
+  word-break: break-word;
 }
 .manifest-head {
   flex: 0 0 auto;

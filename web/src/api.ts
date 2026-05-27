@@ -30,6 +30,21 @@ export async function fetchResource(ns: string, kind: string, name: string, form
   return res.text()
 }
 
+export interface EventEntry {
+  type: string // Normal | Warning
+  reason: string
+  message: string
+  count: number
+  last: string // RFC3339, formatted relative on the client
+}
+
+// fetchEvents returns the Kubernetes events about a resource, newest-first.
+export async function fetchEvents(ns: string, kind: string, name: string): Promise<EventEntry[]> {
+  const res = await fetch(`${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/events`)
+  if (!res.ok) throw new Error(`events: ${res.status}`)
+  return ((await res.json()) as { events: EventEntry[] }).events ?? []
+}
+
 export interface GraphStreamHandlers {
   snapshot: (g: KGraph) => void
   patch: (p: Patch) => void

@@ -1,6 +1,7 @@
-import { createMemo, createResource, createSignal, Show, Suspense } from 'solid-js'
-import { fetchResource, type ManifestFormat } from '../api'
+import { createEffect, createMemo, createResource, createSignal, For, on, Show, Suspense } from 'solid-js'
+import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { healthColor } from '../health'
+import { relativeAge } from '../time'
 import type { KNode } from '../types'
 import LogViewer from './LogViewer'
 
@@ -9,28 +10,37 @@ interface Props {
   onClose: () => void
 }
 
-type Tab = 'logs' | 'manifest'
+type Tab = 'logs' | 'events' | 'manifest'
+const TAB_LABELS: Record<Tab, string> = { logs: 'Logs', events: 'Events', manifest: 'Manifest' }
 
 // Kinds with logs worth showing: a Pod, or a controller whose descendant pods' logs we aggregate.
 const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob'])
 
-// DetailDrawer shows the selected resource's manifest. Pods and the controllers that own them also
-// stream logs (aggregated across descendant pods for controllers), so they get Logs/Manifest tabs
-// defaulting to logs — the developer's first question; other kinds show the manifest directly.
+// DetailDrawer inspects the selected resource across tabs: live Logs (pods and the controllers that
+// own them), Events (kubectl-describe's "why is this degraded"), and the Manifest. Logs default for
+// loggable kinds — the developer's first question; otherwise the manifest leads.
 export default function DetailDrawer(props: Props) {
   const isPod = createMemo(() => props.node?.kind === 'Pod')
   const loggable = createMemo(() => (props.node ? LOGGABLE.has(props.node.kind) : false))
+  const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
+
   const [tab, setTab] = createSignal<Tab>('logs')
+  // Reset to the kind's default tab whenever the selection changes, so a non-loggable resource never
+  // lands on a Logs tab it doesn't have.
+  createEffect(on(() => props.node?.id, () => setTab(loggable() ? 'logs' : 'manifest')))
+
+  const key = () =>
+    props.node ? { ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name } : null
 
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
-  // part of the resource key, so flipping it refetches the server-rendered text. The manifest is
-  // fetched as soon as a node is selected, so switching to it from the Logs tab is instant.
+  // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events
+  // are fetched as soon as a node is selected, so switching tabs is instant.
   const [format, setFormat] = createSignal<ManifestFormat>('yaml')
   const [detail] = createResource(
-    () =>
-      props.node ? { ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name, format: format() } : null,
-    (key) => fetchResource(key.ns, key.kind, key.name, key.format),
+    () => (props.node ? { ...key()!, format: format() } : null),
+    (k) => fetchResource(k.ns, k.kind, k.name, k.format),
   )
+  const [events] = createResource(key, (k) => fetchEvents(k.ns, k.kind, k.name))
 
   return (
     <Show when={props.node}>
@@ -52,27 +62,51 @@ export default function DetailDrawer(props: Props) {
             </button>
           </header>
 
+          <nav class="drawer-tabs">
+            <For each={tabs()}>
+              {(t) => (
+                <button classList={{ active: tab() === t }} onClick={() => setTab(t)}>
+                  {TAB_LABELS[t]}
+                </button>
+              )}
+            </For>
+          </nav>
+
           <Show when={loggable()}>
-            <nav class="drawer-tabs">
-              <button classList={{ active: tab() === 'logs' }} onClick={() => setTab('logs')}>
-                Logs
-              </button>
-              <button classList={{ active: tab() === 'manifest' }} onClick={() => setTab('manifest')}>
-                Manifest
-              </button>
-            </nav>
             {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
-                peek at the manifest tab. */}
+                visit to another tab. */}
             <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
               <LogViewer namespace={node().namespace ?? ''} kind={node().kind} name={node().name} aggregated={!isPod()} />
             </div>
           </Show>
 
-          <section class="manifest-section" classList={{ hidden: loggable() && tab() !== 'manifest' }}>
-            <div class="manifest-head">
-              <Show when={!loggable()}>
-                <span class="manifest-label">Manifest</span>
+          <div class="events-panel" classList={{ hidden: tab() !== 'events' }}>
+            <Suspense fallback={<div class="drawer-loading">loading…</div>}>
+              <Show when={(events()?.length ?? 0) > 0} fallback={<div class="events-empty">No recent events.</div>}>
+                <ul class="event-list">
+                  <For each={events()}>
+                    {(ev) => (
+                      <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
+                        <div class="event-head">
+                          <span class="event-reason">{ev.reason}</span>
+                          <Show when={ev.count > 1}>
+                            <span class="event-count">×{ev.count}</span>
+                          </Show>
+                          <span class="event-age" title={ev.last}>
+                            {relativeAge(ev.last)}
+                          </span>
+                        </div>
+                        <div class="event-message">{ev.message}</div>
+                      </li>
+                    )}
+                  </For>
+                </ul>
               </Show>
+            </Suspense>
+          </div>
+
+          <section class="manifest-section" classList={{ hidden: tab() !== 'manifest' }}>
+            <div class="manifest-head">
               <span class="manifest-format">
                 <button classList={{ active: format() === 'yaml' }} onClick={() => setFormat('yaml')}>
                   YAML
