@@ -169,6 +169,10 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// logResolveInterval is how often a follow stream re-resolves its descendant pods. A package var so
+// tests can shorten it.
+var logResolveInterval = 3 * time.Second
+
 // superviseLogStreams keeps a follow stream's set of pod streamers in sync with the resource's live
 // descendant pods. It re-resolves on a short interval and starts a streamer for any pod not already
 // being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted StatefulSet
@@ -197,7 +201,7 @@ func (a *API) superviseLogStreams(ctx context.Context, ns, kind, name, container
 	}
 
 	resolve() // attach immediately; don't wait a full interval for the first lines
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(logResolveInterval)
 	defer ticker.Stop()
 	for {
 		select {
