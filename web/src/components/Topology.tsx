@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show, createEffect } from 'solid-js'
+import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { healthColor } from '../health'
 import { middleTruncate, relativeName } from '../names'
@@ -112,6 +112,27 @@ export default function Topology(props: Props) {
     setTx((rect.width - l.width * s) / 2)
     setTy((rect.height - l.height * s) / 2)
   })
+
+  // Bring the selection into view when it changes (e.g. via owner navigation or a search match in a
+  // large graph) — but only if it's off-screen, so a normal in-view click doesn't jolt the canvas.
+  createEffect(
+    on(
+      () => props.selectedId,
+      (id) => {
+        if (!id || !svg) return
+        const n = layout().nodes.find((m) => m.id === id)
+        if (!n) return
+        const rect = svg.getBoundingClientRect()
+        const sx = tx() + n.x * scale()
+        const sy = ty() + n.y * scale()
+        const margin = 60
+        if (sx < margin || sx > rect.width - margin || sy < margin || sy > rect.height - margin) {
+          setTx(rect.width / 2 - n.x * scale())
+          setTy(rect.height / 2 - n.y * scale())
+        }
+      },
+    ),
+  )
 
   function onWheel(e: WheelEvent) {
     e.preventDefault()
