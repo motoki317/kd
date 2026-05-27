@@ -3,6 +3,7 @@ import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor } from './health'
+import { nextSelection } from './nav'
 import type { Health, KNode, View } from './types'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
@@ -85,6 +86,14 @@ export default function App() {
         filterEl?.focus()
       } else if (!typing && num >= 1 && num <= VIEWS.length) {
         setView(VIEWS[num - 1].id) // 1-4 jump between Ownership/Network/Nodes/RBAC
+      } else if (!typing && (e.key === 'j' || e.key === 'ArrowDown')) {
+        // Walk selection through the graph, troubled-first, so stepping surfaces problems before
+        // healthy nodes. The selection drives the drawer and the topology's pan-to-selection.
+        e.preventDefault()
+        setSelectedId((cur) => nextSelection(nodes(), cur, 1) ?? cur)
+      } else if (!typing && (e.key === 'k' || e.key === 'ArrowUp')) {
+        e.preventDefault()
+        setSelectedId((cur) => nextSelection(nodes(), cur, -1) ?? cur)
       } else if (e.key === 'Escape') {
         // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.
         if (showHelp()) setShowHelp(false)
@@ -212,6 +221,9 @@ export default function App() {
               </li>
               <li>
                 <kbd>1</kbd>–<kbd>4</kbd> Switch views
+              </li>
+              <li>
+                <kbd>j</kbd>/<kbd>k</kbd> Next / previous resource (troubled first)
               </li>
               <li>
                 <kbd>Esc</kbd> Close drawer / clear filters
