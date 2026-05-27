@@ -7,6 +7,8 @@ import LogViewer from './LogViewer'
 
 interface Props {
   node: KNode | null
+  owners: KNode[]
+  onNavigate: (id: string) => void
   onClose: () => void
 }
 
@@ -63,6 +65,17 @@ export default function DetailDrawer(props: Props) {
                   </span>
                 </Show>
               </div>
+              <Show when={props.owners.length > 0}>
+                <div class="drawer-owners">
+                  <For each={props.owners}>
+                    {(o) => (
+                      <button class="owner-chip" onClick={() => props.onNavigate(o.id)} title={`Go to ${o.kind} ${o.name}`}>
+                        ↑ {o.kind} <span class="owner-name">{o.name}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
             </div>
             <button class="drawer-close" onClick={props.onClose} title="Close">
               ×

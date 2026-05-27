@@ -429,6 +429,36 @@ body {
 .drawer-age::before {
   content: '· ';
 }
+.drawer-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.owner-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  cursor: pointer;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.owner-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.owner-name {
+  text-transform: none;
+  color: var(--text);
+  font-weight: 600;
+}
 .drawer-close {
   border: 0;
   background: transparent;

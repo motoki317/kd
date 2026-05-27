@@ -3,7 +3,7 @@ import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor } from './health'
-import type { View } from './types'
+import type { KNode, View } from './types'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
@@ -90,6 +90,11 @@ export default function App() {
   const nodes = createMemo(() => Object.values(graph.nodes))
   const edges = createMemo(() => graph.edges)
   const selectedNode = createMemo(() => (selectedId() ? graph.nodes[selectedId()!] ?? null : null))
+  // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
+  const ownerNodes = createMemo<KNode[]>(() => {
+    const n = selectedNode()
+    return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
+  })
 
   const counts = createMemo(() => {
     const c: Record<string, number> = {}
@@ -140,7 +145,7 @@ export default function App() {
         />
         <main class="main">
           <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} onSelect={setSelectedId} />
-          <DetailDrawer node={selectedNode()} onClose={() => setSelectedId(null)} />
+          <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />
         </main>
       </div>
     </div>
