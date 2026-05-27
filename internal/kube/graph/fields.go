@@ -1,6 +1,9 @@
 package graph
 
 import (
+	"fmt"
+	"strings"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -135,4 +138,39 @@ func podHost(obj runtime.Object) string {
 		return p.Spec.NodeName
 	}
 	return ""
+}
+
+// nodeCapacity summarizes a Node's allocatable size as "<cpu> vCPU · <mem> · <pods> pods" ("" for
+// non-nodes), the "how big is this node / how much can it hold" context otherwise buried in the
+// manifest. Uses allocatable (capacity minus system-reserved) — what workloads can actually use.
+func nodeCapacity(obj runtime.Object) string {
+	n, ok := obj.(*corev1.Node)
+	if !ok {
+		return ""
+	}
+	alloc := n.Status.Allocatable
+	cpu, mem, pods := alloc.Cpu(), alloc.Memory(), alloc.Pods()
+	if cpu.IsZero() && mem.IsZero() {
+		return "" // capacity not reported yet
+	}
+	parts := []string{cpu.String() + " vCPU", humanizeBytes(mem.Value())}
+	if !pods.IsZero() {
+		parts = append(parts, pods.String()+" pods")
+	}
+	return strings.Join(parts, " · ")
+}
+
+// humanizeBytes renders a byte count as a binary-unit string (Ki/Mi/Gi/Ti), matching how Kubernetes
+// reports memory, so a Node's RAM reads as "16Gi" rather than a raw byte count.
+func humanizeBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%dB", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.0f%ci", float64(b)/float64(div), "KMGTPE"[exp])
 }

@@ -50,6 +50,7 @@ type Node struct {
 	Containers []string          `json:"containers,omitempty"` // pod container names, for the log picker
 	Images     []string          `json:"images,omitempty"`     // distinct container images, "what's deployed here"
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
+	Capacity   string            `json:"capacity,omitempty"`   // a Node's CPU/memory/pod capacity, for "how big is this node"
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

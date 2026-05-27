@@ -97,6 +97,9 @@ export default function DetailDrawer(props: Props) {
                 <Show when={node().host}>
                   <span class="drawer-age">on {node().host}</span>
                 </Show>
+                <Show when={node().capacity}>
+                  <span class="drawer-age">{node().capacity}</span>
+                </Show>
               </div>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so
                   surface them prominently with per-image copy for pasting into kubectl/registry. */}

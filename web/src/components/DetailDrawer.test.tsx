@@ -52,6 +52,12 @@ describe('DetailDrawer', () => {
     expect(vals).toEqual(['shop', 'backend'])
   })
 
+  it('shows node capacity in the meta line when present', () => {
+    const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', health: 'Healthy', capacity: '8 vCPU · 16Gi · 110 pods' }
+    const { container } = render(() => <DetailDrawer node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('.drawer-meta')?.textContent).toContain('8 vCPU · 16Gi · 110 pods')
+  })
+
   it('offers a copy-name button in the header', () => {
     const { getByTitle } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     expect(getByTitle('Copy name')).toBeTruthy()
