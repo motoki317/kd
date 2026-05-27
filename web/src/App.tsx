@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
@@ -35,6 +35,25 @@ export default function App() {
   // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
   const interval = setInterval(() => refetchNamespaces(), 15000)
   onCleanup(() => clearInterval(interval))
+
+  // Global keys: "/" jumps to the namespace filter, Escape backs out (blur a field, else close the
+  // drawer) — the muscle-memory shortcuts operators expect, with no on-screen chrome.
+  let filterEl: HTMLInputElement | undefined
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
+      if (e.key === '/' && !typing) {
+        e.preventDefault()
+        filterEl?.focus()
+      } else if (e.key === 'Escape') {
+        if (typing) (el as HTMLElement).blur()
+        else if (selectedId()) setSelectedId(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    onCleanup(() => window.removeEventListener('keydown', onKey))
+  })
 
   // (Re)subscribe to the graph feed whenever the namespace or view changes.
   createEffect(() => {
@@ -104,6 +123,7 @@ export default function App() {
           selected={namespace()}
           onSelect={setNamespace}
           loading={namespaces.loading}
+          filterRef={(el) => (filterEl = el)}
         />
         <main class="main">
           <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} onSelect={setSelectedId} />

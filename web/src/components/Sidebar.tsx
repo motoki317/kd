@@ -7,6 +7,8 @@ interface Props {
   selected: string | null
   onSelect: (ns: string) => void
   loading: boolean
+  // Lets the app focus the filter from a global key ("/").
+  filterRef?: (el: HTMLInputElement) => void
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
@@ -23,8 +25,9 @@ export default function Sidebar(props: Props) {
     <nav class="sidebar">
       <div class="sidebar-title">Namespaces</div>
       <input
+        ref={props.filterRef}
         class="sidebar-filter"
-        placeholder="Filter…"
+        placeholder="Filter…  ( / )"
         value={filter()}
         onInput={(e) => setFilter(e.currentTarget.value)}
       />
