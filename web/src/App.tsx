@@ -22,6 +22,10 @@ const VIEWS: { id: View; label: string }[] = [
 
 export default function App() {
   const [namespaces, { refetch: refetchNamespaces }] = createResource(fetchNamespaces)
+  // namespaces() rethrows if the fetch errored (Solid resources throw on read in an error state), which
+  // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
+  // read the list through this guard, which yields [] on error/while loading.
+  const namespaceList = createMemo(() => (namespaces.error ? [] : namespaces() ?? []))
   // Seed namespace/view from the URL so a link or reload restores the same place.
   const params = new URLSearchParams(location.search)
   const urlView = params.get('view') as View
@@ -44,8 +48,8 @@ export default function App() {
   // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
   // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
   createEffect(() => {
-    const list = namespaces()
-    if (!list || list.length === 0) return
+    const list = namespaceList()
+    if (list.length === 0) return
     if (!list.some((n) => n.name === namespace())) setNamespace(mostTroubled(list)!.name)
   })
 
@@ -159,7 +163,7 @@ export default function App() {
   // letting it lag up to 15s behind the /namespaces poll. Only override once the graph has loaded, so
   // a still-empty stream doesn't briefly flash the namespace healthy.
   const sidebarNamespaces = createMemo(() => {
-    const list = namespaces() ?? []
+    const list = namespaceList()
     const ns = namespace()
     if (!connected() || !ns || nodes().length === 0) return list
     const live = rollupHealth(nodes())
