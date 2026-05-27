@@ -194,6 +194,62 @@ func TestStatusSummaryService(t *testing.T) {
 	}
 }
 
+func TestDeploymentHealth(t *testing.T) {
+	three := int32(3)
+	tru := true
+
+	// A rollout that blew its progress deadline is a failure, even while old replicas keep serving
+	// (so replica counts alone would read it as Progressing forever).
+	stuck := &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{Replicas: &three},
+		Status: appsv1.DeploymentStatus{
+			Replicas: 3, ReadyReplicas: 3, UpdatedReplicas: 1,
+			Conditions: []appsv1.DeploymentCondition{{
+				Type: appsv1.DeploymentProgressing, Status: corev1.ConditionFalse, Reason: "ProgressDeadlineExceeded",
+			}},
+		},
+	}
+	if got := health(stuck); got != HealthDegraded {
+		t.Errorf("health(deadline-exceeded Deployment) = %q, want Degraded", got)
+	}
+	// "3/3" in red would be misleading; the chip should say the rollout failed.
+	if got := statusSummary(stuck); got != "rollout failed" {
+		t.Errorf("statusSummary(deadline-exceeded Deployment) = %q, want \"rollout failed\"", got)
+	}
+
+	// A normal in-progress rollout (new pods not all ready yet) is Progressing, not a failure.
+	rolling := &appsv1.Deployment{
+		Spec:   appsv1.DeploymentSpec{Replicas: &three},
+		Status: appsv1.DeploymentStatus{Replicas: 3, ReadyReplicas: 3, UpdatedReplicas: 1},
+	}
+	if got := health(rolling); got != HealthProgressing {
+		t.Errorf("health(rolling Deployment) = %q, want Progressing", got)
+	}
+
+	// A fully rolled-out Deployment is Healthy.
+	ready := &appsv1.Deployment{
+		Spec:   appsv1.DeploymentSpec{Replicas: &three},
+		Status: appsv1.DeploymentStatus{Replicas: 3, ReadyReplicas: 3, UpdatedReplicas: 3},
+	}
+	if got := health(ready); got != HealthHealthy {
+		t.Errorf("health(ready Deployment) = %q, want Healthy", got)
+	}
+
+	// A paused Deployment is deliberately held, not unhealthy.
+	paused := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Replicas: &three, Paused: tru}}
+	if got := health(paused); got != HealthSuspended {
+		t.Errorf("health(paused Deployment) = %q, want Suspended", got)
+	}
+	if got := statusSummary(paused); got != "Paused" {
+		t.Errorf("statusSummary(paused Deployment) = %q, want Paused", got)
+	}
+
+	// A normal Deployment still shows ready/desired.
+	if got := statusSummary(ready); got != "3/3" {
+		t.Errorf("statusSummary(ready Deployment) = %q, want 3/3", got)
+	}
+}
+
 func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	three := int32(3)
 	suspended := true

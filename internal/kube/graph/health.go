@@ -15,11 +15,11 @@ func health(obj runtime.Object) Health {
 	case *corev1.Pod:
 		return podHealth(o)
 	case *appsv1.Deployment:
-		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.UpdatedReplicas, desiredReplicas(o.Spec.Replicas), o.Spec.Paused)
+		return deploymentHealth(o)
 	case *appsv1.ReplicaSet:
-		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas), false)
+		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.StatefulSet:
-		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.UpdatedReplicas, desiredReplicas(o.Spec.Replicas), false)
+		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.UpdatedReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.DaemonSet:
 		return daemonSetHealth(o)
 	case *batchv1.Job:
@@ -121,10 +121,24 @@ func isFailureReason(reason string) bool {
 	}
 }
 
-func replicaHealth(current, ready, updated, desired int32, paused bool) Health {
-	if paused {
+// deploymentHealth is replica-count health plus the two states counts alone can't express: a paused
+// rollout is deliberately held (Suspended), and a rollout whose progress deadline expired has been
+// abandoned by the controller (Degraded) even while old replicas keep the count looking Healthy —
+// otherwise it would read Progressing forever, hiding a failed deploy. Matches `kubectl rollout
+// status` failing and ArgoCD.
+func deploymentHealth(d *appsv1.Deployment) Health {
+	if d.Spec.Paused {
 		return HealthSuspended
 	}
+	for _, c := range d.Status.Conditions {
+		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse && c.Reason == "ProgressDeadlineExceeded" {
+			return HealthDegraded
+		}
+	}
+	return replicaHealth(d.Status.Replicas, d.Status.ReadyReplicas, d.Status.UpdatedReplicas, desiredReplicas(d.Spec.Replicas))
+}
+
+func replicaHealth(current, ready, updated, desired int32) Health {
 	if desired == 0 {
 		return HealthHealthy
 	}

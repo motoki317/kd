@@ -18,7 +18,7 @@ func statusSummary(obj runtime.Object) string {
 	case *corev1.Pod:
 		return podStatusSummary(o)
 	case *appsv1.Deployment:
-		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
+		return deploymentStatus(o)
 	case *appsv1.ReplicaSet:
 		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.StatefulSet:
@@ -96,6 +96,21 @@ func podStatusSummary(p *corev1.Pod) string {
 		}
 	}
 	return string(p.Status.Phase)
+}
+
+// deploymentStatus is the ready/desired count, except in the two states that count hides: a paused
+// rollout reads "Paused" and an abandoned one (progress deadline exceeded) reads "rollout failed",
+// so the chip explains a non-green border instead of showing a healthy-looking "3/3" in red/grey.
+func deploymentStatus(d *appsv1.Deployment) string {
+	if d.Spec.Paused {
+		return "Paused"
+	}
+	for _, c := range d.Status.Conditions {
+		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse && c.Reason == "ProgressDeadlineExceeded" {
+			return "rollout failed"
+		}
+	}
+	return fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, desiredReplicas(d.Spec.Replicas))
 }
 
 // nodeStatusSummary mirrors kubectl's node STATUS: Ready/NotReady, plus ,SchedulingDisabled when the
