@@ -15,23 +15,29 @@ state at a glance and app developers can jump straight to pod status and logs.
 ## Features
 
 **See the whole namespace at a glance**
-- 2D topology of ownership, network, node-placement, and RBAC relationships, laid out per connected
-  component and packed to the viewport (no horizontal smear in dense namespaces).
+- 2D topology across five lenses — ownership, network, node-placement, volumes (mounted
+  ConfigMaps/Secrets/PVCs), and RBAC — laid out per connected component and packed to the viewport
+  (no horizontal smear in dense namespaces).
 - Status by exception: healthy resources stay calm; Degraded/Progressing/Suspended get a colored
   border. Select a node to fade everything unrelated; click a legend health to spotlight it.
-- Search resources by name/kind; the sidebar sorts troubled namespaces first, each with a health dot.
+- Search resources by name, kind, label, or image; the sidebar sorts troubled namespaces first, each
+  with a health dot.
 
 **Drill into a resource**
 - Detail drawer with Logs / Events / Manifest tabs. Owner chips walk up the tree (Pod → ReplicaSet →
-  Deployment); age, restart count, and host shown inline.
-- Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs, and
-  aggregated logs across all of a controller's pods. Manifest as YAML (default) or JSON, copyable.
+  Deployment); age, restart count, host, container images, labels, and per-container status inline;
+  one-click copy of the name.
+- Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs,
+  a line filter, an optional timestamps toggle, and aggregated logs across all of a controller's pods
+  (including pods created mid-rollout). Manifest as YAML (default) or JSON, copyable.
 - Events: the resource and its descendants' Kubernetes events (newest first, warnings highlighted),
   with a live count badge.
 
 **Keyboard & sharing**
-- `/` filter, `1`–`4` switch views, `Esc` backs out, `?` shows shortcuts.
-- Namespace, view, and selected resource live in the URL — links and reloads restore the same place.
+- `j`/`k` step through resources (troubled first, scoped to the active filter), `/` filter,
+  `1`–`5` switch views, `Esc` backs out, `?` shows shortcuts.
+- Namespace, view, and selected resource live in the URL — links and reloads restore the same place;
+  the selection follows you across views.
 - Follows the OS light/dark preference.
 
 ## Status
