@@ -546,6 +546,20 @@ body {
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto; /* logs are the developer's primary need: fill the drawer */
+  position: relative; /* anchor the "↓ Latest" button */
+}
+.logs-jump {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 .logs-header {
   display: flex;

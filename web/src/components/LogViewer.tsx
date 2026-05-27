@@ -15,7 +15,15 @@ interface Props {
 export default function LogViewer(props: Props) {
   const [lines, setLines] = createSignal<LogEntry[]>([])
   const [error, setError] = createSignal(false)
+  // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
+  // history, new lines stop yanking them down (a "Latest" button jumps back).
+  const [pinned, setPinned] = createSignal(true)
   let pre: HTMLPreElement | undefined
+
+  const toBottom = () => pre?.scrollTo({ top: pre.scrollHeight })
+  const onScroll = () => {
+    if (pre) setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
+  }
 
   createEffect(() => {
     // Re-subscribe whenever the target resource changes.
@@ -24,6 +32,7 @@ export default function LogViewer(props: Props) {
     const name = props.name
     setLines([])
     setError(false)
+    setPinned(true)
     const close = streamLogs(
       ns,
       kind,
@@ -31,7 +40,7 @@ export default function LogViewer(props: Props) {
       { tailLines: 200 },
       (entry) => {
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
-        queueMicrotask(() => pre?.scrollTo({ top: pre.scrollHeight }))
+        if (pinned()) queueMicrotask(toBottom)
       },
       () => setError(true),
     )
@@ -44,7 +53,7 @@ export default function LogViewer(props: Props) {
         <span>Logs</span>
         {error() && <span class="logs-error">stream interrupted</span>}
       </div>
-      <pre ref={pre} class="logs-body">
+      <pre ref={pre} class="logs-body" onScroll={onScroll}>
         <For each={lines()}>
           {(l) => (
             <div class="log-line">
@@ -59,6 +68,17 @@ export default function LogViewer(props: Props) {
         </For>
         {lines().length === 0 && !error() && <div class="logs-waiting">waiting for log output…</div>}
       </pre>
+      <Show when={!pinned()}>
+        <button
+          class="logs-jump"
+          onClick={() => {
+            toBottom()
+            setPinned(true)
+          }}
+        >
+          ↓ Latest
+        </button>
+      </Show>
     </div>
   )
 }
