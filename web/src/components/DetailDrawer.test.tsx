@@ -3,8 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DetailDrawer from './DetailDrawer'
 import type { KNode } from '../types'
 
+// A loggable resource mounts LogViewer, which opens an EventSource on mount; a no-op stub keeps it
+// from touching the network.
+class NoopEventSource {
+  onerror: (() => void) | null = null
+  addEventListener() {}
+  close() {}
+}
+
 // Stub the network so the manifest/events resources resolve without a server.
 beforeEach(() => {
+  vi.stubGlobal('EventSource', NoopEventSource)
   vi.stubGlobal('fetch', (url: string) =>
     Promise.resolve(
       url.includes('/events')
@@ -41,6 +50,13 @@ describe('DetailDrawer', () => {
     const vals = [...container.querySelectorAll('.label-chip .label-val')].map((e) => e.textContent)
     expect(keys).toEqual(['app', 'tier'])
     expect(vals).toEqual(['shop', 'backend'])
+  })
+
+  it('renders each container image', () => {
+    const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
+    const { container } = render(() => <DetailDrawer node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const imgs = [...container.querySelectorAll('.drawer-image code')].map((e) => e.textContent)
+    expect(imgs).toEqual(['nginx:1.25', 'envoy:1.29'])
   })
 
   it('omits the labels section when there are none', () => {

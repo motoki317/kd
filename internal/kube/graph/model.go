@@ -48,6 +48,7 @@ type Node struct {
 	CreatedAt  string            `json:"createdAt,omitempty"`  // RFC3339 creation time, for age display
 	Restarts   int32             `json:"restarts,omitempty"`   // pod container restart total, a crash signal
 	Containers []string          `json:"containers,omitempty"` // pod container names, for the log picker
+	Images     []string          `json:"images,omitempty"`     // distinct container images, "what's deployed here"
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`

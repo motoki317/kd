@@ -24,6 +24,7 @@ export interface KNode {
   createdAt?: string
   restarts?: number
   containers?: string[]
+  images?: string[]
   host?: string
   labels?: Record<string, string>
   ownerUIDs?: string[]

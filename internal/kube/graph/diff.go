@@ -76,5 +76,6 @@ func nodeEqual(a, b Node) bool {
 		a.Restarts == b.Restarts &&
 		a.Host == b.Host &&
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
+		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node
 		maps.Equal(a.Labels, b.Labels)
 }

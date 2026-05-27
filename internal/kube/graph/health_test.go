@@ -3,6 +3,7 @@ package graph
 import (
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,6 +163,27 @@ func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	}
 	if got := health(active); got != HealthHealthy {
 		t.Errorf("health(active CronJob) = %q, want Healthy", got)
+	}
+}
+
+func TestContainerImages(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{
+		{Name: "app", Image: "nginx:1.25"}, {Name: "sidecar", Image: "envoy:1.29"}, {Name: "dup", Image: "nginx:1.25"},
+	}}}
+	if got := containerImages(pod); len(got) != 2 || got[0] != "nginx:1.25" || got[1] != "envoy:1.29" {
+		t.Errorf("containerImages(pod) = %v, want [nginx:1.25 envoy:1.29] (deduped, ordered)", got)
+	}
+
+	// Workloads expose their pod template's images, not just bare pods.
+	deploy := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "web", Image: "app:v2"}}},
+	}}}
+	if got := containerImages(deploy); len(got) != 1 || got[0] != "app:v2" {
+		t.Errorf("containerImages(deployment) = %v, want [app:v2]", got)
+	}
+
+	if got := containerImages(&corev1.Service{}); got != nil {
+		t.Errorf("containerImages(non-workload) = %v, want nil", got)
 	}
 }
 

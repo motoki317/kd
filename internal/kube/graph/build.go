@@ -37,6 +37,7 @@ func Build(objs []runtime.Object) *Graph {
 			CreatedAt:  creationTime(m),
 			Restarts:   podRestarts(obj),
 			Containers: containerNames(obj),
+			Images:     containerImages(obj),
 			Host:       podHost(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

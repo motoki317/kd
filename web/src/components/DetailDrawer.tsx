@@ -85,6 +85,20 @@ export default function DetailDrawer(props: Props) {
                   <span class="drawer-age">on {node().host}</span>
                 </Show>
               </div>
+              {/* The image(s) are usually the first thing checked ("what version is live?"), so
+                  surface them prominently with per-image copy for pasting into kubectl/registry. */}
+              <Show when={(node().images?.length ?? 0) > 0}>
+                <div class="drawer-images">
+                  <For each={node().images}>
+                    {(img) => (
+                      <div class="drawer-image" title={img}>
+                        <code>{img}</code>
+                        <CopyButton text={() => img} title="Copy image" />
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
               <Show when={props.owners.length > 0}>
                 <div class="drawer-owners">
                   <For each={props.owners}>

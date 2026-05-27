@@ -236,6 +236,49 @@ func containerNames(obj runtime.Object) []string {
 	return names
 }
 
+// containerImages lists the distinct images a resource runs — its own containers for a Pod, its
+// pod template's for a workload — answering "what's actually deployed here" without opening the
+// manifest. Distinct (a multi-replica template repeats the same image) and nil for resources
+// without a pod spec.
+func containerImages(obj runtime.Object) []string {
+	spec := podSpecOf(obj)
+	if spec == nil {
+		return nil
+	}
+	var images []string
+	seen := map[string]bool{}
+	for _, c := range spec.Containers {
+		if c.Image != "" && !seen[c.Image] {
+			seen[c.Image] = true
+			images = append(images, c.Image)
+		}
+	}
+	return images
+}
+
+// podSpecOf returns the PodSpec a resource manages (its own for a Pod, its template's for a
+// workload), or nil for resources without one.
+func podSpecOf(obj runtime.Object) *corev1.PodSpec {
+	switch o := obj.(type) {
+	case *corev1.Pod:
+		return &o.Spec
+	case *appsv1.Deployment:
+		return &o.Spec.Template.Spec
+	case *appsv1.ReplicaSet:
+		return &o.Spec.Template.Spec
+	case *appsv1.StatefulSet:
+		return &o.Spec.Template.Spec
+	case *appsv1.DaemonSet:
+		return &o.Spec.Template.Spec
+	case *batchv1.Job:
+		return &o.Spec.Template.Spec
+	case *batchv1.CronJob:
+		return &o.Spec.JobTemplate.Spec.Template.Spec
+	default:
+		return nil
+	}
+}
+
 // nodeStatusSummary mirrors kubectl's node STATUS: Ready/NotReady, plus ,SchedulingDisabled when the
 // node is cordoned.
 func nodeStatusSummary(n *corev1.Node) string {

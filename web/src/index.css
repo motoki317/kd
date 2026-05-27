@@ -549,6 +549,28 @@ body {
   color: var(--text);
   font-weight: 600;
 }
+.drawer-images {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.drawer-image {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.drawer-image code {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .drawer-labels {
   margin-top: 8px;
 }
