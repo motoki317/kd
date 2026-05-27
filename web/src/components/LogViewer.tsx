@@ -48,6 +48,7 @@ export default function LogViewer(props: Props) {
       name,
       { tailLines: 200, container: c || undefined },
       (entry) => {
+        setError(false) // a line arriving means the stream recovered
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
         if (pinned()) queueMicrotask(toBottom)
       },

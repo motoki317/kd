@@ -163,7 +163,7 @@ export default function App() {
           </For>
         </div>
         <span class="conn" classList={{ live: connected() }}>
-          {connected() ? 'live' : '…'}
+          {connected() ? 'live' : 'offline'}
         </span>
       </header>
 
