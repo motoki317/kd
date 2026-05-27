@@ -23,6 +23,20 @@ func TestPodStatusSummary(t *testing.T) {
 			pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodRunning}},
 			want: "Running",
 		},
+		"running with all containers ready stays Running": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:             corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{{Ready: true}, {Ready: true}},
+			}},
+			want: "Running",
+		},
+		"running with a not-ready container shows ready/total": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:             corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{{Ready: true}, {Ready: false}},
+			}},
+			want: "Running 1/2",
+		},
 		"pending falls back to phase": {
 			pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending}},
 			want: "Pending",

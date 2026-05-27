@@ -147,6 +147,19 @@ func podStatusSummary(p *corev1.Pod) string {
 	if p.Status.Reason != "" {
 		return p.Status.Reason // pod-level, e.g. Evicted, NodeAffinity
 	}
+	// A Running pod with some container not yet ready is up but not serving; show ready/total so
+	// "up but failing readiness" is distinguishable from a healthy Running.
+	if p.Status.Phase == corev1.PodRunning {
+		ready, total := 0, len(p.Status.ContainerStatuses)
+		for _, cs := range p.Status.ContainerStatuses {
+			if cs.Ready {
+				ready++
+			}
+		}
+		if total > 0 && ready < total {
+			return fmt.Sprintf("Running %d/%d", ready, total)
+		}
+	}
 	return string(p.Status.Phase)
 }
 
