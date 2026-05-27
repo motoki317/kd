@@ -44,17 +44,28 @@ func findResource(objs []runtime.Object, kind, name string) (runtime.Object, boo
 	return nil, false
 }
 
-// redact returns a copy of obj safe to expose. Secret values are blanked (keys retained) so the
-// broad read ServiceAccount never leaks secret contents through kd.
-// See docs/ADR/20260527-kubernetes-access-model.md.
-func redact(obj runtime.Object) runtime.Object {
+// presentable returns a copy of obj that is safe and tidy to expose in the detail view:
+//   - Secret values are blanked (keys retained) so the broad read ServiceAccount never leaks
+//     secret contents through kd (see docs/ADR/20260527-kubernetes-access-model.md).
+//   - managedFields and the last-applied-configuration annotation are stripped — they are pure
+//     API-server bookkeeping that otherwise dominates the manifest and bloats the payload.
+func presentable(obj runtime.Object) runtime.Object {
+	obj = obj.DeepCopyObject()
 	if s, ok := obj.(*corev1.Secret); ok {
-		c := s.DeepCopy()
-		for k := range c.Data {
-			c.Data[k] = []byte{}
+		for k := range s.Data {
+			s.Data[k] = []byte{}
 		}
-		c.StringData = nil
-		return c
+		s.StringData = nil
+	}
+	if m, err := meta.Accessor(obj); err == nil {
+		m.SetManagedFields(nil)
+		if ann := m.GetAnnotations(); ann != nil {
+			delete(ann, "kubectl.kubernetes.io/last-applied-configuration")
+			if len(ann) == 0 {
+				ann = nil
+			}
+			m.SetAnnotations(ann)
+		}
 	}
 	return obj
 }

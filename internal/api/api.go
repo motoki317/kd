@@ -70,6 +70,9 @@ type namespacesResponse struct {
 
 type namespaceEntry struct {
 	Name string `json:"name"`
+	// Health is the worst resource health in the namespace, so the sidebar can flag trouble
+	// without the user opening each one.
+	Health string `json:"health"`
 }
 
 func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +84,8 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, a.store.ListNamespaces())
 	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible))}
 	for _, n := range visible {
-		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n})
+		health := graph.Summarize(a.store.SnapshotNamespace(n))
+		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(health)})
 	}
 	writeJSON(w, resp)
 }
@@ -106,7 +110,7 @@ func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	writeJSON(w, redact(obj))
+	writeJSON(w, presentable(obj))
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

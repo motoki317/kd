@@ -18,6 +18,7 @@ import (
 // the same input always yields the same graph, with nodes and edges in a deterministic order.
 func Build(objs []runtime.Object) *Graph {
 	g := &Graph{}
+	objs = slices.DeleteFunc(slices.Clone(objs), isHistorical)
 	for _, obj := range objs {
 		kind, apiVersion, m, ok := describe(obj)
 		if !ok {
@@ -42,6 +43,24 @@ func Build(objs []runtime.Object) *Graph {
 	g.Edges = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
 	sortGraph(g)
 	return g
+}
+
+// isHistorical reports whether an object is finished/superseded clutter that the topology drops
+// unconditionally (rather than behind a toggle), because it dominates real namespaces and never
+// reflects current state:
+//   - ReplicaSets scaled to zero with no pods (Deployment revision history, ~10 kept by default).
+//   - Pods that ran to completion under a controller (Job/CronJob/Workflow leftovers). Failed pods
+//     are kept (they are actionable) and ownerless succeeded pods are kept (someone ran them).
+func isHistorical(obj runtime.Object) bool {
+	switch o := obj.(type) {
+	case *appsv1.ReplicaSet:
+		desiredZero := o.Spec.Replicas != nil && *o.Spec.Replicas == 0
+		return desiredZero && o.Status.Replicas == 0 && metav1.GetControllerOf(&o.ObjectMeta) != nil
+	case *corev1.Pod:
+		return o.Status.Phase == corev1.PodSucceeded && metav1.GetControllerOf(&o.ObjectMeta) != nil
+	default:
+		return false
+	}
 }
 
 // KindOf returns an object's Kubernetes kind, recovered from TypeMeta or the Go type. It lets

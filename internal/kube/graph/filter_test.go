@@ -89,6 +89,61 @@ func TestFilterViews(t *testing.T) {
 	})
 }
 
+func TestSummarizeWorstHealth(t *testing.T) {
+	// A crashing pod dominates a namespace of otherwise-healthy resources.
+	degraded := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok
+  namespace: shop
+  uid: ok-uid
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashing
+  namespace: shop
+  uid: crash-uid
+status:
+  phase: Running
+  containerStatuses:
+    - state:
+        waiting:
+          reason: CrashLoopBackOff
+`)
+	if got := Summarize(degraded); got != HealthDegraded {
+		t.Errorf("Summarize = %q, want Degraded", got)
+	}
+
+	// The superseded fixture's only non-historical workloads are a ready Deployment, its live
+	// ReplicaSet, and a running pod — all healthy — so it summarizes Healthy (the dropped old
+	// ReplicaSets must not affect the roll-up).
+	if got := Summarize(decodeFixture(t, supersededRSFixture)); got != HealthHealthy {
+		t.Errorf("Summarize(superseded) = %q, want Healthy", got)
+	}
+
+	// A lone pending pod rolls up to Progressing.
+	progressing := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: starting
+  namespace: shop
+  uid: starting-uid
+status:
+  phase: Pending
+`)
+	if got := Summarize(progressing); got != HealthProgressing {
+		t.Errorf("Summarize(pending) = %q, want Progressing", got)
+	}
+}
+
 func TestParseView(t *testing.T) {
 	tests := map[string]View{
 		"":          ViewOwnership, // default

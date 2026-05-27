@@ -1,6 +1,36 @@
 package graph
 
-import "slices"
+import (
+	"slices"
+
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// severity orders health from most to least attention-worthy, for rolling many resources up into
+// a single namespace indicator.
+var severity = map[Health]int{
+	HealthDegraded:    4,
+	HealthProgressing: 3,
+	HealthUnknown:     2,
+	HealthSuspended:   1,
+	HealthHealthy:     0,
+}
+
+// Summarize rolls a namespace snapshot up to its single worst resource health, so the UI can show
+// cluster state at a glance without opening each namespace. Historical noise is ignored and an
+// empty namespace reports Healthy.
+func Summarize(objs []runtime.Object) Health {
+	worst := HealthHealthy
+	for _, obj := range objs {
+		if isHistorical(obj) {
+			continue
+		}
+		if h := health(obj); severity[h] > severity[worst] {
+			worst = h
+		}
+	}
+	return worst
+}
 
 // View is a named projection of the full graph onto one relationship dimension, so the UI
 // can switch between the ownership tree, node placement, network, and RBAC without the server
