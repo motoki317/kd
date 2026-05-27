@@ -4,6 +4,7 @@ import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor } from './health'
 import { navCandidates, nextSelection } from './nav'
+import { mostTroubled } from './ns'
 import type { Health, KNode, View } from './types'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
@@ -39,12 +40,13 @@ export default function App() {
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
 
-  // Pick a namespace once the list loads: keep a valid URL-seeded one, else fall back to the first
-  // (so a stale/forbidden ?ns= doesn't strand the user on an empty graph).
+  // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
+  // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
+  // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
   createEffect(() => {
     const list = namespaces()
     if (!list || list.length === 0) return
-    if (!list.some((n) => n.name === namespace())) setNamespace(list[0].name)
+    if (!list.some((n) => n.name === namespace())) setNamespace(mostTroubled(list)!.name)
   })
 
   // Mirror namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).

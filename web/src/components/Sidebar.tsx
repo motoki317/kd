@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import type { NamespaceInfo } from '../api'
-import { healthColor, healthSeverity } from '../health'
+import { healthColor } from '../health'
+import { compareNamespaces } from '../ns'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -23,7 +24,7 @@ export default function Sidebar(props: Props) {
     return props.namespaces
       .filter((n) => n.name.toLowerCase().includes(f))
       .slice()
-      .sort((a, b) => healthSeverity[b.health] - healthSeverity[a.health] || a.name.localeCompare(b.name))
+      .sort(compareNamespaces)
   })
   const troubled = createMemo(() => props.namespaces.filter((n) => n.health !== 'Healthy').length)
 
