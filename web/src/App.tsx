@@ -151,7 +151,14 @@ export default function App() {
           filterRef={(el) => (filterEl = el)}
         />
         <main class="main">
-          <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} healthFilter={healthFilter()} onSelect={setSelectedId} />
+          <Topology
+            nodes={nodes()}
+            edges={edges()}
+            selectedId={selectedId()}
+            healthFilter={healthFilter()}
+            connected={connected()}
+            onSelect={setSelectedId}
+          />
           <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />
         </main>
       </div>

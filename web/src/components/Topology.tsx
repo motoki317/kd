@@ -9,6 +9,7 @@ interface Props {
   edges: KEdge[]
   selectedId: string | null
   healthFilter?: import('../types').Health | null
+  connected: boolean
   onSelect: (id: string) => void
 }
 
@@ -201,7 +202,9 @@ export default function Topology(props: Props) {
   return (
     <div class="topology">
       <Show when={props.nodes.length === 0}>
-        <div class="topology-empty">No resources to display in this namespace.</div>
+        <div class="topology-empty">
+          {props.connected ? 'No resources to display in this namespace.' : 'Connecting…'}
+        </div>
       </Show>
       <div class="topology-search">
         <input
