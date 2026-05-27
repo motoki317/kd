@@ -35,6 +35,7 @@ func Build(objs []runtime.Object) *Graph {
 			Health:     health(obj),
 			Status:     statusSummary(obj),
 			CreatedAt:  creationTime(m),
+			Restarts:   podRestarts(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {
 			node.OwnerUIDs = append(node.OwnerUIDs, string(or.UID))

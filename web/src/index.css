@@ -381,6 +381,11 @@ body {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.node-restarts {
+  font-size: 10px;
+  fill: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
 
 /* Drawer */
 .drawer {

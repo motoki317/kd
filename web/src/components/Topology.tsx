@@ -249,6 +249,11 @@ export default function Topology(props: Props) {
                       {n.status}
                     </text>
                   </Show>
+                  <Show when={(n.restarts ?? 0) > 0}>
+                    <text class="node-restarts" x={n.width - 12} y="40" text-anchor="end">
+                      ↻{n.restarts}
+                    </text>
+                  </Show>
                 </g>
               )}
             </For>

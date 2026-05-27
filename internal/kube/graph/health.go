@@ -150,6 +150,20 @@ func podStatusSummary(p *corev1.Pod) string {
 	return string(p.Status.Phase)
 }
 
+// podRestarts totals a pod's container restarts (0 for non-pods), the at-a-glance crash signal a
+// "Running" status alone hides.
+func podRestarts(obj runtime.Object) int32 {
+	p, ok := obj.(*corev1.Pod)
+	if !ok {
+		return 0
+	}
+	var n int32
+	for _, cs := range p.Status.ContainerStatuses {
+		n += cs.RestartCount
+	}
+	return n
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {

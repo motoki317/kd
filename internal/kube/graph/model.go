@@ -46,6 +46,7 @@ type Node struct {
 	Health     Health            `json:"health"`
 	Status     string            `json:"status,omitempty"`    // short human-readable status, e.g. "Running", "2/2"
 	CreatedAt  string            `json:"createdAt,omitempty"` // RFC3339 creation time, for age display
+	Restarts   int32             `json:"restarts,omitempty"`  // pod container restart total, a crash signal
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 }

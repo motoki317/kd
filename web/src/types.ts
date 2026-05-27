@@ -22,6 +22,7 @@ export interface KNode {
   health: Health
   status?: string
   createdAt?: string
+  restarts?: number
   labels?: Record<string, string>
   ownerUIDs?: string[]
 }

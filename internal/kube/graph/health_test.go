@@ -62,3 +62,15 @@ func TestPodStatusSummary(t *testing.T) {
 		})
 	}
 }
+
+func TestPodRestarts(t *testing.T) {
+	pod := &corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+		{RestartCount: 3}, {RestartCount: 5}, // sums across containers
+	}}}
+	if got := podRestarts(pod); got != 8 {
+		t.Errorf("podRestarts = %d, want 8", got)
+	}
+	if got := podRestarts(&corev1.Service{}); got != 0 {
+		t.Errorf("podRestarts(non-pod) = %d, want 0", got)
+	}
+}

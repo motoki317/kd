@@ -73,6 +73,7 @@ func nodeEqual(a, b Node) bool {
 		a.Name == b.Name &&
 		a.Health == b.Health &&
 		a.Status == b.Status &&
+		a.Restarts == b.Restarts &&
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		maps.Equal(a.Labels, b.Labels)
 }

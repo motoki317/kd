@@ -64,6 +64,9 @@ export default function DetailDrawer(props: Props) {
                     {relativeAge(node().createdAt!)} old
                   </span>
                 </Show>
+                <Show when={(node().restarts ?? 0) > 0}>
+                  <span class="drawer-age">↻ {node().restarts} restarts</span>
+                </Show>
               </div>
               <Show when={props.owners.length > 0}>
                 <div class="drawer-owners">
