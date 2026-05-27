@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
@@ -118,7 +118,11 @@ export default function App() {
     const ns = namespace()
     const v = view()
     if (!ns) return
-    setSelectedId(null)
+    // Preserve the selection across a view switch when the same resource exists in the new view
+    // (UIDs are stable across views), so "look at pod X, switch to Volumes" keeps X selected. A
+    // namespace change naturally clears it: the old UID won't be in the new namespace's graph.
+    // untrack so reading the current selection doesn't make this effect re-subscribe on selection.
+    const keepSel = untrack(selectedId)
     setSearch('') // a stale search/health filter would fade the whole new graph
     setHealthFilter(null)
     setGraph(reconcile(emptyState()))
@@ -127,6 +131,7 @@ export default function App() {
       snapshot: (g) => {
         setGraph(reconcile(fromSnapshot(g)))
         setConnected(true)
+        setSelectedId(g.nodes.some((n) => n.id === keepSel) ? keepSel : null)
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
       error: () => setConnected(false),
