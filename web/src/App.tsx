@@ -80,8 +80,13 @@ export default function App() {
         e.preventDefault()
         filterEl?.focus()
       } else if (e.key === 'Escape') {
+        // Progressive back-out: blur a field, else close the drawer, else clear active filters.
         if (typing) (el as HTMLElement).blur()
         else if (selectedId()) setSelectedId(null)
+        else if (search() || healthFilter()) {
+          setSearch('')
+          setHealthFilter(null)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
