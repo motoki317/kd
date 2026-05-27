@@ -119,6 +119,7 @@ const (
 	ViewNodes     View = "nodes"     // Pod placement on Nodes
 	ViewNetwork   View = "network"   // Ingress -> Service -> Pod
 	ViewRBAC      View = "rbac"      // bindings -> roles and subjects
+	ViewVolumes   View = "volumes"   // Pod -> mounted ConfigMaps/Secrets/PVCs
 )
 
 // viewSpec defines a view: which edge types to keep and which kinds to always show even when
@@ -145,12 +146,17 @@ var viewSpecs = map[View]viewSpec{
 		edges:       []EdgeType{EdgeBinds},
 		alwaysKinds: []string{"Role", "ClusterRole", "RoleBinding", "ClusterRoleBinding", "ServiceAccount"},
 	},
+	// No alwaysKinds: only pods that actually mount something (and the volumes they mount) appear,
+	// so the view stays about real dependencies rather than every pod and every config object.
+	ViewVolumes: {
+		edges: []EdgeType{EdgeMounts},
+	},
 }
 
 // ParseView maps a query parameter to a View, defaulting to the ownership view.
 func ParseView(s string) View {
 	switch View(s) {
-	case ViewAll, ViewOwnership, ViewNodes, ViewNetwork, ViewRBAC:
+	case ViewAll, ViewOwnership, ViewNodes, ViewNetwork, ViewRBAC, ViewVolumes:
 		return View(s)
 	default:
 		return ViewOwnership

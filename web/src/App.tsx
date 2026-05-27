@@ -15,6 +15,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'ownership', label: 'Ownership' },
   { id: 'network', label: 'Network' },
   { id: 'nodes', label: 'Nodes' },
+  { id: 'volumes', label: 'Volumes' },
   { id: 'rbac', label: 'RBAC' },
 ]
 
@@ -220,7 +221,7 @@ export default function App() {
                 <kbd>/</kbd> Filter namespaces
               </li>
               <li>
-                <kbd>1</kbd>–<kbd>4</kbd> Switch views
+                <kbd>1</kbd>–<kbd>5</kbd> Switch views
               </li>
               <li>
                 <kbd>j</kbd>/<kbd>k</kbd> Next / previous resource (troubled first)

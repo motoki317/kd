@@ -11,7 +11,7 @@ export type EdgeType =
   | 'usesServiceAccount'
   | 'binds'
 
-export type View = 'ownership' | 'nodes' | 'network' | 'rbac' | 'all'
+export type View = 'ownership' | 'nodes' | 'network' | 'rbac' | 'volumes' | 'all'
 
 export interface KNode {
   id: string

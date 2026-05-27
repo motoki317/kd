@@ -73,6 +73,25 @@ func TestFilterViews(t *testing.T) {
 		}
 	})
 
+	t.Run("volumes view keeps mounting pods and their mounted volumes via mounts edges", func(t *testing.T) {
+		g := full.Filter(ViewVolumes)
+		if et := edgeTypesPresent(g); !et[EdgeMounts] || len(et) != 1 {
+			t.Errorf("volumes view edges = %v, want only mounts", et)
+		}
+		kinds := kindsPresent(g)
+		if !kinds["Pod"] {
+			t.Error("volumes view should include the mounting Pod")
+		}
+		if !kinds["ConfigMap"] && !kinds["Secret"] && !kinds["PersistentVolumeClaim"] {
+			t.Error("volumes view should include a mounted ConfigMap/Secret/PVC")
+		}
+		for _, unwanted := range []string{"Service", "Ingress", "Node", "Role"} {
+			if kinds[unwanted] {
+				t.Errorf("volumes view should not include %s", unwanted)
+			}
+		}
+	})
+
 	t.Run("all view is unchanged", func(t *testing.T) {
 		g := full.Filter(ViewAll)
 		if len(g.Nodes) != len(full.Nodes) || len(g.Edges) != len(full.Edges) {
@@ -171,6 +190,7 @@ func TestParseView(t *testing.T) {
 		"network":   ViewNetwork,
 		"nodes":     ViewNodes,
 		"rbac":      ViewRBAC,
+		"volumes":   ViewVolumes,
 		"all":       ViewAll,
 		"bogus":     ViewOwnership, // unknown falls back to default
 	}
