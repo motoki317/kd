@@ -283,9 +283,17 @@ body {
   font-size: 13px;
 }
 .ns-name {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Count of non-healthy resources, pushed to the right so the dot+name read first. */
+.ns-count {
+  flex: none;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
 }
 /* Health dot: colored for trouble, a faint hollow placeholder when healthy so names stay aligned. */
 .ns-dot {

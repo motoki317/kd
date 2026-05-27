@@ -53,6 +53,9 @@ export default function Sidebar(props: Props) {
                       <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
                     </Show>
                     <span class="ns-name">{ns.name}</span>
+                    <Show when={(ns.nonReady ?? 0) > 0}>
+                      <span class="ns-count" title={`${ns.nonReady} not healthy`}>{ns.nonReady}</span>
+                    </Show>
                   </button>
                 </li>
               )}

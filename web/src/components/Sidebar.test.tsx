@@ -7,8 +7,8 @@ afterEach(cleanup)
 
 const namespaces: NamespaceInfo[] = [
   { name: 'aaa', health: 'Healthy' },
-  { name: 'zzz-broken', health: 'Degraded' },
-  { name: 'mmm', health: 'Progressing' },
+  { name: 'zzz-broken', health: 'Degraded', nonReady: 3 },
+  { name: 'mmm', health: 'Progressing', nonReady: 1 },
   { name: 'bbb', health: 'Healthy' },
 ]
 
@@ -23,6 +23,9 @@ describe('Sidebar', () => {
     // Degraded > Progressing > the two Healthy (alphabetical) — independent of input order.
     expect(order).toEqual(['zzz-broken', 'mmm', 'aaa', 'bbb'])
     expect(container.querySelector('.ns-trouble')?.textContent).toBe('2')
+    // Each troubled namespace shows its non-ready count; healthy ones show none.
+    const counts = [...container.querySelectorAll('.ns-count')].map((e) => e.textContent)
+    expect(counts).toEqual(['3', '1'])
   })
 
   it('filters the list by name', async () => {

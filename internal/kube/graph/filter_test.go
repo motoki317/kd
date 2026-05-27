@@ -139,15 +139,19 @@ status:
         waiting:
           reason: CrashLoopBackOff
 `)
-	if got := Summarize(degraded); got != HealthDegraded {
-		t.Errorf("Summarize = %q, want Degraded", got)
+	if got := Summarize(degraded); got.Health != HealthDegraded {
+		t.Errorf("Summarize health = %q, want Degraded", got.Health)
+	}
+	// Only the crashing pod is non-healthy; the ready pod must not be counted.
+	if got := Summarize(degraded); got.NonReady != 1 {
+		t.Errorf("Summarize NonReady = %d, want 1", got.NonReady)
 	}
 
 	// The superseded fixture's only non-historical workloads are a ready Deployment, its live
 	// ReplicaSet, and a running pod — all healthy — so it summarizes Healthy (the dropped old
 	// ReplicaSets must not affect the roll-up).
-	if got := Summarize(decodeFixture(t, supersededRSFixture)); got != HealthHealthy {
-		t.Errorf("Summarize(superseded) = %q, want Healthy", got)
+	if got := Summarize(decodeFixture(t, supersededRSFixture)); got.Health != HealthHealthy || got.NonReady != 0 {
+		t.Errorf("Summarize(superseded) = %+v, want Healthy/0", got)
 	}
 
 	// A lone pending pod rolls up to Progressing.
@@ -161,8 +165,8 @@ metadata:
 status:
   phase: Pending
 `)
-	if got := Summarize(progressing); got != HealthProgressing {
-		t.Errorf("Summarize(pending) = %q, want Progressing", got)
+	if got := Summarize(progressing); got.Health != HealthProgressing || got.NonReady != 1 {
+		t.Errorf("Summarize(pending) = %+v, want Progressing/1", got)
 	}
 }
 

@@ -16,20 +16,31 @@ var severity = map[Health]int{
 	HealthHealthy:     0,
 }
 
-// Summarize rolls a namespace snapshot up to its single worst resource health, so the UI can show
-// cluster state at a glance without opening each namespace. Historical noise is ignored and an
-// empty namespace reports Healthy.
-func Summarize(objs []runtime.Object) Health {
-	worst := HealthHealthy
+// Summary rolls a namespace up to its worst resource health plus how many resources are not Healthy,
+// so the sidebar can both flag trouble (the dot color) and convey its scale (the count).
+type Summary struct {
+	Health   Health
+	NonReady int // resources whose health != Healthy (the count behind the dot)
+}
+
+// Summarize rolls a namespace snapshot up to its worst resource health and non-ready count, so the
+// UI can show cluster state at a glance without opening each namespace. Historical noise is ignored
+// and an empty namespace reports Healthy with a zero count.
+func Summarize(objs []runtime.Object) Summary {
+	s := Summary{Health: HealthHealthy}
 	for _, obj := range objs {
 		if isHistorical(obj) {
 			continue
 		}
-		if h := health(obj); severity[h] > severity[worst] {
-			worst = h
+		h := health(obj)
+		if h != HealthHealthy {
+			s.NonReady++
+		}
+		if severity[h] > severity[s.Health] {
+			s.Health = h
 		}
 	}
-	return worst
+	return s
 }
 
 // DescendantPodNames returns the names of every Pod reachable from the node with the given id by

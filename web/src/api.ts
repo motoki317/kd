@@ -9,6 +9,7 @@ const base = '/api/v1'
 export interface NamespaceInfo {
   name: string
   health: Health
+  nonReady?: number // count of non-Healthy resources, the scale behind the health dot
 }
 
 export async function fetchNamespaces(): Promise<NamespaceInfo[]> {

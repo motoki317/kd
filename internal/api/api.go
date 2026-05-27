@@ -74,6 +74,9 @@ type namespaceEntry struct {
 	// Health is the worst resource health in the namespace, so the sidebar can flag trouble
 	// without the user opening each one.
 	Health string `json:"health"`
+	// NonReady is how many resources are not Healthy, so the sidebar can convey the scale of
+	// trouble (3 degraded things vs 1) for triage at cluster scale.
+	NonReady int `json:"nonReady,omitempty"`
 }
 
 func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
@@ -85,8 +88,8 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, a.store.ListNamespaces())
 	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible))}
 	for _, n := range visible {
-		health := graph.Summarize(a.store.SnapshotNamespace(n))
-		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(health)})
+		s := graph.Summarize(a.store.SnapshotNamespace(n))
+		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(s.Health), NonReady: s.NonReady})
 	}
 	writeJSON(w, resp)
 }
