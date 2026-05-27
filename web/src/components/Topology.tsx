@@ -3,6 +3,7 @@ import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { middleTruncate, relativeName } from '../names'
+import { nodeMatches } from '../search'
 import type { EdgeType, KEdge, KNode } from '../types'
 
 interface Props {
@@ -64,17 +65,17 @@ export default function Topology(props: Props) {
     return { nodes, edges }
   })
 
-  // Search dims everything whose name/kind doesn't match the query, so a resource is findable in a
-  // dense namespace without losing its place in the tree. Null when the box is empty. The query is
-  // owned by the parent so it resets on namespace/view change.
+  // Search dims everything that doesn't match the query (by name, kind, label, or image), so a
+  // resource is findable in a dense namespace without losing its place in the tree. Null when the
+  // box is empty. The query is owned by the parent so it resets on namespace/view change.
   const query = () => props.search
   const setQuery = (q: string) => props.onSearch(q)
   const matches = createMemo(() => {
-    const q = query().trim().toLowerCase()
+    const q = query().trim()
     if (!q) return null
     const m = new Set<string>()
     for (const n of layout().nodes) {
-      if (n.name.toLowerCase().includes(q) || n.kind.toLowerCase().includes(q)) m.add(n.id)
+      if (nodeMatches(n, q)) m.add(n.id)
     }
     return m
   })
