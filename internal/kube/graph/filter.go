@@ -1,0 +1,79 @@
+package graph
+
+import "slices"
+
+// View is a named projection of the full graph onto one relationship dimension, so the UI
+// can switch between the ownership tree, node placement, network, and RBAC without the server
+// building a different graph. See docs/ADR/20260527-resource-relationship-graph.md.
+type View string
+
+const (
+	ViewAll       View = "all"
+	ViewOwnership View = "ownership" // default: the parent-child workload tree
+	ViewNodes     View = "nodes"     // Pod placement on Nodes
+	ViewNetwork   View = "network"   // Ingress -> Service -> Pod
+	ViewRBAC      View = "rbac"      // bindings -> roles and subjects
+)
+
+// viewSpec defines a view: which edge types to keep and which kinds to always show even when
+// unconnected (so e.g. a Service with no endpoints still appears in the network view).
+type viewSpec struct {
+	edges       []EdgeType
+	alwaysKinds []string
+}
+
+var viewSpecs = map[View]viewSpec{
+	ViewOwnership: {
+		edges:       []EdgeType{EdgeOwner},
+		alwaysKinds: []string{"Deployment", "ReplicaSet", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"},
+	},
+	ViewNodes: {
+		edges:       []EdgeType{EdgeScheduledOn},
+		alwaysKinds: []string{"Node", "Pod"},
+	},
+	ViewNetwork: {
+		edges:       []EdgeType{EdgeRoutes, EdgeSelects},
+		alwaysKinds: []string{"Ingress", "Service", "Pod"},
+	},
+	ViewRBAC: {
+		edges:       []EdgeType{EdgeBinds},
+		alwaysKinds: []string{"Role", "ClusterRole", "RoleBinding", "ClusterRoleBinding", "ServiceAccount"},
+	},
+}
+
+// ParseView maps a query parameter to a View, defaulting to the ownership view.
+func ParseView(s string) View {
+	switch View(s) {
+	case ViewAll, ViewOwnership, ViewNodes, ViewNetwork, ViewRBAC:
+		return View(s)
+	default:
+		return ViewOwnership
+	}
+}
+
+// Filter returns a new graph projected onto the given view. A node is kept when its kind is
+// one the view always shows or when it is an endpoint of a kept edge.
+func (g *Graph) Filter(v View) *Graph {
+	if v == ViewAll {
+		return &Graph{Nodes: slices.Clone(g.Nodes), Edges: slices.Clone(g.Edges)}
+	}
+	spec := viewSpecs[v]
+
+	edges := make([]Edge, 0, len(g.Edges))
+	connected := map[string]bool{}
+	for _, e := range g.Edges {
+		if slices.Contains(spec.edges, e.Type) {
+			edges = append(edges, e)
+			connected[e.From] = true
+			connected[e.To] = true
+		}
+	}
+
+	nodes := make([]Node, 0, len(g.Nodes))
+	for _, n := range g.Nodes {
+		if connected[n.ID] || slices.Contains(spec.alwaysKinds, n.Kind) {
+			nodes = append(nodes, n)
+		}
+	}
+	return &Graph{Nodes: nodes, Edges: edges}
+}
