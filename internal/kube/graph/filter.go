@@ -24,20 +24,19 @@ type Summary struct {
 }
 
 // Summarize rolls a namespace snapshot up to its worst resource health and non-ready count, so the
-// UI can show cluster state at a glance without opening each namespace. Historical noise is ignored
-// and an empty namespace reports Healthy with a zero count.
+// UI can show cluster state at a glance without opening each namespace. It rolls up the built graph's
+// node health (not raw per-object health) so the sidebar agrees with the topology — including
+// graph-derived signals like a Service with no ready endpoints. Build already drops historical noise,
+// so an empty namespace reports Healthy with a zero count.
 func Summarize(objs []runtime.Object) Summary {
+	g := Build(objs)
 	s := Summary{Health: HealthHealthy}
-	for _, obj := range objs {
-		if isHistorical(obj) {
-			continue
-		}
-		h := health(obj)
-		if h != HealthHealthy {
+	for _, n := range g.Nodes {
+		if n.Health != HealthHealthy {
 			s.NonReady++
 		}
-		if severity[h] > severity[s.Health] {
-			s.Health = h
+		if severity[n.Health] > severity[s.Health] {
+			s.Health = n.Health
 		}
 	}
 	return s

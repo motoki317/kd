@@ -52,11 +52,7 @@ func Build(objs []runtime.Object) *Graph {
 
 	var endpoints map[string]*Endpoints
 	g.Edges, endpoints = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
-	for i := range g.Nodes {
-		if ep, ok := endpoints[g.Nodes[i].ID]; ok {
-			g.Nodes[i].Endpoints = ep
-		}
-	}
+	annotateServiceEndpoints(g.Nodes, endpoints)
 	sortGraph(g)
 	return g
 }
