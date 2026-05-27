@@ -44,6 +44,13 @@ func Build(objs []runtime.Object) *Graph {
 	return g
 }
 
+// KindOf returns an object's Kubernetes kind, recovered from TypeMeta or the Go type. It lets
+// other packages classify cache objects (whose TypeMeta is empty) without duplicating the map.
+func KindOf(obj runtime.Object) string {
+	kind, _, _, _ := describe(obj)
+	return kind
+}
+
 // nodeID is the object UID, falling back to a stable synthetic id when UID is absent.
 func nodeID(kind string, m metav1.Object) string {
 	if uid := string(m.GetUID()); uid != "" {

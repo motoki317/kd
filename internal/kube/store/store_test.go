@@ -76,3 +76,32 @@ func TestStoreSnapshotNamespace(t *testing.T) {
 		t.Errorf("want cluster-scoped Node included, got %d", kinds["Node"])
 	}
 }
+
+func TestStoreSubscribeReceivesChange(t *testing.T) {
+	client := fake.NewSimpleClientset(ns("alpha"))
+	c := New(client, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	ch, unsubscribe := c.Subscribe()
+	defer unsubscribe()
+
+	// Creating a pod should fan a change signal out to the subscriber.
+	if _, err := client.CoreV1().Pods("alpha").Create(ctx, pod("alpha", "new", "node-1"), metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create pod: %v", err)
+	}
+	select {
+	case <-ch:
+	case <-time.After(3 * time.Second):
+		t.Fatal("did not receive change signal after pod creation")
+	}
+
+	// After unsubscribe, the channel is closed and no longer receives.
+	unsubscribe()
+	if _, ok := <-ch; ok {
+		t.Error("channel should be closed after unsubscribe")
+	}
+}

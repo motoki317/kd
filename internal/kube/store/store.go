@@ -29,8 +29,9 @@ type Cache struct {
 	namespaced []cache.SharedIndexInformer // namespaced kinds, indexed by namespace
 	all        []cache.SharedIndexInformer // every informer, for sync + change handlers
 
-	mu       sync.Mutex
-	onChange []func()
+	mu      sync.Mutex
+	subs    map[int]chan struct{}
+	nextSub int
 }
 
 // New registers informers for the kinds kd visualizes and returns an unstarted Cache.
@@ -131,19 +132,37 @@ func (c *Cache) SnapshotNamespace(namespace string) []runtime.Object {
 	return out
 }
 
-// OnChange registers a callback invoked whenever cached state changes. Callbacks should be
-// cheap and non-blocking (e.g. signal a debounce timer); the SSE layer coalesces bursts.
-func (c *Cache) OnChange(fn func()) {
+// Subscribe returns a channel that receives a signal whenever cached state changes, plus a
+// cancel function the subscriber must call to unsubscribe (e.g. when an SSE connection closes).
+// The channel is buffered to depth 1 and coalescing: bursts collapse into a single pending
+// signal, so subscribers see "something changed" rather than every event.
+func (c *Cache) Subscribe() (<-chan struct{}, func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.onChange = append(c.onChange, fn)
+	if c.subs == nil {
+		c.subs = map[int]chan struct{}{}
+	}
+	id := c.nextSub
+	c.nextSub++
+	ch := make(chan struct{}, 1)
+	c.subs[id] = ch
+	return ch, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if existing, ok := c.subs[id]; ok {
+			delete(c.subs, id)
+			close(existing)
+		}
+	}
 }
 
 func (c *Cache) notify() {
 	c.mu.Lock()
-	fns := slices.Clone(c.onChange)
-	c.mu.Unlock()
-	for _, fn := range fns {
-		fn()
+	defer c.mu.Unlock()
+	for _, ch := range c.subs {
+		select {
+		case ch <- struct{}{}:
+		default: // a signal is already pending; coalesce
+		}
 	}
 }
