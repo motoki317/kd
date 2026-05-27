@@ -30,7 +30,8 @@ func TestEventsForResource(t *testing.T) {
 		ev("Started", corev1.EventTypeNormal, 5, "", "Pod", "web-1"),               // matches by name (no uid)
 	}
 
-	got := eventsFor(objs, "Pod", "web-1", "pod-uid")
+	// uids represents the resource subtree (here just the pod itself).
+	got := eventsFor(objs, map[string]bool{"pod-uid": true}, "Pod", "web-1")
 	if len(got) != 3 {
 		t.Fatalf("got %d events, want 3 (the Deployment event excluded): %+v", len(got), got)
 	}
@@ -41,6 +42,22 @@ func TestEventsForResource(t *testing.T) {
 			t.Errorf("event %d = %q, want %q (order: %v)", i, got[i].Reason, w, reasons(got))
 		}
 	}
+
+	// Aggregation: a controller's subtree (Deployment uid + pod uid) pulls in the pod's events too.
+	agg := eventsFor(objs, map[string]bool{"other-uid": true, "pod-uid": true}, "Deployment", "web")
+	got2 := reasons(agg)
+	if !contains(got2, "Scaled") || !contains(got2, "FailedScheduling") {
+		t.Errorf("aggregated events = %v, want both the Deployment's Scaled and the pod's FailedScheduling", got2)
+	}
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 func reasons(es []eventEntry) []string {

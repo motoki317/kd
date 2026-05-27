@@ -69,6 +69,34 @@ func (g *Graph) DescendantPodNames(id string) []string {
 	return pods
 }
 
+// DescendantIDs returns the given node's id plus every node reachable from it through
+// ownerReference edges (the whole subtree). Used to aggregate a controller's events across its
+// ReplicaSets and Pods, where the actionable events (scheduling, image pull) actually land.
+func (g *Graph) DescendantIDs(id string) []string {
+	children := map[string][]string{}
+	for _, e := range g.Edges {
+		if e.Type == EdgeOwner {
+			children[e.From] = append(children[e.From], e.To)
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	var walk func(string)
+	walk = func(cur string) {
+		if seen[cur] {
+			return
+		}
+		seen[cur] = true
+		out = append(out, cur)
+		for _, c := range children[cur] {
+			walk(c)
+		}
+	}
+	walk(id)
+	slices.Sort(out)
+	return out
+}
+
 // View is a named projection of the full graph onto one relationship dimension, so the UI
 // can switch between the ownership tree, node placement, network, and RBAC without the server
 // building a different graph. See docs/ADR/20260527-resource-relationship-graph.md.

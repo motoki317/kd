@@ -5,9 +5,9 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/motoki317/kd/internal/kube/graph"
 )
 
 type eventEntry struct {
@@ -31,22 +31,31 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapshot := a.store.SnapshotNamespace(ns)
-	obj, found := findResource(snapshot, kind, name)
-	if !found {
+	g := graph.Build(snapshot)
+	var rootID string
+	for _, n := range g.Nodes {
+		if n.Kind == kind && n.Name == name {
+			rootID = n.ID
+			break
+		}
+	}
+	if rootID == "" {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	uid := ""
-	if m, err := meta.Accessor(obj); err == nil {
-		uid = string(m.GetUID())
+	// Aggregate over the resource and everything it owns, so a controller surfaces the scheduling
+	// and image-pull events that actually land on its pods.
+	uids := make(map[string]bool)
+	for _, id := range g.DescendantIDs(rootID) {
+		uids[id] = true
 	}
-	writeJSON(w, eventsResponse{Events: eventsFor(snapshot, kind, name, types.UID(uid))})
+	writeJSON(w, eventsResponse{Events: eventsFor(snapshot, uids, kind, name)})
 }
 
-// eventsFor collects the events whose involvedObject is the given resource, newest-first. It matches
-// by UID when the event carries one (the reliable key) and falls back to kind+name so events from
-// before a recreate still surface.
-func eventsFor(objs []runtime.Object, kind, name string, uid types.UID) []eventEntry {
+// eventsFor collects the events whose involvedObject is in the uid set (the resource and its
+// descendants), newest-first. The root also matches by kind+name as a fallback for events that
+// predate the current object (no UID match).
+func eventsFor(objs []runtime.Object, uids map[string]bool, rootKind, rootName string) []eventEntry {
 	var out []eventEntry
 	for _, o := range objs {
 		ev, ok := o.(*corev1.Event)
@@ -54,8 +63,8 @@ func eventsFor(objs []runtime.Object, kind, name string, uid types.UID) []eventE
 			continue
 		}
 		io := ev.InvolvedObject
-		byUID := uid != "" && io.UID == uid
-		byName := io.Kind == kind && io.Name == name
+		byUID := io.UID != "" && uids[string(io.UID)]
+		byName := io.UID == "" && io.Kind == rootKind && io.Name == rootName
 		if !byUID && !byName {
 			continue
 		}
