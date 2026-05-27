@@ -110,7 +110,7 @@ func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	writeJSON(w, presentable(obj))
+	writeManifest(w, presentable(obj), r.URL.Query().Get("format"))
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

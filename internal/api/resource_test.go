@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -49,4 +51,41 @@ func TestPresentableBlanksSecretValues(t *testing.T) {
 	if string(secret.Data["token"]) != "super-secret" {
 		t.Error("presentable must not mutate the cached original secret")
 	}
+}
+
+func TestWriteManifestFormats(t *testing.T) {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "settings", Namespace: "shop"},
+		Data:       map[string]string{"key": "value"},
+	}
+
+	t.Run("default is YAML", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		writeManifest(w, cm, "")
+		if ct := w.Header().Get("Content-Type"); ct != "application/yaml" {
+			t.Errorf("Content-Type = %q, want application/yaml", ct)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, "name: settings") || !strings.Contains(body, "key: value") {
+			t.Errorf("YAML body missing expected fields:\n%s", body)
+		}
+		if strings.Contains(body, "{") {
+			t.Errorf("YAML body should not contain JSON braces:\n%s", body)
+		}
+	})
+
+	t.Run("json is opt-in and indented", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		writeManifest(w, cm, "json")
+		if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", ct)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, `"name": "settings"`) {
+			t.Errorf("JSON body missing expected fields:\n%s", body)
+		}
+		if !strings.Contains(body, "\n  ") {
+			t.Errorf("JSON body should be indented:\n%s", body)
+		}
+	})
 }

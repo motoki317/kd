@@ -18,10 +18,16 @@ export async function fetchNamespaces(): Promise<NamespaceInfo[]> {
   return body.namespaces
 }
 
-export async function fetchResource(ns: string, kind: string, name: string): Promise<unknown> {
-  const res = await fetch(`${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}`)
+export type ManifestFormat = 'yaml' | 'json'
+
+// fetchResource returns the resource manifest already rendered as text by the server (YAML or
+// JSON), so the client just displays it — the structure is never inspected on this path.
+export async function fetchResource(ns: string, kind: string, name: string, format: ManifestFormat): Promise<string> {
+  const res = await fetch(
+    `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}?format=${format}`,
+  )
   if (!res.ok) throw new Error(`resource: ${res.status}`)
-  return res.json()
+  return res.text()
 }
 
 export interface GraphStreamHandlers {

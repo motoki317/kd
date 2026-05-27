@@ -1,9 +1,13 @@
 package api
 
 import (
+	"encoding/json"
+	"net/http"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/yaml"
 
 	"github.com/motoki317/kd/internal/kube/graph"
 )
@@ -68,4 +72,28 @@ func presentable(obj runtime.Object) runtime.Object {
 		}
 	}
 	return obj
+}
+
+// writeManifest renders a resource as YAML (default) or JSON. YAML is the default because it is
+// what operators read by default (`kubectl get -o yaml`); JSON stays available for tooling. Both
+// go through the object's json tags, so the two views describe the same fields.
+func writeManifest(w http.ResponseWriter, obj runtime.Object, format string) {
+	var (
+		body []byte
+		err  error
+		ct   string
+	)
+	if format == "json" {
+		ct = "application/json"
+		body, err = json.MarshalIndent(obj, "", "  ")
+	} else {
+		ct = "application/yaml"
+		body, err = yaml.Marshal(obj)
+	}
+	if err != nil {
+		http.Error(w, "encode error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	_, _ = w.Write(body)
 }

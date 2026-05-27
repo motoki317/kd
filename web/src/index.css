@@ -387,6 +387,10 @@ body {
 .manifest-section > summary {
   cursor: pointer;
   list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 12px 16px;
   font-size: 12px;
   text-transform: uppercase;
@@ -397,12 +401,32 @@ body {
 .manifest-section > summary::-webkit-details-marker {
   display: none;
 }
-.manifest-section > summary::before {
+/* Marker sits on the label so summary's flex row stays just label | format toggle. */
+.manifest-label::before {
   content: '▸ ';
   color: var(--border-strong);
 }
-.manifest-section[open] > summary::before {
+.manifest-section[open] .manifest-label::before {
   content: '▾ ';
+}
+.manifest-format {
+  display: inline-flex;
+  gap: 2px;
+}
+.manifest-format button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.manifest-format button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 .manifest-section .manifest {
   margin: 0 16px 16px;
