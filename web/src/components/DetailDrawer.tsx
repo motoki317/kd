@@ -1,4 +1,4 @@
-import { createResource, createSignal, Show, Suspense } from 'solid-js'
+import { createMemo, createResource, createSignal, Show, Suspense } from 'solid-js'
 import { fetchResource, type ManifestFormat } from '../api'
 import { healthColor } from '../health'
 import type { KNode } from '../types'
@@ -9,23 +9,24 @@ interface Props {
   onClose: () => void
 }
 
-// DetailDrawer shows the selected resource's metadata and spec, plus live logs for pods.
+type Tab = 'logs' | 'manifest'
+
+// DetailDrawer shows the selected resource's manifest. Pods also stream live logs, so they get
+// Logs/Manifest tabs (defaulting to logs, the developer's first question); other kinds have no
+// logs and show the manifest directly.
 export default function DetailDrawer(props: Props) {
+  const isPod = createMemo(() => props.node?.kind === 'Pod')
+  const [tab, setTab] = createSignal<Tab>('logs')
+
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
-  // part of the resource key, so flipping it refetches the server-rendered text.
+  // part of the resource key, so flipping it refetches the server-rendered text. The manifest is
+  // fetched as soon as a node is selected, so switching to it from the Logs tab is instant.
   const [format, setFormat] = createSignal<ManifestFormat>('yaml')
   const [detail] = createResource(
     () =>
       props.node ? { ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name, format: format() } : null,
     (key) => fetchResource(key.ns, key.kind, key.name, key.format),
   )
-
-  // Buttons live inside the <summary>; preventDefault stops the click from also toggling the
-  // <details> open/closed.
-  const pick = (f: ManifestFormat) => (e: MouseEvent) => {
-    e.preventDefault()
-    setFormat(f)
-  }
 
   return (
     <Show when={props.node}>
@@ -47,30 +48,42 @@ export default function DetailDrawer(props: Props) {
             </button>
           </header>
 
-          <Show when={node().kind === 'Pod'}>
-            <LogViewer namespace={node().namespace ?? ''} pod={node().name} />
+          <Show when={isPod()}>
+            <nav class="drawer-tabs">
+              <button classList={{ active: tab() === 'logs' }} onClick={() => setTab('logs')}>
+                Logs
+              </button>
+              <button classList={{ active: tab() === 'manifest' }} onClick={() => setTab('manifest')}>
+                Manifest
+              </button>
+            </nav>
+            {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
+                peek at the manifest tab. */}
+            <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
+              <LogViewer namespace={node().namespace ?? ''} pod={node().name} />
+            </div>
           </Show>
 
-          {/* Manifest is reference detail, so it is collapsed for pods (logs lead) and open
-              otherwise. A plain <details> keeps it one element, not a stateful toggle. */}
-          <details class="drawer-section manifest-section" open={node().kind !== 'Pod'}>
-            <summary>
-              <span class="manifest-label">Manifest</span>
+          <section class="manifest-section" classList={{ hidden: isPod() && tab() !== 'manifest' }}>
+            <div class="manifest-head">
+              <Show when={!isPod()}>
+                <span class="manifest-label">Manifest</span>
+              </Show>
               <span class="manifest-format">
-                <button classList={{ active: format() === 'yaml' }} onClick={pick('yaml')}>
+                <button classList={{ active: format() === 'yaml' }} onClick={() => setFormat('yaml')}>
                   YAML
                 </button>
-                <button classList={{ active: format() === 'json' }} onClick={pick('json')}>
+                <button classList={{ active: format() === 'json' }} onClick={() => setFormat('json')}>
                   JSON
                 </button>
               </span>
-            </summary>
+            </div>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               <Show when={detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
                 <pre class="manifest">{detail()}</pre>
               </Show>
             </Suspense>
-          </details>
+          </section>
         </aside>
       )}
     </Show>
