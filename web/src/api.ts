@@ -72,13 +72,14 @@ export function streamLogs(
   ns: string,
   kind: string,
   name: string,
-  opts: { container?: string; tailLines?: number },
+  opts: { container?: string; tailLines?: number; previous?: boolean },
   onLine: (entry: LogEntry) => void,
   onError?: () => void,
 ): () => void {
-  const params = new URLSearchParams({ follow: 'true' })
+  const params = new URLSearchParams({ follow: opts.previous ? 'false' : 'true' })
   if (opts.container) params.set('container', opts.container)
   if (opts.tailLines != null) params.set('tailLines', String(opts.tailLines))
+  if (opts.previous) params.set('previous', 'true')
   const es = new EventSource(
     `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )

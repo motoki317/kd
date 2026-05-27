@@ -105,22 +105,26 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 
 	pods := podsForResource(a.store.SnapshotNamespace(ns), kind, name)
 
-	follow := r.URL.Query().Get("follow") != "false"
 	container := r.URL.Query().Get("container")
 	tail := parseTail(r.URL.Query().Get("tailLines"))
+	// "previous" returns the logs of the prior, crashed container (kubectl --previous) — the place a
+	// CrashLoopBackOff reason actually lives. A terminated container can't be followed, so previous
+	// implies a one-shot dump.
+	previous := r.URL.Query().Get("previous") == "true"
+	follow := !previous && r.URL.Query().Get("follow") != "false"
 
 	setSSEHeaders(w)
 	flusher.Flush() // commit 200 + headers even before the first line (or when there are no pods)
 
 	// Fan out: one goroutine per pod streams into a shared channel; this loop is the only writer
-	// to w. The channel closes once every pod stream ends (all pods gone, or follow=false EOF).
+	// to w. The channel closes once every pod stream ends (all pods gone, or a non-follow EOF).
 	lines := make(chan logLine, 64)
 	var wg sync.WaitGroup
 	for _, pod := range pods {
 		wg.Add(1)
 		go func(pod *corev1.Pod) {
 			defer wg.Done()
-			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, tail, lines)
+			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, previous, tail, lines)
 		}(pod)
 	}
 	go func() { wg.Wait(); close(lines) }()
@@ -133,7 +137,13 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case ll, ok := <-lines:
 			if !ok {
-				return // every pod stream has ended
+				if follow {
+					return // live stream: all pods gone, let the client reconnect
+				}
+				// One-shot dump finished; hold the connection open (idle) so the browser's
+				// EventSource doesn't auto-reconnect and re-dump. Closing the request ends it.
+				lines = nil
+				continue
 			}
 			if !writeSSE(w, "log", ll) {
 				return
@@ -180,13 +190,13 @@ func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 // streamPodLogs follows one pod's logs, sending each line (tagged with the pod name) to out until
 // the stream ends or ctx is cancelled. A pod that fails to open is skipped, not fatal, so one bad
 // pod never aborts the rest of an aggregate.
-func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow bool, tail *int64, out chan<- logLine) {
+func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous bool, tail *int64, out chan<- logLine) {
 	c := container
 	// An empty container errors on multi-container pods, so default to the first container.
 	if c == "" && len(pod.Spec.Containers) > 0 {
 		c = pod.Spec.Containers[0].Name
 	}
-	opts := &corev1.PodLogOptions{Container: c, Follow: follow}
+	opts := &corev1.PodLogOptions{Container: c, Follow: follow, Previous: previous}
 	if tail != nil {
 		opts.TailLines = tail
 	}

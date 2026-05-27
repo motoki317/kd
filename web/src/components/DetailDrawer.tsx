@@ -122,6 +122,7 @@ export default function DetailDrawer(props: Props) {
                 name={node().name}
                 aggregated={!isPod()}
                 containers={node().containers ?? []}
+                restarts={node().restarts ?? 0}
               />
             </div>
           </Show>

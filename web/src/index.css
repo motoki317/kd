@@ -744,6 +744,22 @@ body {
   letter-spacing: normal;
   cursor: pointer;
 }
+.logs-prev {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.logs-prev.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;

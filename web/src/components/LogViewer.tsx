@@ -11,6 +11,8 @@ interface Props {
   aggregated: boolean
   // container names for a single pod; >1 enables the per-container picker.
   containers: string[]
+  // restart total for a single pod; >0 offers the "previous" (crashed container) logs.
+  restarts: number
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -23,6 +25,8 @@ export default function LogViewer(props: Props) {
   const [pinned, setPinned] = createSignal(true)
   // Selected container for a single multi-container pod (empty = server picks the first).
   const [container, setContainer] = createSignal('')
+  // Show the previous (crashed) container's logs — where a CrashLoopBackOff reason lives.
+  const [previous, setPrevious] = createSignal(false)
   let pre: HTMLPreElement | undefined
 
   const toBottom = () => pre?.scrollTo({ top: pre.scrollHeight })
@@ -30,15 +34,24 @@ export default function LogViewer(props: Props) {
     if (pre) setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
   }
 
-  // Default to the first container whenever the target pod changes.
-  createEffect(on(() => props.name, () => setContainer(props.containers[0] ?? '')))
+  // Reset container + previous toggle whenever the target pod changes.
+  createEffect(
+    on(
+      () => props.name,
+      () => {
+        setContainer(props.containers[0] ?? '')
+        setPrevious(false)
+      },
+    ),
+  )
 
   createEffect(() => {
-    // Re-subscribe whenever the target resource or selected container changes.
+    // Re-subscribe whenever the target resource, container, or previous toggle changes.
     const ns = props.namespace
     const kind = props.kind
     const name = props.name
     const c = container()
+    const prev = previous()
     setLines([])
     setError(false)
     setPinned(true)
@@ -46,7 +59,7 @@ export default function LogViewer(props: Props) {
       ns,
       kind,
       name,
-      { tailLines: 200, container: c || undefined },
+      { tailLines: 200, container: c || undefined, previous: prev },
       (entry) => {
         setError(false) // a line arriving means the stream recovered
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
@@ -65,6 +78,11 @@ export default function LogViewer(props: Props) {
           <select class="logs-container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
             <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
+        </Show>
+        <Show when={!props.aggregated && props.restarts > 0}>
+          <button class="logs-prev" classList={{ active: previous() }} onClick={() => setPrevious((p) => !p)} title="Logs from the previous (crashed) container">
+            previous
+          </button>
         </Show>
         <span class="logs-right">
           {error() && <span class="logs-error">stream interrupted</span>}
