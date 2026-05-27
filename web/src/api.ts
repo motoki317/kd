@@ -62,6 +62,7 @@ export function streamGraph(ns: string, view: View, h: GraphStreamHandlers): () 
 
 export interface LogEntry {
   pod: string
+  time?: string // RFC3339Nano emission time, present only when timestamps were requested
   line: string
 }
 
@@ -72,7 +73,7 @@ export function streamLogs(
   ns: string,
   kind: string,
   name: string,
-  opts: { container?: string; tailLines?: number; previous?: boolean },
+  opts: { container?: string; tailLines?: number; previous?: boolean; timestamps?: boolean },
   onLine: (entry: LogEntry) => void,
   onError?: () => void,
 ): () => void {
@@ -80,6 +81,7 @@ export function streamLogs(
   if (opts.container) params.set('container', opts.container)
   if (opts.tailLines != null) params.set('tailLines', String(opts.tailLines))
   if (opts.previous) params.set('previous', 'true')
+  if (opts.timestamps) params.set('timestamps', 'true')
   const es = new EventSource(
     `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )

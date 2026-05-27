@@ -31,6 +31,11 @@ describe('LogViewer', () => {
     expect(agg.container.querySelector('.logs-container')).toBeNull()
   })
 
+  it('always offers a timestamps toggle', () => {
+    const { container } = render(() => <LogViewer {...base} aggregated={false} containers={['app']} restarts={0} />)
+    expect(container.querySelector('.logs-ts')?.textContent).toContain('timestamps')
+  })
+
   it('hides the line filter until there are log lines', () => {
     const { container } = render(() => <LogViewer {...base} aggregated={false} containers={['app']} restarts={0} />)
     // No lines stream from the stub, so the filter input should not be shown.

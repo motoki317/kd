@@ -32,6 +32,8 @@ export default function LogViewer(props: Props) {
   const [previous, setPrevious] = createSignal(false)
   // Client-side line filter ("grep"): hide lines not containing this substring.
   const [filter, setFilter] = createSignal('')
+  // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
+  const [timestamps, setTimestamps] = createSignal(false)
   const visibleLines = createMemo(() => filterLogLines(lines(), filter()))
   let pre: HTMLPreElement | undefined
 
@@ -61,6 +63,7 @@ export default function LogViewer(props: Props) {
     const name = props.name
     const c = container()
     const prev = previous()
+    const ts = timestamps()
     setLines([])
     setError(false)
     setPinned(true)
@@ -68,7 +71,7 @@ export default function LogViewer(props: Props) {
       ns,
       kind,
       name,
-      { tailLines: 200, container: c || undefined, previous: prev },
+      { tailLines: 200, container: c || undefined, previous: prev, timestamps: ts },
       (entry) => {
         setError(false) // a line arriving means the stream recovered
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
@@ -93,6 +96,9 @@ export default function LogViewer(props: Props) {
             previous
           </button>
         </Show>
+        <button class="logs-ts" classList={{ active: timestamps() }} onClick={() => setTimestamps((t) => !t)} title="Show each line's emission time">
+          timestamps
+        </button>
         <Show when={lines().length > 0 || filter()}>
           <input
             class="logs-filter"
@@ -113,7 +119,7 @@ export default function LogViewer(props: Props) {
             </span>
           </Show>
           <Show when={visibleLines().length > 0}>
-            <CopyButton text={() => visibleLines().map((l) => l.line).join('\n')} title="Copy logs" />
+            <CopyButton text={() => visibleLines().map((l) => (l.time ? `${l.time} ${l.line}` : l.line)).join('\n')} title="Copy logs" />
           </Show>
         </span>
       </div>
@@ -125,6 +131,9 @@ export default function LogViewer(props: Props) {
                 <span class="log-pod" style={{ color: podColor(l.pod) }} title={l.pod}>
                   {middleTruncate(l.pod, 20)}
                 </span>
+              </Show>
+              <Show when={l.time}>
+                <span class="log-time">{l.time}</span>
               </Show>
               {l.line}
             </div>

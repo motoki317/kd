@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,7 +85,10 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 type logLine struct {
 	// Pod names the source pod so the client can label lines when a workload's logs are
 	// aggregated across several pods. It is the pod's own name even for a single Pod.
-	Pod  string `json:"pod"`
+	Pod string `json:"pod"`
+	// Time is the line's emission timestamp (RFC3339Nano), set only when the client asked for
+	// timestamps; it lets the client order an interleaved aggregate by true emission time.
+	Time string `json:"time,omitempty"`
 	Line string `json:"line"`
 }
 
@@ -112,6 +116,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 	// implies a one-shot dump.
 	previous := r.URL.Query().Get("previous") == "true"
 	follow := !previous && r.URL.Query().Get("follow") != "false"
+	timestamps := r.URL.Query().Get("timestamps") == "true"
 
 	setSSEHeaders(w)
 	flusher.Flush() // commit 200 + headers even before the first line (or when there are no pods)
@@ -124,7 +129,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(pod *corev1.Pod) {
 			defer wg.Done()
-			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, previous, tail, lines)
+			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, previous, timestamps, tail, lines)
 		}(pod)
 	}
 	go func() { wg.Wait(); close(lines) }()
@@ -184,13 +189,13 @@ func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 // streamPodLogs follows one pod's logs, sending each line (tagged with the pod name) to out until
 // the stream ends or ctx is cancelled. A pod that fails to open is skipped, not fatal, so one bad
 // pod never aborts the rest of an aggregate.
-func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous bool, tail *int64, out chan<- logLine) {
+func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
 	c := container
 	// An empty container errors on multi-container pods, so default to the first container.
 	if c == "" && len(pod.Spec.Containers) > 0 {
 		c = pod.Spec.Containers[0].Name
 	}
-	opts := &corev1.PodLogOptions{Container: c, Follow: follow, Previous: previous}
+	opts := &corev1.PodLogOptions{Container: c, Follow: follow, Previous: previous, Timestamps: timestamps}
 	if tail != nil {
 		opts.TailLines = tail
 	}
@@ -202,12 +207,32 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
+		ll := logLine{Pod: pod.Name, Line: scanner.Text()}
+		if timestamps {
+			// kubelet prepends "<RFC3339Nano> " to each line; split it into its own field so the
+			// client can render it dimmed (and the raw line stays clean for copy).
+			ll.Time, ll.Line = splitLogTimestamp(ll.Line)
+		}
 		select {
-		case out <- logLine{Pod: pod.Name, Line: scanner.Text()}:
+		case out <- ll:
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// splitLogTimestamp separates the kubelet timestamp prefix ("<RFC3339Nano> message") from the
+// message. It returns ("", line) unchanged when the first token isn't a timestamp, so a stray line
+// without the prefix is never mangled.
+func splitLogTimestamp(line string) (ts, msg string) {
+	tok, rest, ok := strings.Cut(line, " ")
+	if !ok {
+		return "", line
+	}
+	if _, err := time.Parse(time.RFC3339Nano, tok); err != nil {
+		return "", line
+	}
+	return tok, rest
 }
 
 func parseTail(s string) *int64 {

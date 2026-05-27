@@ -911,7 +911,8 @@ body {
   letter-spacing: normal;
   cursor: pointer;
 }
-.logs-prev {
+.logs-prev,
+.logs-ts {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
@@ -922,7 +923,8 @@ body {
   letter-spacing: normal;
   cursor: pointer;
 }
-.logs-prev.active {
+.logs-prev.active,
+.logs-ts.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -973,6 +975,12 @@ body {
   margin-right: 10px;
   white-space: nowrap;
   user-select: none;
+}
+.log-time {
+  color: #6b7888;
+  margin-right: 8px;
+  user-select: none;
+  white-space: nowrap;
 }
 .logs-waiting {
   color: #6b7888;
