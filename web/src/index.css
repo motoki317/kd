@@ -775,6 +775,9 @@ body {
   color: var(--health-degraded);
   text-transform: none;
 }
+.logs-error.notice {
+  color: var(--text-dim); /* a not-yet-started container has no logs — informational, not alarming */
+}
 /* Shared compact action button (copy manifest / logs). */
 .copy-btn {
   border: 1px solid var(--border);

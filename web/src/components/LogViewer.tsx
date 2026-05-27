@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
+import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
@@ -13,6 +13,8 @@ interface Props {
   containers: string[]
   // restart total for a single pod; >0 offers the "previous" (crashed container) logs.
   restarts: number
+  // single pod's status, to tell "container not started yet" from a real stream drop.
+  status?: string
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -29,6 +31,8 @@ export default function LogViewer(props: Props) {
   const [previous, setPrevious] = createSignal(false)
   let pre: HTMLPreElement | undefined
 
+  // A single pod that isn't Running can't produce logs yet, so an error there is "no logs" not a drop.
+  const gentle = createMemo(() => !props.aggregated && !(props.status ?? '').startsWith('Running'))
   const toBottom = () => pre?.scrollTo({ top: pre.scrollHeight })
   const onScroll = () => {
     if (pre) setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
@@ -85,7 +89,11 @@ export default function LogViewer(props: Props) {
           </button>
         </Show>
         <span class="logs-right">
-          {error() && <span class="logs-error">stream interrupted</span>}
+          <Show when={error()}>
+            <span class="logs-error" classList={{ notice: gentle() }}>
+              {gentle() ? 'no logs yet' : 'stream interrupted'}
+            </span>
+          </Show>
           <Show when={lines().length > 0}>
             <CopyButton text={() => lines().map((l) => l.line).join('\n')} title="Copy logs" />
           </Show>
