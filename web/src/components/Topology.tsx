@@ -59,6 +59,35 @@ export default function Topology(props: Props) {
     return { nodes, edges }
   })
 
+  // Search dims everything whose name/kind doesn't match the query, so a resource is findable in a
+  // dense namespace without losing its place in the tree. Null when the box is empty.
+  const [query, setQuery] = createSignal('')
+  const matches = createMemo(() => {
+    const q = query().trim().toLowerCase()
+    if (!q) return null
+    const m = new Set<string>()
+    for (const n of layout().nodes) {
+      if (n.name.toLowerCase().includes(q) || n.kind.toLowerCase().includes(q)) m.add(n.id)
+    }
+    return m
+  })
+
+  // Search takes precedence over selection for the fade; only selection lights edges accent.
+  const nodeFaded = (id: string) => {
+    const m = matches()
+    if (m) return !m.has(id)
+    const r = related()
+    return r ? !r.nodes.has(id) : false
+  }
+  const edgeFaded = (e: { from: string; to: string; type: string }) => {
+    const m = matches()
+    if (m) return !(m.has(e.from) && m.has(e.to))
+    const r = related()
+    return r ? !r.edges.has(edgeKey(e)) : false
+  }
+  const edgeAdjacent = (e: { from: string; to: string; type: string }) =>
+    !matches() && (related()?.edges.has(edgeKey(e)) ?? false)
+
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
   const [ty, setTy] = createSignal(0)
@@ -149,6 +178,19 @@ export default function Topology(props: Props) {
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">No resources to display in this namespace.</div>
       </Show>
+      <div class="topology-search">
+        <input
+          placeholder="Search resources…"
+          value={query()}
+          onInput={(e) => setQuery(e.currentTarget.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+        />
+        <Show when={matches()}>
+          <span class="topology-matches" classList={{ none: matches()!.size === 0 }}>
+            {matches()!.size === 0 ? 'no matches' : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
+          </span>
+        </Show>
+      </div>
       <svg
         ref={svg}
         class="topology-svg"
@@ -167,10 +209,7 @@ export default function Topology(props: Props) {
             <For each={layout().edges}>
               {(e) => (
                 <path
-                  classList={{
-                    faded: related() ? !related()!.edges.has(edgeKey(e)) : false,
-                    adjacent: related() ? related()!.edges.has(edgeKey(e)) : false,
-                  }}
+                  classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e) }}
                   d={edgePath(e.points)}
                   fill="none"
                   stroke="var(--edge-color)"
@@ -188,7 +227,7 @@ export default function Topology(props: Props) {
                   class="node"
                   classList={{
                     selected: n.id === props.selectedId,
-                    faded: related() ? !related()!.nodes.has(n.id) : false,
+                    faded: nodeFaded(n.id),
                     [`h-${n.health.toLowerCase()}`]: true,
                   }}
                   transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}
