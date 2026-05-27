@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, on, Show, Suspense } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { healthColor } from '../health'
 import { relativeAge } from '../time'
@@ -42,7 +42,15 @@ export default function DetailDrawer(props: Props) {
     () => (props.node ? { ...key()!, format: format() } : null),
     (k) => fetchResource(k.ns, k.kind, k.name, k.format),
   )
-  const [events] = createResource(key, (k) => fetchEvents(k.ns, k.kind, k.name))
+  const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ns, k.kind, k.name))
+  const warnings = () => events()?.filter((e) => e.type === 'Warning').length ?? 0
+
+  // Events are transient and a failing resource keeps emitting them, so poll while the drawer is
+  // open (a no-op when nothing is selected) to keep the tab badge and list current.
+  onMount(() => {
+    const t = setInterval(() => refetchEvents(), 8000)
+    onCleanup(() => clearInterval(t))
+  })
 
   return (
     <Show when={props.node}>
@@ -90,6 +98,11 @@ export default function DetailDrawer(props: Props) {
               {(t) => (
                 <button classList={{ active: tab() === t }} onClick={() => setTab(t)}>
                   {TAB_LABELS[t]}
+                  <Show when={t === 'events' && (events()?.length ?? 0) > 0}>
+                    <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
+                      {events()!.length}
+                    </span>
+                  </Show>
                 </button>
               )}
             </For>

@@ -508,6 +508,20 @@ body {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
+.tab-badge {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--border-strong);
+  color: var(--surface);
+  border-radius: 999px;
+  padding: 1px 6px;
+  vertical-align: middle;
+}
+.tab-badge.warn {
+  background: var(--health-degraded);
+  color: #fff;
+}
 
 /* Logs and Manifest are the drawer's two body panels: the active one fills, the other is hidden
    (display:none, so it leaves the flex flow) while staying mounted to preserve its state. */
