@@ -3,7 +3,7 @@ import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor } from './health'
-import { navCandidates, nextSelection } from './nav'
+import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
 import type { Health, KNode, View } from './types'
 import Sidebar from './components/Sidebar'
@@ -131,9 +131,14 @@ export default function App() {
     setConnected(false)
     const close = streamGraph(ns, v, {
       snapshot: (g) => {
+        // Decide the selection from the snapshot's own nodes BEFORE mutating the store, so this set
+        // is authoritative over the reactive deep-link restore below (which would otherwise race and
+        // get clobbered): keep the current selection if still present, else adopt a URL deep-link.
+        const sel = resolveSelectionOnSnapshot(g.nodes, keepSel, pendingSel)
+        if (sel.consumedPending) pendingSel = null
         setGraph(reconcile(fromSnapshot(g)))
         setConnected(true)
-        setSelectedId(g.nodes.some((n) => n.id === keepSel) ? keepSel : null)
+        setSelectedId(sel.id)
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
       error: () => setConnected(false),

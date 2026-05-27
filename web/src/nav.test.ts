@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { navCandidates, nextSelection, orderedForNav } from './nav'
+import { navCandidates, nextSelection, orderedForNav, resolveSelectionOnSnapshot } from './nav'
 import type { Health, KNode } from './types'
 
 function node(id: string, kind: string, name: string, health: Health = 'Healthy'): KNode {
@@ -81,5 +81,29 @@ describe('nextSelection', () => {
 
   it('treats an unknown current id like no selection', () => {
     expect(nextSelection(nodes, 'gone', 1)).toBe('degraded')
+  })
+})
+
+describe('resolveSelectionOnSnapshot', () => {
+  const nodes = [node('uid-1', 'Service', 'kube-dns'), node('uid-2', 'Pod', 'web')]
+
+  it('keeps the current selection when its node is still present (cross-view continuity)', () => {
+    expect(resolveSelectionOnSnapshot(nodes, 'uid-2', null)).toEqual({ id: 'uid-2', consumedPending: false })
+  })
+
+  it('clears a selection whose node is gone and adopts no deep-link', () => {
+    expect(resolveSelectionOnSnapshot(nodes, 'stale', null)).toEqual({ id: null, consumedPending: false })
+  })
+
+  it('adopts a URL deep-link by Kind/name when nothing is kept', () => {
+    expect(resolveSelectionOnSnapshot(nodes, null, 'Service/kube-dns')).toEqual({ id: 'uid-1', consumedPending: true })
+  })
+
+  it('leaves the deep-link pending when its node is not in this snapshot yet', () => {
+    expect(resolveSelectionOnSnapshot(nodes, null, 'Pod/not-here')).toEqual({ id: null, consumedPending: false })
+  })
+
+  it('prefers a kept selection over a deep-link', () => {
+    expect(resolveSelectionOnSnapshot(nodes, 'uid-2', 'Service/kube-dns')).toEqual({ id: 'uid-2', consumedPending: false })
   })
 })
