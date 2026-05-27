@@ -58,6 +58,12 @@ func nodeHealth(n *corev1.Node) Health {
 }
 
 func podHealth(p *corev1.Pod) Health {
+	// A failing init container blocks the pod from ever starting, so it's degraded too.
+	for _, cs := range p.Status.InitContainerStatuses {
+		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+			return HealthDegraded
+		}
+	}
 	// A container stuck waiting (CrashLoopBackOff, ImagePullBackOff, ...) is degraded.
 	for _, cs := range p.Status.ContainerStatuses {
 		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
@@ -160,6 +166,16 @@ func desiredReplicas(r *int32) int32 {
 func podStatusSummary(p *corev1.Pod) string {
 	if p.DeletionTimestamp != nil {
 		return "Terminating"
+	}
+	// Init containers run (sequentially) before the app ones; a failing init is what's actually wrong,
+	// so surface it as kubectl does ("Init:CrashLoopBackOff") rather than the bare "Pending".
+	for _, cs := range p.Status.InitContainerStatuses {
+		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+			return "Init:" + w.Reason
+		}
+		if t := cs.State.Terminated; t != nil && t.ExitCode != 0 && t.Reason != "" {
+			return "Init:" + t.Reason
+		}
 	}
 	for _, cs := range p.Status.ContainerStatuses {
 		if w := cs.State.Waiting; w != nil && w.Reason != "" {

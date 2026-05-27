@@ -64,6 +64,13 @@ func TestPodStatusSummary(t *testing.T) {
 			}},
 			want: "Succeeded",
 		},
+		"failing init container shows Init:<reason>": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:                 corev1.PodPending,
+				InitContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}}},
+			}},
+			want: "Init:CrashLoopBackOff",
+		},
 		"deletion shows Terminating": {
 			pod:  corev1.Pod{ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &metav1.Time{}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
 			want: "Terminating",
@@ -75,6 +82,16 @@ func TestPodStatusSummary(t *testing.T) {
 				t.Errorf("podStatusSummary = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestPodHealthFailingInitContainer(t *testing.T) {
+	pod := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:                 corev1.PodPending,
+		InitContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}}},
+	}}
+	if got := health(pod); got != HealthDegraded {
+		t.Errorf("health(init crash-loop) = %q, want Degraded", got)
 	}
 }
 
