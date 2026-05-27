@@ -672,6 +672,22 @@ body {
   padding: 2px 6px;
   white-space: nowrap;
 }
+.drawer-routes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.route-row {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .drawer-labels {
   margin-top: 8px;
 }

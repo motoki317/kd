@@ -7,6 +7,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -192,6 +193,53 @@ func servicePorts(obj runtime.Object) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// ingressRoutes formats an Ingress's routing table as "host/path → service:port" rows (nil for
+// non-ingresses), so the network view's entry point says where external traffic actually goes without
+// opening the manifest. A hostless rule shows "*", an empty path "/", and a default backend leads as
+// "default → …". The Ingress→Service edges already show the targets; this adds the host/path mapping.
+func ingressRoutes(obj runtime.Object) []string {
+	ing, ok := obj.(*networkingv1.Ingress)
+	if !ok {
+		return nil
+	}
+	var routes []string
+	if db := ing.Spec.DefaultBackend; db != nil && db.Service != nil {
+		routes = append(routes, "default → "+ingressBackend(db.Service))
+	}
+	for _, r := range ing.Spec.Rules {
+		if r.HTTP == nil {
+			continue
+		}
+		host := r.Host
+		if host == "" {
+			host = "*"
+		}
+		for _, p := range r.HTTP.Paths {
+			if p.Backend.Service == nil {
+				continue // resource backends (non-Service) have no node to point at
+			}
+			path := p.Path
+			if path == "" {
+				path = "/"
+			}
+			routes = append(routes, host+path+" → "+ingressBackend(p.Backend.Service))
+		}
+	}
+	return routes
+}
+
+// ingressBackend renders an Ingress backend as "service:port", using the named port when set.
+func ingressBackend(s *networkingv1.IngressServiceBackend) string {
+	switch {
+	case s.Port.Name != "":
+		return s.Name + ":" + s.Port.Name
+	case s.Port.Number != 0:
+		return fmt.Sprintf("%s:%d", s.Name, s.Port.Number)
+	default:
+		return s.Name
+	}
 }
 
 // serviceClusterIP returns a Service's reachable address for the drawer: its cluster IP, "headless"

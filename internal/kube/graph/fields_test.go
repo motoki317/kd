@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -40,6 +41,34 @@ func TestServicePorts(t *testing.T) {
 	}
 	if got := servicePorts(&corev1.Pod{}); got != nil {
 		t.Errorf("servicePorts(non-service) = %v, want nil", got)
+	}
+}
+
+func TestIngressRoutes(t *testing.T) {
+	num := func(p int32) networkingv1.ServiceBackendPort { return networkingv1.ServiceBackendPort{Number: p} }
+	ing := &networkingv1.Ingress{Spec: networkingv1.IngressSpec{
+		DefaultBackend: &networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "fallback", Port: num(80)}},
+		Rules: []networkingv1.IngressRule{
+			{Host: "app.example.com", IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{
+				{Path: "/api", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "api-svc", Port: num(8080)}}},
+				{Path: "", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "web-svc", Port: networkingv1.ServiceBackendPort{Name: "http"}}}}, // empty path → "/", named port
+			}}}},
+			{Host: "", IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{
+				{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "catch-all", Port: num(80)}}}, // hostless → "*"
+			}}}},
+		},
+	}}
+	want := []string{
+		"default → fallback:80",
+		"app.example.com/api → api-svc:8080",
+		"app.example.com/ → web-svc:http",
+		"*/ → catch-all:80",
+	}
+	if got := ingressRoutes(ing); !slices.Equal(got, want) {
+		t.Errorf("ingressRoutes =\n%v\nwant\n%v", got, want)
+	}
+	if got := ingressRoutes(&corev1.Pod{}); got != nil {
+		t.Errorf("ingressRoutes(non-ingress) = %v, want nil", got)
 	}
 }
 

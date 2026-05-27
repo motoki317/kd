@@ -132,6 +132,13 @@ export default function DetailDrawer(props: Props) {
                   </Show>
                 </div>
               </Show>
+              {/* An Ingress's routing table (host/path → backend) — the network view's entry point, so
+                  it should say where external traffic goes without opening the manifest. */}
+              <Show when={(node().routes?.length ?? 0) > 0}>
+                <div class="drawer-routes">
+                  <For each={node().routes}>{(r) => <code class="route-row">{r}</code>}</For>
+                </div>
+              </Show>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so
                   surface them prominently with per-image copy for pasting into kubectl/registry. */}
               <Show when={(node().images?.length ?? 0) > 0}>
