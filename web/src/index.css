@@ -927,6 +927,30 @@ body {
   border-color: var(--accent);
   color: #fff;
 }
+.logs-filter {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  width: 140px;
+}
+.logs-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.logs-count {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.logs-count.none {
+  color: var(--health-degraded);
+}
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;

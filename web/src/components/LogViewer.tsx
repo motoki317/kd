@@ -1,5 +1,6 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
+import { filterLogLines } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -29,6 +30,9 @@ export default function LogViewer(props: Props) {
   const [container, setContainer] = createSignal('')
   // Show the previous (crashed) container's logs — where a CrashLoopBackOff reason lives.
   const [previous, setPrevious] = createSignal(false)
+  // Client-side line filter ("grep"): hide lines not containing this substring.
+  const [filter, setFilter] = createSignal('')
+  const visibleLines = createMemo(() => filterLogLines(lines(), filter()))
   let pre: HTMLPreElement | undefined
 
   // A single pod that isn't Running can't produce logs yet, so an error there is "no logs" not a drop.
@@ -45,6 +49,7 @@ export default function LogViewer(props: Props) {
       () => {
         setContainer(props.containers[0] ?? '')
         setPrevious(false)
+        setFilter('')
       },
     ),
   )
@@ -88,19 +93,32 @@ export default function LogViewer(props: Props) {
             previous
           </button>
         </Show>
+        <Show when={lines().length > 0 || filter()}>
+          <input
+            class="logs-filter"
+            placeholder="filter…"
+            value={filter()}
+            onInput={(e) => setFilter(e.currentTarget.value)}
+          />
+        </Show>
         <span class="logs-right">
+          <Show when={filter()}>
+            <span class="logs-count" classList={{ none: visibleLines().length === 0 }}>
+              {visibleLines().length}/{lines().length}
+            </span>
+          </Show>
           <Show when={error()}>
             <span class="logs-error" classList={{ notice: gentle() }}>
               {gentle() ? 'no logs yet' : 'stream interrupted'}
             </span>
           </Show>
-          <Show when={lines().length > 0}>
-            <CopyButton text={() => lines().map((l) => l.line).join('\n')} title="Copy logs" />
+          <Show when={visibleLines().length > 0}>
+            <CopyButton text={() => visibleLines().map((l) => l.line).join('\n')} title="Copy logs" />
           </Show>
         </span>
       </div>
       <pre ref={pre} class="logs-body" onScroll={onScroll}>
-        <For each={lines()}>
+        <For each={visibleLines()}>
           {(l) => (
             <div class="log-line">
               <Show when={props.aggregated}>
@@ -112,7 +130,9 @@ export default function LogViewer(props: Props) {
             </div>
           )}
         </For>
-        {lines().length === 0 && !error() && <div class="logs-waiting">waiting for log output…</div>}
+        {visibleLines().length === 0 && !error() && (
+          <div class="logs-waiting">{filter() ? 'no lines match the filter' : 'waiting for log output…'}</div>
+        )}
       </pre>
       <Show when={!pinned()}>
         <button
