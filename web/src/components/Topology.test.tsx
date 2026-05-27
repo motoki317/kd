@@ -12,7 +12,7 @@ const nodes: KNode[] = [
 ]
 const edges: KEdge[] = [{ from: '1', to: '2', type: 'ownerReference' }]
 
-const base = { selectedId: null, connected: true, onSearch: () => {}, onSelect: () => {} }
+const base = { selectedId: null, connected: true, viewLabel: 'Ownership', onSearch: () => {}, onSelect: () => {} }
 const faded = (c: Element) => c.querySelectorAll('g.node.faded').length
 
 describe('Topology', () => {

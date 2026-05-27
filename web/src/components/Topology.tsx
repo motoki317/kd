@@ -11,6 +11,7 @@ interface Props {
   selectedId: string | null
   healthFilter?: import('../types').Health | null
   connected: boolean
+  viewLabel: string
   search: string
   onSearch: (q: string) => void
   onSelect: (id: string) => void
@@ -206,7 +207,7 @@ export default function Topology(props: Props) {
     <div class="topology">
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
-          {props.connected ? 'No resources to display in this namespace.' : 'Connecting…'}
+          {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
         </div>
       </Show>
       <div class="topology-search">

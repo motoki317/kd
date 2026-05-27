@@ -182,6 +182,7 @@ export default function App() {
             selectedId={selectedId()}
             healthFilter={healthFilter()}
             connected={connected()}
+            viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
             search={search()}
             onSearch={setSearch}
             onSelect={setSelectedId}
