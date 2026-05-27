@@ -77,8 +77,18 @@ func nodeEqual(a, b Node) bool {
 		a.Host == b.Host &&
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
+		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node
 		slices.Equal(a.ContainerStatuses, b.ContainerStatuses) && // readiness/restart/state changes
 		maps.Equal(a.Labels, b.Labels)
+}
+
+// endpointsEqual compares two endpoint summaries, treating nil (not selector-based) as distinct from
+// a zero count (selector matches nothing).
+func endpointsEqual(a, b *Endpoints) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

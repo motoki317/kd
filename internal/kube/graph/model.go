@@ -58,6 +58,17 @@ type Node struct {
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the
 	// drawer can show which container is unready or crash-looping rather than just an aggregate.
 	ContainerStatuses []ContainerStatus `json:"containerStatuses,omitempty"`
+	// Endpoints, when set (selector-based Services only), reports how many of the pods the Service's
+	// selector matches are Ready — the "is anything actually serving this?" signal. nil for non-Services
+	// and selectorless Services (which define their endpoints manually/externally), so the UI can tell
+	// "no backends" apart from "not selector-based".
+	Endpoints *Endpoints `json:"endpoints,omitempty"`
+}
+
+// Endpoints summarizes how many of a Service's selected pods are Ready out of the total it selects.
+type Endpoints struct {
+	Ready int `json:"ready"`
+	Total int `json:"total"`
 }
 
 // ContainerStatus is one pod container's runtime state, condensed for display.

@@ -32,9 +32,10 @@ func (i *index) id(kind, namespace, name string) (string, bool) {
 
 // edgeBuilder accumulates edges, resolving endpoints through the index and de-duplicating.
 type edgeBuilder struct {
-	idx   *index
-	edges []Edge
-	seen  map[Edge]bool
+	idx       *index
+	edges     []Edge
+	seen      map[Edge]bool
+	endpoints map[string]*Endpoints // service node id -> readiness, populated alongside selects edges
 }
 
 // link adds an edge from a source node to a target identified by (kind, namespace, name),
@@ -54,8 +55,8 @@ func (b *edgeBuilder) link(fromID string, typ EdgeType, toKind, toNamespace, toN
 
 // buildEdges infers every relationship edge from the typed objects, resolving endpoints
 // through idx. Each inferrer is independent, so adding a relationship is adding a case here.
-func buildEdges(nodes []Node, objs []runtime.Object, idx *index) []Edge {
-	b := &edgeBuilder{idx: idx, seen: map[Edge]bool{}}
+func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[string]*Endpoints) {
+	b := &edgeBuilder{idx: idx, seen: map[Edge]bool{}, endpoints: map[string]*Endpoints{}}
 
 	// Owner edges come from metadata.ownerReferences (UID is the node ID), independent of kind.
 	uids := make(map[string]bool, len(nodes))
@@ -99,7 +100,7 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) []Edge {
 			b.subjectEdges(id, "", o.Subjects)
 		}
 	}
-	return b.edges
+	return b.edges, b.endpoints
 }
 
 func (b *edgeBuilder) podEdges(id, ns string, p *corev1.Pod) {
@@ -157,13 +158,22 @@ func (b *edgeBuilder) containerRefs(id, ns string, c corev1.Container) {
 
 func (b *edgeBuilder) serviceEdges(id, ns string, svc *corev1.Service, nodes []Node) {
 	if len(svc.Spec.Selector) == 0 {
-		return
+		return // selectorless: endpoints are managed externally, so we report no readiness
 	}
+	// Endpoint readiness reuses this selector match (a Healthy pod is a Ready backend). A 0/0 result
+	// for a selector-based service is the meaningful "nothing is serving this" signal, so record it
+	// even when no pod matches.
+	ep := &Endpoints{}
 	for _, n := range nodes {
 		if n.Kind == "Pod" && n.Namespace == ns && labelsMatch(svc.Spec.Selector, n.Labels) {
 			b.link(id, EdgeSelects, "Pod", ns, n.Name)
+			ep.Total++
+			if n.Health == HealthHealthy {
+				ep.Ready++
+			}
 		}
 	}
+	b.endpoints[id] = ep
 }
 
 func (b *edgeBuilder) ingressEdges(id, ns string, ing *networkingv1.Ingress) {

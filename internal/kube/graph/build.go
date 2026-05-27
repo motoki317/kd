@@ -50,7 +50,13 @@ func Build(objs []runtime.Object) *Graph {
 		g.Nodes = append(g.Nodes, node)
 	}
 
-	g.Edges = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
+	var endpoints map[string]*Endpoints
+	g.Edges, endpoints = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
+	for i := range g.Nodes {
+		if ep, ok := endpoints[g.Nodes[i].ID]; ok {
+			g.Nodes[i].Endpoints = ep
+		}
+	}
 	sortGraph(g)
 	return g
 }

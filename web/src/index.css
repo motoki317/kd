@@ -661,6 +661,17 @@ body {
   padding: 2px 6px;
   white-space: nowrap;
 }
+.endpoint-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
 .drawer-labels {
   margin-top: 8px;
 }

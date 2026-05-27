@@ -16,6 +16,15 @@ function containerHealth(cs: ContainerStatus): Health {
   return 'Unknown'
 }
 
+// endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
+// Degraded misconfiguration (selector matches nothing), some-but-not-all ready is Progressing (a
+// rollout), and fully ready is Healthy.
+function endpointHealth(ep: { ready: number; total: number }): Health {
+  if (ep.total === 0) return 'Degraded'
+  if (ep.ready < ep.total) return 'Progressing'
+  return 'Healthy'
+}
+
 interface Props {
   node: KNode | null
   owners: KNode[]
@@ -113,6 +122,14 @@ export default function DetailDrawer(props: Props) {
                     </span>
                   </Show>
                   <For each={node().ports}>{(p) => <span class="port-chip">{p}</span>}</For>
+                  <Show when={node().endpoints}>
+                    {(ep) => (
+                      <span class="endpoint-stat" title="Ready pods backing this Service">
+                        <span class="dot" style={{ background: healthColor(endpointHealth(ep())) }} />
+                        {ep().total === 0 ? 'no endpoints' : `${ep().ready}/${ep().total} ready`}
+                      </span>
+                    )}
+                  </Show>
                 </div>
               </Show>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so

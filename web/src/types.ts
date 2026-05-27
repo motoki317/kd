@@ -29,6 +29,7 @@ export interface KNode {
   capacity?: string
   clusterIP?: string
   ports?: string[]
+  endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>
   ownerUIDs?: string[]
