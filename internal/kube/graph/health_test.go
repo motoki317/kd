@@ -1,0 +1,64 @@
+package graph
+
+import (
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func TestPodStatusSummary(t *testing.T) {
+	waiting := func(reason string) corev1.Pod {
+		return corev1.Pod{Status: corev1.PodStatus{
+			Phase:             corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}}}},
+		}}
+	}
+
+	tests := map[string]struct {
+		pod  corev1.Pod
+		want string
+	}{
+		"running falls back to phase": {
+			pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+			want: "Running",
+		},
+		"pending falls back to phase": {
+			pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending}},
+			want: "Pending",
+		},
+		"crash-looping container shows its reason, not Running": {
+			pod:  waiting("CrashLoopBackOff"),
+			want: "CrashLoopBackOff",
+		},
+		"image pull failure shows its reason": {
+			pod:  waiting("ImagePullBackOff"),
+			want: "ImagePullBackOff",
+		},
+		"terminated with error shows the reason": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:             corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "OOMKilled"}}}},
+			}},
+			want: "OOMKilled",
+		},
+		"completed terminated container is not treated as an error": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:             corev1.PodSucceeded,
+				ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}}},
+			}},
+			want: "Succeeded",
+		},
+		"deletion shows Terminating": {
+			pod:  corev1.Pod{ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &metav1.Time{}}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+			want: "Terminating",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := podStatusSummary(&tc.pod); got != tc.want {
+				t.Errorf("podStatusSummary = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -127,11 +127,34 @@ func desiredReplicas(r *int32) int32 {
 	return *r
 }
 
+// podStatusSummary mirrors kubectl's STATUS column: a waiting/terminated container reason
+// (CrashLoopBackOff, ImagePullBackOff, OOMKilled, ...) is far more useful than the bare phase,
+// which stays "Running" even while a container crash-loops. Deletion shows as Terminating.
+func podStatusSummary(p *corev1.Pod) string {
+	if p.DeletionTimestamp != nil {
+		return "Terminating"
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if w := cs.State.Waiting; w != nil && w.Reason != "" {
+			return w.Reason
+		}
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if t := cs.State.Terminated; t != nil && t.Reason != "" && t.Reason != "Completed" {
+			return t.Reason
+		}
+	}
+	if p.Status.Reason != "" {
+		return p.Status.Reason // pod-level, e.g. Evicted, NodeAffinity
+	}
+	return string(p.Status.Phase)
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {
 	case *corev1.Pod:
-		return string(o.Status.Phase)
+		return podStatusSummary(o)
 	case *appsv1.Deployment:
 		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.ReplicaSet:
