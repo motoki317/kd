@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -69,6 +70,34 @@ func TestIngressRoutes(t *testing.T) {
 	}
 	if got := ingressRoutes(&corev1.Pod{}); got != nil {
 		t.Errorf("ingressRoutes(non-ingress) = %v, want nil", got)
+	}
+}
+
+func TestRoleRules(t *testing.T) {
+	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
+		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},
+		{APIGroups: []string{"apps"}, Resources: []string{"deployments"}, Verbs: []string{"*"}},
+		{APIGroups: []string{""}, Resources: []string{"secrets"}, ResourceNames: []string{"db-creds"}, Verbs: []string{"get"}},
+	}}
+	want := []string{
+		"pods, services: get, list, watch",
+		"deployments.apps: *",
+		"secrets [db-creds]: get",
+	}
+	if got := roleRules(role); !slices.Equal(got, want) {
+		t.Errorf("roleRules(Role) =\n%v\nwant\n%v", got, want)
+	}
+
+	// ClusterRoles also carry non-resource URL rules (e.g. /healthz).
+	cr := &rbacv1.ClusterRole{Rules: []rbacv1.PolicyRule{
+		{NonResourceURLs: []string{"/healthz", "/readyz"}, Verbs: []string{"get"}},
+	}}
+	if got := roleRules(cr); !slices.Equal(got, []string{"/healthz, /readyz: get"}) {
+		t.Errorf("roleRules(ClusterRole nonResource) = %v", got)
+	}
+
+	if got := roleRules(&corev1.Pod{}); got != nil {
+		t.Errorf("roleRules(non-role) = %v, want nil", got)
 	}
 }
 

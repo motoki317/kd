@@ -43,6 +43,7 @@ func Build(objs []runtime.Object) *Graph {
 			ClusterIP:         serviceClusterIP(obj),
 			Ports:             servicePorts(obj),
 			Routes:            ingressRoutes(obj),
+			Rules:             roleRules(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

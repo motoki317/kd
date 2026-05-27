@@ -30,6 +30,7 @@ export interface KNode {
   clusterIP?: string
   ports?: string[]
   routes?: string[]
+  rules?: string[]
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

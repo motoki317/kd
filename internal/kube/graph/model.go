@@ -54,6 +54,7 @@ type Node struct {
 	ClusterIP  string            `json:"clusterIP,omitempty"`  // a Service's reachable address ("headless"/ExternalName target for those)
 	Ports      []string          `json:"ports,omitempty"`      // a Service's port mappings, "port→target[:nodePort]/proto"
 	Routes     []string          `json:"routes,omitempty"`     // an Ingress's routing table, "host/path → service:port"
+	Rules      []string          `json:"rules,omitempty"`      // a Role/ClusterRole's policy rules, "resources: verbs"
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

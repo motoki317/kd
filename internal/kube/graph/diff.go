@@ -78,6 +78,7 @@ func nodeEqual(a, b Node) bool {
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
 		slices.Equal(a.Routes, b.Routes) && // an Ingress rule edit must repaint
+		slices.Equal(a.Rules, b.Rules) && // a Role rule edit must repaint
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node

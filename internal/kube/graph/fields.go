@@ -8,6 +8,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -240,6 +241,46 @@ func ingressBackend(s *networkingv1.IngressServiceBackend) string {
 	default:
 		return s.Name
 	}
+}
+
+// roleRules formats a Role/ClusterRole's policy rules as "resources: verbs" rows (nil otherwise), so
+// the RBAC view answers "what does this grant?" at a glance instead of in the manifest. Resources are
+// shown kubectl-style ("deployments.apps", core group bare), resourceNames in [brackets], and a
+// non-resource-URL rule (ClusterRole) as "url: verbs".
+func roleRules(obj runtime.Object) []string {
+	var rules []rbacv1.PolicyRule
+	switch o := obj.(type) {
+	case *rbacv1.Role:
+		rules = o.Rules
+	case *rbacv1.ClusterRole:
+		rules = o.Rules
+	default:
+		return nil
+	}
+	out := make([]string, 0, len(rules))
+	for _, r := range rules {
+		verbs := strings.Join(r.Verbs, ", ")
+		if len(r.NonResourceURLs) > 0 {
+			out = append(out, strings.Join(r.NonResourceURLs, ", ")+": "+verbs)
+			continue
+		}
+		var res []string
+		for _, group := range r.APIGroups {
+			for _, name := range r.Resources {
+				if group == "" {
+					res = append(res, name)
+				} else {
+					res = append(res, name+"."+group)
+				}
+			}
+		}
+		line := strings.Join(res, ", ")
+		if len(r.ResourceNames) > 0 {
+			line += " [" + strings.Join(r.ResourceNames, ", ") + "]"
+		}
+		out = append(out, line+": "+verbs)
+	}
+	return out
 }
 
 // serviceClusterIP returns a Service's reachable address for the drawer: its cluster IP, "headless"

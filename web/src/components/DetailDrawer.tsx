@@ -139,6 +139,13 @@ export default function DetailDrawer(props: Props) {
                   <For each={node().routes}>{(r) => <code class="route-row">{r}</code>}</For>
                 </div>
               </Show>
+              {/* A Role/ClusterRole's grants ("resources: verbs") — the whole point of the resource,
+                  surfaced for the RBAC view instead of buried in the manifest. */}
+              <Show when={(node().rules?.length ?? 0) > 0}>
+                <div class="drawer-routes">
+                  <For each={node().rules}>{(r) => <code class="route-row">{r}</code>}</For>
+                </div>
+              </Show>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so
                   surface them prominently with per-image copy for pasting into kubectl/registry. */}
               <Show when={(node().images?.length ?? 0) > 0}>
