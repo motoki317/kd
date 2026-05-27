@@ -129,9 +129,15 @@ func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	if got := statusSummary(cj); got != "Suspended" {
 		t.Errorf("statusSummary(suspended CronJob) = %q, want Suspended", got)
 	}
+	if got := health(cj); got != HealthSuspended {
+		t.Errorf("health(suspended CronJob) = %q, want Suspended", got)
+	}
 	active := &batchv1.CronJob{Spec: batchv1.CronJobSpec{Schedule: "*/5 * * * *"}}
 	if got := statusSummary(active); got != "*/5 * * * *" {
 		t.Errorf("statusSummary(active CronJob) = %q, want the schedule", got)
+	}
+	if got := health(active); got != HealthHealthy {
+		t.Errorf("health(active CronJob) = %q, want Healthy", got)
 	}
 }
 

@@ -25,6 +25,11 @@ func health(obj runtime.Object) Health {
 		return daemonSetHealth(o)
 	case *batchv1.Job:
 		return jobHealth(o)
+	case *batchv1.CronJob:
+		if o.Spec.Suspend != nil && *o.Spec.Suspend {
+			return HealthSuspended // matches the "Suspended" status text and paused-Deployment handling
+		}
+		return HealthHealthy
 	case *corev1.Node:
 		return nodeHealth(o)
 	default:
