@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextSelection, orderedForNav } from './nav'
+import { navCandidates, nextSelection, orderedForNav } from './nav'
 import type { Health, KNode } from './types'
 
 function node(id: string, kind: string, name: string, health: Health = 'Healthy'): KNode {
@@ -22,6 +22,26 @@ describe('orderedForNav', () => {
     const before = nodes.map((n) => n.id)
     orderedForNav(nodes)
     expect(nodes.map((n) => n.id)).toEqual(before)
+  })
+})
+
+describe('navCandidates', () => {
+  const nodes = [
+    node('a', 'Pod', 'web', 'Healthy'),
+    node('b', 'Pod', 'api', 'Degraded'),
+    node('c', 'Deployment', 'web', 'Degraded'),
+  ]
+
+  it('returns every node when no filter is active', () => {
+    expect(navCandidates(nodes, '', null).map((n) => n.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('scopes to the health filter when set', () => {
+    expect(navCandidates(nodes, '', 'Degraded').map((n) => n.id)).toEqual(['b', 'c'])
+  })
+
+  it('scopes to the search query, taking precedence over the health filter', () => {
+    expect(navCandidates(nodes, 'web', 'Degraded').map((n) => n.id)).toEqual(['a', 'c'])
   })
 })
 
