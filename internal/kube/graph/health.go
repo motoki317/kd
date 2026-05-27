@@ -191,6 +191,15 @@ func containerNames(obj runtime.Object) []string {
 	return names
 }
 
+// podHost returns the node a pod is scheduled on ("" for non-pods or unscheduled pods), placement
+// context the operator otherwise has to dig out of the manifest.
+func podHost(obj runtime.Object) string {
+	if p, ok := obj.(*corev1.Pod); ok {
+		return p.Spec.NodeName
+	}
+	return ""
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {
