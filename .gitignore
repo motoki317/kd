@@ -1,0 +1,35 @@
+# Go
+/kd
+/dist/
+*.test
+*.out
+coverage.txt
+
+# Node / client build
+web/node_modules/
+web/dist/
+.pnpm-store/
+
+# Embedded client build output (generated; produced by `just build`)
+internal/server/webdist/
+
+# Local planning docs (work-in-progress; not committed)
+docs/plans/
+
+# Local config / secrets
+*.local.yaml
+policy.local.csv
+.env
+.envrc.local
+
+# Nix
+result
+result-*
+.direnv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp

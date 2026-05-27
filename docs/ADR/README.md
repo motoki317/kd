@@ -1,0 +1,35 @@
+# Architecture Decision Records (ADR)
+
+ADRs capture the significant architectural decisions behind **kd** — the why, the
+trade-offs, and the alternatives we rejected. They let a future contributor (human or
+agent) understand a decision without re-deriving it, and avoid re-litigating settled
+questions.
+
+## Creating an ADR
+
+1. Copy `_template.md`.
+2. Name it `YYYYMMDD-<title>.md` — the date matches the `date` front-matter field, and
+   the title is a short, concrete English phrase (e.g. `20260527-proxy-authentication.md`).
+3. Fill in every section: Context, Decision, Consequences, Impact, Alternatives, Notes.
+
+## Status
+
+- **proposed** — under discussion (open PR).
+- **accepted** — merged; treated as binding.
+- **superseded** — replaced by a newer ADR. Prefix the old filename with `_`, and
+  cross-link the old and new ADRs.
+
+Front-matter carries the canonical `date`, `author`, and `status`. Git history is the
+authoritative timeline; the filename date is a convenience for sorting.
+
+## Index
+
+| Date | ADR | Summary |
+| --- | --- | --- |
+| 2026-05-27 | [Architecture overview](./20260527-architecture-overview.md) | Go server + Solid.js client, single binary, informer-backed cache |
+| 2026-05-27 | [Proxy authentication](./20260527-proxy-authentication.md) | Trust an upstream identity header (`X-Forwarded-User`), no login flow |
+| 2026-05-27 | [Declarative RBAC via policy.csv](./20260527-declarative-rbac-policy-csv.md) | ArgoCD/Casbin-style policy file, app-level authorization |
+| 2026-05-27 | [Kubernetes access model](./20260527-kubernetes-access-model.md) | Single read-only ServiceAccount, app-level authz (not impersonation) |
+| 2026-05-27 | [Resource relationship graph](./20260527-resource-relationship-graph.md) | ownerReferences + inferred edges, server-built graph model |
+| 2026-05-27 | [Real-time transport (SSE)](./20260527-realtime-transport-sse.md) | Server-Sent Events for watch updates and log streaming |
+| 2026-05-27 | [Frontend stack](./20260527-frontend-stack.md) | Solid.js + Vite + TypeScript, Dagre layout, SVG topology |
