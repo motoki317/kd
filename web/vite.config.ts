@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import solid from 'vite-plugin-solid'
 
 // The production build is emitted into the Go server package so it can be embedded
@@ -7,6 +7,10 @@ import solid from 'vite-plugin-solid'
 // dev identity header is injected so no forward-auth proxy is needed locally.
 export default defineConfig({
   plugins: [solid()],
+  // Component tests render Solid into jsdom; pure-logic tests ignore the environment.
+  test: {
+    environment: 'jsdom',
+  },
   build: {
     outDir: '../internal/server/webdist',
     emptyOutDir: true,
