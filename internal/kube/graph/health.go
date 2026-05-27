@@ -164,6 +164,20 @@ func podRestarts(obj runtime.Object) int32 {
 	return n
 }
 
+// containerNames lists a pod's container names (nil for non-pods), so the client can offer a
+// per-container log picker for multi-container pods (sidecars, init wrappers).
+func containerNames(obj runtime.Object) []string {
+	p, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(p.Spec.Containers))
+	for _, c := range p.Spec.Containers {
+		names = append(names, c.Name)
+	}
+	return names
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {

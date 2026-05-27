@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, createEffect, For, Show } from 'solid-js'
+import { createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { middleTruncate } from '../names'
 
@@ -8,6 +8,8 @@ interface Props {
   name: string
   // aggregated logs span several descendant pods, so each line is labelled with its source pod.
   aggregated: boolean
+  // container names for a single pod; >1 enables the per-container picker.
+  containers: string[]
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -18,6 +20,8 @@ export default function LogViewer(props: Props) {
   // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
   // history, new lines stop yanking them down (a "Latest" button jumps back).
   const [pinned, setPinned] = createSignal(true)
+  // Selected container for a single multi-container pod (empty = server picks the first).
+  const [container, setContainer] = createSignal('')
   let pre: HTMLPreElement | undefined
 
   const toBottom = () => pre?.scrollTo({ top: pre.scrollHeight })
@@ -25,11 +29,15 @@ export default function LogViewer(props: Props) {
     if (pre) setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
   }
 
+  // Default to the first container whenever the target pod changes.
+  createEffect(on(() => props.name, () => setContainer(props.containers[0] ?? '')))
+
   createEffect(() => {
-    // Re-subscribe whenever the target resource changes.
+    // Re-subscribe whenever the target resource or selected container changes.
     const ns = props.namespace
     const kind = props.kind
     const name = props.name
+    const c = container()
     setLines([])
     setError(false)
     setPinned(true)
@@ -37,7 +45,7 @@ export default function LogViewer(props: Props) {
       ns,
       kind,
       name,
-      { tailLines: 200 },
+      { tailLines: 200, container: c || undefined },
       (entry) => {
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
         if (pinned()) queueMicrotask(toBottom)
@@ -51,6 +59,11 @@ export default function LogViewer(props: Props) {
     <div class="logs">
       <div class="logs-header">
         <span>Logs</span>
+        <Show when={!props.aggregated && props.containers.length > 1}>
+          <select class="logs-container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
+            <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
+          </select>
+        </Show>
         {error() && <span class="logs-error">stream interrupted</span>}
       </div>
       <pre ref={pre} class="logs-body" onScroll={onScroll}>

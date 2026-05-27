@@ -23,6 +23,7 @@ export interface KNode {
   status?: string
   createdAt?: string
   restarts?: number
+  containers?: string[]
   labels?: Record<string, string>
   ownerUIDs?: string[]
 }

@@ -112,7 +112,13 @@ export default function DetailDrawer(props: Props) {
             {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
                 visit to another tab. */}
             <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
-              <LogViewer namespace={node().namespace ?? ''} kind={node().kind} name={node().name} aggregated={!isPod()} />
+              <LogViewer
+                namespace={node().namespace ?? ''}
+                kind={node().kind}
+                name={node().name}
+                aggregated={!isPod()}
+                containers={node().containers ?? []}
+              />
             </div>
           </Show>
 
