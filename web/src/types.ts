@@ -26,8 +26,17 @@ export interface KNode {
   containers?: string[]
   images?: string[]
   host?: string
+  containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>
   ownerUIDs?: string[]
+}
+
+export interface ContainerStatus {
+  name: string
+  ready: boolean
+  restarts?: number
+  state: string // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
+  init?: boolean
 }
 
 export interface KEdge {

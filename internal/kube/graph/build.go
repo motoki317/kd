@@ -26,19 +26,20 @@ func Build(objs []runtime.Object) *Graph {
 			continue
 		}
 		node := Node{
-			ID:         nodeID(kind, m),
-			Kind:       kind,
-			APIVersion: apiVersion,
-			Namespace:  m.GetNamespace(),
-			Name:       m.GetName(),
-			Labels:     m.GetLabels(),
-			Health:     health(obj),
-			Status:     statusSummary(obj),
-			CreatedAt:  creationTime(m),
-			Restarts:   podRestarts(obj),
-			Containers: containerNames(obj),
-			Images:     containerImages(obj),
-			Host:       podHost(obj),
+			ID:                nodeID(kind, m),
+			Kind:              kind,
+			APIVersion:        apiVersion,
+			Namespace:         m.GetNamespace(),
+			Name:              m.GetName(),
+			Labels:            m.GetLabels(),
+			Health:            health(obj),
+			Status:            statusSummary(obj),
+			CreatedAt:         creationTime(m),
+			Restarts:          podRestarts(obj),
+			Containers:        containerNames(obj),
+			Images:            containerImages(obj),
+			Host:              podHost(obj),
+			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {
 			node.OwnerUIDs = append(node.OwnerUIDs, string(or.UID))

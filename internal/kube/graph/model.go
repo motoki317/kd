@@ -52,6 +52,18 @@ type Node struct {
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
+	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the
+	// drawer can show which container is unready or crash-looping rather than just an aggregate.
+	ContainerStatuses []ContainerStatus `json:"containerStatuses,omitempty"`
+}
+
+// ContainerStatus is one pod container's runtime state, condensed for display.
+type ContainerStatus struct {
+	Name     string `json:"name"`
+	Ready    bool   `json:"ready"`
+	Restarts int32  `json:"restarts,omitempty"`
+	State    string `json:"state"`          // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
+	Init     bool   `json:"init,omitempty"` // an init container (runs to completion before the app ones)
 }
 
 // Edge is a typed relationship from one node to another.

@@ -2,9 +2,19 @@ import { createEffect, createMemo, createResource, createSignal, For, on, onClea
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { healthColor } from '../health'
 import { relativeAge } from '../time'
-import type { KNode } from '../types'
+import type { ContainerStatus, Health, KNode } from '../types'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
+
+// containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
+// same colors as the rest of the UI: a crash-loop or non-Completed exit is Degraded, a not-yet-ready
+// Running container is Progressing, a completed init container is Healthy (done).
+function containerHealth(cs: ContainerStatus): Health {
+  if (cs.state.startsWith('Waiting:')) return 'Degraded'
+  if (cs.state.startsWith('Terminated:')) return cs.state.includes('Completed') ? 'Healthy' : 'Degraded'
+  if (cs.state === 'Running') return cs.ready ? 'Healthy' : 'Progressing'
+  return 'Unknown'
+}
 
 interface Props {
   node: KNode | null
@@ -94,6 +104,31 @@ export default function DetailDrawer(props: Props) {
                       <div class="drawer-image" title={img}>
                         <code>{img}</code>
                         <CopyButton text={() => img} title="Copy image" />
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              {/* Per-container state so a multi-container pod reveals which container is unready or
+                  crash-looping, not just an aggregate restart count. */}
+              <Show when={(node().containerStatuses?.length ?? 0) > 0}>
+                <div class="drawer-containers">
+                  <For each={node().containerStatuses}>
+                    {(cs) => (
+                      <div class="container-row" classList={{ 'not-ready': !cs.ready && !cs.init }}>
+                        <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
+                        <span class="container-name">
+                          {cs.name}
+                          <Show when={cs.init}>
+                            <span class="container-init"> init</span>
+                          </Show>
+                        </span>
+                        <span class="container-state">{cs.state}</span>
+                        <Show when={(cs.restarts ?? 0) > 0}>
+                          <span class="container-restarts" title={`${cs.restarts} restarts`}>
+                            ↻ {cs.restarts}
+                          </span>
+                        </Show>
                       </div>
                     )}
                   </For>

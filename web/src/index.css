@@ -549,6 +549,48 @@ body {
   color: var(--text);
   font-weight: 600;
 }
+.drawer-containers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+}
+.container-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  min-width: 0;
+}
+.container-row .dot {
+  flex: none;
+}
+.container-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+.container-init {
+  color: var(--text-dim);
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.container-state {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.container-restarts {
+  margin-left: auto;
+  color: var(--health-degraded);
+  flex: none;
+}
 .drawer-images {
   display: flex;
   flex-direction: column;

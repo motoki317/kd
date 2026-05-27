@@ -236,6 +236,52 @@ func containerNames(obj runtime.Object) []string {
 	return names
 }
 
+// containerStatuses condenses a pod's per-container runtime state (init containers first, then app
+// containers), nil for non-pods. It's the "which container is actually broken" detail an aggregate
+// restart count or phase hides.
+func containerStatuses(obj runtime.Object) []ContainerStatus {
+	p, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil
+	}
+	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses))
+	for _, cs := range p.Status.InitContainerStatuses {
+		out = append(out, containerStat(cs, true))
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		out = append(out, containerStat(cs, false))
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
+	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init}
+}
+
+// containerStateString renders a container's current state as "Running", "Waiting: <reason>", or
+// "Terminated: <reason>" — the reason is the actionable part (CrashLoopBackOff, OOMKilled, ...).
+func containerStateString(s corev1.ContainerState) string {
+	switch {
+	case s.Running != nil:
+		return "Running"
+	case s.Waiting != nil:
+		if s.Waiting.Reason != "" {
+			return "Waiting: " + s.Waiting.Reason
+		}
+		return "Waiting"
+	case s.Terminated != nil:
+		if s.Terminated.Reason != "" {
+			return "Terminated: " + s.Terminated.Reason
+		}
+		return "Terminated"
+	default:
+		return "Unknown"
+	}
+}
+
 // containerImages lists the distinct images a resource runs — its own containers for a Pod, its
 // pod template's for a workload — answering "what's actually deployed here" without opening the
 // manifest. Distinct (a multi-replica template repeats the same image) and nil for resources

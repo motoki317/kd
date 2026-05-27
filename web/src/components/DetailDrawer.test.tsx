@@ -52,6 +52,23 @@ describe('DetailDrawer', () => {
     expect(vals).toEqual(['shop', 'backend'])
   })
 
+  it('renders per-container status rows with names and states', () => {
+    const pod: KNode = {
+      ...configMap,
+      kind: 'Pod',
+      containerStatuses: [
+        { name: 'app', ready: true, state: 'Running' },
+        { name: 'sidecar', ready: false, restarts: 4, state: 'Waiting: CrashLoopBackOff' },
+      ],
+    }
+    const { container } = render(() => <DetailDrawer node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const names = [...container.querySelectorAll('.container-row .container-name')].map((e) => e.textContent)
+    const states = [...container.querySelectorAll('.container-row .container-state')].map((e) => e.textContent)
+    expect(names).toEqual(['app', 'sidecar'])
+    expect(states).toEqual(['Running', 'Waiting: CrashLoopBackOff'])
+    expect(container.querySelector('.container-restarts')?.textContent).toContain('4')
+  })
+
   it('renders each container image', () => {
     const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
     const { container } = render(() => <DetailDrawer node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)

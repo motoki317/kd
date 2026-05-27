@@ -166,6 +166,36 @@ func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	}
 }
 
+func TestContainerStatuses(t *testing.T) {
+	pod := &corev1.Pod{Status: corev1.PodStatus{
+		InitContainerStatuses: []corev1.ContainerStatus{
+			{Name: "setup", Ready: true, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}},
+		},
+		ContainerStatuses: []corev1.ContainerStatus{
+			{Name: "app", Ready: true, RestartCount: 2, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+			{Name: "sidecar", Ready: false, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}},
+		},
+	}}
+	got := containerStatuses(pod)
+	want := []ContainerStatus{
+		{Name: "setup", Ready: true, State: "Terminated: Completed", Init: true},
+		{Name: "app", Ready: true, Restarts: 2, State: "Running"},
+		{Name: "sidecar", Ready: false, State: "Waiting: CrashLoopBackOff"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("containerStatuses len = %d, want %d (%+v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("containerStatuses[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	if got := containerStatuses(&corev1.Service{}); got != nil {
+		t.Errorf("containerStatuses(non-pod) = %v, want nil", got)
+	}
+}
+
 func TestContainerImages(t *testing.T) {
 	pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{
 		{Name: "app", Image: "nginx:1.25"}, {Name: "sidecar", Image: "envoy:1.29"}, {Name: "dup", Image: "nginx:1.25"},
