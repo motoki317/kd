@@ -2,7 +2,7 @@ import { createEffect, createMemo, createResource, createSignal, For, onCleanup,
 import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
-import { HEALTH_ORDER, healthColor } from './health'
+import { HEALTH_ORDER, healthColor, rollupHealth } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
 import type { Health, KNode, View } from './types'
@@ -155,6 +155,17 @@ export default function App() {
     return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
   })
 
+  // Keep the sidebar entry for the namespace being viewed live from the streamed graph, instead of
+  // letting it lag up to 15s behind the /namespaces poll. Only override once the graph has loaded, so
+  // a still-empty stream doesn't briefly flash the namespace healthy.
+  const sidebarNamespaces = createMemo(() => {
+    const list = namespaces() ?? []
+    const ns = namespace()
+    if (!connected() || !ns || nodes().length === 0) return list
+    const live = rollupHealth(nodes())
+    return list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
+  })
+
   const counts = createMemo(() => {
     const c: Record<string, number> = {}
     for (const n of nodes()) c[n.health] = (c[n.health] ?? 0) + 1
@@ -204,7 +215,7 @@ export default function App() {
 
       <div class="body">
         <Sidebar
-          namespaces={namespaces() ?? []}
+          namespaces={sidebarNamespaces()}
           selected={namespace()}
           onSelect={setNamespace}
           loading={namespaces.loading}
