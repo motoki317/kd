@@ -183,6 +183,7 @@ export default function App() {
           selected={namespace()}
           onSelect={setNamespace}
           loading={namespaces.loading}
+          failed={!!namespaces.error}
           filterRef={(el) => (filterEl = el)}
         />
         <main class="main">

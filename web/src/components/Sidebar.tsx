@@ -7,6 +7,7 @@ interface Props {
   selected: string | null
   onSelect: (ns: string) => void
   loading: boolean
+  failed: boolean
   // Lets the app focus the filter from a global key ("/").
   filterRef?: (el: HTMLInputElement) => void
 }
@@ -42,23 +43,26 @@ export default function Sidebar(props: Props) {
         onInput={(e) => setFilter(e.currentTarget.value)}
       />
       <Show when={!props.loading} fallback={<div class="sidebar-loading">loading…</div>}>
-        <ul class="ns-list">
-          <For each={shown()}>
-            {(ns) => (
-              <li>
-                <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
-                  <Show when={ns.health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
-                    <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
-                  </Show>
-                  <span class="ns-name">{ns.name}</span>
-                </button>
-              </li>
-            )}
-          </For>
-          <Show when={shown().length === 0}>
-            <li class="ns-empty">no matches</li>
-          </Show>
-        </ul>
+        <Show when={!props.failed} fallback={<div class="sidebar-loading">Couldn't load namespaces.</div>}>
+          <ul class="ns-list">
+            <For each={shown()}>
+              {(ns) => (
+                <li>
+                  <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
+                    <Show when={ns.health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
+                      <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
+                    </Show>
+                    <span class="ns-name">{ns.name}</span>
+                  </button>
+                </li>
+              )}
+            </For>
+            <Show when={shown().length === 0}>
+              {/* Distinguish "filtered everything out" from "nothing visible to this user" (RBAC). */}
+              <li class="ns-empty">{props.namespaces.length === 0 ? 'No namespaces visible.' : 'no matches'}</li>
+            </Show>
+          </ul>
+        </Show>
       </Show>
     </nav>
   )
