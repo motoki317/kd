@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { middleTruncate, relativeName } from './names'
+import { kindLabel, middleTruncate, relativeName } from './names'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -12,6 +12,16 @@ describe('relativeName', () => {
   })
   it('does not strip when it would leave an empty string', () => {
     expect(relativeName('api', 'api')).toBe('api')
+  })
+})
+
+describe('kindLabel', () => {
+  it('abbreviates verbose kinds that would overflow the node header', () => {
+    expect(kindLabel('PersistentVolumeClaim')).toBe('PVC')
+  })
+  it('leaves kinds that already fit unchanged', () => {
+    expect(kindLabel('Deployment')).toBe('Deployment')
+    expect(kindLabel('Pod')).toBe('Pod')
   })
 })
 

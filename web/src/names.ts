@@ -12,6 +12,18 @@ export function relativeName(name: string, ownerName?: string): string {
   return name
 }
 
+// Compact labels for verbose kinds in the dense topology header, where the full kind would collide
+// with the right-aligned status (e.g. PERSISTENTVOLUMECLAIM over "Bound 10Gi"). The drawer still
+// shows the full kind; these are kubectl's well-known abbreviations.
+const KIND_LABELS: Record<string, string> = {
+  PersistentVolumeClaim: 'PVC',
+}
+
+// kindLabel returns the compact topology label for a kind, or the kind unchanged when it fits.
+export function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind
+}
+
 // middleTruncate keeps the head and tail of an over-long label, dropping the middle (usually a
 // hash), so both the workload prefix and the unique suffix stay visible.
 export function middleTruncate(s: string, max = 22): string {

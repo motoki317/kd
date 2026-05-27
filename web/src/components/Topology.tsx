@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
-import { middleTruncate, relativeName } from '../names'
+import { kindLabel, middleTruncate, relativeName } from '../names'
 import { nodeMatches } from '../search'
 import type { EdgeType, KEdge, KNode } from '../types'
 
@@ -272,7 +272,7 @@ export default function Topology(props: Props) {
                       must subtract both the top and bottom inset or it overflows the card bottom. */}
                   <rect class="node-stripe" width="5" height={n.height - 16} rx="2.5" fill={healthColor(n.health)} />
                   <text class="node-kind" x="16" y="22">
-                    {n.kind}
+                    {kindLabel(n.kind)}
                   </text>
                   <text class="node-name" x="16" y="40">
                     {label(n)}
