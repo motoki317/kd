@@ -236,7 +236,7 @@ export default function DetailDrawer(props: Props) {
               {(t) => (
                 <button classList={{ active: tab() === t }} onClick={() => setTab(t)}>
                   {TAB_LABELS[t]}
-                  <Show when={t === 'events' && (events()?.length ?? 0) > 0}>
+                  <Show when={t === 'events' && !events.error && (events()?.length ?? 0) > 0}>
                     <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
                       {events()!.length}
                     </span>
@@ -264,25 +264,29 @@ export default function DetailDrawer(props: Props) {
 
           <div class="events-panel" classList={{ hidden: tab() !== 'events' }}>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
-              <Show when={(events()?.length ?? 0) > 0} fallback={<div class="events-empty">No recent events.</div>}>
-                <ul class="event-list">
-                  <For each={events()}>
-                    {(ev) => (
-                      <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
-                        <div class="event-head">
-                          <span class="event-reason">{ev.reason}</span>
-                          <Show when={ev.count > 1}>
-                            <span class="event-count">×{ev.count}</span>
-                          </Show>
-                          <span class="event-age" title={ev.last}>
-                            {relativeAge(ev.last)}
-                          </span>
-                        </div>
-                        <div class="event-message">{ev.message}</div>
-                      </li>
-                    )}
-                  </For>
-                </ul>
+              {/* events() throws if the resource errored, so gate on events.error first — both to show
+                  a real error (not a misleading "no events") and to avoid reading the errored signal. */}
+              <Show when={!events.error} fallback={<div class="events-empty">Couldn't load events.</div>}>
+                <Show when={(events()?.length ?? 0) > 0} fallback={<div class="events-empty">No recent events.</div>}>
+                  <ul class="event-list">
+                    <For each={events()}>
+                      {(ev) => (
+                        <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
+                          <div class="event-head">
+                            <span class="event-reason">{ev.reason}</span>
+                            <Show when={ev.count > 1}>
+                              <span class="event-count">×{ev.count}</span>
+                            </Show>
+                            <span class="event-age" title={ev.last}>
+                              {relativeAge(ev.last)}
+                            </span>
+                          </div>
+                          <div class="event-message">{ev.message}</div>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
               </Show>
             </Suspense>
           </div>

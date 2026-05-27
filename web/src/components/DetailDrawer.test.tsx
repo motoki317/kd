@@ -92,6 +92,22 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-labels')).toBeNull()
   })
 
+  it("shows a load error (not 'no events') when the events fetch fails, without crashing", async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response('boom', { status: 500 })
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      ),
+    )
+    const { container, findByText } = render(() => (
+      <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    await findByText("Couldn't load events.")
+    // The drawer itself still rendered (a thrown resource error would have torn it down).
+    expect(container.querySelector('.drawer')).toBeTruthy()
+  })
+
   it('renders an age and clickable owner chips', () => {
     const owner: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const navigated: string[] = []
