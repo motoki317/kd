@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
@@ -33,6 +33,7 @@ export default function App() {
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
+  const [showHelp, setShowHelp] = createSignal(false)
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
 
@@ -77,14 +78,17 @@ export default function App() {
       const el = e.target as HTMLElement | null
       const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
       const num = Number(e.key)
-      if (e.key === '/' && !typing) {
+      if (e.key === '?' && !typing) {
+        setShowHelp((s) => !s)
+      } else if (e.key === '/' && !typing) {
         e.preventDefault()
         filterEl?.focus()
       } else if (!typing && num >= 1 && num <= VIEWS.length) {
         setView(VIEWS[num - 1].id) // 1-4 jump between Ownership/Network/Nodes/RBAC
       } else if (e.key === 'Escape') {
-        // Progressive back-out: blur a field, else close the drawer, else clear active filters.
-        if (typing) (el as HTMLElement).blur()
+        // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.
+        if (showHelp()) setShowHelp(false)
+        else if (typing) (el as HTMLElement).blur()
         else if (selectedId()) setSelectedId(null)
         else if (search() || healthFilter()) {
           setSearch('')
@@ -168,6 +172,9 @@ export default function App() {
         <span class="conn" classList={{ live: connected() }}>
           {connected() ? 'live' : 'offline'}
         </span>
+        <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)">
+          ?
+        </button>
       </header>
 
       <div class="body">
@@ -193,6 +200,28 @@ export default function App() {
           <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />
         </main>
       </div>
+
+      <Show when={showHelp()}>
+        <div class="help-backdrop" onClick={() => setShowHelp(false)}>
+          <div class="help-panel" onClick={(e) => e.stopPropagation()}>
+            <h3>Keyboard shortcuts</h3>
+            <ul>
+              <li>
+                <kbd>/</kbd> Filter namespaces
+              </li>
+              <li>
+                <kbd>1</kbd>–<kbd>4</kbd> Switch views
+              </li>
+              <li>
+                <kbd>Esc</kbd> Close drawer / clear filters
+              </li>
+              <li>
+                <kbd>?</kbd> Toggle this help
+              </li>
+            </ul>
+          </div>
+        </div>
+      </Show>
     </div>
   )
 }
