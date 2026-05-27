@@ -160,6 +160,58 @@ func nodeCapacity(obj runtime.Object) string {
 	return strings.Join(parts, " · ")
 }
 
+// servicePorts formats a Service's port mappings as "[name ]port[→target][:nodePort]/proto" (nil for
+// non-services), the "what does this route to, on which port" detail the network view needs without
+// opening the manifest. The target port is shown only when it differs from the service port, and the
+// node port only when set (NodePort/LoadBalancer).
+func servicePorts(obj runtime.Object) []string {
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		return nil
+	}
+	if len(svc.Spec.Ports) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(svc.Spec.Ports))
+	for _, p := range svc.Spec.Ports {
+		s := fmt.Sprintf("%d", p.Port)
+		if tp := p.TargetPort.String(); tp != "" && tp != "0" && tp != s {
+			s += "→" + tp
+		}
+		if p.NodePort != 0 {
+			s += fmt.Sprintf(":%d", p.NodePort)
+		}
+		proto := p.Protocol
+		if proto == "" {
+			proto = corev1.ProtocolTCP
+		}
+		s += "/" + string(proto)
+		if p.Name != "" {
+			s = p.Name + " " + s
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// serviceClusterIP returns a Service's reachable address for the drawer: its cluster IP, "headless"
+// for a headless (ClusterIP: None) service, or the aliased host for an ExternalName service. "" for
+// non-services or a not-yet-assigned IP, so the drawer omits it.
+func serviceClusterIP(obj runtime.Object) string {
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		return ""
+	}
+	switch {
+	case svc.Spec.Type == corev1.ServiceTypeExternalName:
+		return svc.Spec.ExternalName
+	case svc.Spec.ClusterIP == corev1.ClusterIPNone:
+		return "headless"
+	default:
+		return svc.Spec.ClusterIP
+	}
+}
+
 // humanizeBytes renders a byte count as a binary-unit string (Ki/Mi/Gi/Ti), matching how Kubernetes
 // reports memory, so a Node's RAM reads as "16Gi" rather than a raw byte count.
 func humanizeBytes(b int64) string {

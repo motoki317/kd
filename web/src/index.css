@@ -634,6 +634,33 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.drawer-ports {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.port-addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.port-addr code {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.port-chip {
+  font-size: 11px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
 .drawer-labels {
   margin-top: 8px;
 }

@@ -101,6 +101,20 @@ export default function DetailDrawer(props: Props) {
                   <span class="drawer-age">{node().capacity}</span>
                 </Show>
               </div>
+              {/* A Service's reachable address and port mappings — the network view's core question
+                  ("what routes here, on which port?"), otherwise buried in the manifest. The address
+                  is copyable for pasting into a curl/port-forward. */}
+              <Show when={node().clusterIP || (node().ports?.length ?? 0) > 0}>
+                <div class="drawer-ports">
+                  <Show when={node().clusterIP}>
+                    <span class="port-addr">
+                      <code>{node().clusterIP}</code>
+                      <CopyButton text={() => node().clusterIP!} title="Copy address" />
+                    </span>
+                  </Show>
+                  <For each={node().ports}>{(p) => <span class="port-chip">{p}</span>}</For>
+                </div>
+              </Show>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so
                   surface them prominently with per-image copy for pasting into kubectl/registry. */}
               <Show when={(node().images?.length ?? 0) > 0}>

@@ -75,6 +75,8 @@ func nodeEqual(a, b Node) bool {
 		a.Status == b.Status &&
 		a.Restarts == b.Restarts &&
 		a.Host == b.Host &&
+		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
+		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node
 		slices.Equal(a.ContainerStatuses, b.ContainerStatuses) && // readiness/restart/state changes

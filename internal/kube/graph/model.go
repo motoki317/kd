@@ -51,6 +51,8 @@ type Node struct {
 	Images     []string          `json:"images,omitempty"`     // distinct container images, "what's deployed here"
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
 	Capacity   string            `json:"capacity,omitempty"`   // a Node's CPU/memory/pod capacity, for "how big is this node"
+	ClusterIP  string            `json:"clusterIP,omitempty"`  // a Service's reachable address ("headless"/ExternalName target for those)
+	Ports      []string          `json:"ports,omitempty"`      // a Service's port mappings, "port→target[:nodePort]/proto"
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

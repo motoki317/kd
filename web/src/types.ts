@@ -27,6 +27,8 @@ export interface KNode {
   images?: string[]
   host?: string
   capacity?: string
+  clusterIP?: string
+  ports?: string[]
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>
   ownerUIDs?: string[]

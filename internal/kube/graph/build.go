@@ -40,6 +40,8 @@ func Build(objs []runtime.Object) *Graph {
 			Images:            containerImages(obj),
 			Host:              podHost(obj),
 			Capacity:          nodeCapacity(obj),
+			ClusterIP:         serviceClusterIP(obj),
+			Ports:             servicePorts(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {
