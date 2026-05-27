@@ -44,6 +44,8 @@ func Build(objs []runtime.Object) *Graph {
 			Ports:             servicePorts(obj),
 			Routes:            ingressRoutes(obj),
 			Rules:             roleRules(obj),
+			RoleRef:           bindingRoleRef(obj),
+			Subjects:          bindingSubjects(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

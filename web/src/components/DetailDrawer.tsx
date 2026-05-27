@@ -146,6 +146,16 @@ export default function DetailDrawer(props: Props) {
                   <For each={node().rules}>{(r) => <code class="route-row">{r}</code>}</For>
                 </div>
               </Show>
+              {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
+                  only place they're visible — the "who got access" answer for an RBAC audit. */}
+              <Show when={node().roleRef || (node().subjects?.length ?? 0) > 0}>
+                <div class="drawer-routes">
+                  <Show when={node().roleRef}>
+                    <code class="route-row">→ {node().roleRef}</code>
+                  </Show>
+                  <For each={node().subjects}>{(s) => <code class="route-row">{s}</code>}</For>
+                </div>
+              </Show>
               {/* The image(s) are usually the first thing checked ("what version is live?"), so
                   surface them prominently with per-image copy for pasting into kubectl/registry. */}
               <Show when={(node().images?.length ?? 0) > 0}>

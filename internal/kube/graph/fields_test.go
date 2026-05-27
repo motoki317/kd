@@ -101,6 +101,42 @@ func TestRoleRules(t *testing.T) {
 	}
 }
 
+func TestBindingSubjectsAndRoleRef(t *testing.T) {
+	rb := &rbacv1.RoleBinding{
+		RoleRef: rbacv1.RoleRef{Kind: "ClusterRole", Name: "edit"},
+		Subjects: []rbacv1.Subject{
+			{Kind: "User", Name: "alice@example.com"},
+			{Kind: "Group", Name: "platform"},
+			{Kind: "ServiceAccount", Namespace: "shop", Name: "deployer"},
+		},
+	}
+	if got := bindingRoleRef(rb); got != "ClusterRole/edit" {
+		t.Errorf("bindingRoleRef = %q, want ClusterRole/edit", got)
+	}
+	want := []string{"User: alice@example.com", "Group: platform", "ServiceAccount: shop/deployer"}
+	if got := bindingSubjects(rb); !slices.Equal(got, want) {
+		t.Errorf("bindingSubjects =\n%v\nwant\n%v", got, want)
+	}
+
+	crb := &rbacv1.ClusterRoleBinding{
+		RoleRef:  rbacv1.RoleRef{Kind: "ClusterRole", Name: "cluster-admin"},
+		Subjects: []rbacv1.Subject{{Kind: "Group", Name: "system:masters"}},
+	}
+	if got := bindingRoleRef(crb); got != "ClusterRole/cluster-admin" {
+		t.Errorf("bindingRoleRef(CRB) = %q", got)
+	}
+	if got := bindingSubjects(crb); !slices.Equal(got, []string{"Group: system:masters"}) {
+		t.Errorf("bindingSubjects(CRB) = %v", got)
+	}
+
+	if got := bindingRoleRef(&corev1.Pod{}); got != "" {
+		t.Errorf("bindingRoleRef(non-binding) = %q, want empty", got)
+	}
+	if got := bindingSubjects(&corev1.Pod{}); got != nil {
+		t.Errorf("bindingSubjects(non-binding) = %v, want nil", got)
+	}
+}
+
 func TestServiceClusterIP(t *testing.T) {
 	tests := []struct {
 		name string

@@ -283,6 +283,47 @@ func roleRules(obj runtime.Object) []string {
 	return out
 }
 
+// bindingRoleRef renders a RoleBinding/ClusterRoleBinding's target role as "Kind/name" ("" otherwise).
+// The binding→role edge already shows an in-namespace Role, but a roleRef to a cluster-scoped
+// ClusterRole has no node in a namespace graph, so this is the only place that target is visible.
+func bindingRoleRef(obj runtime.Object) string {
+	switch o := obj.(type) {
+	case *rbacv1.RoleBinding:
+		return o.RoleRef.Kind + "/" + o.RoleRef.Name
+	case *rbacv1.ClusterRoleBinding:
+		return o.RoleRef.Kind + "/" + o.RoleRef.Name
+	default:
+		return ""
+	}
+}
+
+// bindingSubjects renders who a RoleBinding/ClusterRoleBinding grants to as "Kind: [namespace/]name"
+// rows (nil otherwise). User and Group subjects aren't Kubernetes objects, so they have no node and
+// are invisible in the topology — this surfaces them, the core "who got access" audit answer.
+func bindingSubjects(obj runtime.Object) []string {
+	var subjects []rbacv1.Subject
+	switch o := obj.(type) {
+	case *rbacv1.RoleBinding:
+		subjects = o.Subjects
+	case *rbacv1.ClusterRoleBinding:
+		subjects = o.Subjects
+	default:
+		return nil
+	}
+	if len(subjects) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(subjects))
+	for _, s := range subjects {
+		name := s.Name
+		if s.Kind == "ServiceAccount" && s.Namespace != "" {
+			name = s.Namespace + "/" + s.Name
+		}
+		out = append(out, s.Kind+": "+name)
+	}
+	return out
+}
+
 // serviceClusterIP returns a Service's reachable address for the drawer: its cluster IP, "headless"
 // for a headless (ClusterIP: None) service, or the aliased host for an ExternalName service. "" for
 // non-services or a not-yet-assigned IP, so the drawer omits it.

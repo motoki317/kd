@@ -31,6 +31,8 @@ export interface KNode {
   ports?: string[]
   routes?: string[]
   rules?: string[]
+  roleRef?: string
+  subjects?: string[]
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>
