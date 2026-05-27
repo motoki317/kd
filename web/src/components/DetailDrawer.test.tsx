@@ -1,5 +1,6 @@
 import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSignal } from 'solid-js'
 import DetailDrawer from './DetailDrawer'
 import type { KNode } from '../types'
 
@@ -121,6 +122,32 @@ describe('DetailDrawer', () => {
     ))
     await findByText('unavailable')
     expect(container.querySelector('.drawer')).toBeTruthy()
+  })
+
+  it('keeps the active tab across selections when the new resource has it', () => {
+    const podA: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
+    const podB: KNode = { id: 'pb', kind: 'Pod', name: 'pod-b', namespace: 'shop', health: 'Healthy' }
+    const [node, setNode] = createSignal<KNode>(podA)
+    const { container } = render(() => <DetailDrawer node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const tabBtn = (label: string) =>
+      [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim().startsWith(label)) as HTMLButtonElement
+    const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+
+    tabBtn('Events').click()
+    expect(activeTab()).toBe('Events')
+    setNode(podB) // another loggable resource that also has an Events tab
+    expect(activeTab()).toBe('Events')
+  })
+
+  it('falls back to the default tab when the new resource lacks the current one', () => {
+    const pod: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
+    const [node, setNode] = createSignal<KNode>(pod)
+    const { container } = render(() => <DetailDrawer node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+    // Pod defaults to Logs; switching to a non-loggable ConfigMap (no Logs tab) must fall back.
+    expect(activeTab()).toBe('Logs')
+    setNode(configMap)
+    expect(activeTab()).toBe('Manifest')
   })
 
   it('renders an age and clickable owner chips', () => {

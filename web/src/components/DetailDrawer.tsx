@@ -52,9 +52,15 @@ export default function DetailDrawer(props: Props) {
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
-  // Reset to the kind's default tab whenever the selection changes, so a non-loggable resource never
-  // lands on a Logs tab it doesn't have.
-  createEffect(on(() => props.node?.id, () => setTab(loggable() ? 'logs' : 'manifest')))
+  // On selection change, keep the current tab if the new resource has it — so triaging the same tab
+  // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
+  // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
+  createEffect(
+    on(
+      () => props.node?.id,
+      () => setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest')),
+    ),
+  )
 
   const key = () =>
     props.node ? { ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name } : null
