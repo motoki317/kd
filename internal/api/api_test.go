@@ -162,6 +162,52 @@ func TestUnauthenticatedRejected(t *testing.T) {
 	}
 }
 
+// TestResourceEventsHandler exercises the events endpoint through HTTP, including the controller-subtree
+// aggregation: a Deployment's events include its pod's event.
+func TestResourceEventsHandler(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
+		&appsv1.Deployment{ObjectMeta: meta("shop", "web", "dep-uid")},
+		&appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "shop", Name: "web-rs", UID: "rs-uid",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "web", UID: "dep-uid", Controller: ptr(true)}},
+		}, Spec: appsv1.ReplicaSetSpec{Replicas: ptr(int32(1))}, Status: appsv1.ReplicaSetStatus{Replicas: 1}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "shop", Name: "web-a", UID: "pa",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-rs", UID: "rs-uid", Controller: ptr(true)}},
+		}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+		&corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Namespace: "shop", Name: "evt-1"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-a", UID: "pa"},
+			Reason:         "FailedScheduling", Type: corev1.EventTypeWarning, Message: "no nodes", Count: 1,
+			LastTimestamp: metav1.Now(),
+		},
+	}
+	srv := newServer(t, "", objs...)
+
+	resp, body := get(t, srv, "/api/v1/namespaces/shop/resources/Deployment/web/events", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got struct {
+		Events []struct{ Reason string }
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	reasons := make([]string, len(got.Events))
+	for i, e := range got.Events {
+		reasons[i] = e.Reason
+	}
+	if !contains(reasons, "FailedScheduling") {
+		t.Errorf("Deployment events = %v, want the pod's FailedScheduling (subtree aggregation)", reasons)
+	}
+
+	if resp, _ := get(t, srv, "/api/v1/namespaces/shop/resources/Pod/nope/events", "alice"); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("missing resource events status = %d, want 404", resp.StatusCode)
+	}
+}
+
 func TestGraphStreamSendsSnapshot(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
