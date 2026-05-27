@@ -6,6 +6,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -124,6 +125,32 @@ func TestNodeHealthAndStatus(t *testing.T) {
 			}
 			if got := statusSummary(tc.node); got != tc.wantStatus {
 				t.Errorf("status = %q, want %q", got, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestStatusSummaryIngress(t *testing.T) {
+	rules := func(hosts ...string) *networkingv1.Ingress {
+		ing := &networkingv1.Ingress{}
+		for _, h := range hosts {
+			ing.Spec.Rules = append(ing.Spec.Rules, networkingv1.IngressRule{Host: h})
+		}
+		return ing
+	}
+	tests := map[string]struct {
+		ing  *networkingv1.Ingress
+		want string
+	}{
+		"single host":             {rules("app.example.com"), "app.example.com"},
+		"multiple distinct hosts": {rules("a.example.com", "b.example.com"), "a.example.com +1"},
+		"duplicate hosts dedupe":  {rules("a.example.com", "a.example.com"), "a.example.com"},
+		"host-less catch-all":     {rules(), "*"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := statusSummary(tc.ing); got != tc.want {
+				t.Errorf("statusSummary(Ingress) = %q, want %q", got, tc.want)
 			}
 		})
 	}

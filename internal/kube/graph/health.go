@@ -6,6 +6,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -349,6 +350,27 @@ func podHost(obj runtime.Object) string {
 	return ""
 }
 
+// ingressStatus shows an Ingress's distinct hostnames so the network view says what URL routes
+// where: the single host, "host +N" when there are several, or "*" for a host-less catch-all.
+func ingressStatus(ing *networkingv1.Ingress) string {
+	seen := map[string]bool{}
+	var hosts []string
+	for _, r := range ing.Spec.Rules {
+		if r.Host != "" && !seen[r.Host] {
+			seen[r.Host] = true
+			hosts = append(hosts, r.Host)
+		}
+	}
+	switch {
+	case len(hosts) == 0:
+		return "*"
+	case len(hosts) == 1:
+		return hosts[0]
+	default:
+		return fmt.Sprintf("%s +%d", hosts[0], len(hosts)-1)
+	}
+}
+
 // statusSummary is a short human-readable status shown on the node chip.
 func statusSummary(obj runtime.Object) string {
 	switch o := obj.(type) {
@@ -366,6 +388,8 @@ func statusSummary(obj runtime.Object) string {
 		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
 	case *corev1.Node:
 		return nodeStatusSummary(o)
+	case *networkingv1.Ingress:
+		return ingressStatus(o)
 	case *batchv1.Job:
 		if o.Spec.Suspend != nil && *o.Spec.Suspend {
 			return "Suspended"
