@@ -3,6 +3,7 @@ package graph
 import (
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -81,6 +82,23 @@ func TestStatusSummaryService(t *testing.T) {
 	svc := &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer}}
 	if got := statusSummary(svc); got != "LoadBalancer" {
 		t.Errorf("statusSummary(Service) = %q, want LoadBalancer", got)
+	}
+}
+
+func TestStatusSummaryJobAndCronJob(t *testing.T) {
+	three := int32(3)
+	job := &batchv1.Job{Spec: batchv1.JobSpec{Completions: &three}, Status: batchv1.JobStatus{Succeeded: 1}}
+	if got := statusSummary(job); got != "1/3" {
+		t.Errorf("statusSummary(Job) = %q, want 1/3", got)
+	}
+	suspended := true
+	cj := &batchv1.CronJob{Spec: batchv1.CronJobSpec{Schedule: "*/5 * * * *", Suspend: &suspended}}
+	if got := statusSummary(cj); got != "Suspended" {
+		t.Errorf("statusSummary(suspended CronJob) = %q, want Suspended", got)
+	}
+	active := &batchv1.CronJob{Spec: batchv1.CronJobSpec{Schedule: "*/5 * * * *"}}
+	if got := statusSummary(active); got != "*/5 * * * *" {
+		t.Errorf("statusSummary(active CronJob) = %q, want the schedule", got)
 	}
 }
 

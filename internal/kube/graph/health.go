@@ -215,6 +215,17 @@ func statusSummary(obj runtime.Object) string {
 		return fmt.Sprintf("%d/%d", o.Status.NumberReady, o.Status.DesiredNumberScheduled)
 	case *corev1.Service:
 		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
+	case *batchv1.Job:
+		completions := int32(1)
+		if o.Spec.Completions != nil {
+			completions = *o.Spec.Completions
+		}
+		return fmt.Sprintf("%d/%d", o.Status.Succeeded, completions)
+	case *batchv1.CronJob:
+		if o.Spec.Suspend != nil && *o.Spec.Suspend {
+			return "Suspended"
+		}
+		return o.Spec.Schedule
 	default:
 		return ""
 	}
