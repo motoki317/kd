@@ -25,6 +25,11 @@ const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'Dae
 export default function DetailDrawer(props: Props) {
   const isPod = createMemo(() => props.node?.kind === 'Pod')
   const loggable = createMemo(() => (props.node ? LOGGABLE.has(props.node.kind) : false))
+  // Labels are high-signal metadata (app, version, team) the operator otherwise has to dig out of
+  // the manifest. Sort by key for a stable, scannable order.
+  const labels = createMemo(() =>
+    Object.entries(props.node?.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  )
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
@@ -90,6 +95,25 @@ export default function DetailDrawer(props: Props) {
                     )}
                   </For>
                 </div>
+              </Show>
+              {/* Collapsible so a Helm-managed resource's label noise can be tucked away, but open
+                  by default since labels are usually what the operator came to check. */}
+              <Show when={labels().length > 0}>
+                <details class="drawer-labels" open>
+                  <summary>Labels · {labels().length}</summary>
+                  <div class="label-chips">
+                    <For each={labels()}>
+                      {([k, v]) => (
+                        <span class="label-chip" title={`${k}=${v}`}>
+                          <span class="label-key">{k}</span>
+                          <Show when={v}>
+                            <span class="label-val">{v}</span>
+                          </Show>
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </details>
               </Show>
             </div>
             <button class="drawer-close" onClick={props.onClose} title="Close">

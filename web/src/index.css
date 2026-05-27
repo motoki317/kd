@@ -549,6 +549,47 @@ body {
   color: var(--text);
   font-weight: 600;
 }
+.drawer-labels {
+  margin-top: 8px;
+}
+.drawer-labels > summary {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.label-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 132px;
+  overflow: auto;
+}
+.label-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.label-key {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.label-val {
+  color: var(--text);
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .drawer-close {
   border: 0;
   background: transparent;

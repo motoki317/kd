@@ -34,6 +34,20 @@ describe('DetailDrawer', () => {
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
+  it('renders labels as key/value chips, sorted by key', () => {
+    const labeled: KNode = { ...configMap, labels: { tier: 'backend', app: 'shop' } }
+    const { container } = render(() => <DetailDrawer node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const keys = [...container.querySelectorAll('.label-chip .label-key')].map((e) => e.textContent)
+    const vals = [...container.querySelectorAll('.label-chip .label-val')].map((e) => e.textContent)
+    expect(keys).toEqual(['app', 'tier'])
+    expect(vals).toEqual(['shop', 'backend'])
+  })
+
+  it('omits the labels section when there are none', () => {
+    const { container } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('.drawer-labels')).toBeNull()
+  })
+
   it('renders an age and clickable owner chips', () => {
     const owner: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const navigated: string[] = []
