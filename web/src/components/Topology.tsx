@@ -40,6 +40,25 @@ export default function Topology(props: Props) {
   })
   const label = (n: KNode) => middleTruncate(relativeName(n.name, ownerName().get(n.id)))
 
+  // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
+  // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null
+  // when nothing is selected, so the whole graph renders at full strength.
+  const edgeKey = (e: { from: string; to: string; type: string }) => `${e.from}|${e.to}|${e.type}`
+  const related = createMemo(() => {
+    const id = props.selectedId
+    if (!id) return null
+    const nodes = new Set<string>([id])
+    const edges = new Set<string>()
+    for (const e of layout().edges) {
+      if (e.from === id || e.to === id) {
+        nodes.add(e.from)
+        nodes.add(e.to)
+        edges.add(edgeKey(e))
+      }
+    }
+    return { nodes, edges }
+  })
+
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
   const [ty, setTy] = createSignal(0)
@@ -148,6 +167,10 @@ export default function Topology(props: Props) {
             <For each={layout().edges}>
               {(e) => (
                 <path
+                  classList={{
+                    faded: related() ? !related()!.edges.has(edgeKey(e)) : false,
+                    adjacent: related() ? related()!.edges.has(edgeKey(e)) : false,
+                  }}
                   d={edgePath(e.points)}
                   fill="none"
                   stroke="var(--edge-color)"
@@ -163,7 +186,11 @@ export default function Topology(props: Props) {
               {(n) => (
                 <g
                   class="node"
-                  classList={{ selected: n.id === props.selectedId, [`h-${n.health.toLowerCase()}`]: true }}
+                  classList={{
+                    selected: n.id === props.selectedId,
+                    faded: related() ? !related()!.nodes.has(n.id) : false,
+                    [`h-${n.health.toLowerCase()}`]: true,
+                  }}
                   transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}
                   onClick={() => props.onSelect(n.id)}
                 >

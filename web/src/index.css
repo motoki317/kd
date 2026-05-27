@@ -261,6 +261,22 @@ body {
 .node {
   cursor: pointer;
 }
+/* Selection focus: fade everything not connected to the selected node, and light up the edges
+   that are, so a resource's relationships pop out of a dense graph. */
+.node,
+.edges path {
+  transition: opacity 0.12s;
+}
+.node.faded {
+  opacity: 0.2;
+}
+.edges path.faded {
+  opacity: 0.08;
+}
+.edges path.adjacent {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
 .node-bg {
   fill: var(--surface);
   stroke: var(--border-strong);
