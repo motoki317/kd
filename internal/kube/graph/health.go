@@ -25,9 +25,31 @@ func health(obj runtime.Object) Health {
 		return daemonSetHealth(o)
 	case *batchv1.Job:
 		return jobHealth(o)
+	case *corev1.Node:
+		return nodeHealth(o)
 	default:
 		return HealthHealthy
 	}
+}
+
+// nodeHealth reads a Node's conditions: Ready=False (or missing) is Degraded, as is any resource
+// pressure (Memory/Disk/PID); otherwise Healthy. Without this a NotReady node renders green.
+func nodeHealth(n *corev1.Node) Health {
+	ready := false
+	for _, c := range n.Status.Conditions {
+		switch c.Type {
+		case corev1.NodeReady:
+			ready = c.Status == corev1.ConditionTrue
+		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure, corev1.NodePIDPressure:
+			if c.Status == corev1.ConditionTrue {
+				return HealthDegraded
+			}
+		}
+	}
+	if !ready {
+		return HealthDegraded
+	}
+	return HealthHealthy
 }
 
 func podHealth(p *corev1.Pod) Health {
@@ -191,6 +213,21 @@ func containerNames(obj runtime.Object) []string {
 	return names
 }
 
+// nodeStatusSummary mirrors kubectl's node STATUS: Ready/NotReady, plus ,SchedulingDisabled when the
+// node is cordoned.
+func nodeStatusSummary(n *corev1.Node) string {
+	status := "NotReady"
+	for _, c := range n.Status.Conditions {
+		if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
+			status = "Ready"
+		}
+	}
+	if n.Spec.Unschedulable {
+		status += ",SchedulingDisabled"
+	}
+	return status
+}
+
 // podHost returns the node a pod is scheduled on ("" for non-pods or unscheduled pods), placement
 // context the operator otherwise has to dig out of the manifest.
 func podHost(obj runtime.Object) string {
@@ -215,6 +252,8 @@ func statusSummary(obj runtime.Object) string {
 		return fmt.Sprintf("%d/%d", o.Status.NumberReady, o.Status.DesiredNumberScheduled)
 	case *corev1.Service:
 		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
+	case *corev1.Node:
+		return nodeStatusSummary(o)
 	case *batchv1.Job:
 		completions := int32(1)
 		if o.Spec.Completions != nil {

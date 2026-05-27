@@ -78,6 +78,39 @@ func TestPodStatusSummary(t *testing.T) {
 	}
 }
 
+func TestNodeHealthAndStatus(t *testing.T) {
+	node := func(ready corev1.ConditionStatus, unschedulable bool, extra ...corev1.NodeCondition) *corev1.Node {
+		conds := append([]corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}, extra...)
+		return &corev1.Node{Spec: corev1.NodeSpec{Unschedulable: unschedulable}, Status: corev1.NodeStatus{Conditions: conds}}
+	}
+
+	tests := []struct {
+		name       string
+		node       *corev1.Node
+		wantHealth Health
+		wantStatus string
+	}{
+		{"ready", node(corev1.ConditionTrue, false), HealthHealthy, "Ready"},
+		{"not ready", node(corev1.ConditionFalse, false), HealthDegraded, "NotReady"},
+		{"cordoned but ready", node(corev1.ConditionTrue, true), HealthHealthy, "Ready,SchedulingDisabled"},
+		{
+			"memory pressure",
+			node(corev1.ConditionTrue, false, corev1.NodeCondition{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue}),
+			HealthDegraded, "Ready",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := health(tc.node); got != tc.wantHealth {
+				t.Errorf("health = %q, want %q", got, tc.wantHealth)
+			}
+			if got := statusSummary(tc.node); got != tc.wantStatus {
+				t.Errorf("status = %q, want %q", got, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestStatusSummaryService(t *testing.T) {
 	svc := &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer}}
 	if got := statusSummary(svc); got != "LoadBalancer" {
