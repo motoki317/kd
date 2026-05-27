@@ -1,0 +1,148 @@
+package graph
+
+import (
+	"fmt"
+
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// statusSummary is a short human-readable status shown on the node chip — kubectl's STATUS column
+// for the kinds that have one. The per-kind helpers live below; health.go derives the colored
+// Health enum from the same objects.
+func statusSummary(obj runtime.Object) string {
+	switch o := obj.(type) {
+	case *corev1.Pod:
+		return podStatusSummary(o)
+	case *appsv1.Deployment:
+		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
+	case *appsv1.ReplicaSet:
+		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
+	case *appsv1.StatefulSet:
+		return fmt.Sprintf("%d/%d", o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
+	case *appsv1.DaemonSet:
+		return fmt.Sprintf("%d/%d", o.Status.NumberReady, o.Status.DesiredNumberScheduled)
+	case *corev1.Service:
+		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
+	case *corev1.Node:
+		return nodeStatusSummary(o)
+	case *networkingv1.Ingress:
+		return ingressStatus(o)
+	case *corev1.PersistentVolumeClaim:
+		return pvcStatus(o)
+	case *batchv1.Job:
+		if o.Spec.Suspend != nil && *o.Spec.Suspend {
+			return "Suspended"
+		}
+		completions := int32(1)
+		if o.Spec.Completions != nil {
+			completions = *o.Spec.Completions
+		}
+		return fmt.Sprintf("%d/%d", o.Status.Succeeded, completions)
+	case *batchv1.CronJob:
+		if o.Spec.Suspend != nil && *o.Spec.Suspend {
+			return "Suspended"
+		}
+		return o.Spec.Schedule
+	default:
+		return ""
+	}
+}
+
+// podStatusSummary mirrors kubectl's STATUS column: a waiting/terminated container reason
+// (CrashLoopBackOff, ImagePullBackOff, OOMKilled, ...) is far more useful than the bare phase,
+// which stays "Running" even while a container crash-loops. Deletion shows as Terminating.
+func podStatusSummary(p *corev1.Pod) string {
+	if p.DeletionTimestamp != nil {
+		return "Terminating"
+	}
+	// Init containers run (sequentially) before the app ones; a failing init is what's actually wrong,
+	// so surface it as kubectl does ("Init:CrashLoopBackOff") rather than the bare "Pending".
+	for _, cs := range p.Status.InitContainerStatuses {
+		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+			return "Init:" + w.Reason
+		}
+		if t := cs.State.Terminated; t != nil && t.ExitCode != 0 && t.Reason != "" {
+			return "Init:" + t.Reason
+		}
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if w := cs.State.Waiting; w != nil && w.Reason != "" {
+			return w.Reason
+		}
+	}
+	for _, cs := range p.Status.ContainerStatuses {
+		if t := cs.State.Terminated; t != nil && t.Reason != "" && t.Reason != "Completed" {
+			return t.Reason
+		}
+	}
+	if p.Status.Reason != "" {
+		return p.Status.Reason // pod-level, e.g. Evicted, NodeAffinity
+	}
+	// A Running pod with some container not yet ready is up but not serving; show ready/total so
+	// "up but failing readiness" is distinguishable from a healthy Running.
+	if p.Status.Phase == corev1.PodRunning {
+		ready, total := 0, len(p.Status.ContainerStatuses)
+		for _, cs := range p.Status.ContainerStatuses {
+			if cs.Ready {
+				ready++
+			}
+		}
+		if total > 0 && ready < total {
+			return fmt.Sprintf("Running %d/%d", ready, total)
+		}
+	}
+	return string(p.Status.Phase)
+}
+
+// nodeStatusSummary mirrors kubectl's node STATUS: Ready/NotReady, plus ,SchedulingDisabled when the
+// node is cordoned.
+func nodeStatusSummary(n *corev1.Node) string {
+	status := "NotReady"
+	for _, c := range n.Status.Conditions {
+		if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
+			status = "Ready"
+		}
+	}
+	if n.Spec.Unschedulable {
+		status += ",SchedulingDisabled"
+	}
+	return status
+}
+
+// ingressStatus shows an Ingress's distinct hostnames so the network view says what URL routes
+// where: the single host, "host +N" when there are several, or "*" for a host-less catch-all.
+func ingressStatus(ing *networkingv1.Ingress) string {
+	seen := map[string]bool{}
+	var hosts []string
+	for _, r := range ing.Spec.Rules {
+		if r.Host != "" && !seen[r.Host] {
+			seen[r.Host] = true
+			hosts = append(hosts, r.Host)
+		}
+	}
+	switch {
+	case len(hosts) == 0:
+		return "*"
+	case len(hosts) == 1:
+		return hosts[0]
+	default:
+		return fmt.Sprintf("%s +%d", hosts[0], len(hosts)-1)
+	}
+}
+
+// pvcStatus shows the claim phase plus the bound capacity when known (e.g. "Bound 10Gi"), the
+// at-a-glance answer to "did my storage actually provision, and how big?".
+func pvcStatus(p *corev1.PersistentVolumeClaim) string {
+	phase := string(p.Status.Phase)
+	if phase == "" {
+		return ""
+	}
+	if q, ok := p.Status.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
+		return phase + " " + q.String()
+	}
+	return phase
+}
