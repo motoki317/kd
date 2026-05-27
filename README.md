@@ -33,6 +33,19 @@ just build           # build client, embed, build the kd binary
 In dev, the Vite server proxies `/api` to the Go server and injects a `dev` identity, so no
 forward-auth proxy is needed locally.
 
+## Deployment
+
+`docker build -t <ref> .` builds a single static image (client embedded). Then:
+
+```bash
+kubectl apply -k deploy/
+```
+
+This runs kd as one read-only Deployment behind a forward-auth proxy, with a declarative
+`policy.csv` ConfigMap (hot-reloaded). See [`deploy/README.md`](deploy/README.md) for the
+ServiceAccount/RBAC, policy, and IngressRoute details. The release binary embeds the client via
+the `embed_web` build tag (`just build`); the default build serves the API with a placeholder page.
+
 ## Architecture
 
 See `docs/ADR/README.md` for the full set. Highlights:

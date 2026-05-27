@@ -1,0 +1,22 @@
+# Exposes kd behind the same traefik-forward-auth middleware as Grafana, so the proxy injects
+# X-Forwarded-User and kd never sees an unauthenticated request.
+# See docs/ADR/20260527-proxy-authentication.md and the auth-admin middleware in motoki317-manifest.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: kd
+  namespace: kd
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`kd.toki317.dev`)
+      middlewares:
+        - name: auth-admin
+          namespace: auth
+      services:
+        - kind: Service
+          name: kd
+          port: 80
+  tls: {}

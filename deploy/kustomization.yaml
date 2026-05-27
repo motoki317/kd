@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# kd deployment base. Overlay your own policy.csv (policy-configmap.yaml) and the IngressRoute
+# host/middleware for your cluster. The IngressRoute assumes a traefik-forward-auth setup
+# emitting X-Forwarded-User; drop it (and front kd another way) if your edge differs.
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - policy-configmap.yaml
+  - deployment.yaml
+  - ingressroute.yaml

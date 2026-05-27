@@ -21,7 +21,7 @@ dev-web:
 
 # Build the client, embed it, and build the kd binary into ./kd.
 build: build-web
-    CGO_ENABLED=0 go build -o kd ./cmd/kd
+    CGO_ENABLED=0 go build -tags embed_web -o kd ./cmd/kd
 
 # Build the client into the embed directory (internal/server/webdist).
 build-web:
