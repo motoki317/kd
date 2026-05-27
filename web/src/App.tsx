@@ -25,6 +25,9 @@ export default function App() {
   const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
   const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
+  // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
+  // stable across reloads, so we key the link on the stable identity).
+  let pendingSel = params.get('sel')
   const [connected, setConnected] = createSignal(false)
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
@@ -39,12 +42,25 @@ export default function App() {
     if (!list.some((n) => n.name === namespace())) setNamespace(list[0].name)
   })
 
-  // Mirror namespace/view back into the URL (replace, not push, so Back isn't spammed).
+  // Mirror namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
   createEffect(() => {
     const p = new URLSearchParams()
     if (namespace()) p.set('ns', namespace()!)
     p.set('view', view())
+    const id = selectedId()
+    const n = id ? graph.nodes[id] : null
+    if (n) p.set('sel', `${n.kind}/${n.name}`)
     history.replaceState(null, '', `${location.pathname}?${p}`)
+  })
+
+  // Restore a URL-seeded selection once its node arrives (then stop tracking).
+  createEffect(() => {
+    if (!pendingSel) return
+    const match = Object.values(graph.nodes).find((n) => `${n.kind}/${n.name}` === pendingSel)
+    if (match) {
+      setSelectedId(match.id)
+      pendingSel = null
+    }
   })
 
   // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
