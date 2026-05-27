@@ -1,106 +1,107 @@
-import { createSignal } from 'solid-js'
-import solidLogo from './assets/solid.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup } from 'solid-js'
+import { createStore, reconcile } from 'solid-js/store'
+import { fetchNamespaces, streamGraph } from './api'
+import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
+import { HEALTH_ORDER, healthColor } from './health'
+import type { View } from './types'
+import Sidebar from './components/Sidebar'
+import Topology from './components/Topology'
+import DetailDrawer from './components/DetailDrawer'
 
-function App() {
-  const [count, setCount] = createSignal(0)
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'ownership', label: 'Ownership' },
+  { id: 'network', label: 'Network' },
+  { id: 'nodes', label: 'Nodes' },
+  { id: 'rbac', label: 'RBAC' },
+  { id: 'all', label: 'All' },
+]
+
+export default function App() {
+  const [namespaces] = createResource(fetchNamespaces)
+  const [namespace, setNamespace] = createSignal<string | null>(null)
+  const [view, setView] = createSignal<View>('ownership')
+  const [selectedId, setSelectedId] = createSignal<string | null>(null)
+  const [connected, setConnected] = createSignal(false)
+
+  const [graph, setGraph] = createStore<GraphState>(emptyState())
+
+  // Default to the first namespace once the list loads.
+  createEffect(() => {
+    const list = namespaces()
+    if (list && list.length > 0 && namespace() === null) setNamespace(list[0])
+  })
+
+  // (Re)subscribe to the graph feed whenever the namespace or view changes.
+  createEffect(() => {
+    const ns = namespace()
+    const v = view()
+    if (!ns) return
+    setSelectedId(null)
+    setGraph(reconcile(emptyState()))
+    setConnected(false)
+    const close = streamGraph(ns, v, {
+      snapshot: (g) => {
+        setGraph(reconcile(fromSnapshot(g)))
+        setConnected(true)
+      },
+      patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
+      error: () => setConnected(false),
+    })
+    onCleanup(close)
+  })
+
+  const nodes = createMemo(() => Object.values(graph.nodes))
+  const edges = createMemo(() => graph.edges)
+  const selectedNode = createMemo(() => (selectedId() ? graph.nodes[selectedId()!] ?? null : null))
+
+  const counts = createMemo(() => {
+    const c: Record<string, number> = {}
+    for (const n of nodes()) c[n.health] = (c[n.health] ?? 0) + 1
+    return c
+  })
 
   return (
-    <>
-      <section id="center">
-        <div class="hero">
-          <img src={heroImg} class="base" width="170" height="179" alt="" />
-          <img src={solidLogo} class="framework" alt="Solid logo" />
-          <img src={viteLogo} class="vite" alt="Vite logo" />
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">kd</div>
+        <div class="topbar-spacer" />
+        <div class="views">
+          <For each={VIEWS}>
+            {(v) => (
+              <button classList={{ active: v.id === view() }} onClick={() => setView(v.id)}>
+                {v.label}
+              </button>
+            )}
+          </For>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+        <div class="legend">
+          <For each={HEALTH_ORDER}>
+            {(h) => (
+              <span class="legend-item" classList={{ dim: !counts()[h] }}>
+                <span class="dot" style={{ background: healthColor(h) }} />
+                {h}
+                <span class="legend-count">{counts()[h] ?? 0}</span>
+              </span>
+            )}
+          </For>
         </div>
-        <button
-          type="button"
-          class="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count()}
-        </button>
-      </section>
+        <span class="conn" classList={{ live: connected() }}>
+          {connected() ? 'live' : '…'}
+        </span>
+      </header>
 
-      <div class="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img class="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://solidjs.com/" target="_blank">
-                <img class="button-icon" src={solidLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg class="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg class="button-icon" role="presentation" aria-hidden="true">
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div class="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <div class="body">
+        <Sidebar
+          namespaces={namespaces() ?? []}
+          selected={namespace()}
+          onSelect={setNamespace}
+          loading={namespaces.loading}
+        />
+        <main class="main">
+          <Topology nodes={nodes()} edges={edges()} selectedId={selectedId()} onSelect={setSelectedId} />
+          <DetailDrawer node={selectedNode()} onClose={() => setSelectedId(null)} />
+        </main>
+      </div>
+    </div>
   )
 }
-
-export default App

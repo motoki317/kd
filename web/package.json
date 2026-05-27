@@ -6,15 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^24.12.3",
+    "jsdom": "^29.1.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
-    "vite-plugin-solid": "^2.11.12"
+    "vite-plugin-solid": "^2.11.12",
+    "vitest": "^4.1.7"
   }
 }
