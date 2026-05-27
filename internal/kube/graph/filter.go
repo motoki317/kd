@@ -32,6 +32,43 @@ func Summarize(objs []runtime.Object) Health {
 	return worst
 }
 
+// DescendantPodNames returns the names of every Pod reachable from the node with the given id by
+// following ownerReference edges downward — or just that pod's name if the id is itself a Pod. It
+// lets the API aggregate logs for a workload across all the pods it ultimately owns (Deployment →
+// ReplicaSet → Pod, CronJob → Job → Pod, ...). Historical pods are absent because Build drops them.
+func (g *Graph) DescendantPodNames(id string) []string {
+	children := map[string][]string{}
+	for _, e := range g.Edges {
+		if e.Type == EdgeOwner {
+			children[e.From] = append(children[e.From], e.To)
+		}
+	}
+	kind := make(map[string]string, len(g.Nodes))
+	name := make(map[string]string, len(g.Nodes))
+	for _, n := range g.Nodes {
+		kind[n.ID], name[n.ID] = n.Kind, n.Name
+	}
+
+	var pods []string
+	seen := map[string]bool{}
+	var walk func(string)
+	walk = func(cur string) {
+		if seen[cur] {
+			return // ownerReferences are a DAG in practice, but guard against cycles regardless
+		}
+		seen[cur] = true
+		if kind[cur] == "Pod" {
+			pods = append(pods, name[cur])
+		}
+		for _, c := range children[cur] {
+			walk(c)
+		}
+	}
+	walk(id)
+	slices.Sort(pods)
+	return pods
+}
+
 // View is a named projection of the full graph onto one relationship dimension, so the UI
 // can switch between the ownership tree, node placement, network, and RBAC without the server
 // building a different graph. See docs/ADR/20260527-resource-relationship-graph.md.

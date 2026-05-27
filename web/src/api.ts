@@ -45,19 +45,29 @@ export function streamGraph(ns: string, view: View, h: GraphStreamHandlers): () 
   return () => es.close()
 }
 
-// streamLogs tails a pod's logs and returns a function that closes the stream.
+export interface LogEntry {
+  pod: string
+  line: string
+}
+
+// streamLogs tails a resource's logs and returns a function that closes the stream. For a Pod this
+// is the pod's own log; for a workload (Deployment, ReplicaSet, ...) the server merges every
+// descendant pod's log into one stream, tagging each line with its source pod.
 export function streamLogs(
   ns: string,
-  pod: string,
+  kind: string,
+  name: string,
   opts: { container?: string; tailLines?: number },
-  onLine: (line: string) => void,
+  onLine: (entry: LogEntry) => void,
   onError?: () => void,
 ): () => void {
   const params = new URLSearchParams({ follow: 'true' })
   if (opts.container) params.set('container', opts.container)
   if (opts.tailLines != null) params.set('tailLines', String(opts.tailLines))
-  const es = new EventSource(`${base}/namespaces/${encodeURIComponent(ns)}/pods/${encodeURIComponent(pod)}/log/stream?${params}`)
-  es.addEventListener('log', (e) => onLine((JSON.parse((e as MessageEvent).data) as { line: string }).line))
+  const es = new EventSource(
+    `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
+  )
+  es.addEventListener('log', (e) => onLine(JSON.parse((e as MessageEvent).data) as LogEntry))
   es.onerror = () => onError?.()
   return () => es.close()
 }

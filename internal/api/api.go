@@ -45,7 +45,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/namespaces/{ns}/graph", a.handleGraph)
 	mux.HandleFunc("GET /api/v1/namespaces/{ns}/graph/stream", a.handleGraphStream)
 	mux.HandleFunc("GET /api/v1/namespaces/{ns}/resources/{kind}/{name}", a.handleResource)
-	mux.HandleFunc("GET /api/v1/namespaces/{ns}/pods/{pod}/log/stream", a.handleLogStream)
+	mux.HandleFunc("GET /api/v1/namespaces/{ns}/resources/{kind}/{name}/log/stream", a.handleResourceLogStream)
 	return mux
 }
 

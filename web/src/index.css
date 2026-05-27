@@ -505,6 +505,14 @@ body {
   white-space: pre-wrap;
   word-break: break-all;
 }
+/* Source-pod label for aggregated workload logs: a fixed-width column so the log text aligns. */
+.log-pod {
+  display: inline-block;
+  width: 20ch;
+  margin-right: 10px;
+  white-space: nowrap;
+  user-select: none;
+}
 .logs-waiting {
   color: #6b7888;
 }

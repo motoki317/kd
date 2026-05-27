@@ -11,11 +11,15 @@ interface Props {
 
 type Tab = 'logs' | 'manifest'
 
-// DetailDrawer shows the selected resource's manifest. Pods also stream live logs, so they get
-// Logs/Manifest tabs (defaulting to logs, the developer's first question); other kinds have no
-// logs and show the manifest directly.
+// Kinds with logs worth showing: a Pod, or a controller whose descendant pods' logs we aggregate.
+const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob'])
+
+// DetailDrawer shows the selected resource's manifest. Pods and the controllers that own them also
+// stream logs (aggregated across descendant pods for controllers), so they get Logs/Manifest tabs
+// defaulting to logs — the developer's first question; other kinds show the manifest directly.
 export default function DetailDrawer(props: Props) {
   const isPod = createMemo(() => props.node?.kind === 'Pod')
+  const loggable = createMemo(() => (props.node ? LOGGABLE.has(props.node.kind) : false))
   const [tab, setTab] = createSignal<Tab>('logs')
 
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
@@ -48,7 +52,7 @@ export default function DetailDrawer(props: Props) {
             </button>
           </header>
 
-          <Show when={isPod()}>
+          <Show when={loggable()}>
             <nav class="drawer-tabs">
               <button classList={{ active: tab() === 'logs' }} onClick={() => setTab('logs')}>
                 Logs
@@ -60,13 +64,13 @@ export default function DetailDrawer(props: Props) {
             {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
                 peek at the manifest tab. */}
             <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
-              <LogViewer namespace={node().namespace ?? ''} pod={node().name} />
+              <LogViewer namespace={node().namespace ?? ''} kind={node().kind} name={node().name} aggregated={!isPod()} />
             </div>
           </Show>
 
-          <section class="manifest-section" classList={{ hidden: isPod() && tab() !== 'manifest' }}>
+          <section class="manifest-section" classList={{ hidden: loggable() && tab() !== 'manifest' }}>
             <div class="manifest-head">
-              <Show when={!isPod()}>
+              <Show when={!loggable()}>
                 <span class="manifest-label">Manifest</span>
               </Show>
               <span class="manifest-format">

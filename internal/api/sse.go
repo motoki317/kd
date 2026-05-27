@@ -2,12 +2,16 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/motoki317/kd/internal/kube/graph"
 )
@@ -78,13 +82,18 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 }
 
 type logLine struct {
+	// Pod names the source pod so the client can label lines when a workload's logs are
+	// aggregated across several pods. It is the pod's own name even for a single Pod.
+	Pod  string `json:"pod"`
 	Line string `json:"line"`
 }
 
-// handleLogStream tails a pod container's logs as SSE `log` events, wrapping the Kubernetes
-// pods/log follow stream.
-func (a *API) handleLogStream(w http.ResponseWriter, r *http.Request) {
-	ns, podName := r.PathValue("ns"), r.PathValue("pod")
+// handleResourceLogStream tails the logs of a resource as SSE `log` events. For a Pod that is the
+// pod's own log; for a workload (Deployment, ReplicaSet, StatefulSet, ...) it is the merged logs of
+// every descendant pod, so the developer reads one stream instead of opening each pod. Each line
+// carries its source pod name.
+func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
+	ns, kind, name := r.PathValue("ns"), r.PathValue("kind"), r.PathValue("name")
 	if _, ok := a.authorize(w, r, ns, "logs", "get"); !ok {
 		return
 	}
@@ -94,30 +103,106 @@ func (a *API) handleLogStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pods := podsForResource(a.store.SnapshotNamespace(ns), kind, name)
+
 	follow := r.URL.Query().Get("follow") != "false"
-	opts := &corev1.PodLogOptions{
-		Container: r.URL.Query().Get("container"),
-		Follow:    follow,
+	container := r.URL.Query().Get("container")
+	tail := parseTail(r.URL.Query().Get("tailLines"))
+
+	setSSEHeaders(w)
+	flusher.Flush() // commit 200 + headers even before the first line (or when there are no pods)
+
+	// Fan out: one goroutine per pod streams into a shared channel; this loop is the only writer
+	// to w. The channel closes once every pod stream ends (all pods gone, or follow=false EOF).
+	lines := make(chan logLine, 64)
+	var wg sync.WaitGroup
+	for _, pod := range pods {
+		wg.Add(1)
+		go func(pod *corev1.Pod) {
+			defer wg.Done()
+			streamPodLogs(r.Context(), a.store.Client(), pod, container, follow, tail, lines)
+		}(pod)
 	}
-	if tail := parseTail(r.URL.Query().Get("tailLines")); tail != nil {
+	go func() { wg.Wait(); close(lines) }()
+
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case ll, ok := <-lines:
+			if !ok {
+				return // every pod stream has ended
+			}
+			if !writeSSE(w, "log", ll) {
+				return
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			// Keep the connection open through proxies even while idle (e.g. no pods yet).
+			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+// podsForResource returns the live pods whose logs represent the given resource: the pod itself if
+// kind is Pod, otherwise every pod reachable through ownerReferences. It resolves through the graph
+// so historical/completed pods (which Build drops) are excluded from the aggregate.
+func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
+	g := graph.Build(objs)
+	var rootID string
+	for _, n := range g.Nodes {
+		if n.Kind == kind && n.Name == name {
+			rootID = n.ID
+			break
+		}
+	}
+	if rootID == "" {
+		return nil
+	}
+	want := make(map[string]bool)
+	for _, p := range g.DescendantPodNames(rootID) {
+		want[p] = true
+	}
+	var pods []*corev1.Pod
+	for _, obj := range objs {
+		if p, ok := obj.(*corev1.Pod); ok && want[p.Name] {
+			pods = append(pods, p)
+		}
+	}
+	return pods
+}
+
+// streamPodLogs follows one pod's logs, sending each line (tagged with the pod name) to out until
+// the stream ends or ctx is cancelled. A pod that fails to open is skipped, not fatal, so one bad
+// pod never aborts the rest of an aggregate.
+func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow bool, tail *int64, out chan<- logLine) {
+	c := container
+	// An empty container errors on multi-container pods, so default to the first container.
+	if c == "" && len(pod.Spec.Containers) > 0 {
+		c = pod.Spec.Containers[0].Name
+	}
+	opts := &corev1.PodLogOptions{Container: c, Follow: follow}
+	if tail != nil {
 		opts.TailLines = tail
 	}
-
-	stream, err := a.store.Client().CoreV1().Pods(ns).GetLogs(podName, opts).Stream(r.Context())
+	stream, err := client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, opts).Stream(ctx)
 	if err != nil {
-		http.Error(w, "could not open log stream", http.StatusBadGateway)
 		return
 	}
 	defer stream.Close()
-
-	setSSEHeaders(w)
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		if !writeSSE(w, "log", logLine{Line: scanner.Text()}) {
+		select {
+		case out <- logLine{Pod: pod.Name, Line: scanner.Text()}:
+		case <-ctx.Done():
 			return
 		}
-		flusher.Flush()
 	}
 }
 

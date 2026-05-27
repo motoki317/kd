@@ -193,7 +193,7 @@ func TestLogStream(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	url := srv.URL + "/api/v1/namespaces/shop/pods/web-1/log/stream?follow=false"
+	url := srv.URL + "/api/v1/namespaces/shop/resources/Pod/web-1/log/stream?follow=false"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
@@ -217,9 +217,61 @@ func TestLogStream(t *testing.T) {
 	}
 }
 
+// TestAggregatedLogStream verifies a workload's log stream merges its descendant pods, tagging
+// each line with the source pod so the client can label them.
+func TestAggregatedLogStream(t *testing.T) {
+	owner := func(uid string) []metav1.OwnerReference {
+		return []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-rs", UID: types.UID(uid), Controller: ptr(true)}}
+	}
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
+		&appsv1.Deployment{ObjectMeta: meta("shop", "web", "dep-uid")},
+		&appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "shop", Name: "web-rs", UID: "rs-uid",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "web", UID: "dep-uid", Controller: ptr(true)}},
+		}, Spec: appsv1.ReplicaSetSpec{Replicas: ptr(int32(2))}, Status: appsv1.ReplicaSetStatus{Replicas: 2}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-a", UID: "pa", OwnerReferences: owner("rs-uid")}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-b", UID: "pb", OwnerReferences: owner("rs-uid")}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+	}
+	srv := newServer(t, "", objs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	url := srv.URL + "/api/v1/namespaces/shop/resources/Deployment/web/log/stream?follow=false"
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("log stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	seenPods := map[string]bool{}
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var ll struct{ Pod string }
+		if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ll) == nil && ll.Pod != "" {
+			seenPods[ll.Pod] = true
+		}
+	}
+	// The fake clientset returns a canned log line per GetLogs call, so each descendant pod
+	// contributes at least one tagged line.
+	if !seenPods["web-a"] || !seenPods["web-b"] {
+		t.Errorf("aggregated stream covered pods %v, want both web-a and web-b", seenPods)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
 func TestLogStreamForbidden(t *testing.T) {
 	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
-	resp, _ := get(t, srv, "/api/v1/namespaces/shop/pods/web-1/log/stream", "dev")
+	resp, _ := get(t, srv, "/api/v1/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
 	}

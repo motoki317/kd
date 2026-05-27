@@ -1,6 +1,9 @@
 package graph
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func kindsPresent(g *Graph) map[string]bool {
 	m := map[string]bool{}
@@ -141,6 +144,23 @@ status:
 `)
 	if got := Summarize(progressing); got != HealthProgressing {
 		t.Errorf("Summarize(pending) = %q, want Progressing", got)
+	}
+}
+
+func TestDescendantPodNames(t *testing.T) {
+	g := Build(decodeFixture(t, ownershipFixture)) // Deployment(dep-uid) -> RS(rs-uid) -> 2 pods
+	bothPods := []string{"web-abc-1", "web-abc-2"}
+
+	tests := map[string][]string{
+		"dep-uid":    bothPods,      // Deployment aggregates every pod under its ReplicaSets
+		"rs-uid":     bothPods,      // ReplicaSet aggregates its own pods
+		"pod1-uid":   {"web-abc-1"}, // a Pod resolves to just itself
+		"absent-uid": nil,           // unknown node owns nothing
+	}
+	for id, want := range tests {
+		if got := g.DescendantPodNames(id); !slices.Equal(got, want) {
+			t.Errorf("DescendantPodNames(%q) = %v, want %v", id, got, want)
+		}
 	}
 }
 
