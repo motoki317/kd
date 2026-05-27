@@ -40,14 +40,16 @@ export default function DetailDrawer(props: Props) {
             <LogViewer namespace={node().namespace ?? ''} pod={node().name} />
           </Show>
 
-          <section class="drawer-section">
-            <h3>Manifest</h3>
+          {/* Manifest is reference detail, so it is collapsed for pods (logs lead) and open
+              otherwise. A plain <details> keeps it one element, not a stateful toggle. */}
+          <details class="drawer-section manifest-section" open={node().kind !== 'Pod'}>
+            <summary>Manifest</summary>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               <Show when={detail()} fallback={<div class="drawer-loading">unavailable</div>}>
                 <pre class="manifest">{JSON.stringify(detail(), null, 2)}</pre>
               </Show>
             </Suspense>
-          </section>
+          </details>
         </aside>
       )}
     </Show>

@@ -1,19 +1,22 @@
 import { createMemo, createSignal, For, Show } from 'solid-js'
+import type { NamespaceInfo } from '../api'
+import { healthColor } from '../health'
 
 interface Props {
-  namespaces: string[]
+  namespaces: NamespaceInfo[]
   selected: string | null
   onSelect: (ns: string) => void
   loading: boolean
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
-// quick filter box.
+// quick filter box. A namespace with a non-healthy resource shows a colored dot, so an operator
+// spots trouble across the cluster without opening each one.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
   const shown = createMemo(() => {
     const f = filter().toLowerCase()
-    return props.namespaces.filter((n) => n.toLowerCase().includes(f))
+    return props.namespaces.filter((n) => n.name.toLowerCase().includes(f))
   })
 
   return (
@@ -30,8 +33,11 @@ export default function Sidebar(props: Props) {
           <For each={shown()}>
             {(ns) => (
               <li>
-                <button classList={{ active: ns === props.selected }} onClick={() => props.onSelect(ns)}>
-                  {ns}
+                <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
+                  <Show when={ns.health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
+                    <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
+                  </Show>
+                  <span class="ns-name">{ns.name}</span>
                 </button>
               </li>
             )}

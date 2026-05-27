@@ -8,16 +8,17 @@ import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
 
+// Each view is a relationship lens the user explicitly asked for. There is no "everything at
+// once" view on purpose: a whole-namespace hairball is the opposite of reading state at a glance.
 const VIEWS: { id: View; label: string }[] = [
   { id: 'ownership', label: 'Ownership' },
   { id: 'network', label: 'Network' },
   { id: 'nodes', label: 'Nodes' },
   { id: 'rbac', label: 'RBAC' },
-  { id: 'all', label: 'All' },
 ]
 
 export default function App() {
-  const [namespaces] = createResource(fetchNamespaces)
+  const [namespaces, { refetch: refetchNamespaces }] = createResource(fetchNamespaces)
   const [namespace, setNamespace] = createSignal<string | null>(null)
   const [view, setView] = createSignal<View>('ownership')
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
@@ -28,8 +29,12 @@ export default function App() {
   // Default to the first namespace once the list loads.
   createEffect(() => {
     const list = namespaces()
-    if (list && list.length > 0 && namespace() === null) setNamespace(list[0])
+    if (list && list.length > 0 && namespace() === null) setNamespace(list[0].name)
   })
+
+  // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
+  const interval = setInterval(() => refetchNamespaces(), 15000)
+  onCleanup(() => clearInterval(interval))
 
   // (Re)subscribe to the graph feed whenever the namespace or view changes.
   createEffect(() => {
@@ -59,6 +64,9 @@ export default function App() {
     for (const n of nodes()) c[n.health] = (c[n.health] ?? 0) + 1
     return c
   })
+  // Only surface health states actually present, so the legend stays a quiet summary until
+  // something needs attention rather than a row of zeros.
+  const shownHealth = createMemo(() => HEALTH_ORDER.filter((h) => counts()[h]))
 
   return (
     <div class="app">
@@ -75,12 +83,12 @@ export default function App() {
           </For>
         </div>
         <div class="legend">
-          <For each={HEALTH_ORDER}>
+          <For each={shownHealth()}>
             {(h) => (
-              <span class="legend-item" classList={{ dim: !counts()[h] }}>
+              <span class="legend-item">
                 <span class="dot" style={{ background: healthColor(h) }} />
                 {h}
-                <span class="legend-count">{counts()[h] ?? 0}</span>
+                <span class="legend-count">{counts()[h]}</span>
               </span>
             )}
           </For>

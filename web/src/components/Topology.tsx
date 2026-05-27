@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { healthColor } from '../health'
+import { middleTruncate, relativeName } from '../names'
 import type { EdgeType, KEdge, KNode } from '../types'
 
 interface Props {
@@ -25,13 +26,19 @@ function edgePath(points: Point[]): string {
   return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ')
 }
 
-// truncate keeps node labels inside the fixed-width card; the full name is shown via a tooltip.
-function truncate(s: string, max = 24): string {
-  return s.length > max ? s.slice(0, max - 1) + '…' : s
-}
-
 export default function Topology(props: Props) {
   const layout = createMemo(() => layoutGraph(props.nodes, props.edges))
+
+  // Map each node to its owner's name, so children render relative to their parent in the tree.
+  const ownerName = createMemo(() => {
+    const nameById = new Map(props.nodes.map((n) => [n.id, n.name]))
+    const m = new Map<string, string>()
+    for (const e of props.edges) {
+      if (e.type === 'ownerReference' && nameById.has(e.from)) m.set(e.to, nameById.get(e.from)!)
+    }
+    return m
+  })
+  const label = (n: KNode) => middleTruncate(relativeName(n.name, ownerName().get(n.id)))
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
@@ -156,18 +163,20 @@ export default function Topology(props: Props) {
               {(n) => (
                 <g
                   class="node"
-                  classList={{ selected: n.id === props.selectedId }}
+                  classList={{ selected: n.id === props.selectedId, [`h-${n.health.toLowerCase()}`]: true }}
                   transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}
                   onClick={() => props.onSelect(n.id)}
                 >
                   <title>{`${n.kind} ${n.name}${n.status ? ` (${n.status})` : ''}`}</title>
                   <rect class="node-bg" width={n.width} height={n.height} rx="8" />
-                  <rect class="node-stripe" width="5" height={n.height} rx="2.5" fill={healthColor(n.health)} />
+                  {/* Stripe is inset 8px on every side (the CSS shifts it by 8,8), so its height
+                      must subtract both the top and bottom inset or it overflows the card bottom. */}
+                  <rect class="node-stripe" width="5" height={n.height - 16} rx="2.5" fill={healthColor(n.health)} />
                   <text class="node-kind" x="16" y="22">
                     {n.kind}
                   </text>
                   <text class="node-name" x="16" y="40">
-                    {truncate(n.name)}
+                    {label(n)}
                   </text>
                   <Show when={n.status}>
                     <text class="node-status" x={n.width - 12} y="22" text-anchor="end" fill={healthColor(n.health)}>

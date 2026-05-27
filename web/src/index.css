@@ -168,6 +168,9 @@ body {
 }
 .ns-list button {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   border: 0;
   background: transparent;
@@ -176,9 +179,22 @@ body {
   cursor: pointer;
   color: var(--text);
   font-size: 13px;
+}
+.ns-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Health dot: colored for trouble, a faint hollow placeholder when healthy so names stay aligned. */
+.ns-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.ns-dot-ok {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .ns-list button:hover {
   background: var(--surface-2);
@@ -258,6 +274,28 @@ body {
   stroke: var(--accent);
   stroke-width: 2;
 }
+
+/* Status by exception: healthy nodes stay calm, problems get a bold colored border + faint tint
+   so a single degraded resource pops out of a wall of green at a glance. */
+.node.h-degraded .node-bg {
+  stroke: var(--health-degraded);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-degraded) 7%, var(--surface));
+}
+.node.h-progressing .node-bg {
+  stroke: var(--health-progressing);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-progressing) 6%, var(--surface));
+}
+.node.h-suspended .node-bg {
+  stroke: var(--health-suspended);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-suspended) 8%, var(--surface));
+}
+/* Selection always wins as the strongest outline. */
+.node.selected .node-bg {
+  stroke: var(--accent);
+}
 .node-stripe {
   transform: translate(8px, 8px);
 }
@@ -334,6 +372,42 @@ body {
   color: var(--text-dim);
   margin: 0 0 8px;
 }
+
+/* Manifest is a <details>: collapsed it is just its summary; open it grows and scrolls. */
+.manifest-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  padding: 0;
+}
+.manifest-section[open] {
+  flex: 1 1 auto;
+}
+.manifest-section > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  user-select: none;
+}
+.manifest-section > summary::-webkit-details-marker {
+  display: none;
+}
+.manifest-section > summary::before {
+  content: '▸ ';
+  color: var(--border-strong);
+}
+.manifest-section[open] > summary::before {
+  content: '▾ ';
+}
+.manifest-section .manifest {
+  margin: 0 16px 16px;
+  overflow: auto;
+}
 .drawer-loading {
   color: var(--text-dim);
   font-size: 13px;
@@ -357,7 +431,7 @@ body {
   flex-direction: column;
   border-bottom: 1px solid var(--border);
   min-height: 0;
-  max-height: 45%;
+  flex: 1 1 auto; /* logs are the developer's primary need: fill the drawer */
 }
 .logs-header {
   display: flex;
@@ -376,6 +450,7 @@ body {
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;
+  flex: 1 1 auto;
   overflow: auto;
   background: #0e131b;
   color: #d6deea;

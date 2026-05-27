@@ -2,15 +2,20 @@
 // The identity header is supplied by the forward-auth proxy (or the Vite dev proxy), so
 // EventSource needs no custom headers. See docs/ADR/20260527-realtime-transport-sse.md.
 
-import type { KGraph, Patch, View } from './types'
+import type { Health, KGraph, Patch, View } from './types'
 
 const base = '/api/v1'
 
-export async function fetchNamespaces(): Promise<string[]> {
+export interface NamespaceInfo {
+  name: string
+  health: Health
+}
+
+export async function fetchNamespaces(): Promise<NamespaceInfo[]> {
   const res = await fetch(`${base}/namespaces`)
   if (!res.ok) throw new Error(`namespaces: ${res.status}`)
-  const body = (await res.json()) as { namespaces: { name: string }[] }
-  return body.namespaces.map((n) => n.name)
+  const body = (await res.json()) as { namespaces: NamespaceInfo[] }
+  return body.namespaces
 }
 
 export async function fetchResource(ns: string, kind: string, name: string): Promise<unknown> {
