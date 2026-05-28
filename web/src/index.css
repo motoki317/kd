@@ -398,11 +398,26 @@ body {
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 7px 9px;
+  padding: 7px 9px 7px 12px;
   border-radius: 7px;
   cursor: pointer;
   color: var(--text);
   font-size: 13px;
+  position: relative;
+  transition: background-color 0.1s, color 0.1s;
+}
+/* Active-row left accent (cycle 134): a 3px vertical bar at the left edge so the active namespace
+   reads at a peripheral glance without needing to track the row tint. Tied to ::before so it
+   layers under the button content cleanly. */
+.ns-list button.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
 }
 .ns-name {
   flex: 1;
