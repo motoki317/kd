@@ -1964,6 +1964,22 @@ button.event-source:hover {
   background: color-mix(in srgb, var(--accent) 90%, white);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
+.logs-jump:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+/* Backlog badge: number of new lines arrived while scrolled up. Inset pill in the button so the
+   eye reads "↓ Latest 42" as a single CTA. Tabular-nums to keep digit widths consistent as the
+   counter ticks up. */
+.logs-jump-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.22);
+}
 .logs-header {
   display: flex;
   align-items: center;

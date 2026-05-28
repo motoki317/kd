@@ -33,6 +33,9 @@ export default function LogViewer(props: Props) {
   // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
   // history, new lines stop yanking them down (a "Latest" button jumps back).
   const [pinned, setPinned] = createSignal(true)
+  // Count of new lines arrived while the operator was scrolled up — surfaced in the "Latest"
+  // button so they know how much they're missing without scrolling to check.
+  const [unseenLines, setUnseenLines] = createSignal(0)
   // Selected container for a single multi-container pod (empty = server picks the first).
   const [container, setContainer] = createSignal('')
   // Show the previous (crashed) container's logs — where a CrashLoopBackOff reason lives.
@@ -74,7 +77,9 @@ export default function LogViewer(props: Props) {
   }
   const onScroll = () => {
     if (autoScrolling || !pre) return
-    setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
+    const nowPinned = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40
+    setPinned(nowPinned)
+    if (nowPinned) setUnseenLines(0) // back at tail → clear the backlog badge
   }
 
   // Reset container + previous toggle whenever the target pod changes.
@@ -101,6 +106,7 @@ export default function LogViewer(props: Props) {
     setLines([])
     setError(false)
     setPinned(true)
+    setUnseenLines(0)
     const close = streamLogs(
       ctx,
       ns,
@@ -110,6 +116,8 @@ export default function LogViewer(props: Props) {
       (entry) => {
         setError(false) // a line arriving means the stream recovered
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
+        // While scrolled up, count incoming lines so the Latest button can advertise the backlog.
+        if (!pinned()) setUnseenLines((n) => Math.min(n + 1, 999))
         scheduleTail()
       },
       () => setError(true),
@@ -242,9 +250,13 @@ export default function LogViewer(props: Props) {
           onClick={() => {
             toBottom()
             setPinned(true)
+            setUnseenLines(0)
           }}
         >
           ↓ Latest
+          <Show when={unseenLines() > 0}>
+            <span class="logs-jump-count">{unseenLines() >= 999 ? '999+' : unseenLines()}</span>
+          </Show>
         </button>
       </Show>
     </div>
