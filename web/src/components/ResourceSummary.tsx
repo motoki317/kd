@@ -1,6 +1,6 @@
 import { createMemo, For, Show } from 'solid-js'
 import { healthColor } from '../health'
-import { kindIcon } from '../icons'
+import { kindFromRef, kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -123,13 +123,30 @@ export default function ResourceSummary(props: Props) {
         </div>
       </Show>
       {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
-          only place they're visible — the "who got access" answer for an RBAC audit. */}
+          only place they're visible — the "who got access" answer for an RBAC audit. Each row
+          prepends the kind's icon so Role/CR vs User/Group/SA reads at a glance, matching the
+          card / drawer / owner-chip pattern. */}
       <Show when={props.node.roleRef || (props.node.subjects?.length ?? 0) > 0}>
         <div class="drawer-routes">
           <Show when={props.node.roleRef}>
-            <code class="route-row">→ {props.node.roleRef}</code>
+            <code class="route-row">
+              <span class="route-arrow">→</span>
+              <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                {kindIcon(kindFromRef(props.node.roleRef!))}
+              </svg>
+              {props.node.roleRef}
+            </code>
           </Show>
-          <For each={props.node.subjects}>{(s) => <code class="route-row">{s}</code>}</For>
+          <For each={props.node.subjects}>
+            {(s) => (
+              <code class="route-row">
+                <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                  {kindIcon(kindFromRef(s))}
+                </svg>
+                {s}
+              </code>
+            )}
+          </For>
         </div>
       </Show>
       {/* The image(s) are usually the first thing checked ("what version is live?"), so

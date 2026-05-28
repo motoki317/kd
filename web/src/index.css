@@ -718,6 +718,12 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.route-arrow {
+  color: var(--text-dim);
 }
 .drawer-labels {
   margin-top: 8px;

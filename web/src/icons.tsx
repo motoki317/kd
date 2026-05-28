@@ -134,6 +134,23 @@ const icons: Record<string, () => JSX.Element> = {
       <path d="M 2.5 12 C 3 8.5 5 7.5 7 7.5 C 9 7.5 11 8.5 11.5 12" />
     </>
   ),
+  // Same identity shape as ServiceAccount — a User is an RBAC identity too; shows up only in
+  // binding-subject rows (not as a topology node), so visual sameness with SA reads as "identity".
+  User: () => (
+    <>
+      <circle cx="7" cy="5" r="2.2" />
+      <path d="M 2.5 12 C 3 8.5 5 7.5 7 7.5 C 9 7.5 11 8.5 11.5 12" />
+    </>
+  ),
+  // Two overlapping people — a Group is a set of identities; distinguishes from User/SA at a glance.
+  Group: () => (
+    <>
+      <circle cx="4.5" cy="5" r="1.8" />
+      <circle cx="9.5" cy="5" r="1.8" />
+      <path d="M 1.5 12 C 2 9 3.5 8 5 8 C 5.5 8 6.2 8.2 6.5 8.5" />
+      <path d="M 7.5 8.5 C 7.8 8.2 8.5 8 9 8 C 10.5 8 12 9 12.5 12" />
+    </>
+  ),
   // Scroll — a Role grants permissions, like a written charter.
   Role: () => (
     <>
@@ -195,4 +212,16 @@ export function kindIcon(kind: string): JSX.Element {
 // tests that assert coverage of currently-emitted kinds without snapshotting visuals.
 export function hasKindIcon(kind: string): boolean {
   return kind in icons
+}
+
+// kindFromRef extracts the leading kind from a binding's roleRef string ("Role/foo",
+// "ClusterRole/bar") or a binding-subject string ("User: x", "Group: g", "ServiceAccount: ns/sa").
+// Returns "" if neither shape matches, so a caller can decide whether to render an icon at all.
+export function kindFromRef(ref: string): string {
+  const slash = ref.indexOf('/')
+  const colon = ref.indexOf(':')
+  // Subject lines use "Kind: rest"; roleRef uses "Kind/rest". Pick the earlier separator (if any).
+  if (colon !== -1 && (slash === -1 || colon < slash)) return ref.slice(0, colon).trim()
+  if (slash !== -1) return ref.slice(0, slash).trim()
+  return ''
 }

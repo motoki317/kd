@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasKindIcon } from './icons'
+import { hasKindIcon, kindFromRef } from './icons'
 
 describe('kindIcon', () => {
   it('has an icon for every kind the server currently emits', () => {
@@ -29,5 +29,20 @@ describe('kindIcon', () => {
       'ClusterRoleBinding',
     ]
     for (const k of kinds) expect(hasKindIcon(k), `missing icon for ${k}`).toBe(true)
+  })
+})
+
+describe('kindFromRef', () => {
+  it('parses a binding roleRef ("Kind/name")', () => {
+    expect(kindFromRef('Role/foo')).toBe('Role')
+    expect(kindFromRef('ClusterRole/admin')).toBe('ClusterRole')
+  })
+  it('parses a binding subject ("Kind: name") regardless of whether the name has a slash', () => {
+    expect(kindFromRef('User: alice')).toBe('User')
+    expect(kindFromRef('Group: devs')).toBe('Group')
+    expect(kindFromRef('ServiceAccount: default/builder')).toBe('ServiceAccount')
+  })
+  it('returns "" when neither separator is present', () => {
+    expect(kindFromRef('anything')).toBe('')
   })
 })
