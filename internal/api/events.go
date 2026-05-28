@@ -13,11 +13,12 @@ import (
 )
 
 type eventEntry struct {
-	Type    string `json:"type"`    // Normal | Warning
-	Reason  string `json:"reason"`  // short CamelCase cause, e.g. BackOff, FailedScheduling
-	Message string `json:"message"` // human-readable detail
-	Count   int32  `json:"count"`   // times this event has repeated
-	Last    string `json:"last"`    // RFC3339 last-seen, for relative display on the client
+	Type    string `json:"type"`             // Normal | Warning
+	Reason  string `json:"reason"`           // short CamelCase cause, e.g. BackOff, FailedScheduling
+	Message string `json:"message"`          // human-readable detail
+	Count   int32  `json:"count"`            // times this event has repeated
+	Last    string `json:"last"`             // RFC3339 last-seen, for relative display on the client
+	Source  string `json:"source,omitempty"` // "Kind/name" of involvedObject; lets the client show which descendant emitted this event when aggregating
 }
 
 type eventsResponse struct {
@@ -70,6 +71,7 @@ func eventsFor(objs []runtime.Object, uids map[string]bool, rootKind, rootName s
 			Message: ev.Message,
 			Count:   max(ev.Count, 1),
 			Last:    lastSeen(ev),
+			Source:  io.Kind + "/" + io.Name,
 		})
 	}
 	// Newest first; Warnings break ties ahead of Normal so problems sit at the top.

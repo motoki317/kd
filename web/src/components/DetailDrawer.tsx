@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
+import { kindFromRef, kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import type { KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -109,20 +110,34 @@ export default function DetailDrawer(props: Props) {
                 <Show when={(events()?.length ?? 0) > 0} fallback={<div class="events-empty">No recent events.</div>}>
                   <ul class="event-list">
                     <For each={events()}>
-                      {(ev) => (
-                        <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
-                          <div class="event-head">
-                            <span class="event-reason">{ev.reason}</span>
-                            <Show when={ev.count > 1}>
-                              <span class="event-count">×{ev.count}</span>
-                            </Show>
-                            <span class="event-age" title={ev.last}>
-                              {relativeAge(ev.last)}
-                            </span>
-                          </div>
-                          <div class="event-message">{ev.message}</div>
-                        </li>
-                      )}
+                      {(ev) => {
+                        const root = `${node().kind}/${node().name}`
+                        // Only show the source pill when an aggregated event came from a
+                        // descendant — the root's own events are obvious from the drawer header.
+                        const showSource = ev.source && ev.source !== root
+                        return (
+                          <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
+                            <div class="event-head">
+                              <span class="event-reason">{ev.reason}</span>
+                              <Show when={ev.count > 1}>
+                                <span class="event-count">×{ev.count}</span>
+                              </Show>
+                              <Show when={showSource}>
+                                <span class="event-source" title={`from ${ev.source}`}>
+                                  <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
+                                    {kindIcon(kindFromRef(ev.source!))}
+                                  </svg>
+                                  {ev.source!.split('/').pop()}
+                                </span>
+                              </Show>
+                              <span class="event-age" title={ev.last}>
+                                {relativeAge(ev.last)}
+                              </span>
+                            </div>
+                            <div class="event-message">{ev.message}</div>
+                          </li>
+                        )
+                      }}
                     </For>
                   </ul>
                 </Show>

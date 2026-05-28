@@ -894,6 +894,22 @@ body {
 .event-age {
   margin-left: auto;
 }
+/* Source pill on an aggregated event: kind icon + descendant short name, dim so the reason still
+   reads as the primary signal. */
+.event-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 1px 7px;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .event-message {
   font-size: 12px;
   margin-top: 2px;

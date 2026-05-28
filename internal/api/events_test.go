@@ -49,6 +49,28 @@ func TestEventsForResource(t *testing.T) {
 	if !contains(got2, "Scaled") || !contains(got2, "FailedScheduling") {
 		t.Errorf("aggregated events = %v, want both the Deployment's Scaled and the pod's FailedScheduling", got2)
 	}
+	// Source ("Kind/name") is on every entry so the client can show which descendant emitted it
+	// when viewing a controller's aggregated events.
+	for _, e := range agg {
+		if e.Source == "" {
+			t.Errorf("event %q has empty Source; want a Kind/name", e.Reason)
+		}
+	}
+	if src := sourceFor(agg, "Scaled"); src != "Deployment/web" {
+		t.Errorf("Scaled.Source = %q, want Deployment/web", src)
+	}
+	if src := sourceFor(agg, "FailedScheduling"); src != "Pod/web-1" {
+		t.Errorf("FailedScheduling.Source = %q, want Pod/web-1", src)
+	}
+}
+
+func sourceFor(es []eventEntry, reason string) string {
+	for _, e := range es {
+		if e.Reason == reason {
+			return e.Source
+		}
+	}
+	return ""
 }
 
 func contains(s []string, v string) bool {

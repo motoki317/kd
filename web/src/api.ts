@@ -37,6 +37,7 @@ export interface EventEntry {
   message: string
   count: number
   last: string // RFC3339, formatted relative on the client
+  source?: string // "Kind/name" of the involvedObject; shown for aggregated events from descendants
 }
 
 // fetchEvents returns the Kubernetes events about a resource, newest-first.
