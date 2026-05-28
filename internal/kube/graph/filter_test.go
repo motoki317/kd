@@ -111,6 +111,42 @@ func TestFilterViews(t *testing.T) {
 	})
 }
 
+// SummarizeBuilt is the cycle-201 entry point used by the SSE handler so the same unfiltered
+// graph powers both the filtered view payload and the namespace summary (no double Build). Pin
+// behavior so future refactors can't quietly drop the parity with Summarize.
+func TestSummarizeBuiltMatchesSummarize(t *testing.T) {
+	objs := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok
+  namespace: shop
+  uid: ok-uid
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashing
+  namespace: shop
+  uid: crash-uid
+status:
+  phase: Running
+  containerStatuses:
+    - state:
+        waiting:
+          reason: CrashLoopBackOff
+`)
+	want := Summarize(objs)
+	if got := SummarizeBuilt(Build(objs), false); got != want {
+		t.Errorf("SummarizeBuilt = %+v, want %+v (must match Summarize)", got, want)
+	}
+}
+
 func TestSummarizeWorstHealth(t *testing.T) {
 	// A crashing pod dominates a namespace of otherwise-healthy resources.
 	degraded := decodeFixture(t, `
