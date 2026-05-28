@@ -475,7 +475,8 @@ body {
 .sidebar-loading {
   color: var(--text-dim);
   font-size: 12px;
-  padding: 6px 9px;
+  padding: 12px 9px;
+  font-style: italic;
 }
 
 /* Main + topology */
