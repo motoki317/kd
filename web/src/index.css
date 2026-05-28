@@ -383,6 +383,7 @@ body {
 }
 .sidebar-filter:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .ns-list {
   list-style: none;
@@ -541,6 +542,7 @@ body {
 }
 .topology-search input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .topology-search-clear {
   position: absolute;
@@ -1396,6 +1398,7 @@ button.event-source:hover {
 .logs-filter:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .logs-count {
   text-transform: none;
