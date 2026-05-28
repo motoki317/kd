@@ -638,7 +638,7 @@ export default function Topology(props: Props) {
                       {h.label}
                       {/* Pod count at a glance: lighter weight + tabular nums, separated by a
                           middle-dot so a long host name + count still reads as one label. */}
-                      <tspan class="host-group-count"> · {podsPerHost()[h.host] ?? 0} pods</tspan>
+                      <tspan class="host-group-count"> · {podsPerHost()[h.host] ?? 0} pod{(podsPerHost()[h.host] ?? 0) === 1 ? '' : 's'}</tspan>
                     </text>
                   </g>
                 )}
@@ -774,7 +774,7 @@ export default function Topology(props: Props) {
             when={matches() || props.healthFilter || activeKinds()}
             fallback={
               <>
-                {props.nodes.length} resources
+                {props.nodes.length} resource{props.nodes.length === 1 ? '' : 's'}
                 {/* In the All view, append "· K kinds" so the operator can see the breadth
                     of what's loaded at a glance — useful when CRDs bring dozens of new kinds. */}
                 <Show when={props.viewId === 'all' && groups().length > 1}>
