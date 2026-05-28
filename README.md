@@ -15,9 +15,12 @@ state at a glance and app developers can jump straight to pod status and logs.
 ## Features
 
 **See the whole namespace at a glance**
-- 2D topology across six lenses — ownership, network, node-placement, volumes (mounted
-  ConfigMaps/Secrets/PVCs), RBAC, and an "all" view that groups every resource by kind — laid out
-  per connected component and packed to the viewport (no horizontal smear in dense namespaces).
+- 2D topology across six lenses — each lens uses the layout that fits its relationship:
+  Ownership reads top-down (the workload tree), Network / Volumes / RBAC read left-to-right
+  (traffic / dependency / binding flow), Nodes view groups pods inside labeled host containers
+  (containment carries scheduledOn, no fan of edges), and the All view groups every resource by
+  kind. Each lens lays out per connected component and packs to the viewport (no horizontal
+  smear in dense namespaces).
 - Every kind the cluster exposes is watched via a dynamic informer factory, including custom
   resources defined by CRDs. Workflows, Certificates, ExternalSecrets, ArgoCD Applications,
   Crossplane composites — all render in the topology with their ownership chains down to Pods.
@@ -38,10 +41,14 @@ state at a glance and app developers can jump straight to pod status and logs.
   in, removals fade out, position shifts ease — so a rollout is visible as motion, not a jump cut.
 - The topbar carries a proportional health-distribution stripe along its bottom edge so
   "what is this cluster doing right now?" reads without parsing legend numbers.
-- Search resources by name, kind, label, image, status, host, or IP — kubectl short names (svc, sts)
-  match too. The sidebar sorts troubled namespaces first, each with a health dot and a non-ready
-  count colored to match (live for the namespace you're viewing). Resource count + current filter
-  subset shown in the topology corner.
+- Search resources by name, kind, label, image, status, host, or IP — kubectl short names (svc, sts,
+  hpa, pdb, netpol …) match too. Click a kind chip under the search to spotlight only that kind
+  (multi-select; composes with the legend-health filter). Pods carry a distinct indigo accent so
+  the fundamental workload reads at a glance. The sidebar sorts troubled namespaces first, each
+  with a health dot and a non-ready count colored to match (live for the namespace you're viewing,
+  computed on the unfiltered graph so a view that filters out the unhealthy resource doesn't lie).
+  Resource count + current filter subset shown in the topology corner. The active kind filter
+  persists in the URL so a filtered view is shareable.
 
 **Drill into a resource**
 - Detail drawer with Logs / Events / Manifest tabs. The drawer header carries the same kind
