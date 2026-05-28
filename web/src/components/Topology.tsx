@@ -393,6 +393,38 @@ export default function Topology(props: Props) {
     }
   })
 
+  // Track SVG size so resizes re-center the canvas (cycle 294). Drawer open/close and window
+  // resizes both squeeze/grow the SVG; without this the existing pan stays at old coords and the
+  // graph drifts off-screen. Only re-fits when there's no user-driven pan in progress AND there's
+  // no selection — selection-fit already handles that case. Debounce via rAF so a continuous
+  // resize (window drag) doesn't fight the animation. Guarded for jsdom (no ResizeObserver).
+  onMount(() => {
+    if (!svg || typeof ResizeObserver === 'undefined') return
+    let rafId = 0
+    const ro = new ResizeObserver(() => {
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        if (!svg) return
+        const l = layout()
+        if (l.width === 0) return
+        if (props.selectedId) return // selection-fit owns this case
+        const target = computeFitFor(0, 0, l.width, l.height, 1.4)
+        target.scale *= 0.92
+        // Snap, not animate: a resize is a viewport change, not a user-initiated transition, so
+        // sliding would feel sluggish during a window drag.
+        setScale(target.scale)
+        setTx(target.tx)
+        setTy(target.ty)
+      })
+    })
+    ro.observe(svg)
+    onCleanup(() => {
+      if (rafId) cancelAnimationFrame(rafId)
+      ro.disconnect()
+    })
+  })
+
   // When the selection changes, smoothly frame the selected resource's full subtree (computed by
   // related()) — answers the user's "zoom to selected + related" without requiring a manual Fit.
   // Selection cleared → glide back to fit-all so the dashboard re-orients without a jolt.
