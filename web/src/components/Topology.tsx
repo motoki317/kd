@@ -658,7 +658,11 @@ export default function Topology(props: Props) {
                       {h.label}
                       {/* Pod count at a glance: lighter weight + tabular nums, separated by a
                           middle-dot so a long host name + count still reads as one label. */}
-                      <tspan class="host-group-count"> · {podsPerHost()[h.host] ?? 0} pod{(podsPerHost()[h.host] ?? 0) === 1 ? '' : 's'}</tspan>
+                      <tspan class="host-group-count">
+                        {' '}· {(podsPerHost()[h.host] ?? 0) === 0
+                          ? 'no pods'
+                          : `${podsPerHost()[h.host]} pod${podsPerHost()[h.host] === 1 ? '' : 's'}`}
+                      </tspan>
                     </text>
                   </g>
                 )}
