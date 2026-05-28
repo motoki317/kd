@@ -210,7 +210,7 @@ export default function DetailDrawer(props: Props) {
                   {TAB_LABELS[t]}
                   <Show when={t === 'events' && !events.error && (events()?.length ?? 0) > 0}>
                     <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
-                      {events()!.length}
+                      {events()!.length > 99 ? '99+' : events()!.length}
                     </span>
                   </Show>
                 </button>

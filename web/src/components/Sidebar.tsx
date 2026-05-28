@@ -72,7 +72,7 @@ export default function Sidebar(props: Props) {
           </span>
         </Show>
         <Show when={troubled() > 0}>
-          <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled()}</span>
+          <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>
         </Show>
       </div>
       <div class="sidebar-filter-field">
