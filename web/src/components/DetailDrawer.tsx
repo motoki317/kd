@@ -177,9 +177,12 @@ export default function DetailDrawer(props: Props) {
                 title="Copy share link"
                 aria-label="Copy share link to this resource"
                 onClick={async (e) => {
+                  // Capture the element BEFORE await — `currentTarget` is nulled out as soon as the
+                  // synchronous event handler returns (standard DOM), so the post-await read would
+                  // throw on .classList. Same pattern label-chip uses (cycle 254).
+                  const el = e.currentTarget as HTMLButtonElement
                   try {
                     await navigator.clipboard.writeText(window.location.href)
-                    const el = e.currentTarget
                     el.classList.add('copied')
                     setTimeout(() => el.classList.remove('copied'), 1100)
                   } catch {

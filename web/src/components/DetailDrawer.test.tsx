@@ -64,6 +64,25 @@ describe('DetailDrawer', () => {
     expect(getByTitle('Copy name')).toBeTruthy()
   })
 
+  it('share button copies window.location.href to the clipboard (cycle 275)', async () => {
+    const writes: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (s: string) => { writes.push(s); return Promise.resolve() } },
+    })
+    const { getByTitle } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    const btn = getByTitle('Copy share link') as HTMLButtonElement
+    btn.click()
+    // Two microtask cycles: writeText resolves, then the .copied class is added in the await
+    // continuation. A second await ensures both have flushed before the assertion runs.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(writes).toEqual([window.location.href])
+    expect(btn.classList.contains('copied')).toBe(true)
+  })
+
   it('renders per-container status rows with names and states', () => {
     const pod: KNode = {
       ...configMap,

@@ -269,10 +269,12 @@ export default function ResourceSummary(props: Props) {
                   class="label-chip"
                   title={`Click to copy ${k}${v ? `=${v}` : ''}`}
                   onClick={async (e) => {
+                    // Capture el BEFORE await — DOM nulls currentTarget after the synchronous
+                    // handler returns. Same pattern as the drawer share button (cycle 275/281).
+                    const el = e.currentTarget as HTMLButtonElement
                     const text = v ? `${k}=${v}` : k
                     try {
                       await navigator.clipboard.writeText(text)
-                      const el = e.currentTarget
                       el.classList.add('copied')
                       setTimeout(() => el.classList.remove('copied'), 900)
                     } catch {
