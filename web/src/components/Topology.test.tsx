@@ -110,6 +110,39 @@ describe('Topology', () => {
     expect(onKindFilter).toHaveBeenCalledWith('Pod')
   })
 
+  it('Nodes view renders a host-group rect for each unique host (cycle 205)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy' },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1' },
+      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1' },
+    ]
+    const edgesV: KEdge[] = [
+      { from: 'p1', to: 'node-a', type: 'scheduledOn' },
+      { from: 'p2', to: 'node-a', type: 'scheduledOn' },
+    ]
+    const { container } = render(() => <Topology nodes={nodesV} edges={edgesV} search="" {...base} viewId="nodes" />)
+    expect(container.querySelectorAll('.host-group').length).toBe(1)
+    // scheduledOn edges are dropped from rendering (containment carries them).
+    expect(container.querySelectorAll('g.edges > g').length).toBe(0)
+  })
+
+  it('clears all filters via onClearFilters (cycle 216)', () => {
+    const onClearFilters = vi.fn()
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search="web"
+        {...base}
+        onClearFilters={onClearFilters}
+      />
+    ))
+    const clear = container.querySelector('.topology-clear') as HTMLButtonElement
+    expect(clear).toBeTruthy()
+    fireEvent.click(clear)
+    expect(onClearFilters).toHaveBeenCalledOnce()
+  })
+
   it('fades nodes not matching the search query', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
     // "web" matches the Deployment and web-abc pod; api-xyz is faded.
