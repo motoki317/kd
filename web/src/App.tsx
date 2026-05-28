@@ -143,11 +143,11 @@ export default function App() {
         // healthy nodes. Scoped to the active search/health filter so stepping visits only what's
         // spotlighted. The selection drives the drawer and the topology's pan-to-selection.
         e.preventDefault()
-        const cand = navCandidates(nodes(), search(), healthFilter())
+        const cand = navCandidates(nodes(), search(), healthFilter(), kindFilter())
         setSelectedId((cur) => nextSelection(cand, cur, 1) ?? cur)
       } else if (!typing && (e.key === 'k' || e.key === 'ArrowUp')) {
         e.preventDefault()
-        const cand = navCandidates(nodes(), search(), healthFilter())
+        const cand = navCandidates(nodes(), search(), healthFilter(), kindFilter())
         setSelectedId((cur) => nextSelection(cand, cur, -1) ?? cur)
       } else if (e.key === 'Escape') {
         // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.

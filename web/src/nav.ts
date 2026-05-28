@@ -21,15 +21,23 @@ export function resolveSelectionOnSnapshot(
   return { id: null, consumedPending: false }
 }
 
-// navCandidates is the set keyboard stepping (j/k) walks through. When a search or health-legend
-// filter is active, navigation is scoped to what's spotlighted — so "filter to Degraded, then step"
-// visits only the degraded nodes — matching the topology's fade precedence (search > health filter).
-// With no filter, every node is a candidate.
-export function navCandidates(nodes: KNode[], search: string, healthFilter: Health | null): KNode[] {
+// navCandidates is the set keyboard stepping (j/k) walks through. When ANY filter is active,
+// navigation is scoped to what's spotlighted — so "filter to Degraded, then step" visits only the
+// degraded nodes — matching the topology's compose-all-filters fade. With no filter, every node
+// is a candidate. Kinds compose with the others (cycle 215: keyboard nav was previously ignoring
+// the kind filter, which let j/k drift off the spotlighted set).
+export function navCandidates(
+  nodes: KNode[],
+  search: string,
+  healthFilter: Health | null,
+  kindFilter: Set<string> | null = null,
+): KNode[] {
   const q = search.trim()
-  if (q) return nodes.filter((n) => nodeMatches(n, q))
-  if (healthFilter) return nodes.filter((n) => n.health === healthFilter)
-  return nodes
+  const matchesAll = (n: KNode) =>
+    (!q || nodeMatches(n, q)) &&
+    (!healthFilter || n.health === healthFilter) &&
+    (!kindFilter || kindFilter.size === 0 || kindFilter.has(n.kind))
+  return nodes.filter(matchesAll)
 }
 
 // Stable ordering for keyboard navigation: most attention-worthy first (so stepping through the
