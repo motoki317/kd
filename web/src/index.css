@@ -79,6 +79,21 @@ body {
   font-weight: 700;
   font-size: 18px;
   letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* The brand mark gets a soft gradient fill so the tiers read as a small physical object (not
+   three flat rects). Accent-tinted so it picks up the app's primary color, but quiet enough to
+   not steal attention from the breadcrumb that follows. */
+.brand-mark rect {
+  fill: var(--accent);
+  opacity: 0.92;
+}
+.brand-mark rect:nth-child(1) { opacity: 0.55; }
+.brand-mark rect:nth-child(2) { opacity: 0.78; }
+.brand-text {
+  line-height: 1;
 }
 .topbar-spacer {
   flex: 1;

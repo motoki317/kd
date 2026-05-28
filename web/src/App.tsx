@@ -188,7 +188,18 @@ export default function App() {
   return (
     <div class="app">
       <header class="topbar">
-        <div class="brand">kd</div>
+        <div class="brand">
+          {/* Brand mark (cycle 131): a tiny stacked-tier glyph that echoes the ownership tree the
+              dashboard draws (a controller over its children). Pure decoration — the "kd" text
+              still carries the name — but anchors the topbar so the brand reads as a logo rather
+              than a bare lowercase word. */}
+          <svg class="brand-mark" viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+            <rect x="5" y="2" width="6" height="2.4" rx="1" />
+            <rect x="3" y="6.6" width="10" height="2.4" rx="1" />
+            <rect x="1" y="11.2" width="14" height="2.4" rx="1" />
+          </svg>
+          <span class="brand-text">kd</span>
+        </div>
         <Show when={namespace()}>
           {/* Breadcrumb keeps context (which ns + view) visible regardless of where the eye is —
               sidebar highlight only helps when the operator is looking at the sidebar. */}
