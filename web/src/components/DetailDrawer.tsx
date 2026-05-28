@@ -91,6 +91,18 @@ export default function DetailDrawer(props: Props) {
   )
   const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ctx, k.ns, k.kind, k.name))
   const warnings = () => events()?.filter((e) => e.type === 'Warning').length ?? 0
+  // Warnings-only toggle: noisy resources emit many Normal events (Pulled, Created, Started…) that
+  // bury the Warning a triage needs. Resets when the drawer switches to a different resource so
+  // the filter doesn't silently follow operators into a new context.
+  const [warnOnly, setWarnOnly] = createSignal(false)
+  createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
+  const shownEvents = createMemo(() => {
+    // The resource throws when errored; reading events() then surfaces an uncaught rejection. The
+    // outer Show gates the JSX, but the memo also runs reactively so we must short-circuit here.
+    if (events.error) return []
+    const all = events() ?? []
+    return warnOnly() ? all.filter((e) => e.type === 'Warning') : all
+  })
 
   // Events are transient and a failing resource keeps emitting them, so poll while the drawer is
   // open (a no-op when nothing is selected) to keep the tab badge and list current.
@@ -157,9 +169,25 @@ export default function DetailDrawer(props: Props) {
               {/* events() throws if the resource errored, so gate on events.error first — both to show
                   a real error (not a misleading "no events") and to avoid reading the errored signal. */}
               <Show when={!events.error} fallback={<div class="events-empty">Couldn't load events.</div>}>
-                <Show when={(events()?.length ?? 0) > 0} fallback={<div class="events-empty">No recent events.</div>}>
+                {/* Warnings-only toggle: surfaced only when there's a mix to filter (some warnings AND
+                    some normal). Pure "all normal" or "all warnings" hides the chip — no useful action. */}
+                <Show when={(events()?.length ?? 0) > 0 && warnings() > 0 && warnings() < (events()?.length ?? 0)}>
+                  <div class="events-filter">
+                    <button
+                      class="events-filter-chip"
+                      classList={{ active: warnOnly() }}
+                      aria-pressed={warnOnly()}
+                      onClick={() => setWarnOnly((v) => !v)}
+                      title={warnOnly() ? 'Show all events' : 'Show only Warning events'}
+                    >
+                      Warnings only
+                      <span class="events-filter-count">{warnings()}</span>
+                    </button>
+                  </div>
+                </Show>
+                <Show when={shownEvents().length > 0} fallback={<div class="events-empty">{warnOnly() ? 'No warnings.' : 'No recent events.'}</div>}>
                   <ul class="event-list">
-                    <For each={events()}>
+                    <For each={shownEvents()}>
                       {(ev) => {
                         const root = `${node().kind}/${node().name}`
                         // Only show the source pill when an aggregated event came from a

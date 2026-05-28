@@ -190,6 +190,62 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('on worker-1')
   })
 
+  it('events list offers a warnings-only toggle when there is a mix to filter', async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(
+              JSON.stringify({
+                events: [
+                  { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
+                  { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
+                  { type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() },
+                ],
+              }),
+              { status: 200 },
+            )
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      ),
+    )
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    // Wait for events to render; expect all three reasons visible initially.
+    await findByText('Pulled')
+    expect(container.querySelectorAll('.event-item').length).toBe(3)
+    const chip = container.querySelector('.events-filter-chip') as HTMLButtonElement
+    expect(chip).toBeTruthy()
+    chip.click()
+    // After toggling, only the Warning event remains.
+    expect(container.querySelectorAll('.event-item').length).toBe(1)
+    expect(container.querySelector('.event-reason')?.textContent).toBe('BackOff')
+  })
+
+  it('omits the warnings-only chip when all events are the same type', async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(
+              JSON.stringify({
+                events: [
+                  { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
+                  { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
+                ],
+              }),
+              { status: 200 },
+            )
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      ),
+    )
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await findByText('Pulled')
+    expect(container.querySelector('.events-filter-chip')).toBeNull()
+  })
+
   it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
     // Stub the events fetch to return an event whose source differs from the root resource —
     // i.e. an aggregated event from a descendant pod.
