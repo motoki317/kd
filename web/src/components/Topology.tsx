@@ -50,6 +50,27 @@ function cardTitle(n: KNode, now: Date): string {
   return lines.join('\n')
 }
 
+// Human-readable label for an edge type. The dashed style says "non-ownership"; the tooltip says
+// which kind of non-ownership it is (selects, mounts a volume, routes traffic, …), so operators
+// don't need to know the graph package's edge taxonomy by heart.
+const EDGE_LABELS: Record<EdgeType, string> = {
+  ownerReference: 'owns',
+  scheduledOn: 'runs on',
+  selects: 'selects',
+  routes: 'routes to',
+  mounts: 'mounts',
+  usesServiceAccount: 'runs as',
+  binds: 'binds',
+}
+
+function edgeTitle(e: KEdge, nodes: KNode[]): string {
+  const fromN = nodes.find((n) => n.id === e.from)
+  const toN = nodes.find((n) => n.id === e.to)
+  const fromS = fromN ? `${fromN.kind} ${fromN.name}` : e.from
+  const toS = toN ? `${toN.kind} ${toN.name}` : e.to
+  return `${fromS} ${EDGE_LABELS[e.type]} ${toS}`
+}
+
 export default function Topology(props: Props) {
   const layout = createMemo(() => layoutGraph(props.nodes, props.edges))
 
@@ -288,15 +309,21 @@ export default function Topology(props: Props) {
           <g class="edges">
             <For each={layout().edges}>
               {(e) => (
-                <path
-                  classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e) }}
-                  d={edgePath(e.points)}
-                  fill="none"
-                  stroke="var(--edge-color)"
-                  stroke-width={1.5}
-                  stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
-                  marker-end="url(#arrow)"
-                />
+                <g>
+                  {/* <title> on the path makes hover reveal the relationship type. Wrap in <g>
+                      so a future hover affordance (highlight on hover, click-to-select endpoints)
+                      can hang off the same element without churning this tree. */}
+                  <title>{edgeTitle(e, props.nodes)}</title>
+                  <path
+                    classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e) }}
+                    d={edgePath(e.points)}
+                    fill="none"
+                    stroke="var(--edge-color)"
+                    stroke-width={1.5}
+                    stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
+                    marker-end="url(#arrow)"
+                  />
+                </g>
               )}
             </For>
           </g>
