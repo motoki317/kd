@@ -11,6 +11,9 @@ interface Props {
   failed: boolean
   // Lets the app focus the filter from a global key ("/").
   filterRef?: (el: HTMLInputElement) => void
+  // Lets the failure state offer a retry button — optional so a caller that hides the
+  // namespaces list outright (or has no refresh handler) still works.
+  onRetry?: () => void
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
@@ -68,7 +71,19 @@ export default function Sidebar(props: Props) {
         </Show>
       </div>
       <Show when={!props.loading} fallback={<div class="sidebar-loading">loading…</div>}>
-        <Show when={!props.failed} fallback={<div class="sidebar-loading">Couldn't load namespaces.</div>}>
+        <Show
+          when={!props.failed}
+          fallback={
+            <div class="sidebar-loading">
+              Couldn't load namespaces.
+              <Show when={props.onRetry}>
+                <button class="sidebar-retry" onClick={() => props.onRetry?.()}>
+                  retry
+                </button>
+              </Show>
+            </div>
+          }
+        >
           <ul class="ns-list">
             {/* Pinned cluster pseudo-namespace (FR-004): always above the namespace list and
                 outside the filter, so the operator can always jump to cluster-scoped state

@@ -352,6 +352,7 @@ export default function App() {
           loading={namespaces.loading}
           failed={!!namespaces.error}
           filterRef={(el) => (filterEl = el)}
+          onRetry={() => refetchNamespaces()}
         />
         <main class="main">
           <Topology
