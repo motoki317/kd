@@ -47,6 +47,14 @@ export default function Sidebar(props: Props) {
     <nav class="sidebar">
       <div class="sidebar-title">
         Namespaces
+        {/* Total namespace count next to the title — quick "how big is this cluster's RBAC
+            surface" read. The cluster pseudo-entry is excluded (it's not a real ns), matching
+            the trouble badge below. Tabular-nums so the number sits at a constant width. */}
+        <Show when={props.namespaces.length > 1}>
+          <span class="ns-total" title="visible namespaces">
+            {props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE).length}
+          </span>
+        </Show>
         <Show when={troubled() > 0}>
           <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled()}</span>
         </Show>

@@ -444,6 +444,19 @@ body {
   font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 20%, transparent);
 }
+.ns-total {
+  /* Quiet "total namespaces" stat: same shape language as .ns-trouble (rounded pill, tabular
+     nums) but stripped of color so the eye doesn't read it as an alarm. */
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
 .sidebar-filter-field {
   position: relative;
   display: flex;
