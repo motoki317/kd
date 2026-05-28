@@ -286,7 +286,12 @@ export default function App() {
         <div class="views">
           <For each={VIEWS}>
             {(v) => (
-              <button classList={{ active: v.id === view() }} onClick={() => setView(v.id)} title={v.hint}>
+              <button
+                classList={{ active: v.id === view() }}
+                aria-pressed={v.id === view()}
+                onClick={() => setView(v.id)}
+                title={v.hint}
+              >
                 {v.label}
               </button>
             )}
