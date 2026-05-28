@@ -431,22 +431,25 @@ export default function Topology(props: Props) {
                       status and the restart/age badge on their own rows so nothing competes for
                       width. Health is carried by the .node-bg border + tint (see CSS), so a colored
                       stripe is redundant and was removed to reclaim left padding for the icon. */}
-                  <g class="node-icon node-icon-large" transform="translate(10,6) scale(2)">
+                  {/* Tightened icon+kind unit (cycle 158): icon at y=5, kind label at y=43 sits
+                      directly under the icon's bottom (y=33) with a 3px gap — was a 30px chasm.
+                      Card height dropped 72→60 to drop the dead space below the kind label too. */}
+                  <g class="node-icon node-icon-large" transform="translate(10,5) scale(2)">
                     {kindIcon(n.kind)}
                   </g>
-                  <text class="node-kind" x="24" y="64" text-anchor="middle">
+                  <text class="node-kind" x="24" y="43" text-anchor="middle">
                     {kindShortLabel(n.kind)}
                   </text>
-                  <text class="node-name" x="46" y="38">
+                  <text class="node-name" x="46" y="32">
                     {label(n)}
                   </text>
                   <Show when={n.status}>
-                    <text class="node-status" x={n.width - 12} y="20" text-anchor="end" fill={healthColor(n.health)}>
+                    <text class="node-status" x={n.width - 12} y="17" text-anchor="end" fill={healthColor(n.health)}>
                       {cardStatus(n.status!)}
                     </text>
                   </Show>
                   <Show when={rightBadge(n)}>
-                    <text class="node-restarts" x={n.width - 12} y="58" text-anchor="end">
+                    <text class="node-restarts" x={n.width - 12} y="50" text-anchor="end">
                       {rightBadge(n)}
                     </text>
                   </Show>
