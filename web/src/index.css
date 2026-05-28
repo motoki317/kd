@@ -420,8 +420,14 @@ body {
   position: relative;
   min-width: 0;
   background-color: var(--bg);
-  background-image: radial-gradient(var(--border) 1px, transparent 1px);
-  background-size: 22px 22px;
+  /* Two stacked layers (cycle 130): the dot grid for spatial reference, plus a faint elliptical
+     sheen centered slightly above center — gives the canvas a quiet "stage" feel so the resource
+     cards read as elements arranged on a surface, not floating in fog. The sheen is intentionally
+     subtle (~7% of the surface color) so it does not compete with the cards themselves. */
+  background-image:
+    radial-gradient(var(--border) 1px, transparent 1px),
+    radial-gradient(ellipse 75% 55% at 50% 35%, color-mix(in srgb, var(--surface) 50%, transparent), transparent 75%);
+  background-size: 22px 22px, 100% 100%;
 }
 .topology-svg {
   width: 100%;
