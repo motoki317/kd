@@ -11,6 +11,10 @@ interface Props {
   node: KNode | null
   owners: KNode[]
   onNavigate: (id: string) => void
+  // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
+  // whether a match was found, so the UI can avoid presenting a navigable pill when the source
+  // isn't in the current graph (filtered out by view, or already gone).
+  onNavigateRef?: (kindSlashName: string) => boolean
   onClose: () => void
 }
 
@@ -123,12 +127,28 @@ export default function DetailDrawer(props: Props) {
                                 <span class="event-count">×{ev.count}</span>
                               </Show>
                               <Show when={showSource}>
-                                <span class="event-source" title={`from ${ev.source}`}>
-                                  <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
-                                    {kindIcon(kindFromRef(ev.source!))}
-                                  </svg>
-                                  {ev.source!.split('/').pop()}
-                                </span>
+                                {/* Clickable when the source resource is still in the current
+                                    graph: triaging a controller's events leads straight to the
+                                    offending descendant. Fall back to a static span when not. */}
+                                {props.onNavigateRef ? (
+                                  <button
+                                    class="event-source"
+                                    title={`Go to ${ev.source}`}
+                                    onClick={() => props.onNavigateRef!(ev.source!)}
+                                  >
+                                    <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
+                                      {kindIcon(kindFromRef(ev.source!))}
+                                    </svg>
+                                    {ev.source!.split('/').pop()}
+                                  </button>
+                                ) : (
+                                  <span class="event-source" title={`from ${ev.source}`}>
+                                    <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
+                                      {kindIcon(kindFromRef(ev.source!))}
+                                    </svg>
+                                    {ev.source!.split('/').pop()}
+                                  </span>
+                                )}
                               </Show>
                               <span class="event-age" title={ev.last}>
                                 {relativeAge(ev.last)}

@@ -244,7 +244,19 @@ export default function App() {
             onSearch={setSearch}
             onSelect={setSelectedId}
           />
-          <DetailDrawer node={selectedNode()} owners={ownerNodes()} onNavigate={setSelectedId} onClose={() => setSelectedId(null)} />
+          <DetailDrawer
+            node={selectedNode()}
+            owners={ownerNodes()}
+            onNavigate={setSelectedId}
+            onNavigateRef={(ref) => {
+              const [kind, ...rest] = ref.split('/')
+              const name = rest.join('/')
+              const match = Object.values(graph.nodes).find((n) => n.kind === kind && n.name === name)
+              if (match) setSelectedId(match.id)
+              return !!match
+            }}
+            onClose={() => setSelectedId(null)}
+          />
         </main>
       </div>
 

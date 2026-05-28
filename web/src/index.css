@@ -973,7 +973,8 @@ body {
   margin-left: auto;
 }
 /* Source pill on an aggregated event: kind icon + descendant short name, dim so the reason still
-   reads as the primary signal. */
+   reads as the primary signal. Rendered as a button when the source still exists in the current
+   graph, so a click navigates to it; reset the default <button> chrome to match the span variant. */
 .event-source {
   display: inline-flex;
   align-items: center;
@@ -987,6 +988,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.event-source:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
 }
 .event-message {
   font-size: 12px;
