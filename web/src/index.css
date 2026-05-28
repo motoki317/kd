@@ -2056,6 +2056,11 @@ button.event-source:hover {
   border-color: var(--accent);
   color: #fff;
 }
+.logs-prev:focus-visible,
+.logs-ts:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .logs-prev.active:hover,
 .logs-ts.active:hover {
   color: #fff;

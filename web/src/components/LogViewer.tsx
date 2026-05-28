@@ -150,11 +150,23 @@ export default function LogViewer(props: Props) {
           </select>
         </Show>
         <Show when={!props.aggregated && props.restarts > 0}>
-          <button class="logs-prev" classList={{ active: previous() }} onClick={() => setPrevious((p) => !p)} title="Logs from the previous (crashed) container">
+          <button
+            class="logs-prev"
+            classList={{ active: previous() }}
+            aria-pressed={previous()}
+            onClick={() => setPrevious((p) => !p)}
+            title="Logs from the previous (crashed) container"
+          >
             previous
           </button>
         </Show>
-        <button class="logs-ts" classList={{ active: timestamps() }} onClick={() => setTimestamps((t) => !t)} title="Show each line's emission time">
+        <button
+          class="logs-ts"
+          classList={{ active: timestamps() }}
+          aria-pressed={timestamps()}
+          onClick={() => setTimestamps((t) => !t)}
+          title="Show each line's emission time"
+        >
           timestamps
         </button>
         <Show when={lines().length > 0 || filter()}>
