@@ -386,18 +386,54 @@ body {
   gap: 8px;
   z-index: 2;
 }
+.topology-search-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.topology-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--text-dim);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
 .topology-search input {
   border: 1px solid var(--border-strong);
   background: var(--surface);
   border-radius: 7px;
-  padding: 6px 10px;
+  /* Left padding leaves room for the icon; right padding leaves room for the clear button (which
+     overlays the field instead of pushing it). */
+  padding: 6px 28px 6px 30px;
   font-size: 13px;
-  width: 200px;
+  width: 220px;
   outline: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .topology-search input:focus {
   border-color: var(--accent);
+}
+.topology-search-clear {
+  position: absolute;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.topology-search-clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 .topology-matches {
   font-size: 12px;

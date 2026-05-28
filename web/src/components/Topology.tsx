@@ -246,12 +246,25 @@ export default function Topology(props: Props) {
         </div>
       </Show>
       <div class="topology-search">
-        <input
-          placeholder="Search resources…"
-          value={query()}
-          onInput={(e) => setQuery(e.currentTarget.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-        />
+        {/* Wraps the input so the magnifier glyph (positional, decorative) and the clear-X button
+            sit inside the field's frame instead of beside it. */}
+        <div class="topology-search-field">
+          <svg class="topology-search-icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+            <circle cx="6" cy="6" r="3.5" />
+            <line x1="8.6" y1="8.6" x2="12" y2="12" />
+          </svg>
+          <input
+            placeholder="Search resources…"
+            value={query()}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+          />
+          <Show when={query()}>
+            <button class="topology-search-clear" onClick={() => setQuery('')} title="Clear (Esc)">
+              ×
+            </button>
+          </Show>
+        </div>
         <Show when={matches()}>
           <span class="topology-matches" classList={{ none: matches()!.size === 0 }}>
             {matches()!.size === 0 ? 'no matches' : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
