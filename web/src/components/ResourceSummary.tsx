@@ -176,7 +176,11 @@ export default function ResourceSummary(props: Props) {
           <For each={props.owners}>
             {(o) => (
               <button class="owner-chip" onClick={() => props.onNavigate(o.id)} title={`Go to ${o.kind} ${o.name}`}>
-                ↑ {o.kind} <span class="owner-name">{o.name}</span>
+                <span class="owner-arrow">↑</span>
+                <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                  {kindIcon(o.kind)}
+                </svg>
+                {o.kind} <span class="owner-name">{o.name}</span>
               </button>
             )}
           </For>

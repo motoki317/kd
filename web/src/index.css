@@ -578,10 +578,17 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .owner-chip:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+.owner-arrow {
+  font-size: 12px;
+  line-height: 1;
 }
 .owner-name {
   text-transform: none;
