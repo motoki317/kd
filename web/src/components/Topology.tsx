@@ -199,17 +199,36 @@ export default function Topology(props: Props) {
     ),
   )
 
+  // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see
+  // ~/projects/Arto/renderer/src/base-viewer-controller.ts for the same exp() smoothing approach):
+  //   1. Trackpad pinch — arrives as a wheel event with ctrlKey=true synthesized by macOS.
+  //   2. Cmd+scroll — explicit zoom intent on either pointer type.
+  //   3. Regular wheel with deltaMode=LINE/PAGE — a classic mouse wheel; users expect zoom.
+  //   4. Regular wheel with deltaMode=PIXEL — trackpad 2-finger scroll; users expect PAN.
+  // Zoom factor uses Math.exp(-Δ * k) so a single mouse-wheel click and a flurry of trackpad
+  // events both land at sensible cumulative zoom. k tuned smaller than Arto's 0.01 because kd's
+  // canvas is denser and a 1.1x factor per click was overshooting.
   function onWheel(e: WheelEvent) {
     e.preventDefault()
-    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
-    const rect = svg!.getBoundingClientRect()
-    const mx = e.clientX - rect.left
-    const my = e.clientY - rect.top
-    const s = Math.min(Math.max(scale() * factor, 0.15), 3)
-    // Zoom toward the cursor: keep the graph point under the cursor fixed.
-    setTx(mx - ((mx - tx()) / scale()) * s)
-    setTy(my - ((my - ty()) / scale()) * s)
-    setScale(s)
+    const deltaScale = e.deltaMode === 0 ? 1 : e.deltaMode === 1 ? 10 : 20
+    const isPinch = e.ctrlKey || e.metaKey
+    const isMouseWheel = e.deltaMode !== 0 // LINE/PAGE deltas come from classic mice
+    if (isPinch || isMouseWheel) {
+      // Zoom toward the cursor, keeping the graph point under it fixed.
+      const k = isPinch ? 0.012 : 0.006 // pinch is small-step; mouse wheel ticks are coarser
+      const factor = Math.exp(-e.deltaY * deltaScale * k)
+      const rect = svg!.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+      const s = Math.min(Math.max(scale() * factor, 0.15), 3)
+      setTx(mx - ((mx - tx()) / scale()) * s)
+      setTy(my - ((my - ty()) / scale()) * s)
+      setScale(s)
+    } else {
+      // Trackpad 2-finger scroll: pan in both axes. Both deltas are in pixel units already.
+      setTx(tx() - e.deltaX)
+      setTy(ty() - e.deltaY)
+    }
   }
 
   // Pan only after the pointer moves past a small threshold, so a plain click still reaches a
