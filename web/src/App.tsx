@@ -2,6 +2,7 @@ import { createEffect, createMemo, createResource, createSignal, For, onCleanup,
 import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
+import { faviconDataUrl, worstHealth } from './favicon'
 import { HEALTH_ORDER, healthColor } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
@@ -277,6 +278,16 @@ export default function App() {
   // Only surface health states actually present, so the legend stays a quiet summary until
   // something needs attention rather than a row of zeros.
   const shownHealth = createMemo(() => HEALTH_ORDER.filter((h) => counts()[h]))
+
+  // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the current
+  // view as a colored dot on the brand mark, so multi-tab operators spot trouble without clicking
+  // into each tab. Healthy/empty restores the plain mark. Updated via the existing <link rel="icon">
+  // element rather than injecting a new one, so the DOM stays clean across HMR reloads in dev.
+  createEffect(() => {
+    const worst = worstHealth(counts())
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link) link.href = worst ? faviconDataUrl(worst) : '/favicon.svg'
+  })
 
   return (
     <div class="app">
