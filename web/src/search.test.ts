@@ -64,4 +64,13 @@ describe('nodeMatches', () => {
     const pvc: KNode = { id: '6', kind: 'PersistentVolumeClaim', name: 'data', health: 'Healthy' }
     expect(nodeMatches(pvc, 'pvc')).toBe(true)
   })
+
+  it('matches kubectl short names that are not substrings of the full kind', () => {
+    // "svc" is not a substring of "Service" and "sts" is not a substring of "StatefulSet" — but
+    // they're what operators type in kubectl, so the topology should follow that muscle memory.
+    const svc: KNode = { id: '7', kind: 'Service', name: 's', health: 'Healthy' }
+    const sts: KNode = { id: '8', kind: 'StatefulSet', name: 'db', health: 'Healthy' }
+    expect(nodeMatches(svc, 'svc')).toBe(true)
+    expect(nodeMatches(sts, 'sts')).toBe(true)
+  })
 })

@@ -24,6 +24,21 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind
 }
 
+// Extra search aliases for kinds whose kubectl short name isn't a substring of the full kind, so
+// muscle-memory queries like "svc" / "sts" find Services / StatefulSets. Only listed where needed
+// (e.g. "deploy" already matches "Deployment" by substring; "ing" matches "Ingress"). 2-char shorts
+// (rs, ds, cm, …) are omitted because substring match makes them too noisy.
+const KIND_ALIASES: Record<string, string[]> = {
+  Service: ['svc'],
+  StatefulSet: ['sts'],
+}
+
+// kindAliases returns extra search-only synonyms for a kind. The full kind and the kindLabel are
+// already matched by nodeMatches; this fills the gaps left by non-substring short names.
+export function kindAliases(kind: string): string[] {
+  return KIND_ALIASES[kind] ?? []
+}
+
 // middleTruncate keeps the head and tail of an over-long label, dropping the middle (usually a
 // hash), so both the workload prefix and the unique suffix stay visible.
 export function middleTruncate(s: string, max = 22): string {

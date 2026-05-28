@@ -1,4 +1,4 @@
-import { kindLabel } from './names'
+import { kindAliases, kindLabel } from './names'
 import type { KNode } from './types'
 
 // nodeMatches reports whether a node should stay lit for the given query. Matches anything an
@@ -12,6 +12,7 @@ export function nodeMatches(n: KNode, query: string): boolean {
   if (n.name.toLowerCase().includes(q)) return true
   if (n.kind.toLowerCase().includes(q)) return true
   if (kindLabel(n.kind).toLowerCase().includes(q)) return true
+  if (kindAliases(n.kind).some((a) => a.includes(q))) return true
   if (n.status?.toLowerCase().includes(q)) return true
   if (n.host?.toLowerCase().includes(q)) return true
   if (n.clusterIP?.toLowerCase().includes(q)) return true
