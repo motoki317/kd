@@ -456,7 +456,22 @@ export default function Topology(props: Props) {
   function resetView() {
     const l = layout()
     if (!svg || l.width === 0) return
-    const target = computeFitFor(0, 0, l.width, l.height, 1.4)
+    // When any filter is active, frame just the lit subset — otherwise "Fit" gives you a
+    // viewport of mostly-faded cards with the actual interesting nodes shrunk down. With no
+    // filter the full layout is the right frame (cycle 214).
+    const lit = matches() || props.healthFilter || activeKinds()
+      ? l.nodes.filter((n) => !nodeFaded(n))
+      : l.nodes
+    if (lit.length === 0) {
+      // Filter excluded everything — fall back to the full layout so Fit isn't a dead button.
+      const target = computeFitFor(0, 0, l.width, l.height, 1.4)
+      target.scale *= 0.92
+      animateTo(target)
+      return
+    }
+    const xs = lit.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
+    const ys = lit.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
+    const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.4)
     target.scale *= 0.92
     animateTo(target)
   }
