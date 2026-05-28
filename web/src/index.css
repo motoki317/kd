@@ -793,13 +793,22 @@ body {
   cursor: pointer;
   line-height: 1.4;
 }
+.kind-chip {
+  /* Soft transition so hover/active changes don't snap, matching the legend pills' rhythm. */
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
 .kind-chip:hover {
   border-color: var(--border-strong);
   color: var(--text);
+  /* Subtle lift on hover so the chip reads as a clickable affordance, not a static label. */
+  transform: translateY(-1px);
 }
 .kind-chip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+.kind-chip:active {
+  transform: translateY(0);
 }
 .kind-chip.active {
   /* Active chips borrow the same accent treatment as the legend pills: a tinted background plus
