@@ -72,10 +72,20 @@ export default function DetailDrawer(props: Props) {
   // On selection change, keep the current tab if the new resource has it — so triaging the same tab
   // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
   // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
+  // Tab panel scroll containers — reset to the top whenever the displayed resource changes so a
+  // long previous events list or scrolled-down manifest doesn't carry the operator's prior
+  // position into a fresh resource (cycle 272).
+  let eventsPanelEl: HTMLDivElement | undefined
+  let manifestSectionEl: HTMLElement | undefined
   createEffect(
     on(
       () => displayNode()?.id,
-      () => setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest')),
+      () => {
+        setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest'))
+        if (eventsPanelEl) eventsPanelEl.scrollTop = 0
+        const mp = manifestSectionEl?.querySelector('.manifest') as HTMLElement | null
+        if (mp) mp.scrollTop = 0
+      },
     ),
   )
 
@@ -199,7 +209,7 @@ export default function DetailDrawer(props: Props) {
             </div>
           </Show>
 
-          <div class="events-panel" classList={{ hidden: tab() !== 'events' }}>
+          <div class="events-panel" classList={{ hidden: tab() !== 'events' }} ref={eventsPanelEl}>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               {/* events() throws if the resource errored, so gate on events.error first — both to show
                   a real error (not a misleading "no events") and to avoid reading the errored signal. */}
@@ -274,7 +284,7 @@ export default function DetailDrawer(props: Props) {
             </Suspense>
           </div>
 
-          <section class="manifest-section" classList={{ hidden: tab() !== 'manifest' }}>
+          <section class="manifest-section" classList={{ hidden: tab() !== 'manifest' }} ref={manifestSectionEl}>
             <div class="manifest-head">
               <span class="manifest-format">
                 <button classList={{ active: format() === 'yaml' }} onClick={() => setFormat('yaml')}>
