@@ -842,6 +842,9 @@ export default function Topology(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* Hide the Fit button when there's nothing on canvas — it would just trigger a no-op against
+          an empty layout, and the empty-state copy already explains what to do. */}
+      <Show when={props.nodes.length > 0}>
       <button class="topology-fit" onClick={resetView} title="Fit to view (f)">
         {/* Tiny "fit corners" glyph: four L-corners around an implied frame so the button reads
             as "frame the canvas" even before the eye lands on the word. */}
@@ -850,6 +853,7 @@ export default function Topology(props: Props) {
         </svg>
         Fit
       </button>
+      </Show>
     </div>
   )
 }
