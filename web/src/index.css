@@ -369,9 +369,11 @@ body {
   background: var(--health-degraded);
   color: #fff;
   border-radius: 999px;
-  padding: 0 6px;
+  padding: 1px 7px;
   font-size: 10px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 20%, transparent);
 }
 .sidebar-filter-field {
   position: relative;
