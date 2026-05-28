@@ -1376,10 +1376,27 @@ button.event-source:hover {
   text-transform: none;
   letter-spacing: normal;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
 .copy-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+/* Confirmation flash: green border + tint for 1.2s after copy (the check glyph rides on this). */
+.copy-btn.copied {
+  border-color: var(--health-healthy);
+  color: var(--health-healthy);
+  background: color-mix(in srgb, var(--health-healthy) 8%, var(--surface));
+}
+.copy-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .logs-container {
   margin-left: 8px;

@@ -14,8 +14,19 @@ export default function CopyButton(props: { text: () => string; title?: string }
     }
   }
   return (
-    <button class="copy-btn" onClick={copy} title={props.title ?? 'Copy'}>
-      {copied() ? 'Copied' : 'Copy'}
+    <button class="copy-btn" classList={{ copied: copied() }} onClick={copy} title={props.title ?? 'Copy'}>
+      {copied() ? (
+        <>
+          {/* Tiny check glyph + word — confirms the copy without the button changing width
+              meaningfully (Copy ≈ Copied in pixel-width once a check icon prefixes the text). */}
+          <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">
+            <path d="M 1.5 5.5 L 4 8 L 8.5 2.5" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        'Copy'
+      )}
     </button>
   )
 }
