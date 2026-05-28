@@ -94,6 +94,15 @@ export default function App() {
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
+  // Last value yanked via the 'y' shortcut (cycle 288). Surfaced as a brief toast so the operator
+  // can see what hit their clipboard — otherwise a silent copy is indistinguishable from a missed
+  // keystroke. The toast auto-clears after 1.5s.
+  const [copiedRef, setCopiedRef] = createSignal<string | null>(null)
+  createEffect(() => {
+    if (!copiedRef()) return
+    const t = setTimeout(() => setCopiedRef(null), 1500)
+    onCleanup(() => clearTimeout(t))
+  })
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
   // Live namespace summary from the SSE feed, computed server-side over the UNFILTERED graph so
@@ -188,6 +197,16 @@ export default function App() {
         e.preventDefault()
         const cand = navCandidates(nodes(), search(), healthFilter(), kindFilter())
         setSelectedId((cur) => nextSelection(cand, cur, -1) ?? cur)
+      } else if (!typing && e.key === 'y' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // 'y' yanks the current selection's "Kind/name" to the clipboard — same string Shift+click
+        // on the drawer copy button produces (cycle 287), but without opening the drawer first.
+        // Mirrors the vim yank verb, so muscle memory carries over. Brief toast via help overlay-
+        // adjacent state would be overkill; the standard browser clipboard pulse is the feedback.
+        const sel = graph.nodes[selectedId() ?? '']
+        if (sel) {
+          const ref = `${sel.kind}/${sel.name}`
+          navigator.clipboard?.writeText(ref).then(() => setCopiedRef(ref))
+        }
       } else if (e.key === 'Escape') {
         // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.
         if (showHelp()) setShowHelp(false)
@@ -455,6 +474,17 @@ export default function App() {
         </main>
       </div>
 
+      <Show when={copiedRef()}>
+        {/* Bottom-center confirmation that the 'y' yank fired. Pure overlay, no input — clicks
+            pass through. Auto-fades via the createEffect timer above. */}
+        <div class="copy-toast" role="status" aria-live="polite">
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+            <path d="M 1.5 5.5 L 4 8 L 8.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+          Copied <code>{copiedRef()}</code>
+        </div>
+      </Show>
+
       <Show when={showHelp()}>
         <div class="help-backdrop" onClick={() => setShowHelp(false)}>
           <div class="help-panel" onClick={(e) => e.stopPropagation()}>
@@ -473,6 +503,9 @@ export default function App() {
                 </li>
                 <li>
                   <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
+                </li>
+                <li>
+                  <kbd>y</kbd> Copy the selected resource's <code>Kind/name</code> (yank, paste into <code>kubectl</code>)
                 </li>
                 <li>
                   Click owner chip Walk up the ownership tree
