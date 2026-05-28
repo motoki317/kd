@@ -1681,12 +1681,17 @@ button.drawer-host:hover {
   font-style: italic;
 }
 .events-filter {
+  /* Sticky so the chip stays visible while the operator scrolls through a long event list —
+     "Warnings only" remains one click away even after paging through Normal events. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-sub, var(--bg));
+  background: var(--surface);
 }
 .events-filter-chip {
   display: inline-flex;
