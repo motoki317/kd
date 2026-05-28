@@ -376,12 +376,21 @@ export default function Topology(props: Props) {
     <div class="topology">
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
-          {/* Friendly graphic so the "nothing here" state isn't just bare text — three faded
-              card-silhouettes hint at "this is where resources would render". */}
-          <svg class="topology-empty-illo" viewBox="0 0 120 60" width="120" height="60" aria-hidden="true">
-            <rect x="6" y="22" width="32" height="20" rx="4" />
-            <rect x="44" y="14" width="32" height="20" rx="4" />
-            <rect x="82" y="26" width="32" height="20" rx="4" />
+          {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a
+              tiny icon-circle hint at the top-left echoing the cycle-126 icon-forward card. */}
+          <svg class="topology-empty-illo" viewBox="0 0 140 64" width="140" height="64" aria-hidden="true">
+            <g>
+              <rect x="6" y="22" width="36" height="22" rx="5" class="empty-card" />
+              <circle cx="14" cy="32" r="2.6" class="empty-card-icon" />
+            </g>
+            <g>
+              <rect x="50" y="12" width="36" height="22" rx="5" class="empty-card" />
+              <circle cx="58" cy="22" r="2.6" class="empty-card-icon" />
+            </g>
+            <g>
+              <rect x="94" y="26" width="36" height="22" rx="5" class="empty-card" />
+              <circle cx="102" cy="36" r="2.6" class="empty-card-icon" />
+            </g>
           </svg>
           <div class="topology-empty-text">
             {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
