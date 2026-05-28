@@ -716,13 +716,14 @@ export default function Topology(props: Props) {
           </g>
         </g>
       </svg>
-      {/* Bottom-left count overlay: at-a-glance namespace size, plus the search/health filter
-          subset when one is active ("4 of 23"). Hidden when the canvas is empty (the empty-state
-          message there already covers it). */}
+      {/* Bottom-left count overlay: at-a-glance namespace size, plus the active-filter subset
+          when one is active ("4 of 23"). Active filters compose (search ∩ health ∩ kinds), so
+          the count reflects what's actually lit on the canvas. Hidden when the canvas is empty —
+          the empty-state already covers the message. */}
       <Show when={props.nodes.length > 0}>
         <div class="topology-count">
           <Show
-            when={matches() || props.healthFilter}
+            when={matches() || props.healthFilter || activeKinds()}
             fallback={
               <>
                 {props.nodes.length} resources
@@ -734,7 +735,7 @@ export default function Topology(props: Props) {
               </>
             }
           >
-            {(matches()?.size ?? props.nodes.filter((n) => n.health === props.healthFilter).length)} of {props.nodes.length}
+            {layout().nodes.filter((n) => !nodeFaded(n)).length} of {props.nodes.length}
           </Show>
         </div>
       </Show>

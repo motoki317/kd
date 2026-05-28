@@ -65,6 +65,21 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-kinds')).toBeNull()
   })
 
+  it('count reflects the kind filter ("2 of 3" when only Pods are active, cycle 213)', () => {
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search=""
+        {...base}
+        onKindFilter={() => {}}
+        kindFilter={new Set(['Pod'])}
+      />
+    ))
+    // 2 Pods of 3 total resources, computed from the intersected filter set.
+    expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
+  })
+
   it('toggles the kind filter via the chip click handler', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
