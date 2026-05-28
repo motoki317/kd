@@ -22,6 +22,12 @@ describe('Topology', () => {
     expect(faded(container)).toBe(0)
   })
 
+  it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    // Only the two Pods carry the kind-pod class; the Deployment doesn't.
+    expect(container.querySelectorAll('g.node.kind-pod').length).toBe(2)
+  })
+
   it('fades nodes not matching the search query', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
     // "web" matches the Deployment and web-abc pod; api-xyz is faded.

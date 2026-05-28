@@ -468,7 +468,7 @@ export default function Topology(props: Props) {
             <g class="kind-groups">
               <For each={groups()}>
                 {(g) => (
-                  <g class="kind-group">
+                  <g class="kind-group" classList={{ 'kind-pod': g.kind === 'Pod' }}>
                     {/* Subtle background rect behind the whole kind group (label + cards) gives the
                         grouping a tactile container so kind boundaries read spatially, not just via
                         spacing. Drawn before the icon and label so it's the underlay. */}
@@ -526,6 +526,10 @@ export default function Topology(props: Props) {
                     faded: nodeFaded(n),
                     exiting: exitingIds().has(n.id),
                     [`h-${n.health.toLowerCase()}`]: true,
+                    // Pod kind gets a CSS hook for the accent treatment (cycle 202): pods are the
+                    // fundamental workload, so they read distinct from their controllers/services
+                    // even before the operator focuses on the card.
+                    'kind-pod': n.kind === 'Pod',
                   }}
                   /* CSS transform (not the SVG attribute) so browsers can transition position
                      changes — when SSE patches shift the Dagre layout, cards glide to their new

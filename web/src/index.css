@@ -16,6 +16,13 @@
   --health-suspended: #f0a92a;
   --health-unknown: #9aa5b1;
 
+  /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
+     a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
+     glance. Distinct enough from --health-progressing (blue) and --edge-refers (violet) to not
+     trigger a status read; close enough to the K8s brand to feel canonical. Only affects the
+     icon and the small kind label — never the health border/tint. */
+  --pod-accent: #5b6cf0;
+
   --topbar-h: 52px;
   --sidebar-w: 230px;
   --drawer-w: 520px;
@@ -40,6 +47,7 @@
     --accent: #4d8bf0;
     --edge-color: #3f4654;
     --edge-refers: #7b6abf;
+    --pod-accent: #8593f5;
     color-scheme: dark;
   }
 }
@@ -534,6 +542,15 @@ body {
   stroke-width: 1;
   pointer-events: none;
 }
+/* All view: the Pod kind group's header picks up the same accent as Pod cards. The bg rect
+   stays neutral so the contained pod cards keep their tinted-by-health appearance. */
+.kind-group.kind-pod .kind-group-label {
+  fill: var(--pod-accent);
+}
+.kind-group.kind-pod .kind-group-icon {
+  color: var(--pod-accent);
+  stroke: var(--pod-accent);
+}
 .kind-groups .kind-group-count {
   font-weight: 400;
   font-size: 11px;
@@ -904,6 +921,16 @@ body {
 }
 .node-icon-large {
   stroke-width: 0.75;
+}
+/* Pod kind accent (cycle 202): pod cards are the fundamental workload, so the icon and the kind
+   label pick up --pod-accent. The card body + border still carry health, and the accent stays
+   visually quiet against a degraded red / progressing amber border so status never gets lost. */
+.node.kind-pod .node-icon {
+  stroke: var(--pod-accent);
+  color: var(--pod-accent);
+}
+.node.kind-pod .node-kind {
+  fill: var(--pod-accent);
 }
 .node-kind {
   font-size: 10px;
