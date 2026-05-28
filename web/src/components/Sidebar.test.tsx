@@ -46,4 +46,32 @@ describe('Sidebar', () => {
     const { getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
     expect(getByText('No namespaces visible.')).toBeTruthy()
   })
+
+  it('inserts a divider between troubled and healthy namespaces (none when all-troubled / all-healthy)', () => {
+    // Mixed: divider should render once between the troubled group and the healthy group.
+    const mixed = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    expect(mixed.container.querySelectorAll('.ns-divider').length).toBe(1)
+    cleanup()
+    // All healthy: no boundary to mark.
+    const allHealthy: NamespaceInfo[] = [
+      { name: 'a', health: 'Healthy' },
+      { name: 'b', health: 'Healthy' },
+    ]
+    const healthy = render(() => (
+      <Sidebar namespaces={allHealthy} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    expect(healthy.container.querySelectorAll('.ns-divider').length).toBe(0)
+    cleanup()
+    // All troubled: no boundary to mark either.
+    const allTroubled: NamespaceInfo[] = [
+      { name: 'a', health: 'Degraded', nonReady: 1 },
+      { name: 'b', health: 'Progressing', nonReady: 1 },
+    ]
+    const troubled = render(() => (
+      <Sidebar namespaces={allTroubled} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    expect(troubled.container.querySelectorAll('.ns-divider').length).toBe(0)
+  })
 })

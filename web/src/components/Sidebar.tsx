@@ -27,6 +27,13 @@ export default function Sidebar(props: Props) {
       .sort(compareNamespaces)
   })
   const troubled = createMemo(() => props.namespaces.filter((n) => n.health !== 'Healthy').length)
+  // Index of the first healthy entry in the sorted list, so a divider can mark the transition
+  // between "needs attention" and "fine"; -1 means no boundary (all troubled or all healthy).
+  const dividerAt = createMemo(() => {
+    const list = shown()
+    const firstHealthy = list.findIndex((n) => n.health === 'Healthy')
+    return firstHealthy > 0 && firstHealthy < list.length ? firstHealthy : -1
+  })
 
   return (
     <nav class="sidebar">
@@ -59,7 +66,14 @@ export default function Sidebar(props: Props) {
         <Show when={!props.failed} fallback={<div class="sidebar-loading">Couldn't load namespaces.</div>}>
           <ul class="ns-list">
             <For each={shown()}>
-              {(ns) => (
+              {(ns, i) => (
+                <>
+                  {/* Quiet rule between the last troubled and first healthy namespace, so the
+                      troubled-first sort reads as deliberate grouping ("here's what's wrong",
+                      then "here's everything else") rather than an unmotivated order. */}
+                  <Show when={i() === dividerAt()}>
+                    <li class="ns-divider" aria-hidden="true" />
+                  </Show>
                 <li>
                   <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
                     <Show when={ns.health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
@@ -81,6 +95,7 @@ export default function Sidebar(props: Props) {
                     </Show>
                   </button>
                 </li>
+                </>
               )}
             </For>
             <Show when={shown().length === 0}>

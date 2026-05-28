@@ -364,6 +364,12 @@ body {
   color: var(--accent);
   font-weight: 600;
 }
+.ns-divider {
+  list-style: none;
+  height: 1px;
+  background: var(--border);
+  margin: 6px 9px;
+}
 .ns-empty,
 .sidebar-loading {
   color: var(--text-dim);
