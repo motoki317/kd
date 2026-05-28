@@ -100,12 +100,27 @@ body {
   transition: flex 0.3s ease;
 }
 .brand {
+  /* Now a <button> (cycle 290) so clicking the logo resets the view. Strip button chrome so it
+     reads identical to the prior <div> presentation, only with cursor + focus affordance. */
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
   font-weight: 700;
   font-size: 18px;
   letter-spacing: -0.02em;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+}
+.brand:hover .brand-mark rect { opacity: 1; }
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 /* The brand mark gets a soft gradient fill so the tiers read as a small physical object (not
    three flat rects). Accent-tinted so it picks up the app's primary color, but quiet enough to

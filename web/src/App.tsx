@@ -311,7 +311,22 @@ export default function App() {
   return (
     <div class="app">
       <header class="topbar">
-        <div class="brand">
+        {/* Clickable home: resets view + filters + selection without touching the namespace
+            (cycle 290). Operators end up on Ownership with no spotlight — the default "what's
+            in this ns" stance — without having to hunt for the right tab + clear button. */}
+        <button
+          class="brand"
+          type="button"
+          title="Reset view (Ownership, no filters)"
+          aria-label="Reset to default view"
+          onClick={() => {
+            setView('ownership')
+            setSearch('')
+            setHealthFilter(null)
+            setKindFilter(new Set<string>())
+            setSelectedId(null)
+          }}
+        >
           {/* Brand mark (cycle 131): a tiny stacked-tier glyph that echoes the ownership tree the
               dashboard draws (a controller over its children). Pure decoration — the "kd" text
               still carries the name — but anchors the topbar so the brand reads as a logo rather
@@ -322,7 +337,7 @@ export default function App() {
             <rect x="1" y="11.2" width="14" height="2.4" rx="1" />
           </svg>
           <span class="brand-text">kd</span>
-        </div>
+        </button>
         <ContextSwitcher info={contextsInfo()} current={ctx()} onSelect={setCtx} />
         <Show when={namespace()}>
           {/* Breadcrumb keeps context (which ns + view) visible regardless of where the eye is —
