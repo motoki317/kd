@@ -102,19 +102,30 @@ export default function Topology(props: Props) {
   }
   const label = (n: KNode) => cardName(n.name, ownerName().get(n.id))
 
-  // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
-  // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null
-  // when nothing is selected, so the whole graph renders at full strength.
+  // When a node is selected, walk its full connected component (edges treated as undirected) so
+  // the entire ownership/relationship tree containing the selection stays lit while everything
+  // else fades out — ArgoCD-style focus on "this resource and what relates to it". Cycle 157
+  // promoted this from immediate-neighbors to full-component because the auto-fit (below) targets
+  // the same set: clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
   const related = createMemo(() => {
     const id = props.selectedId
     if (!id) return null
     const nodes = new Set<string>([id])
     const edges = new Set<string>()
-    for (const e of layout().edges) {
-      if (e.from === id || e.to === id) {
-        nodes.add(e.from)
-        nodes.add(e.to)
-        edges.add(edgeKey(e))
+    const queue = [id]
+    while (queue.length > 0) {
+      const cur = queue.shift()!
+      for (const e of layout().edges) {
+        const k = edgeKey(e)
+        if (edges.has(k)) continue
+        if (e.from === cur || e.to === cur) {
+          edges.add(k)
+          const next = e.from === cur ? e.to : e.from
+          if (!nodes.has(next)) {
+            nodes.add(next)
+            queue.push(next)
+          }
+        }
       }
     }
     return { nodes, edges }
@@ -164,43 +175,89 @@ export default function Topology(props: Props) {
   let lastX = 0
   let lastY = 0
 
-  // Fit the graph into view whenever its size changes (namespace/view switch, big deltas).
+  // Smoothly animate viewport (tx/ty/scale) to a target over ~360ms with easeOutCubic.
+  // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
+  // changes glide instead of jumping — easier for a human to track what just changed.
+  let animFrame = 0
+  function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
+    cancelAnimationFrame(animFrame)
+    const s0 = scale(), tx0 = tx(), ty0 = ty()
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration)
+      const e = 1 - Math.pow(1 - t, 3)
+      setScale(s0 + (target.scale - s0) * e)
+      setTx(tx0 + (target.tx - tx0) * e)
+      setTy(ty0 + (target.ty - ty0) * e)
+      if (t < 1) animFrame = requestAnimationFrame(tick)
+    }
+    animFrame = requestAnimationFrame(tick)
+  }
+  onCleanup(() => cancelAnimationFrame(animFrame))
+
+  // computeFitFor: scale + translate that frames the given bounds into the SVG viewport with the
+  // given padding. Caps max scale so single-card selections don't zoom in to absurd sizes.
+  function computeFitFor(minX: number, minY: number, maxX: number, maxY: number, maxScale: number) {
+    const rect = svg!.getBoundingClientRect()
+    const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY)
+    const padding = 60
+    const s = Math.min((rect.width - padding * 2) / w, (rect.height - padding * 2) / h, maxScale)
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+    return { scale: s, tx: rect.width / 2 - cx * s, ty: rect.height / 2 - cy * s }
+  }
+
+  // Fit-all on namespace/view switch (big shape changes). Tracks a key so an SSE patch that
+  // changes node positions slightly doesn't re-fit and yank the viewport away from where the user
+  // panned. First mount is a snap (no animation); subsequent fits glide.
   let lastFitKey = ''
+  let firstFit = true
   createEffect(() => {
     const l = layout()
     const key = `${l.width}x${l.height}x${l.nodes.length}`
     if (!svg || l.width === 0 || key === lastFitKey) return
     lastFitKey = key
-    const rect = svg.getBoundingClientRect()
-    const s = Math.min(rect.width / l.width, rect.height / l.height, 1.4) * 0.92
-    setScale(s)
-    setTx((rect.width - l.width * s) / 2)
-    setTy((rect.height - l.height * s) / 2)
+    if (props.selectedId) return // selection-fit takes precedence; don't double-animate
+    const target = computeFitFor(0, 0, l.width, l.height, 1.4)
+    target.scale *= 0.92
+    if (firstFit) {
+      firstFit = false
+      setScale(target.scale)
+      setTx(target.tx)
+      setTy(target.ty)
+    } else {
+      animateTo(target)
+    }
   })
 
-  // Bring the selection into view when it changes (e.g. via owner navigation or a search match in a
-  // large graph) — but only if it's off-screen, so a normal in-view click doesn't jolt the canvas.
+  // When the selection changes, smoothly frame the selected resource's full subtree (computed by
+  // related()) — answers the user's "zoom to selected + related" without requiring a manual Fit.
+  // Selection cleared → glide back to fit-all so the dashboard re-orients without a jolt.
   createEffect(
     on(
       () => props.selectedId,
       (id) => {
-        if (!id || !svg) return
-        const n = layout().nodes.find((m) => m.id === id)
-        if (!n) return
-        const rect = svg.getBoundingClientRect()
-        const sx = tx() + n.x * scale()
-        const sy = ty() + n.y * scale()
-        const margin = 60
-        if (sx < margin || sx > rect.width - margin || sy < margin || sy > rect.height - margin) {
-          setTx(rect.width / 2 - n.x * scale())
-          setTy(rect.height / 2 - n.y * scale())
+        if (!svg) return
+        const l = layout()
+        if (l.width === 0) return
+        if (!id) {
+          animateTo({ ...computeFitFor(0, 0, l.width, l.height, 1.4), }) // glide back to fit-all
+          return
         }
+        const r = related()
+        if (!r) return
+        const inSet = l.nodes.filter((n) => r.nodes.has(n.id))
+        if (inSet.length === 0) return
+        const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
+        const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
+        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
+        animateTo(target)
       },
+      { defer: true },
     ),
   )
 
   // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see
-  // ~/projects/Arto/renderer/src/base-viewer-controller.ts for the same exp() smoothing approach):
+  // github.com/arto-app/Arto renderer/src/base-viewer-controller.ts for the same exp() smoothing):
   //   1. Trackpad pinch — arrives as a wheel event with ctrlKey=true synthesized by macOS.
   //   2. Cmd+scroll — explicit zoom intent on either pointer type.
   //   3. Regular wheel with deltaMode=LINE/PAGE — a classic mouse wheel; users expect zoom.
@@ -267,15 +324,11 @@ export default function Topology(props: Props) {
   }
 
   function resetView() {
-    lastFitKey = '' // force the fit effect to recompute
-    setScale(scale() === 1 ? 1.0001 : 1) // nudge to retrigger if needed
     const l = layout()
     if (!svg || l.width === 0) return
-    const rect = svg.getBoundingClientRect()
-    const s = Math.min(rect.width / l.width, rect.height / l.height, 1.4) * 0.92
-    setScale(s)
-    setTx((rect.width - l.width * s) / 2)
-    setTy((rect.height - l.height * s) / 2)
+    const target = computeFitFor(0, 0, l.width, l.height, 1.4)
+    target.scale *= 0.92
+    animateTo(target)
   }
 
   return (
