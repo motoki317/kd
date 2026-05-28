@@ -18,13 +18,19 @@ state at a glance and app developers can jump straight to pod status and logs.
 - 2D topology across five lenses — ownership, network, node-placement, volumes (mounted
   ConfigMaps/Secrets/PVCs), and RBAC — laid out per connected component and packed to the viewport
   (no horizontal smear in dense namespaces).
-- Every card carries a kind-specific silhouette (Pod=circle, Deployment=stacked layers, Service=hub-
-  spokes, Secret=key, PVC=cylinder, …) so types read by shape at a glance, and a relative-age tag
-  ("7d", "30s") that updates in place — a freshly-restarted pod next to a 90d release pops out.
-- Status by exception: healthy resources stay calm; Degraded/Progressing/Suspended get a colored
-  border. Failures that bare counts hide are surfaced too — a Deployment past its rollout deadline, a
-  Service whose selector matches no ready pods. Select a node to fade everything unrelated; click a
-  legend health to spotlight it (the active pill borrows the health hue).
+- Every card carries a large kind-specific silhouette (Pod=circle, Deployment=stacked layers,
+  Service=hub-spokes, Secret=key, PVC=cylinder, …) with a small kubectl-style kind label below it
+  (DEPL, RS, STS, DS, SVC, …) so types read by shape at a glance; a relative-age tag ("7d", "30s")
+  updates in place so a freshly-restarted pod next to a 90d release pops out.
+- Health on the card body: the whole card wears a pastel tint + colored border matching its state
+  (healthy soft green, degraded red, progressing amber). Non-healthy cards add a quiet halo so
+  trouble announces itself at zoom-out across a packed canvas.
+- Selecting a card smoothly zooms the canvas to frame its full ownership subtree, with every
+  unrelated resource fading. Click the background to clear; pan with two-finger trackpad scroll,
+  zoom with pinch / cmd-scroll / mouse wheel. SSE patches glide between layouts — additions fade
+  in, removals fade out, position shifts ease — so a rollout is visible as motion, not a jump cut.
+- The topbar carries a proportional health-distribution stripe along its bottom edge so
+  "what is this cluster doing right now?" reads without parsing legend numbers.
 - Search resources by name, kind, label, image, status, host, or IP — kubectl short names (svc, sts)
   match too. The sidebar sorts troubled namespaces first, each with a health dot and a non-ready
   count colored to match (live for the namespace you're viewing). Resource count + current filter
