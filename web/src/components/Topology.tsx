@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on, onCleanup } from
 import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
-import { cardName, cardStatus, kindLabel } from '../names'
+import { cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
@@ -354,7 +354,7 @@ export default function Topology(props: Props) {
                     {kindIcon(n.kind)}
                   </g>
                   <text class="node-kind" x="24" y="64" text-anchor="middle">
-                    {kindLabel(n.kind)}
+                    {kindShortLabel(n.kind)}
                   </text>
                   <text class="node-name" x="46" y="38">
                     {label(n)}

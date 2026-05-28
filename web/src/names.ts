@@ -24,6 +24,33 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind
 }
 
+// Under-icon kind label: must fit beneath the 28×28 icon (≈40 px wide budget at 10 px uppercase
+// font + 0.06em letter-spacing), so anything longer than ~5 chars uses the kubectl short name.
+// Distinct from kindLabel because the drawer header can still afford the full word.
+const KIND_SHORT_LABELS: Record<string, string> = {
+  Deployment: 'DEPL',
+  ReplicaSet: 'RS',
+  StatefulSet: 'STS',
+  DaemonSet: 'DS',
+  CronJob: 'CRON',
+  Service: 'SVC',
+  Ingress: 'ING',
+  ConfigMap: 'CMAP',
+  Secret: 'SECRT',
+  PersistentVolumeClaim: 'PVC',
+  Namespace: 'NS',
+  ServiceAccount: 'SA',
+  Group: 'GRP',
+  ClusterRole: 'CROLE',
+  RoleBinding: 'RB',
+  ClusterRoleBinding: 'CRB',
+  Endpoints: 'EP',
+}
+
+export function kindShortLabel(kind: string): string {
+  return KIND_SHORT_LABELS[kind] ?? kind.toUpperCase()
+}
+
 // Extra search aliases for kinds whose kubectl short name isn't a substring of the full kind, so
 // muscle-memory queries like "svc" / "sts" find Services / StatefulSets. Only listed where needed
 // (e.g. "deploy" already matches "Deployment" by substring; "ing" matches "Ingress"). 2-char shorts
