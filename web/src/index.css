@@ -171,11 +171,33 @@ body {
   color: var(--text-dim);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px 10px 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Pulsing leading dot (cycle 129): a slow heartbeat on the live pill makes the dashboard read as
+   alive at a glance — the SSE stream's actual liveness mirrored in pixels. Connecting amber
+   doesn't pulse the dot (the whole pill already pulses); offline shows a static dim dot. */
+.conn::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
 }
 .conn.live {
   color: var(--health-healthy);
   border-color: var(--health-healthy);
+}
+.conn.live::before {
+  background: var(--health-healthy);
+  animation: heartbeat 2.4s ease-in-out infinite;
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.7); opacity: 0.55; }
 }
 /* "connecting…" is a transient state; a slow opacity pulse signals "working on it" instead of
    the alarming bare "offline" look. Progressing amber so it reads neutral-positive (waiting). */
@@ -184,9 +206,18 @@ body {
   border-color: var(--health-progressing);
   animation: conn-pulse 1.2s ease-in-out infinite;
 }
+.conn.connecting::before {
+  background: var(--health-progressing);
+}
 @keyframes conn-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
+}
+/* Reduced-motion: keep the color signal but skip the heartbeat scale/opacity — the bordered pill
+   still says "live" without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .conn.live::before,
+  .conn.connecting { animation: none; }
 }
 .help-btn {
   width: 24px;
