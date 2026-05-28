@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show, createEffect, on, onCleanup } from 'solid-js'
+import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
@@ -484,6 +484,23 @@ export default function Topology(props: Props) {
     target.scale *= 0.92
     animateTo(target)
   }
+
+  // Keyboard shortcut: 'f' fits the canvas. Mirrors the button (cycle 229). Plain key, no
+  // modifier — operators want fit-to-view as a single tap. Ignored when typing in an input,
+  // when a modifier is held, or when the topology hasn't laid out yet.
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'f') {
+        e.preventDefault()
+        resetView()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    onCleanup(() => window.removeEventListener('keydown', onKey))
+  })
 
   return (
     <div class="topology">

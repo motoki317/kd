@@ -444,6 +444,7 @@ export default function App() {
                 </li>
                 <li>Click a legend health Spotlight only those resources</li>
                 <li>Click a kind chip Toggle that kind in the filter (multi-select)</li>
+                <li><kbd>f</kbd> Fit the topology to view</li>
               </ul>
             </section>
           </div>
