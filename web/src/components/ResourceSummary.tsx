@@ -24,6 +24,23 @@ function endpointHealth(ep: { ready: number; total: number }): Health {
   return 'Healthy'
 }
 
+// isFloatingImageTag returns true when the image reference isn't pinned to an immutable revision:
+// no tag at all (implicit :latest), explicit :latest, or "stable"/"main"/"edge" — common moving
+// pointers. A digest reference (@sha256:…) is always treated as pinned. Used to surface a quiet
+// warning in the drawer so operators can spot images that can drift across restarts.
+export function isFloatingImageTag(img: string): boolean {
+  if (img.includes('@sha256:')) return false
+  // Tag is everything after the last ":" that isn't a port — but registry paths can include a port,
+  // e.g. "registry:5000/foo/bar:1.2.3". Split off any path first to make the ":port" case impossible
+  // in the segment we inspect.
+  const lastSlash = img.lastIndexOf('/')
+  const tail = lastSlash >= 0 ? img.slice(lastSlash + 1) : img
+  const colon = tail.lastIndexOf(':')
+  if (colon < 0) return true // no tag → implicit :latest
+  const tag = tail.slice(colon + 1).toLowerCase()
+  return tag === 'latest' || tag === 'stable' || tag === 'main' || tag === 'master' || tag === 'edge'
+}
+
 interface Props {
   node: KNode
   owners: KNode[]
@@ -168,13 +185,23 @@ export default function ResourceSummary(props: Props) {
         </div>
       </Show>
       {/* The image(s) are usually the first thing checked ("what version is live?"), so
-          surface them prominently with per-image copy for pasting into kubectl/registry. */}
+          surface them prominently with per-image copy for pasting into kubectl/registry. A
+          floating tag (":latest" or none) gets a small warning chip — these images cannot be
+          pinned to a known revision, so a rolling restart can silently change what's running. */}
       <Show when={(props.node.images?.length ?? 0) > 0}>
         <div class="drawer-images">
           <For each={props.node.images}>
             {(img) => (
               <div class="drawer-image" title={img}>
                 <code>{img}</code>
+                <Show when={isFloatingImageTag(img)}>
+                  <span
+                    class="image-floating-tag"
+                    title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
+                  >
+                    floating tag
+                  </span>
+                </Show>
                 <CopyButton text={() => img} title="Copy image" />
               </div>
             )}

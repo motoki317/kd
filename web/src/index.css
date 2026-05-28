@@ -1427,6 +1427,21 @@ button.drawer-host:hover {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* Small badge that flags an image without a pinned tag/digest — same shape as label-chip but
+   tinted in the Suspended (amber) hue so it reads as "you should know about this" rather than
+   "this is broken". The full explanation lives in the title. */
+.image-floating-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--health-suspended);
+  background: color-mix(in srgb, var(--health-suspended) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--health-suspended) 55%, var(--border));
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
 .drawer-ports {
   display: flex;
   flex-wrap: wrap;
