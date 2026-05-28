@@ -94,6 +94,11 @@ export default function App() {
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
+  // Collapsible sidebar (cycle 299): operators with wide ownership graphs sometimes want every
+  // pixel for the canvas. Cmd/Ctrl+B toggles; state persists in localStorage so a reload doesn't
+  // surprise them with the sidebar re-appearing. Default expanded.
+  const [sidebarHidden, setSidebarHidden] = createSignal(localStorage.getItem('kd:sidebarHidden') === '1')
+  createEffect(() => localStorage.setItem('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
   // Last value yanked via the 'y' shortcut (cycle 288). Surfaced as a brief toast so the operator
   // can see what hit their clipboard — otherwise a silent copy is indistinguishable from a missed
   // keystroke. The toast auto-clears after 1.5s.
@@ -177,6 +182,13 @@ export default function App() {
         e.preventDefault()
         searchEl?.focus()
         searchEl?.select()
+        return
+      }
+      // Cmd/Ctrl+B toggles the namespace sidebar (cycle 299). VS Code uses the same shortcut for
+      // its sidebar, so the muscle memory carries over for most operators.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault()
+        setSidebarHidden((v) => !v)
         return
       }
       if (e.key === '?' && !typing) {
@@ -461,7 +473,7 @@ export default function App() {
         </Show>
       </header>
 
-      <div class="body">
+      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }}>
         <Sidebar
           namespaces={sidebarNamespaces()}
           selected={namespace()}
@@ -548,6 +560,9 @@ export default function App() {
                 </li>
                 <li>
                   <kbd>y</kbd> Copy the selected resource's <code>Kind/name</code> (yank, paste into <code>kubectl</code>)
+                </li>
+                <li>
+                  <kbd>⌘</kbd><kbd>B</kbd> / <kbd>Ctrl</kbd><kbd>B</kbd> Toggle the namespace sidebar
                 </li>
                 <li>
                   Click owner chip Walk up the ownership tree
