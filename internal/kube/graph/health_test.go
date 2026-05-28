@@ -112,7 +112,10 @@ func TestNodeHealthAndStatus(t *testing.T) {
 	}{
 		{"ready", node(corev1.ConditionTrue, false), HealthHealthy, "Ready"},
 		{"not ready", node(corev1.ConditionFalse, false), HealthDegraded, "NotReady"},
-		{"cordoned but ready", node(corev1.ConditionTrue, true), HealthHealthy, "Ready,SchedulingDisabled"},
+		// Cordoned is an intentional hold (drain/maintenance), surfaced like a paused Deployment.
+		{"cordoned but ready", node(corev1.ConditionTrue, true), HealthSuspended, "Ready,SchedulingDisabled"},
+		// A real fault outranks the cordon: a cordoned node that's also down is Degraded, not Suspended.
+		{"cordoned and not ready", node(corev1.ConditionFalse, true), HealthDegraded, "NotReady,SchedulingDisabled"},
 		{
 			"memory pressure",
 			node(corev1.ConditionTrue, false, corev1.NodeCondition{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue}),

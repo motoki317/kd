@@ -54,7 +54,9 @@ func pvcHealth(p *corev1.PersistentVolumeClaim) Health {
 }
 
 // nodeHealth reads a Node's conditions: Ready=False (or missing) is Degraded, as is any resource
-// pressure (Memory/Disk/PID); otherwise Healthy. Without this a NotReady node renders green.
+// pressure (Memory/Disk/PID). A cordoned (unschedulable) but otherwise-Ready node is Suspended — an
+// intentional hold for drain/maintenance, surfaced like a paused Deployment so it stands out from
+// green without alarming, while a real fault above still takes precedence. Otherwise Healthy.
 func nodeHealth(n *corev1.Node) Health {
 	ready := false
 	for _, c := range n.Status.Conditions {
@@ -69,6 +71,9 @@ func nodeHealth(n *corev1.Node) Health {
 	}
 	if !ready {
 		return HealthDegraded
+	}
+	if n.Spec.Unschedulable {
+		return HealthSuspended
 	}
 	return HealthHealthy
 }
