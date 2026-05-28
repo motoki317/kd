@@ -403,6 +403,19 @@ body {
 /* Nodes & edges */
 .node {
   cursor: pointer;
+  /* Drop-shadow on hover hints "lift" so cards announce themselves as clickable; transitions
+     here so the lift fades in/out instead of jumping. */
+  transition: opacity 0.12s, filter 0.15s;
+}
+.node:hover {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.10));
+}
+/* In dark mode, a black drop-shadow on a dark surface is invisible — use a faint white glow
+   instead so the lift still reads. */
+@media (prefers-color-scheme: dark) {
+  .node:hover {
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.10));
+  }
 }
 /* Selection focus: fade everything not connected to the selected node, and light up the edges
    that are, so a resource's relationships pop out of a dense graph. */
@@ -424,10 +437,10 @@ body {
   fill: var(--surface);
   stroke: var(--border-strong);
   stroke-width: 1;
-  transition: stroke 0.1s;
+  transition: stroke 0.1s, stroke-width 0.1s;
 }
 .node:hover .node-bg {
-  stroke: var(--text-dim);
+  stroke: var(--accent);
 }
 .node.selected .node-bg {
   stroke: var(--accent);
