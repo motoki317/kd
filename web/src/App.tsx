@@ -400,10 +400,13 @@ export default function App() {
             <section class="help-section">
               <h4>Views</h4>
               <ul>
+                {/* Surface the view hint alongside the number so the help overlay teaches
+                    "what does this view show" — same line of text the tooltip and empty
+                    state use, but visible without hovering. */}
                 <For each={VIEWS}>
                   {(v, i) => (
                     <li>
-                      <kbd>{i() + 1}</kbd> {v.label}
+                      <kbd>{i() + 1}</kbd> {v.label} <span class="help-hint">{v.hint}</span>
                     </li>
                   )}
                 </For>
