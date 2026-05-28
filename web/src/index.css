@@ -660,8 +660,74 @@ body {
   top: 14px;
   display: flex;
   align-items: center;
+  /* Wrap the kind-chip row to a second line when it gets long, so the canvas isn't pushed off
+     screen by a wide topology with many kinds. The search field + matches count anchor the
+     first line; the chip row flows underneath. */
+  flex-wrap: wrap;
   gap: 8px;
   z-index: 2;
+  /* Keep the chip row from blanketing too much of the canvas in dense kind sets: the topology
+     scroll handlers see the underlying SVG behind a clipped overflow row. */
+  max-width: calc(100% - 28px);
+}
+.topology-kinds {
+  /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". Wrap so
+     the row grows downward as kinds accumulate; gap matches the legend pills' rhythm. */
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.kind-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.kind-chip.active {
+  /* Active chips borrow the same accent treatment as the legend pills: a tinted background plus
+     coloured border, so the spotlighted kinds read at a glance against the inactive grey row. */
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.kind-chip-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.kind-chip-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.kind-chip.active .kind-chip-count {
+  color: var(--text);
+}
+/* Pod chip echoes the card accent so the Pod kind reads with the same visual identity in the
+   filter row as it does on the canvas. */
+.kind-chip.kind-pod {
+  color: var(--pod-accent);
+}
+.kind-chip.kind-pod.active {
+  border-color: var(--pod-accent);
+  background: color-mix(in srgb, var(--pod-accent) 14%, transparent);
 }
 .topology-search-field {
   position: relative;

@@ -28,6 +28,54 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.node.kind-pod').length).toBe(2)
   })
 
+  it('renders a kind-filter chip per present kind, ordered by count (cycle 203)', () => {
+    // nodes has 2 Pods + 1 Deployment, so the chips should be [Pod (2), Deployment (1)].
+    const onKindFilter = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
+    ))
+    const labels = [...container.querySelectorAll('.kind-chip-label')].map((e) => e.textContent)
+    // Short labels: Pod -> "POD", Deployment -> "DEPLOY". Most common kind first.
+    expect(labels[0]).toMatch(/POD/i)
+    expect(labels.length).toBe(2)
+  })
+
+  it('fades non-matching kinds when a kind filter is active, lit ones survive (cycle 203)', () => {
+    // kindFilter={Pod} → the Deployment should fade, the two Pods stay lit.
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search=""
+        {...base}
+        onKindFilter={() => {}}
+        kindFilter={new Set(['Pod'])}
+      />
+    ))
+    expect(faded(container)).toBe(1) // only the Deployment
+    const lit = [...container.querySelectorAll('g.node:not(.faded)')]
+    expect(lit.every((g) => g.classList.contains('kind-pod'))).toBe(true)
+  })
+
+  it('hides the kind-chip row when only one kind is present (no-op filter)', () => {
+    const single: KNode[] = [{ id: '1', kind: 'Pod', name: 'only-pod', health: 'Healthy' }]
+    const { container } = render(() => (
+      <Topology nodes={single} edges={[]} search="" {...base} onKindFilter={() => {}} kindFilter={new Set<string>()} />
+    ))
+    expect(container.querySelector('.topology-kinds')).toBeNull()
+  })
+
+  it('toggles the kind filter via the chip click handler', () => {
+    const onKindFilter = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
+    ))
+    const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
+    fireEvent.click(firstChip)
+    // The most common kind (Pod) sits first, so clicking the first chip dispatches 'Pod'.
+    expect(onKindFilter).toHaveBeenCalledWith('Pod')
+  })
+
   it('fades nodes not matching the search query', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
     // "web" matches the Deployment and web-abc pod; api-xyz is faded.

@@ -13,6 +13,11 @@ interface Props {
   edges: KEdge[]
   selectedId: string | null
   healthFilter?: import('../types').Health | null
+  // Multi-select set of kinds to spotlight (cycle 203). Empty / null means "show all"; a
+  // non-empty set fades every node whose kind isn't in it. The parent owns the set so it
+  // survives namespace/view transitions when desired (currently cleared on view change).
+  kindFilter?: Set<string> | null
+  onKindFilter?: (k: string) => void
   connected: boolean
   viewLabel: string
   // viewId is the lower-case view key — Topology switches layout strategy on 'all' to use
@@ -195,9 +200,34 @@ export default function Topology(props: Props) {
     return m
   })
 
-  // Fade precedence: search query > legend health filter > selection neighbors; only a bare
-  // selection lights its edges accent.
-  const nodeFaded = (n: { id: string; health: string }) => {
+  // Active kind filter (cycle 203): an empty/null set means "show all kinds"; otherwise only the
+  // listed kinds stay lit. Re-derived so an empty set still reads as "no filter active".
+  const activeKinds = createMemo(() => {
+    const s = props.kindFilter
+    return s && s.size > 0 ? s : null
+  })
+  // Counts per kind in the current view, so the chip row can show "Pod 7" etc. and the chips
+  // are ordered by frequency (the most common kind, almost always Pod, sits first).
+  const kindCounts = createMemo(() => {
+    const c = new Map<string, number>()
+    for (const n of layout().nodes) c.set(n.kind, (c.get(n.kind) ?? 0) + 1)
+    return c
+  })
+  const kindChips = createMemo(() =>
+    [...kindCounts().entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => ({ kind: k, count: n })),
+  )
+  // Nodes that pass the kind filter — used both for fading and to short-circuit the related/search
+  // intersection. Kinds compose with search and healthFilter (intersection: a node must match all).
+  const nodeKindOk = (kind: string) => {
+    const a = activeKinds()
+    return !a || a.has(kind)
+  }
+
+  // Fade precedence: search query > legend health filter > kind filter > selection neighbors;
+  // only a bare selection lights its edges accent. When a kind filter is active alongside another
+  // filter, both must accept the node — so kinds compose rather than overriding.
+  const nodeFaded = (n: { id: string; health: string; kind: string }) => {
+    if (!nodeKindOk(n.kind)) return true
     const m = matches()
     if (m) return !m.has(n.id)
     if (props.healthFilter) return n.health !== props.healthFilter
@@ -208,10 +238,17 @@ export default function Topology(props: Props) {
     const m = matches()
     if (m) return !(m.has(e.from) && m.has(e.to))
     if (props.healthFilter) return true
+    if (activeKinds()) {
+      // Light the edge only when both endpoints pass the kind filter — keeps the active subset's
+      // connectivity readable instead of leaving dangling lines that go nowhere.
+      const a = layout().nodes.find((n) => n.id === e.from)
+      const b = layout().nodes.find((n) => n.id === e.to)
+      return !(a && b && nodeKindOk(a.kind) && nodeKindOk(b.kind))
+    }
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
-  const edgeAdjacent = (e: KEdge) => !matches() && !props.healthFilter && (related()?.edges.has(edgeKey(e)) ?? false)
+  const edgeAdjacent = (e: KEdge) => !matches() && !props.healthFilter && !activeKinds() && (related()?.edges.has(edgeKey(e)) ?? false)
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
@@ -440,6 +477,32 @@ export default function Topology(props: Props) {
           <span class="topology-matches" classList={{ none: matches()!.size === 0 }}>
             {matches()!.size === 0 ? 'no matches' : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
           </span>
+        </Show>
+        {/* Kind filter chips (cycle 203): one chip per kind present in the current view. Click
+            toggles the kind in/out of the active set; multi-select composes with search and the
+            legend health filter. Hidden when only one kind is present (no filter would do
+            anything). Each chip carries the same monochrome silhouette as its cards, so the
+            chip row reads as a compact legend of "what kinds are here". */}
+        <Show when={kindChips().length > 1 && props.onKindFilter}>
+          <div class="topology-kinds" role="toolbar" aria-label="Kind filter">
+            <For each={kindChips()}>
+              {(c) => (
+                <button
+                  class="kind-chip"
+                  classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod' }}
+                  onClick={() => props.onKindFilter?.(c.kind)}
+                  title={`Spotlight ${c.kind} resources`}
+                  aria-pressed={activeKinds()?.has(c.kind) ?? false}
+                >
+                  <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
+                    {kindIcon(c.kind)}
+                  </svg>
+                  <span class="kind-chip-label">{kindShortLabel(c.kind)}</span>
+                  <span class="kind-chip-count">{c.count}</span>
+                </button>
+              )}
+            </For>
+          </div>
         </Show>
       </div>
       <svg

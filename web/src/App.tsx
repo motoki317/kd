@@ -64,6 +64,15 @@ export default function App() {
   const connected = () => connState() === 'live'
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
+  // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
+  // healthFilter. Lives in App so it resets on namespace/view change alongside the others.
+  const [kindFilter, setKindFilter] = createSignal<Set<string>>(new Set())
+  const toggleKind = (k: string) => {
+    const s = new Set(kindFilter())
+    if (s.has(k)) s.delete(k)
+    else s.add(k)
+    setKindFilter(s)
+  }
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
@@ -142,9 +151,10 @@ export default function App() {
         if (showHelp()) setShowHelp(false)
         else if (typing) (el as HTMLElement).blur()
         else if (selectedId()) setSelectedId(null)
-        else if (search() || healthFilter()) {
+        else if (search() || healthFilter() || kindFilter().size > 0) {
           setSearch('')
           setHealthFilter(null)
+          setKindFilter(new Set<string>())
         }
       }
     }
@@ -164,8 +174,9 @@ export default function App() {
     // namespace change naturally clears it: the old UID won't be in the new namespace's graph.
     // untrack so reading the current selection doesn't make this effect re-subscribe on selection.
     const keepSel = untrack(selectedId)
-    setSearch('') // a stale search/health filter would fade the whole new graph
+    setSearch('') // a stale search/health/kind filter would fade the whole new graph
     setHealthFilter(null)
+    setKindFilter(new Set<string>())
     setGraph(reconcile(emptyState()))
     setLiveSummary(null) // previous stream's summary belongs to the previous (ns, view) — clear it
     setConnState('connecting')
@@ -331,6 +342,8 @@ export default function App() {
             edges={edges()}
             selectedId={selectedId()}
             healthFilter={healthFilter()}
+            kindFilter={kindFilter()}
+            onKindFilter={toggleKind}
             connected={connected()}
             viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
             viewId={view()}
@@ -402,6 +415,7 @@ export default function App() {
                   <kbd>?</kbd> Toggle this help
                 </li>
                 <li>Click a legend health Spotlight only those resources</li>
+                <li>Click a kind chip Toggle that kind in the filter (multi-select)</li>
               </ul>
             </section>
           </div>
