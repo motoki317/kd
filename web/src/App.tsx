@@ -116,6 +116,17 @@ export default function App() {
     history.replaceState(null, '', `${location.pathname}?${p}`)
   })
 
+  // Reflect ctx + ns + view in the tab title so operators with multiple cluster tabs can tell
+  // them apart from the OS chrome (and re-find one in a tab-switcher). Format: "ns · ctx · kd"
+  // when both are known, falling back gracefully — the trailing "kd" anchors recognition.
+  createEffect(() => {
+    const parts: string[] = []
+    if (namespace()) parts.push(namespace() === CLUSTER_SCOPE ? '[cluster]' : namespace()!)
+    if (ctx() && contextsInfo()?.enabled) parts.push(ctx()!)
+    parts.push('kd')
+    document.title = parts.join(' · ')
+  })
+
   // Restore a URL-seeded selection once its node arrives (then stop tracking).
   createEffect(() => {
     if (!pendingSel) return
