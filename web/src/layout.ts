@@ -9,8 +9,8 @@
 import dagre from '@dagrejs/dagre'
 import type { KEdge, KNode } from './types'
 
-export const NODE_WIDTH = 190
-export const NODE_HEIGHT = 56
+export const NODE_WIDTH = 220
+export const NODE_HEIGHT = 72
 
 // Target width:height of the packed block, so fit-to-view fills both axes instead of a thin band.
 const TARGET_ASPECT = 1.7

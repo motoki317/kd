@@ -48,36 +48,23 @@ export function middleTruncate(s: string, max = 22): string {
   return s.slice(0, head) + '…' + s.slice(s.length - tail)
 }
 
-// CARD_NAME_MAX is the name-line character budget at NODE_WIDTH: tuned so a full-width name fills
-// the card up to its right padding.
+// Card geometry: the icon is on the left (its own column) and the right text column carries name,
+// status and the restart/age badge on three vertically-separated rows. Nothing competes on a row,
+// so each line gets the full right-column width — no inter-row truncation gymnastics required.
+//
+// At NODE_WIDTH=220 the right text column is ~162 px. Bold 13 px fits ~22 chars; regular 11 px
+// (status) fits ~28; the badge is right-anchored so its budget is its own length. The numbers are
+// conservative against proportional-font drift — a one-char-shorter name beats an overflow.
 const CARD_NAME_MAX = 22
+const CARD_STATUS_MAX = 24
 
-// cardName is a topology card's display name: stripped of its owner prefix, then middle-truncated
-// to fit the card. When a right-side badge (restart count and/or age, e.g. "↻3", "2d", "↻3 · 2d")
-// shares the name line, reserve its width first so the name truncates short of it instead of
-// rendering underneath. The reserve is in name-characters: the ↻ glyph is ~2 of them wide, each
-// regular char ~1, plus ~2 for a visible gap. Char-count is only an estimate for a proportional
-// font, so lean generous — a slightly shorter name beats an overlap.
-export function cardName(name: string, ownerName: string | undefined, rightBadge: string | number = ''): string {
-  // Back-compat: old call sites passed `restarts: number`. Convert to the badge string they used to imply.
-  const badge = typeof rightBadge === 'number' ? (rightBadge > 0 ? `↻${rightBadge}` : '') : rightBadge
-  const reserved = badge ? badge.length + (badge.match(/↻/g)?.length ?? 0) + 2 : 0
-  return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX - reserved)
+export function cardName(name: string, ownerName?: string): string {
+  return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX)
 }
 
-// TOP_LINE_CHARS is the kind+status character budget for the card's top line at NODE_WIDTH, with
-// kind left- and status right-aligned. GAP keeps a visible space between them. The icon at the
-// top-left consumes ~2.5 name-chars of horizontal room, so the budget shrinks accordingly.
-const TOP_LINE_CHARS = 21
-const TOP_LINE_GAP = 2
-
-// cardStatus fits the right-aligned status onto the top line beside the left-aligned kind,
-// end-truncating it to the width the kind leaves. Without this an unbounded status — an Ingress
-// host, a cordoned Node's "Ready,SchedulingDisabled", an "Init:CrashLoopBackOff" — overflows the
-// card or renders on top of the kind. End-truncation keeps the meaningful head (the reason / host
-// prefix); the drawer shows the full status.
-export function cardStatus(status: string, kindLabel: string): string {
-  const budget = TOP_LINE_CHARS - kindLabel.length - TOP_LINE_GAP
-  if (status.length <= budget) return status
-  return status.slice(0, Math.max(1, budget - 1)) + '…'
+// cardStatus end-truncates a long status to its own row's width. End (not middle) keeps the leading
+// reason — "Init:CrashLoop…" beats "I…ackOff" — and the drawer still shows the full status.
+export function cardStatus(status: string): string {
+  if (status.length <= CARD_STATUS_MAX) return status
+  return status.slice(0, CARD_STATUS_MAX - 1) + '…'
 }

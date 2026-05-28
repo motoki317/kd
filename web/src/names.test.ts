@@ -42,41 +42,28 @@ describe('cardName', () => {
   it('strips the owner prefix and leaves a fitting name intact', () => {
     expect(cardName('api-7d9f-2xkp', 'api-7d9f')).toBe('2xkp')
   })
-  it('reserves room on the name line for the restart badge, so the name truncates shorter', () => {
+  it('middle-truncates an over-long name to the card budget', () => {
+    // After cycle 126 the name has its own row, no badge competing — full CARD_NAME_MAX is used.
     const long = 'kube-scheduler-docker-desktop'
-    const noBadge = cardName(long, undefined, 0)
-    const withBadge = cardName(long, undefined, 12)
-    // A restart badge (↻12) shares the name line, so the name must give up width to it.
-    expect(withBadge.length).toBeLessThan(noBadge.length)
-  })
-  it('reserves more room for a wider badge (more restart digits)', () => {
-    const long = 'kube-scheduler-docker-desktop'
-    expect(cardName(long, undefined, 5).length).toBeGreaterThan(cardName(long, undefined, 12345).length)
-  })
-  it('accepts an arbitrary right-badge string (age, age+restarts) and reserves its width', () => {
-    const long = 'kube-scheduler-docker-desktop'
-    const noBadge = cardName(long, undefined, '')
-    const ageOnly = cardName(long, undefined, '2d')
-    const combined = cardName(long, undefined, '↻3 · 2d')
-    expect(ageOnly.length).toBeLessThan(noBadge.length)
-    expect(combined.length).toBeLessThan(ageOnly.length)
+    const out = cardName(long, undefined)
+    expect(out.length).toBeLessThan(long.length)
+    expect(out).toContain('…')
+    expect(out.startsWith('kube')).toBe(true)
+    expect(out.endsWith('desktop')).toBe(true)
   })
 })
 
 describe('cardStatus', () => {
-  it('leaves a status that fits beside its kind untouched', () => {
-    expect(cardStatus('Running', 'Pod')).toBe('Running')
-    expect(cardStatus('2/2', 'Deployment')).toBe('2/2')
+  it('leaves a fitting status untouched', () => {
+    expect(cardStatus('Running')).toBe('Running')
+    expect(cardStatus('2/2')).toBe('2/2')
   })
-  it('end-truncates a long status so it cannot overlap the kind (keeps the meaningful head)', () => {
-    // A cordoned node: "NODE" + "Ready,SchedulingDisabled" used to collide.
-    const out = cardStatus('Ready,SchedulingDisabled', 'Node')
-    expect(out.length).toBeLessThan('Ready,SchedulingDisabled'.length)
-    expect(out.startsWith('Ready,')).toBe(true)
+  it('end-truncates a long status to the row width (keeps the meaningful head)', () => {
+    // The bad cases that used to overflow: "Init:CrashLoopBackOff", "Ready,SchedulingDisabled",
+    // "Pending:ContainerCreating". End-truncation keeps the leading reason for triage.
+    const out = cardStatus('Init:CrashLoopBackOff exceeded threshold (15)')
+    expect(out.length).toBeLessThan('Init:CrashLoopBackOff exceeded threshold (15)'.length)
+    expect(out.startsWith('Init:Crash')).toBe(true)
     expect(out.endsWith('…')).toBe(true)
-  })
-  it('leaves less room for the status when the kind is wider', () => {
-    const status = 'rollout failed in progress now'
-    expect(cardStatus(status, 'StatefulSet').length).toBeLessThan(cardStatus(status, 'Pod').length)
   })
 })

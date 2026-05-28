@@ -100,7 +100,7 @@ export default function Topology(props: Props) {
     if (r > 0) return `↻${r}`
     return age
   }
-  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id), rightBadge(n))
+  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id))
 
   // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
   // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null
@@ -344,26 +344,28 @@ export default function Topology(props: Props) {
                       a tightly-truncated card in a zoomed-out graph still reveals the full name,
                       age, host (pods), and restart count without selecting it. */}
                   <title>{cardTitle(n, now())}</title>
-                  <rect class="node-bg" width={n.width} height={n.height} rx="8" />
-                  {/* Stripe is inset 8px on every side (the CSS shifts it by 8,8), so its height
-                      must subtract both the top and bottom inset or it overflows the card bottom. */}
-                  <rect class="node-stripe" width="5" height={n.height - 16} rx="2.5" fill={healthColor(n.health)} />
-                  {/* 14x14 kind icon at the top-left, just inside the health stripe; the kind
-                      text follows so the silhouette acts as a fast-recognition aid for the label. */}
-                  <g class="node-icon" transform="translate(16,10)">{kindIcon(n.kind)}</g>
-                  <text class="node-kind" x="32" y="22">
+                  <rect class="node-bg" width={n.width} height={n.height} rx="9" />
+                  {/* Icon-forward card (cycle 126): a 28×28 kind silhouette anchors the left column
+                      and a small uppercase kind label sits under it; the right column lays name,
+                      status and the restart/age badge on their own rows so nothing competes for
+                      width. Health is carried by the .node-bg border + tint (see CSS), so a colored
+                      stripe is redundant and was removed to reclaim left padding for the icon. */}
+                  <g class="node-icon node-icon-large" transform="translate(10,6) scale(2)">
+                    {kindIcon(n.kind)}
+                  </g>
+                  <text class="node-kind" x="24" y="64" text-anchor="middle">
                     {kindLabel(n.kind)}
                   </text>
-                  <text class="node-name" x="16" y="40">
+                  <text class="node-name" x="46" y="38">
                     {label(n)}
                   </text>
                   <Show when={n.status}>
-                    <text class="node-status" x={n.width - 12} y="22" text-anchor="end" fill={healthColor(n.health)}>
-                      {cardStatus(n.status!, kindLabel(n.kind))}
+                    <text class="node-status" x={n.width - 12} y="20" text-anchor="end" fill={healthColor(n.health)}>
+                      {cardStatus(n.status!)}
                     </text>
                   </Show>
                   <Show when={rightBadge(n)}>
-                    <text class="node-restarts" x={n.width - 12} y="40" text-anchor="end">
+                    <text class="node-restarts" x={n.width - 12} y="58" text-anchor="end">
                       {rightBadge(n)}
                     </text>
                   </Show>

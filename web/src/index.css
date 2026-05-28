@@ -553,47 +553,47 @@ body {
   stroke: var(--accent);
   stroke-width: 2;
 }
+/* Card background carries health: every state gets a colored border + matching pastel tint so the
+   whole card body reads as the status indicator. Cycle 126 dropped the inset stripe in favor of
+   this (frees the left padding for the larger icon, and the colored body is far more visible at
+   zoom-out than a 5px line was). Healthy uses the gentlest tint so a single degraded card still
+   pops out of a wall of green; selection overrides with the accent border. */
 .node-bg {
-  fill: var(--surface);
-  stroke: var(--border-strong);
-  stroke-width: 1;
-  transition: stroke 0.1s, stroke-width 0.1s;
+  fill: color-mix(in srgb, var(--health-healthy) 5%, var(--surface));
+  stroke: color-mix(in srgb, var(--health-healthy) 55%, var(--border-strong));
+  stroke-width: 1.5;
+  transition: stroke 0.1s, stroke-width 0.1s, fill 0.1s;
 }
 .node:hover .node-bg {
   stroke: var(--accent);
 }
-.node.selected .node-bg {
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-
-/* Status by exception: healthy nodes stay calm, problems get a bold colored border + faint tint
-   so a single degraded resource pops out of a wall of green at a glance. */
 .node.h-degraded .node-bg {
   stroke: var(--health-degraded);
   stroke-width: 2;
-  fill: color-mix(in srgb, var(--health-degraded) 7%, var(--surface));
+  fill: color-mix(in srgb, var(--health-degraded) 9%, var(--surface));
 }
 .node.h-progressing .node-bg {
   stroke: var(--health-progressing);
   stroke-width: 2;
-  fill: color-mix(in srgb, var(--health-progressing) 6%, var(--surface));
+  fill: color-mix(in srgb, var(--health-progressing) 8%, var(--surface));
 }
 .node.h-suspended .node-bg {
   stroke: var(--health-suspended);
   stroke-width: 2;
-  fill: color-mix(in srgb, var(--health-suspended) 8%, var(--surface));
+  fill: color-mix(in srgb, var(--health-suspended) 9%, var(--surface));
 }
-/* Selection always wins as the strongest outline. */
+.node.h-unknown .node-bg {
+  stroke: var(--health-unknown);
+  stroke-width: 1.5;
+  fill: color-mix(in srgb, var(--health-unknown) 6%, var(--surface));
+}
 .node.selected .node-bg {
   stroke: var(--accent);
+  stroke-width: 2.5;
 }
-.node-stripe {
-  transform: translate(8px, 8px);
-}
-/* Kind icon: monochrome outline, picks up the kind text's dim color so it never competes with
-   the health stripe/border (which carry status). 1.5px stroke is the smallest that stays crisp
-   at 14px without anti-alias blur. */
+/* Kind icon: monochrome outline that picks up the dim text color so it never competes with the
+   health-tinted body (the body carries status; the icon carries type). The .large variant hosts a
+   scale(2) transform, so its base stroke is halved to render at the same 1.5px visual thickness. */
 .node-icon {
   fill: none;
   stroke: var(--text-dim);
@@ -602,11 +602,15 @@ body {
   stroke-linejoin: round;
   color: var(--text-dim);
 }
+.node-icon-large {
+  stroke-width: 0.75;
+}
 .node-kind {
-  font-size: 11px;
+  font-size: 10px;
   fill: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 .node-name {
   font-size: 13px;
