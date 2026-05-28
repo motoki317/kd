@@ -183,16 +183,28 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 18px 22px;
-  min-width: 280px;
+  padding: 18px 22px 14px;
+  min-width: 360px;
+  max-width: 480px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
 }
 .help-panel h3 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-dim);
+}
+.help-section {
+  margin-top: 12px;
+}
+.help-section h4 {
+  margin: 0 0 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 600;
 }
 .help-panel ul {
   list-style: none;
@@ -200,8 +212,8 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12.5px;
 }
 .help-panel kbd {
   display: inline-block;

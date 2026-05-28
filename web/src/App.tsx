@@ -248,23 +248,47 @@ export default function App() {
         <div class="help-backdrop" onClick={() => setShowHelp(false)}>
           <div class="help-panel" onClick={(e) => e.stopPropagation()}>
             <h3>Keyboard shortcuts</h3>
-            <ul>
-              <li>
-                <kbd>/</kbd> Filter namespaces
-              </li>
-              <li>
-                <kbd>1</kbd>–<kbd>5</kbd> Switch views
-              </li>
-              <li>
-                <kbd>j</kbd>/<kbd>k</kbd> or <kbd>↓</kbd>/<kbd>↑</kbd> Next / previous resource (troubled first)
-              </li>
-              <li>
-                <kbd>Esc</kbd> Close drawer / clear filters
-              </li>
-              <li>
-                <kbd>?</kbd> Toggle this help
-              </li>
-            </ul>
+            {/* Grouped so the overlay reads as a reference card (Navigation / Views / Actions),
+                not a flat undifferentiated list. Each VIEWS entry is enumerated explicitly so
+                "5 jumps to RBAC" is discoverable without counting tabs. */}
+            <section class="help-section">
+              <h4>Navigation</h4>
+              <ul>
+                <li>
+                  <kbd>/</kbd> Filter namespaces
+                </li>
+                <li>
+                  <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
+                </li>
+                <li>
+                  Click owner chip Walk up the ownership tree
+                </li>
+              </ul>
+            </section>
+            <section class="help-section">
+              <h4>Views</h4>
+              <ul>
+                <For each={VIEWS}>
+                  {(v, i) => (
+                    <li>
+                      <kbd>{i() + 1}</kbd> {v.label}
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </section>
+            <section class="help-section">
+              <h4>Actions</h4>
+              <ul>
+                <li>
+                  <kbd>Esc</kbd> Help → field blur → drawer → clear search / health filter
+                </li>
+                <li>
+                  <kbd>?</kbd> Toggle this help
+                </li>
+                <li>Click a legend health Spotlight only those resources</li>
+              </ul>
+            </section>
           </div>
         </div>
       </Show>
