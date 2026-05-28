@@ -1194,16 +1194,22 @@ button.drawer-host:hover {
 .tab-badge {
   margin-left: 6px;
   font-size: 10px;
-  font-weight: 600;
-  background: var(--border-strong);
-  color: var(--surface);
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   vertical-align: middle;
+  font-variant-numeric: tabular-nums;
 }
 .tab-badge.warn {
   background: var(--health-degraded);
   color: #fff;
+  border-color: var(--health-degraded);
+  /* Soft red glow so a Warning-events tab announces trouble at a glance — same vocabulary as
+     the non-healthy card halo (cycle 136). */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 22%, transparent);
 }
 
 /* Logs and Manifest are the drawer's two body panels: the active one fills, the other is hidden
