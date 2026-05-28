@@ -599,15 +599,19 @@ export default function Topology(props: Props) {
                 else (e.currentTarget as HTMLInputElement).blur()
               }
               else if (e.key === 'Enter') {
-                // Mirrors the sidebar filter (cycle 223): typing 'web-' + Enter jumps to the first
-                // matched card so the operator doesn't have to mouse over to click it. orderedForNav
-                // is the same severity-first sort j/k uses, so this Enter lands on the most
-                // attention-worthy hit (Degraded > Progressing > … > Healthy).
+                // Cycle through matches: first Enter picks the most-troubled (orderedForNav).
+                // Subsequent Enters step to the next match in that order; Shift+Enter steps back.
+                // Wraps at both ends. With nothing matched it's a no-op.
                 const m = matches()
-                if (m && m.size > 0) {
-                  const ordered = orderedForNav(props.nodes.filter((n) => m.has(n.id)))
-                  if (ordered[0]) props.onSelect(ordered[0].id)
-                }
+                if (!m || m.size === 0) return
+                const ordered = orderedForNav(props.nodes.filter((n) => m.has(n.id)))
+                if (ordered.length === 0) return
+                const cur = ordered.findIndex((n) => n.id === props.selectedId)
+                const dir = e.shiftKey ? -1 : 1
+                const next = cur < 0
+                  ? (dir > 0 ? 0 : ordered.length - 1)
+                  : (cur + dir + ordered.length) % ordered.length
+                props.onSelect(ordered[next].id)
               }
             }}
           />

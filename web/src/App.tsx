@@ -458,7 +458,7 @@ export default function App() {
                   <kbd>/</kbd> Filter namespaces
                 </li>
                 <li>
-                  <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> jumps to top match)
+                  <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
                 </li>
                 <li>
                   <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
