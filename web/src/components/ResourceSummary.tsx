@@ -74,7 +74,15 @@ export default function ResourceSummary(props: Props) {
           <div class="drawer-kind">{props.node.kind}</div>
           <div class="drawer-name">
             {props.node.name}
-            <CopyButton text={() => props.node.name} title="Copy name" />
+            {/* Plain copy yields the bare name (chat-friendly); Shift+click yields "Kind/name" —
+                the form `kubectl get` accepts directly, so operators don't have to retype the
+                kind every time they paste a resource ref into a terminal. */}
+            <CopyButton
+              text={() => props.node.name}
+              title="Copy name"
+              altText={() => `${props.node.kind}/${props.node.name}`}
+              altTitle="for Kind/name"
+            />
           </div>
         </div>
       </div>

@@ -2,19 +2,36 @@ import { createSignal } from 'solid-js'
 
 // CopyButton copies the text returned by props.text() to the clipboard and briefly confirms.
 // Silently no-ops when the Clipboard API is unavailable (e.g. a non-secure context).
-export default function CopyButton(props: { text: () => string; title?: string }) {
+//
+// Optional altText/altTitle (cycle 287): when present, Shift+click copies altText instead. Used by
+// the drawer's name button so plain click copies just the name (the common case — pasting into
+// chat) while Shift+click copies "Kind/name" for kubectl pipelines. The title gets a "· ⇧ for
+// <altTitle>" suffix so the modifier is discoverable.
+export default function CopyButton(props: {
+  text: () => string
+  title?: string
+  altText?: () => string
+  altTitle?: string
+}) {
   const [copied, setCopied] = createSignal(false)
-  const copy = async () => {
+  const copy = async (e: MouseEvent) => {
+    // Capture the value choice synchronously so the post-await flash matches what was copied.
+    const useAlt = e.shiftKey && !!props.altText
+    const text = useAlt ? props.altText!() : props.text()
     try {
-      await navigator.clipboard.writeText(props.text())
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     } catch {
       /* clipboard unavailable */
     }
   }
+  const title = () => {
+    const base = props.title ?? 'Copy'
+    return props.altText ? `${base} · Shift+click ${props.altTitle ?? 'for alt'}` : base
+  }
   return (
-    <button class="copy-btn" classList={{ copied: copied() }} onClick={copy} title={props.title ?? 'Copy'}>
+    <button class="copy-btn" classList={{ copied: copied() }} onClick={copy} title={title()}>
       {copied() ? (
         <>
           {/* Tiny check glyph + word — confirms the copy without the button changing width

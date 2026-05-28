@@ -59,9 +59,12 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('8 vCPU · 16Gi · 110 pods')
   })
 
-  it('offers a copy-name button in the header', () => {
-    const { getByTitle } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
-    expect(getByTitle('Copy name')).toBeTruthy()
+  it('offers a copy-name button in the header (cycle 287: title also documents Shift+click for Kind/name)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const btn = container.querySelector('.drawer-name .copy-btn') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.getAttribute('title')).toMatch(/^Copy name/)
+    expect(btn.getAttribute('title')).toMatch(/Shift\+click for Kind\/name/)
   })
 
   it('label chip click copies key=value; Shift+click copies value only (cycle 282)', async () => {
