@@ -16,6 +16,10 @@ internal/server/webdist/
 # Local planning docs (work-in-progress; not committed)
 docs/plans/
 
+# Throwaway dev harnesses (screenshot probes, etc.)
+web/shot.mjs
+web/probe.mjs
+
 # Local config / secrets
 *.local.yaml
 policy.local.csv
