@@ -28,6 +28,8 @@ interface Props {
   node: KNode
   owners: KNode[]
   onNavigate: (id: string) => void
+  // Optional "Kind/name" → select navigator; lets the host meta jump to its Node when present.
+  onNavigateRef?: (kindSlashName: string) => boolean
 }
 
 // ResourceSummary is the drawer header's "what is this resource" block: identity, the runtime meta
@@ -68,7 +70,19 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">↻ {props.node.restarts} restarts</span>
         </Show>
         <Show when={props.node.host}>
-          <span class="drawer-age">on {props.node.host}</span>
+          {/* Clickable when the Node is in the current graph (Nodes view + Ownership both include
+              it); otherwise render the same chrome as a static span so the line is consistent. */}
+          {props.onNavigateRef ? (
+            <button
+              class="drawer-age drawer-host"
+              title={`Go to Node ${props.node.host}`}
+              onClick={() => props.onNavigateRef!(`Node/${props.node.host}`)}
+            >
+              on {props.node.host}
+            </button>
+          ) : (
+            <span class="drawer-age">on {props.node.host}</span>
+          )}
         </Show>
         <Show when={props.node.capacity}>
           <span class="drawer-age">{props.node.capacity}</span>

@@ -636,6 +636,19 @@ body {
 .drawer-age::before {
   content: '· ';
 }
+/* Host meta rendered as a button (cycle 116) so it can navigate to its Node; strip default chrome
+   to match the sibling spans, and add a quiet hover so the click affordance is visible. */
+button.drawer-age {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+button.drawer-host:hover {
+  color: var(--accent);
+}
 .drawer-owners {
   display: flex;
   flex-wrap: wrap;

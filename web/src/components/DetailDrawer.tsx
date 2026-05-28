@@ -69,7 +69,12 @@ export default function DetailDrawer(props: Props) {
       {(node) => (
         <aside class="drawer">
           <header class="drawer-header">
-            <ResourceSummary node={node()} owners={props.owners} onNavigate={props.onNavigate} />
+            <ResourceSummary
+              node={node()}
+              owners={props.owners}
+              onNavigate={props.onNavigate}
+              onNavigateRef={props.onNavigateRef}
+            />
             <button class="drawer-close" onClick={props.onClose} title="Close">
               ×
             </button>
