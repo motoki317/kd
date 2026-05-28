@@ -660,14 +660,44 @@ body {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
+/* Drawer hero header (cycle 128): big kind icon on the left, kind label + name stacked on the
+   right — mirrors the topology card so the drawer reads as the card "expanded". The hero picks
+   up a health-tinted icon stroke so it pops at a glance before any text is read. */
+.drawer-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+.drawer-hero-icon {
+  flex: 0 0 auto;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-dim);
+  stroke: currentColor;
+}
+.drawer-hero-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Health tints for the hero icon: only the icon stroke shifts, so kind + name stay readable text
+   while the silhouette announces status (healthy stays neutral-dim so the eye lands on actual
+   trouble first). */
+.health-tint-degraded .drawer-hero-icon { color: var(--health-degraded); }
+.health-tint-progressing .drawer-hero-icon { color: var(--health-progressing); }
+.health-tint-suspended .drawer-hero-icon { color: var(--health-suspended); }
+.health-tint-unknown .drawer-hero-icon { color: var(--health-unknown); }
 .drawer-kind {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  font-weight: 600;
 }
 .drawer-kind-icon {
   fill: none;
@@ -679,11 +709,11 @@ body {
 .drawer-name {
   font-size: 16px;
   font-weight: 700;
-  margin-top: 2px;
   word-break: break-all;
   display: flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
 }
 /* Keep the copy affordance quiet until the header is hovered, so the name stays the focus. */
 .drawer-name .copy-btn {

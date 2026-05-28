@@ -44,18 +44,22 @@ export default function ResourceSummary(props: Props) {
 
   return (
     <div>
-      <div class="drawer-kind">
-        <span class="dot" style={{ background: healthColor(props.node.health) }} />
-        {/* Same silhouette as the topology card so the drawer reads as the "expanded view" of
-            the resource you clicked — visual continuity across click. */}
-        <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+      {/* Drawer "hero" header (cycle 128): a card-sized kind silhouette plus the kind label and
+          name stacked beside it — mirrors the topology card's icon-forward design so the drawer
+          reads as the "blown up" version of the card you just clicked. The icon's host <g> picks
+          up the health color (.health-tint*) so the hero pops in the row even before the eye
+          reads the kind text or name. */}
+      <div class="drawer-hero" classList={{ [`health-tint-${props.node.health.toLowerCase()}`]: true }}>
+        <svg class="drawer-hero-icon" viewBox="0 0 14 14" width="34" height="34" aria-hidden="true">
           {kindIcon(props.node.kind)}
         </svg>
-        {props.node.kind}
-      </div>
-      <div class="drawer-name">
-        {props.node.name}
-        <CopyButton text={() => props.node.name} title="Copy name" />
+        <div class="drawer-hero-text">
+          <div class="drawer-kind">{props.node.kind}</div>
+          <div class="drawer-name">
+            {props.node.name}
+            <CopyButton text={() => props.node.name} title="Copy name" />
+          </div>
+        </div>
       </div>
       <div class="drawer-meta">
         <Show when={props.node.namespace}>
