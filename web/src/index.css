@@ -83,6 +83,27 @@ body {
 .topbar-spacer {
   flex: 1;
 }
+/* Breadcrumb beside the brand: dim separator, slightly heavier namespace name so the eye lands on
+   the ns first (the brand is the constant; the ns is the context). */
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  max-width: 320px;
+  overflow: hidden;
+}
+.crumb-sep {
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+}
+.crumb-ns {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .views {
   display: inline-flex;
   background: var(--surface-2);

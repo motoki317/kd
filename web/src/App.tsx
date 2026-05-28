@@ -189,6 +189,14 @@ export default function App() {
     <div class="app">
       <header class="topbar">
         <div class="brand">kd</div>
+        <Show when={namespace()}>
+          {/* Breadcrumb keeps context (which ns + view) visible regardless of where the eye is —
+              sidebar highlight only helps when the operator is looking at the sidebar. */}
+          <span class="crumb">
+            <span class="crumb-sep">›</span>
+            <span class="crumb-ns">{namespace()}</span>
+          </span>
+        </Show>
         <div class="topbar-spacer" />
         <div class="views">
           <For each={VIEWS}>
