@@ -71,12 +71,24 @@ export default function ResourceSummary(props: Props) {
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address
           is copyable for pasting into a curl/port-forward. */}
-      <Show when={props.node.clusterIP || (props.node.ports?.length ?? 0) > 0}>
+      <Show when={props.node.clusterIP || props.node.externalIP || (props.node.ports?.length ?? 0) > 0}>
         <div class="drawer-ports">
           <Show when={props.node.clusterIP}>
             <span class="port-addr">
               <code>{props.node.clusterIP}</code>
               <CopyButton text={() => props.node.clusterIP!} title="Copy address" />
+            </span>
+          </Show>
+          {/* For a LoadBalancer/NodePort service the external address is the actual "reach it from
+              outside" answer the cluster IP can't give — surface it labelled, and copyable unless
+              it's still "pending" (no address assigned yet). */}
+          <Show when={props.node.externalIP}>
+            <span class="port-addr port-ext" title="External address (LoadBalancer / externalIPs)">
+              <span class="addr-label">ext</span>
+              <code>{props.node.externalIP}</code>
+              <Show when={props.node.externalIP !== 'pending'}>
+                <CopyButton text={() => props.node.externalIP!} title="Copy external address" />
+              </Show>
             </span>
           </Show>
           <For each={props.node.ports}>{(p) => <span class="port-chip">{p}</span>}</For>

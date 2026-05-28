@@ -76,6 +76,7 @@ func nodeEqual(a, b Node) bool {
 		a.Restarts == b.Restarts &&
 		a.Host == b.Host &&
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
+		a.ExternalIP == b.ExternalIP && // a LoadBalancer's "pending" → assigned address must repaint
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
 		slices.Equal(a.Routes, b.Routes) && // an Ingress rule edit must repaint
 		slices.Equal(a.Rules, b.Rules) && // a Role rule edit must repaint

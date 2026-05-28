@@ -67,6 +67,34 @@ func serviceClusterIP(obj runtime.Object) string {
 	}
 }
 
+// serviceExternalAddress returns a Service's external reachability — the "how do I reach this from
+// outside the cluster" answer the cluster IP can't give: a LoadBalancer's assigned ingress IP (or
+// hostname, or "pending" while it provisions) and any admin-set spec.externalIPs. An IP is preferred
+// over a hostname as the more specific address. "" for a plain ClusterIP service (nothing external)
+// or non-services, so the drawer omits it.
+func serviceExternalAddress(obj runtime.Object) string {
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		return ""
+	}
+	var addrs []string
+	for _, ing := range svc.Status.LoadBalancer.Ingress {
+		if ing.IP != "" {
+			addrs = append(addrs, ing.IP)
+		} else if ing.Hostname != "" {
+			addrs = append(addrs, ing.Hostname)
+		}
+	}
+	addrs = append(addrs, svc.Spec.ExternalIPs...)
+	if len(addrs) == 0 {
+		if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+			return "pending" // requested an external IP; the provider hasn't assigned one yet
+		}
+		return ""
+	}
+	return strings.Join(addrs, ", ")
+}
+
 // ingressRoutes formats an Ingress's routing table as "host/path → service:port" rows (nil for
 // non-ingresses), so the network view's entry point says where external traffic actually goes without
 // opening the manifest. A hostless rule shows "*", an empty path "/", and a default backend leads as

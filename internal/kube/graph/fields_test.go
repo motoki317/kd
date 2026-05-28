@@ -160,6 +160,37 @@ func TestServiceClusterIP(t *testing.T) {
 	}
 }
 
+func TestServiceExternalAddress(t *testing.T) {
+	lb := func(ing ...corev1.LoadBalancerIngress) *corev1.Service {
+		return &corev1.Service{
+			Spec:   corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer},
+			Status: corev1.ServiceStatus{LoadBalancer: corev1.LoadBalancerStatus{Ingress: ing}},
+		}
+	}
+	tests := []struct {
+		name string
+		svc  *corev1.Service
+		want string
+	}{
+		{"lb hostname", lb(corev1.LoadBalancerIngress{Hostname: "lb.example.com"}), "lb.example.com"},
+		{"lb ip", lb(corev1.LoadBalancerIngress{IP: "203.0.113.7"}), "203.0.113.7"},
+		// An IP is the more specific address, so prefer it when both are present.
+		{"lb ip preferred over hostname", lb(corev1.LoadBalancerIngress{IP: "203.0.113.7", Hostname: "lb.example.com"}), "203.0.113.7"},
+		// A LoadBalancer with no ingress yet is still provisioning — say so, don't hide it.
+		{"lb pending", lb(), "pending"},
+		{"externalIPs", &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, ExternalIPs: []string{"198.51.100.4"}}}, "198.51.100.4"},
+		{"plain clusterIP", &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, ClusterIP: "10.96.0.1"}}, ""},
+	}
+	for _, tt := range tests {
+		if got := serviceExternalAddress(tt.svc); got != tt.want {
+			t.Errorf("serviceExternalAddress(%s) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+	if got := serviceExternalAddress(&corev1.Pod{}); got != "" {
+		t.Errorf("serviceExternalAddress(non-service) = %q, want empty", got)
+	}
+}
+
 func TestHumanizeBytes(t *testing.T) {
 	tests := map[int64]string{
 		512:                     "512B",

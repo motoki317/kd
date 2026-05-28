@@ -41,6 +41,7 @@ func Build(objs []runtime.Object) *Graph {
 			Host:              podHost(obj),
 			Capacity:          nodeCapacity(obj),
 			ClusterIP:         serviceClusterIP(obj),
+			ExternalIP:        serviceExternalAddress(obj),
 			Ports:             servicePorts(obj),
 			Routes:            ingressRoutes(obj),
 			Rules:             roleRules(obj),

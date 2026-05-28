@@ -28,6 +28,7 @@ export interface KNode {
   host?: string
   capacity?: string
   clusterIP?: string
+  externalIP?: string
   ports?: string[]
   routes?: string[]
   rules?: string[]

@@ -65,7 +65,7 @@ func TestNodeEqualDetectsFieldChanges(t *testing.T) {
 	base := Node{
 		ID: "id", Kind: "Pod", APIVersion: "v1", Namespace: "ns", Name: "n",
 		Health: HealthHealthy, Status: "Running", Restarts: 1, Host: "node-1",
-		Capacity: "16 vCPU", ClusterIP: "10.0.0.1", Ports: []string{"80/TCP"},
+		Capacity: "16 vCPU", ClusterIP: "10.0.0.1", ExternalIP: "pending", Ports: []string{"80/TCP"},
 		Routes: []string{"h/p → s:80"}, Rules: []string{"pods: get"}, RoleRef: "Role/r",
 		Subjects: []string{"User: a"}, Containers: []string{"app"}, Images: []string{"img:1"},
 		CreatedAt: "2026-01-01T00:00:00Z", Labels: map[string]string{"app": "x"}, OwnerUIDs: []string{"o"},
@@ -91,6 +91,7 @@ func TestNodeEqualDetectsFieldChanges(t *testing.T) {
 		{"Restarts", func(n *Node) { n.Restarts = 2 }},
 		{"Host", func(n *Node) { n.Host = "node-2" }},
 		{"ClusterIP", func(n *Node) { n.ClusterIP = "10.0.0.2" }},
+		{"ExternalIP", func(n *Node) { n.ExternalIP = "203.0.113.7" }},
 		{"Ports", func(n *Node) { n.Ports = []string{"443/TCP"} }},
 		{"Routes", func(n *Node) { n.Routes = []string{"h/p → s:443"} }},
 		{"Rules", func(n *Node) { n.Rules = []string{"pods: list"} }},

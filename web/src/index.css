@@ -653,6 +653,12 @@ body {
   border-radius: 4px;
   padding: 2px 6px;
 }
+.addr-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
 .port-chip {
   font-size: 11px;
   color: var(--text);
