@@ -648,13 +648,14 @@ body {
   cursor: pointer;
   /* Resting elevation: a tiny drop-shadow lifts every card slightly off the dotted canvas, so cards
      read as physical "tiles" rather than flat fills (cycle 127). Hover deepens it; transitions
-     here so the lift fades in/out instead of jumping. */
+     here so the lift fades in/out instead of jumping.
+     Cycle 159: also transition transform, so SSE-patched layout shifts glide instead of teleport. */
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
-  transition: opacity 0.12s, filter 0.15s;
+  transition: opacity 0.12s, filter 0.15s, transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
   /* Brief fade on first mount — eases the "connecting → graph" snap and also gentles in SSE-added
      nodes (a new pod showing up mid-rollout). Runs once per element, doesn't compete with the
      opacity transition above (which fires on class change, not creation). */
-  animation: node-enter 0.22s ease-out;
+  animation: node-enter 0.32s ease-out;
 }
 .edges path {
   animation: node-enter 0.28s ease-out;

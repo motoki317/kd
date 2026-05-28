@@ -418,7 +418,10 @@ export default function Topology(props: Props) {
                     faded: nodeFaded(n),
                     [`h-${n.health.toLowerCase()}`]: true,
                   }}
-                  transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}
+                  /* CSS transform (not the SVG attribute) so browsers can transition position
+                     changes — when SSE patches shift the Dagre layout, cards glide to their new
+                     spots instead of teleporting. See .node { transition: transform … } in CSS. */
+                  style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
                   onClick={() => props.onSelect(n.id)}
                 >
                   {/* Hover tooltip: a compact "everything on the card + a little more" view, so
