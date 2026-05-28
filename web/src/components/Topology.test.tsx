@@ -111,6 +111,25 @@ describe('Topology', () => {
     expect(onKindFilter).toHaveBeenCalledWith('Pod', false)
   })
 
+  it('shows "X of N matches" when the selected node is itself a match (cycle 285)', () => {
+    // selectedId=2 is the Degraded Pod 'web-abc'; search "web" matches both Deployment 'web' (id=1)
+    // and 'web-abc'. In severity-first order the Degraded pod (web-abc, id=2) comes first, so the
+    // selection is position 1 of 2.
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="web" {...base} selectedId="2" />
+    ))
+    const counter = container.querySelector('.topology-matches') as HTMLElement
+    expect(counter).toBeTruthy()
+    expect(counter.textContent).toBe('1 of 2')
+    cleanup()
+    // Same matches but selection is outside the match set → falls back to the bare count.
+    const m = render(() => (
+      <Topology nodes={nodes} edges={edges} search="web" {...base} selectedId="3" />
+    ))
+    const c2 = m.container.querySelector('.topology-matches') as HTMLElement
+    expect(c2.textContent).toBe('2 matches')
+  })
+
   it('Enter in the topology search selects the most-troubled match (cycle 259)', () => {
     const onSelect = vi.fn()
     // Render with a search query that hits two nodes; the Degraded one ('web-abc') should win

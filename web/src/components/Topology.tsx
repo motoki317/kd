@@ -244,6 +244,21 @@ export default function Topology(props: Props) {
     }
     return m
   })
+  // Ordered list of matches in the same severity-first order used for Enter cycling (cycle 284).
+  // Memoized so the "X of N" indicator and the Enter handler agree on positions.
+  const matchOrdered = createMemo(() => {
+    const m = matches()
+    if (!m || m.size === 0) return []
+    return orderedForNav(props.nodes.filter((n) => m.has(n.id)))
+  })
+  // 1-based position of the current selection within matchOrdered, or 0 if the selection is not a
+  // match. Drives the "3 of 7 matches" indicator that complements Enter-cycling (cycle 285).
+  const matchPos = createMemo(() => {
+    const ordered = matchOrdered()
+    if (ordered.length === 0) return 0
+    const idx = ordered.findIndex((n) => n.id === props.selectedId)
+    return idx < 0 ? 0 : idx + 1
+  })
 
   // Active kind filter (cycle 203): an empty/null set means "show all kinds"; otherwise only the
   // listed kinds stay lit. Re-derived so an empty set still reads as "no filter active".
@@ -602,9 +617,7 @@ export default function Topology(props: Props) {
                 // Cycle through matches: first Enter picks the most-troubled (orderedForNav).
                 // Subsequent Enters step to the next match in that order; Shift+Enter steps back.
                 // Wraps at both ends. With nothing matched it's a no-op.
-                const m = matches()
-                if (!m || m.size === 0) return
-                const ordered = orderedForNav(props.nodes.filter((n) => m.has(n.id)))
+                const ordered = matchOrdered()
                 if (ordered.length === 0) return
                 const cur = ordered.findIndex((n) => n.id === props.selectedId)
                 const dir = e.shiftKey ? -1 : 1
@@ -622,8 +635,29 @@ export default function Topology(props: Props) {
           </Show>
         </div>
         <Show when={matches()}>
-          <span class="topology-matches" classList={{ none: matches()!.size === 0 }}>
-            {matches()!.size === 0 ? 'no matches' : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
+          <span
+            class="topology-matches"
+            classList={{ none: matches()!.size === 0 }}
+            // When the current selection is itself a match, prefix the count with its 1-based
+            // position in the cycle order — so an operator pressing Enter knows "I'm at 3 of 7"
+            // and can predict when the cycle wraps. Falls back to the bare count if the selection
+            // is outside the match set (or no selection).
+            title={
+              matchPos() > 0
+                ? `Match ${matchPos()} of ${matches()!.size}. Press Enter for next, Shift+Enter for previous.`
+                : matches()!.size === 0
+                  ? 'No resources match the current search.'
+                  : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}. Press Enter to jump to one.`
+            }
+          >
+            <Show
+              when={matches()!.size === 0}
+              fallback={matchPos() > 0
+                ? `${matchPos()} of ${matches()!.size}`
+                : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
+            >
+              no matches
+            </Show>
           </span>
         </Show>
         {/* Clear-all: surfaces the same operation as Escape, but discoverable without knowing
