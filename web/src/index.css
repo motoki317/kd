@@ -572,6 +572,12 @@ body {
   color: var(--pod-accent);
   stroke: var(--pod-accent);
 }
+/* A faded kind-group sinks the whole group (bg + label + cards inside) — kind-filter active
+   and this kind isn't in it (cycle 234). */
+.kind-group.faded {
+  opacity: 0.2;
+  transition: opacity 0.12s;
+}
 
 /* Host group (Nodes view, cycle 205). Mirrors .kind-group but distinct enough that the two
    grouped views don't visually conflate — a slightly warmer fill, no surface-2 shadow. */

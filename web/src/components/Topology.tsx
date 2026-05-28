@@ -672,7 +672,16 @@ export default function Topology(props: Props) {
             <g class="kind-groups">
               <For each={groups()}>
                 {(g) => (
-                  <g class="kind-group" classList={{ 'kind-pod': g.kind === 'Pod' }}>
+                  <g
+                    class="kind-group"
+                    classList={{
+                      'kind-pod': g.kind === 'Pod',
+                      // Fade the whole kind group (label + bg + cards) when a kind filter is
+                      // active and this kind isn't in it — otherwise the bg rect + label stay
+                      // opaque while cards inside fade, which reads as a stale leftover.
+                      faded: !!activeKinds() && !activeKinds()!.has(g.kind),
+                    }}
+                  >
                     {/* Subtle background rect behind the whole kind group (label + cards) gives the
                         grouping a tactile container so kind boundaries read spatially, not just via
                         spacing. Drawn before the icon and label so it's the underlay. */}
