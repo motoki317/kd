@@ -29,13 +29,25 @@ type Summary struct {
 // graph-derived signals like a Service with no ready endpoints. Build already drops historical noise,
 // so an empty namespace reports Healthy with a zero count.
 func Summarize(objs []runtime.Object) Summary {
+	return summarize(objs, false)
+}
+
+// SummarizeCluster is the cluster pseudo-namespace counterpart of Summarize: rolls up only the
+// cluster-scoped resources in the snapshot, so the sidebar's [cluster] entry can flag Node /
+// PV / cluster-CR trouble at a glance. Namespaced ride-along objects are ignored — they
+// belong to a namespace's health, not the cluster's.
+func SummarizeCluster(objs []runtime.Object) Summary {
+	return summarize(objs, true)
+}
+
+func summarize(objs []runtime.Object, clusterScope bool) Summary {
 	g := Build(objs)
 	s := Summary{Health: HealthHealthy}
 	for _, n := range g.Nodes {
-		// Cluster-scoped resources (Nodes) ride along in every namespace's snapshot for placement
-		// edges; rolling their health into a per-namespace indicator would flag every namespace over
-		// one cluster-level event (a cordoned or NotReady Node). They surface in the Nodes view.
-		if n.Namespace == "" {
+		// Per-namespace rollup skips cluster-scoped ride-along (a cordoned Node would otherwise
+		// flag every namespace that's scheduled on it). The cluster rollup is the inverse — only
+		// cluster-scoped objects.
+		if clusterScope != (n.Namespace == "") {
 			continue
 		}
 		if n.Health != HealthHealthy {

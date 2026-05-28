@@ -1,5 +1,5 @@
 import { healthSeverity } from './health'
-import type { NamespaceInfo } from './api'
+import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 
 // compareNamespaces orders namespaces troubled-first (worst health, then most non-ready resources),
 // breaking ties alphabetically — the order operators want, with what needs attention up top. Shared
@@ -13,7 +13,10 @@ export function compareNamespaces(a: NamespaceInfo, b: NamespaceInfo): number {
 }
 
 // mostTroubled returns the namespace an operator most likely wants to land on (the top of the
-// troubled-first order), or undefined for an empty list.
+// troubled-first order), or undefined for an empty list. The cluster pseudo-namespace is
+// excluded — it's a separate jump target the operator selects deliberately, and landing
+// there by default would be jarring on a fresh load with a healthy cluster scope.
 export function mostTroubled(list: NamespaceInfo[]): NamespaceInfo | undefined {
-  return list.length ? [...list].sort(compareNamespaces)[0] : undefined
+  const eligible = list.filter((n) => n.name !== CLUSTER_SCOPE)
+  return eligible.length ? [...eligible].sort(compareNamespaces)[0] : undefined
 }

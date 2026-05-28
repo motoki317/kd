@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { kindGroups, layoutGraph, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -86,5 +86,65 @@ describe('layoutGraph', () => {
     const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
     expect(y('dep')).toBeLessThan(y('rs'))
     expect(y('rs')).toBeLessThan(y('p1'))
+  })
+})
+
+describe('layoutGraphByKind', () => {
+  // A snapshot with several kinds drives the kind-grouped layout: every Deployment in one
+  // box, every Pod in another, kind boxes shelf-packed into the viewport. This is the
+  // "All" view's contract (FR-006) — same input as layoutGraph, fundamentally different
+  // grouping.
+  const allKindsNodes: KNode[] = [
+    { id: 'dep1', kind: 'Deployment', name: 'web', health: 'Healthy' },
+    { id: 'dep2', kind: 'Deployment', name: 'api', health: 'Healthy' },
+    { id: 'svc1', kind: 'Service', name: 'web', health: 'Healthy' },
+    { id: 'svc2', kind: 'Service', name: 'api', health: 'Healthy' },
+    { id: 'pod1', kind: 'Pod', name: 'web-1', health: 'Healthy' },
+    { id: 'pod2', kind: 'Pod', name: 'web-2', health: 'Progressing' },
+    { id: 'pod3', kind: 'Pod', name: 'api-1', health: 'Healthy' },
+  ]
+
+  it('groups nodes into one box per kind and positions every node', () => {
+    const l = layoutGraphByKind(allKindsNodes, [])
+    expect(l.nodes).toHaveLength(allKindsNodes.length)
+    for (const n of l.nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+      expect(n.width).toBe(NODE_WIDTH)
+      expect(n.height).toBe(NODE_HEIGHT)
+    }
+    const groups = kindGroups(l)
+    expect(groups.map((g) => g.kind)).toEqual(['Deployment', 'Pod', 'Service'])
+    // Each group's bounding box contains every node of that kind.
+    for (const g of groups) {
+      const members = l.nodes.filter((n) => n.kind === g.kind)
+      for (const n of members) {
+        expect(n.x - n.width / 2).toBeGreaterThanOrEqual(g.x - 0.001)
+        expect(n.x + n.width / 2).toBeLessThanOrEqual(g.x + g.width + 0.001)
+        expect(n.y - n.height / 2).toBeGreaterThanOrEqual(g.y - 0.001)
+        expect(n.y + n.height / 2).toBeLessThanOrEqual(g.y + g.height + 0.001)
+      }
+    }
+  })
+
+  it('draws cross-kind edges as straight lines between resolved node positions', () => {
+    // A Deployment owns a Pod across two kind boxes — the edge survives kind grouping so
+    // the ownership backbone is still visible in the All view.
+    const e: KEdge[] = [{ from: 'dep1', to: 'pod1', type: 'ownerReference' }]
+    const l = layoutGraphByKind(allKindsNodes, e)
+    expect(l.edges).toHaveLength(1)
+    expect(l.edges[0].points).toHaveLength(2)
+    const from = l.nodes.find((n) => n.id === 'dep1')!
+    const to = l.nodes.find((n) => n.id === 'pod1')!
+    expect(l.edges[0].points[0].x).toBeCloseTo(from.x, 5)
+    expect(l.edges[0].points[0].y).toBeCloseTo(from.y, 5)
+    expect(l.edges[0].points[1].x).toBeCloseTo(to.x, 5)
+    expect(l.edges[0].points[1].y).toBeCloseTo(to.y, 5)
+  })
+
+  it('handles an empty graph', () => {
+    const l = layoutGraphByKind([], [])
+    expect(l.nodes).toEqual([])
+    expect(l.edges).toEqual([])
   })
 })

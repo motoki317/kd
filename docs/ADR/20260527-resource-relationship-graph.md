@@ -35,11 +35,18 @@ an external LoadBalancer) get stable derived IDs.
 - `usesServiceAccount` — Pod→ServiceAccount.
 - `binds` — RoleBinding/ClusterRoleBinding→Role/ClusterRole, and →subjects
   (User/Group/ServiceAccount), for the RBAC relationship view.
+- `refers` — CR→referenced object, inferred from a curated registry of vendor schemas
+  (Argo Workflow, cert-manager Certificate, ExternalSecret, ArgoCD Application) plus a
+  convention scanner for `{name, kind, apiGroup?, namespace?}` shapes in `spec`. Added by
+  [`20260528-dynamic-informers-and-cluster-scope.md`](./20260528-dynamic-informers-and-cluster-scope.md);
+  rendered with a dashed style so the ownership backbone stays the primary read.
 
 **Health/status** is computed per kind with a small rules set (e.g. Pod: Running/Ready vs
 CrashLoopBackOff/Pending; Deployment: available replicas vs desired), normalized to a shared
 enum (`Healthy | Progressing | Degraded | Suspended | Unknown`) so the UI colors nodes
-uniformly — the ArgoCD approach.
+uniformly — the ArgoCD approach. Custom resources without a typed rule walk
+`status.conditions[]` for `Ready` or `Available` per the heuristic in
+[`20260528-dynamic-informers-and-cluster-scope.md`](./20260528-dynamic-informers-and-cluster-scope.md).
 
 **Views**: the graph is filtered into named views the client can request:
 `ownership` (default, per namespace), `nodes` (Node/Pod), `network` (Ingress/Service/Pod),

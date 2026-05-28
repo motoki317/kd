@@ -10,14 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/motoki317/kd/internal/auth"
+	"github.com/motoki317/kd/internal/kube/discovery"
 	"github.com/motoki317/kd/internal/kube/registry"
+	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 )
 
@@ -69,7 +77,7 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	t.Cleanup(func() { logResolveInterval = saved })
 
 	rsOwner := []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-rs", UID: types.UID("rs-uid"), Controller: boolp(true)}}
-	client := fake.NewSimpleClientset(
+	seed := []runtime.Object{
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web", UID: "dep-uid"}},
 		&appsv1.ReplicaSet{
@@ -79,9 +87,17 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 			Status: appsv1.ReplicaSetStatus{Replicas: 2},
 		},
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-a", UID: "pa", OwnerReferences: rsOwner}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
-	)
-
-	reg := registry.NewInCluster(client, 0)
+	}
+	client := fake.NewSimpleClientset(seed...)
+	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, seed...)
+	resources := []discovery.Resource{
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, Kind: "Namespace", Namespaced: false},
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
+		{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, Kind: "Deployment", Namespaced: true},
+		{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, Kind: "ReplicaSet", Namespaced: true},
+	}
+	opts := store.Options{Discoverer: discovery.Static(resources)}
+	reg := registry.NewInCluster(registry.Clients{Typed: client, Dynamic: dyn}, 0, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
@@ -122,11 +138,25 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 			// Only after the stream is live and following web-a, roll out a second pod.
 			if !createdB {
 				createdB = true
-				_, err := client.CoreV1().Pods("shop").Create(ctx,
-					&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-b", UID: "pb", OwnerReferences: rsOwner}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
-					metav1.CreateOptions{})
-				if err != nil {
-					t.Fatalf("create web-b: %v", err)
+				// Create web-b on BOTH fakes: the dynamic client drives the store's
+				// informer (so the supervisor's re-resolve picks it up), the typed
+				// client drives Pod.GetLogs() (so the streamer can actually open a log
+				// stream once we attach).
+				webB := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-b", UID: "pb", OwnerReferences: rsOwner}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+				if _, err := client.CoreV1().Pods("shop").Create(ctx, webB, metav1.CreateOptions{}); err != nil {
+					t.Fatalf("create web-b (typed): %v", err)
+				}
+				webBU := &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "v1", "kind": "Pod",
+					"metadata": map[string]any{
+						"namespace": "shop", "name": "web-b", "uid": "pb",
+						"ownerReferences": []any{map[string]any{"kind": "ReplicaSet", "name": "web-rs", "uid": "rs-uid", "controller": true, "apiVersion": "apps/v1"}},
+					},
+					"status": map[string]any{"phase": "Running"},
+				}}
+				podGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+				if _, err := dyn.Resource(podGVR).Namespace("shop").Create(ctx, webBU, metav1.CreateOptions{}); err != nil {
+					t.Fatalf("create web-b (dynamic): %v", err)
 				}
 			}
 		case "web-b":

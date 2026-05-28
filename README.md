@@ -15,9 +15,16 @@ state at a glance and app developers can jump straight to pod status and logs.
 ## Features
 
 **See the whole namespace at a glance**
-- 2D topology across five lenses — ownership, network, node-placement, volumes (mounted
-  ConfigMaps/Secrets/PVCs), and RBAC — laid out per connected component and packed to the viewport
-  (no horizontal smear in dense namespaces).
+- 2D topology across six lenses — ownership, network, node-placement, volumes (mounted
+  ConfigMaps/Secrets/PVCs), RBAC, and an "all" view that groups every resource by kind — laid out
+  per connected component and packed to the viewport (no horizontal smear in dense namespaces).
+- Every kind the cluster exposes is watched via a dynamic informer factory, including custom
+  resources defined by CRDs. Workflows, Certificates, ExternalSecrets, ArgoCD Applications,
+  Crossplane composites — all render in the topology with their ownership chains down to Pods.
+- A pinned `[cluster]` entry at the top of the sidebar shows cluster-scoped state (Nodes, PVs,
+  ClusterRoles, CRDs, cluster-scoped CRs) at one click. Cluster-scoped objects also ride along
+  into namespace views when referenced (a Pod's Node, a PVC's PV) — so a namespace doesn't
+  silently hide the cluster-scoped resources its workloads depend on.
 - Every card carries a large kind-specific silhouette (Pod=circle, Deployment=stacked layers,
   Service=hub-spokes, Secret=key, PVC=cylinder, …) with a small kubectl-style kind label below it
   (DEPL, RS, STS, DS, SVC, …) so types read by shape at a glance; a relative-age tag ("7d", "30s")
@@ -56,7 +63,8 @@ state at a glance and app developers can jump straight to pod status and logs.
 
 **Keyboard & sharing**
 - `j`/`k` (or `↓`/`↑`) step through resources (troubled first, scoped to the active filter), `/`
-  focuses the namespace filter, `1`–`5` switch views, `Esc` backs out, `?` shows shortcuts.
+  focuses the namespace filter, `1`–`6` switch views (the 6th is "all"), `Esc` backs out, `?`
+  shows shortcuts.
 - The topbar shows a "kd › <namespace>" breadcrumb and a live/connecting/offline connection pill.
 - Namespace, view, and selected resource live in the URL — links and reloads restore the same place;
   the selection follows you across views.
@@ -108,9 +116,9 @@ See `docs/ADR/README.md` for the full set. Highlights:
 
 | Concern | Decision |
 | --- | --- |
-| Topology | Single Go binary, informer cache, server-built relationship graph |
+| Topology | Single Go binary, dynamic-informer cache (every discovered GVR incl. CRDs), server-built relationship graph |
 | Auth | Trust upstream `X-Forwarded-User`; no in-app login |
-| RBAC | Declarative `policy.csv` (Casbin), app-level authz |
-| K8s access | One read-only ServiceAccount, app-level authorization |
+| RBAC | Declarative `policy.csv` (Casbin), app-level authz with legacy class + GVR group dual-class |
+| K8s access | One read-only ServiceAccount, wildcard read (`*` `*` get/list/watch), app-level authorization |
 | Transport | Server-Sent Events for watch feed + logs |
 | Client | Solid.js + Vite, Dagre layout, SVG |

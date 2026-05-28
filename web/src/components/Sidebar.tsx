@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show } from 'solid-js'
-import type { NamespaceInfo } from '../api'
+import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 import { healthColor } from '../health'
 import { compareNamespaces } from '../ns'
 
@@ -18,15 +18,20 @@ interface Props {
 // spots trouble across the cluster without opening each one.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
+  // The cluster pseudo-namespace is split out from the rest: it's pinned above the namespace
+  // list (and the filter doesn't apply to it) so it stays a stable jump target regardless of
+  // what the operator is searching for. Server-side it's identified by CLUSTER_SCOPE.
+  const clusterEntry = createMemo(() => props.namespaces.find((n) => n.name === CLUSTER_SCOPE) ?? null)
   // Troubled namespaces sort to the top (operators look there first); ties break alphabetically.
+  // Exclude the cluster entry — it has its own pinned row, not part of the alpha-sorted list.
   const shown = createMemo(() => {
     const f = filter().toLowerCase()
     return props.namespaces
-      .filter((n) => n.name.toLowerCase().includes(f))
+      .filter((n) => n.name !== CLUSTER_SCOPE && n.name.toLowerCase().includes(f))
       .slice()
       .sort(compareNamespaces)
   })
-  const troubled = createMemo(() => props.namespaces.filter((n) => n.health !== 'Healthy').length)
+  const troubled = createMemo(() => props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE && n.health !== 'Healthy').length)
   // Index of the first healthy entry in the sorted list, so a divider can mark the transition
   // between "needs attention" and "fine"; -1 means no boundary (all troubled or all healthy).
   const dividerAt = createMemo(() => {
@@ -65,6 +70,35 @@ export default function Sidebar(props: Props) {
       <Show when={!props.loading} fallback={<div class="sidebar-loading">loading…</div>}>
         <Show when={!props.failed} fallback={<div class="sidebar-loading">Couldn't load namespaces.</div>}>
           <ul class="ns-list">
+            {/* Pinned cluster pseudo-namespace (FR-004): always above the namespace list and
+                outside the filter, so the operator can always jump to cluster-scoped state
+                — Nodes, PVs, ClusterRoles, cluster-scoped CRs — in one click. Visually
+                distinct (italic label, brackets) so it doesn't look like a regular namespace. */}
+            <Show when={clusterEntry()}>
+              {(c) => (
+                <li>
+                  <button
+                    class="ns-cluster"
+                    classList={{ active: c().name === props.selected }}
+                    onClick={() => props.onSelect(c().name)}
+                  >
+                    <Show when={c().health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
+                      <span class="ns-dot" style={{ background: healthColor(c().health) }} title={c().health} />
+                    </Show>
+                    <span class="ns-name ns-name-cluster">[cluster]</span>
+                    <Show when={(c().nonReady ?? 0) > 0}>
+                      <span
+                        class="ns-count"
+                        style={{ color: healthColor(c().health) }}
+                        title={`${c().nonReady} not healthy`}
+                      >
+                        {c().nonReady}
+                      </span>
+                    </Show>
+                  </button>
+                </li>
+              )}
+            </Show>
             <For each={shown()}>
               {(ns, i) => (
                 <>

@@ -17,9 +17,18 @@ import (
 
 // Build assembles the relationship graph from a snapshot of Kubernetes objects. It is pure:
 // the same input always yields the same graph, with nodes and edges in a deterministic order.
+//
+// Input objects may be typed (corev1.Pod, …) or *unstructured.Unstructured (the shape the
+// dynamic-informer store yields). Known kinds are converted to their typed struct at the
+// entry boundary so per-kind logic (health rules, edge inferrers) keeps working as-is;
+// unknown kinds (custom resources) stay unstructured and flow through the CR-specific paths.
 func Build(objs []runtime.Object) *Graph {
 	g := &Graph{}
-	objs = slices.DeleteFunc(slices.Clone(objs), isHistorical)
+	objs = slices.Clone(objs)
+	for i, o := range objs {
+		objs[i] = toTyped(o)
+	}
+	objs = slices.DeleteFunc(objs, isHistorical)
 	for _, obj := range objs {
 		kind, apiVersion, m, ok := describe(obj)
 		if !ok {

@@ -30,6 +30,13 @@ type Config struct {
 	// Kubernetes.
 	Kubeconfig string        // empty = in-cluster, then default kubeconfig
 	Resync     time.Duration // informer resync period
+	// SkipKinds removes resource names from the eager-load set, on top of the built-in
+	// high-cardinality defaults (events, leases, endpointslices, controllerrevisions).
+	SkipKinds []string
+	// EagerKinds adds resource names back into the eager-load set, overriding both the
+	// built-in defaults and SkipKinds. Lets an operator opt back into watching e.g.
+	// "events" if they want the full picture.
+	EagerKinds []string
 }
 
 // Load parses configuration from the given args (typically os.Args[1:]).
@@ -38,6 +45,8 @@ func Load(args []string) (Config, error) {
 	var (
 		c              Config
 		trustedProxies string
+		skipKinds      string
+		eagerKinds     string
 	)
 	fs.StringVar(&c.Addr, "addr", envOr("KD_ADDR", ":8080"), "HTTP listen address")
 	fs.StringVar(&c.UserHeader, "user-header", envOr("KD_USER_HEADER", "X-Forwarded-User"), "request header carrying the authenticated username")
@@ -50,6 +59,8 @@ func Load(args []string) (Config, error) {
 	fs.DurationVar(&c.PolicyReloadInterval, "policy-reload-interval", envDurationOr("KD_POLICY_RELOAD_INTERVAL", 10*time.Second), "how often to poll the policy file for changes")
 	fs.StringVar(&c.Kubeconfig, "kubeconfig", envOr("KUBECONFIG", ""), "path to kubeconfig (empty = in-cluster, then default)")
 	fs.DurationVar(&c.Resync, "resync", envDurationOr("KD_RESYNC", 10*time.Minute), "informer resync period")
+	fs.StringVar(&skipKinds, "skip-kinds", envOr("KD_SKIP_KINDS", ""), "comma-separated extra resource names to skip from eager informer startup, on top of the built-in defaults (events, leases, endpointslices, controllerrevisions)")
+	fs.StringVar(&eagerKinds, "eager-kinds", envOr("KD_EAGER_KINDS", ""), "comma-separated resource names to force-include in eager startup, overriding both --skip-kinds and the built-in defaults")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -60,7 +71,20 @@ func Load(args []string) (Config, error) {
 		return Config{}, err
 	}
 	c.TrustedProxies = prefixes
+	c.SkipKinds = splitCSV(skipKinds)
+	c.EagerKinds = splitCSV(eagerKinds)
 	return c, nil
+}
+
+// splitCSV trims and drops empty entries from a comma-separated list.
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func parsePrefixes(csv string) ([]netip.Prefix, error) {

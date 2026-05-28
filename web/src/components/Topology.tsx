@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup } from 'solid-js'
-import { layoutGraph, type Point } from '../layout'
+import { kindGroups, layoutGraph, layoutGraphByKind, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { cardName, cardStatus, kindShortLabel } from '../names'
@@ -15,6 +15,10 @@ interface Props {
   healthFilter?: import('../types').Health | null
   connected: boolean
   viewLabel: string
+  // viewId is the lower-case view key — Topology switches layout strategy on 'all' to use
+  // the kind-grouped variant (FR-006). All other views fall back to the default
+  // connectivity-based layout.
+  viewId?: import('../types').View
   search: string
   onSearch: (q: string) => void
   onSelect: (id: string) => void
@@ -24,7 +28,8 @@ interface Props {
 }
 
 // Edges other than ownership are drawn dashed so the parent-child backbone stays visually
-// dominant (the primary relationship operators scan for first).
+// dominant (the primary relationship operators scan for first). EdgeRefers (CR-defined
+// references) joins the dashed family — it's a relationship but not the ownership backbone.
 const DASHED: Partial<Record<EdgeType, boolean>> = {
   selects: true,
   routes: true,
@@ -32,6 +37,7 @@ const DASHED: Partial<Record<EdgeType, boolean>> = {
   usesServiceAccount: true,
   binds: true,
   scheduledOn: true,
+  refers: true,
 }
 
 function edgePath(points: Point[]): string {
@@ -64,6 +70,7 @@ const EDGE_LABELS: Record<EdgeType, string> = {
   mounts: 'mounts',
   usesServiceAccount: 'runs as',
   binds: 'binds',
+  refers: 'refers to',
 }
 
 function edgeTitle(e: KEdge, nodes: KNode[]): string {
@@ -75,7 +82,14 @@ function edgeTitle(e: KEdge, nodes: KNode[]): string {
 }
 
 export default function Topology(props: Props) {
-  const layout = createMemo(() => layoutGraph(props.nodes, props.edges))
+  const layout = createMemo(() =>
+    props.viewId === 'all'
+      ? layoutGraphByKind(props.nodes, props.edges)
+      : layoutGraph(props.nodes, props.edges),
+  )
+  // In the All view we draw a faint kind-label band above each kind box so the operator can
+  // scan "this section is all Pods, that's all Services" without inferring it from card kinds.
+  const groups = createMemo(() => (props.viewId === 'all' ? kindGroups(layout()) : []))
 
   // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
@@ -437,6 +451,22 @@ export default function Topology(props: Props) {
           </marker>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
+          {/* All view: a faint kind label sits above each kind group, so the eye can sweep
+              "Pods here, Services there" without inferring it from card text. Underlay only —
+              no interactivity; cards above remain selectable normally. */}
+          <Show when={groups().length > 0}>
+            <g class="kind-groups">
+              <For each={groups()}>
+                {(g) => (
+                  <g class="kind-group">
+                    <text class="kind-group-label" x={g.x} y={g.y + 14}>
+                      {g.kind} <tspan class="kind-group-count">{props.nodes.filter((n) => n.kind === g.kind).length}</tspan>
+                    </text>
+                  </g>
+                )}
+              </For>
+            </g>
+          </Show>
           <g class="edges">
             <For each={layout().edges}>
               {(e) => (

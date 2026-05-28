@@ -225,6 +225,9 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 // kind is Pod, otherwise every pod reachable through ownerReferences. It resolves through the graph
 // so historical/completed pods (which Build drops) are excluded from the aggregate.
 func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
+	// Snapshots arrive as *unstructured.Unstructured from the dynamic-informer store. Convert
+	// known kinds (Pod included) so the type assertion below works regardless of input shape.
+	objs = graph.AsTypedSlice(objs)
 	g := graph.Build(objs)
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {

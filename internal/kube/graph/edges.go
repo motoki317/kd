@@ -4,6 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -98,6 +99,12 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 		case *rbacv1.ClusterRoleBinding:
 			b.link(id, EdgeBinds, roleRefKind(o.RoleRef), "", o.RoleRef.Name)
 			b.subjectEdges(id, "", o.Subjects)
+		case *unstructured.Unstructured:
+			// Custom resource. Try the curated registry first (deterministic, hand-coded
+			// for vendor schemas), then fall back to the convention scanner for the
+			// generic {name, kind, …} shape.
+			b.curatedRefEdges(id, o)
+			b.conventionRefEdges(id, o)
 		}
 	}
 	return b.edges, b.endpoints

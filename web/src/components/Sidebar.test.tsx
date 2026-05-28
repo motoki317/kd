@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Sidebar from './Sidebar'
-import type { NamespaceInfo } from '../api'
+import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 
 afterEach(cleanup)
 
@@ -45,6 +45,32 @@ describe('Sidebar', () => {
   it('distinguishes no namespaces visible from no filter matches', () => {
     const { getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
     expect(getByText('No namespaces visible.')).toBeTruthy()
+  })
+
+  it('pins the [cluster] pseudo-namespace above the list and outside the filter (FR-004)', async () => {
+    const withCluster: NamespaceInfo[] = [
+      { name: CLUSTER_SCOPE, health: 'Degraded', nonReady: 1 },
+      { name: 'aaa', health: 'Healthy' },
+      { name: 'bbb', health: 'Healthy' },
+    ]
+    const onSelect = vi.fn()
+    const { container, getByText, getByPlaceholderText } = render(() => (
+      <Sidebar namespaces={withCluster} selected={null} onSelect={onSelect} loading={false} failed={false} />
+    ))
+    // Pinned first regardless of name sort, identified by its [cluster] label.
+    expect(getByText('[cluster]')).toBeTruthy()
+    // The cluster entry sits above the namespaces list visually — it's the first ns-name.
+    const names = [...container.querySelectorAll('.ns-name')].map((e) => e.textContent)
+    expect(names[0]).toBe('[cluster]')
+    // The cluster entry is excluded from the troubled-count badge so the badge keeps
+    // describing namespace trouble specifically.
+    expect(container.querySelector('.ns-trouble')).toBeNull()
+    // Filter doesn't drop the pinned entry — operator can always jump to cluster scope.
+    fireEvent.input(getByPlaceholderText(/Filter/), { target: { value: 'aaa' } })
+    expect(getByText('[cluster]')).toBeTruthy()
+    // Click forwards CLUSTER_SCOPE through onSelect — the server uses this exact value in URLs.
+    fireEvent.click(getByText('[cluster]'))
+    expect(onSelect).toHaveBeenCalledWith(CLUSTER_SCOPE)
   })
 
   it('inserts a divider between troubled and healthy namespaces (none when all-troubled / all-healthy)', () => {

@@ -54,6 +54,94 @@ interface Component {
   height: number
 }
 
+// KIND_HEADER_HEIGHT reserves vertical space at the top of each kind box for the kind label
+// rendered by the Topology, so the body grid doesn't overlap the heading text.
+export const KIND_HEADER_HEIGHT = 26
+
+// layoutGraphByKind is the "All" view variant: instead of connectivity-based components, nodes
+// are grouped by Kind (every Pod in one box, every Service in another, …) and laid out in a
+// per-kind grid, then shelf-packed into the viewport. Cross-kind edges (ownership backbone,
+// CR references) draw as straight lines across the kind boxes so the topology backbone stays
+// visible even in the broadest view. This is the v1 antidote to the previous "All" hairball.
+export function layoutGraphByKind(nodes: KNode[], edges: KEdge[]): Layout {
+  if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
+
+  // Group nodes by kind, names sorted alphabetically inside each group for stable layout
+  // (so reloads don't shuffle, and snapshot equality holds across patches that don't change
+  // the kind set).
+  const byKind = new Map<string, KNode[]>()
+  for (const n of nodes) {
+    if (!byKind.has(n.kind)) byKind.set(n.kind, [])
+    byKind.get(n.kind)!.push(n)
+  }
+  for (const list of byKind.values()) list.sort((a, b) => a.name.localeCompare(b.name))
+
+  const components: Component[] = []
+  for (const [, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const grid = gridDims(list.length)
+    const positioned: PositionedNode[] = []
+    list.forEach((leaf, i) => {
+      const row = Math.floor(i / grid.cols)
+      const col = i % grid.cols
+      // Left-align rows (rather than centering) so the kind box's left edge is the natural
+      // column gutter — the kind header reads anchored to that edge in Topology.
+      const x = col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
+      const y = KIND_HEADER_HEIGHT + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
+      positioned.push({ ...leaf, x, y, width: NODE_WIDTH, height: NODE_HEIGHT })
+    })
+    components.push({
+      nodes: positioned,
+      edges: [], // cross-kind edges resolved after packing
+      width: grid.w,
+      height: KIND_HEADER_HEIGHT + grid.h,
+    })
+  }
+
+  const packed = packComponents(components)
+
+  // Resolve cross-kind edges against the packed global positions, so ownership backbone
+  // (Deployment→ReplicaSet→Pod) and CR refs draw as straight lines across kind boxes.
+  const present = new Map(packed.nodes.map((n) => [n.id, n]))
+  const positionedEdges: PositionedEdge[] = []
+  for (const e of edges) {
+    const from = present.get(e.from)
+    const to = present.get(e.to)
+    if (!from || !to) continue
+    positionedEdges.push({ ...e, points: [{ x: from.x, y: from.y }, { x: to.x, y: to.y }] })
+  }
+  return { ...packed, edges: positionedEdges }
+}
+
+// kindGroups returns the kind boxes' bounding rectangles in the layout's coordinate space,
+// so the renderer can draw kind labels + group outlines without recomputing the grouping.
+export function kindGroups(layout: Layout): { kind: string; x: number; y: number; width: number; height: number }[] {
+  const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>()
+  for (const n of layout.nodes) {
+    const left = n.x - n.width / 2
+    const right = n.x + n.width / 2
+    const top = n.y - n.height / 2
+    const bottom = n.y + n.height / 2
+    const cur = groups.get(n.kind)
+    if (!cur) {
+      groups.set(n.kind, { minX: left, minY: top, maxX: right, maxY: bottom })
+    } else {
+      cur.minX = Math.min(cur.minX, left)
+      cur.minY = Math.min(cur.minY, top)
+      cur.maxX = Math.max(cur.maxX, right)
+      cur.maxY = Math.max(cur.maxY, bottom)
+    }
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([kind, r]) => ({
+      kind,
+      x: r.minX,
+      y: r.minY - KIND_HEADER_HEIGHT,
+      width: r.maxX - r.minX,
+      height: r.maxY - r.minY + KIND_HEADER_HEIGHT,
+    }))
+}
+
 // layoutGraph arranges the relationship graph top-to-bottom within each connected component, then
 // packs the components into a viewport-shaped block. Edges with a missing endpoint are dropped
 // defensively (the server should not emit them).

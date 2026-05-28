@@ -144,6 +144,57 @@ p, charlie, secret-ns, *, *, deny
 	}
 }
 
+// TestEnforceAny locks the dual-class contract: a request authorized against multiple
+// resource strings (legacy class + GVR group) allows when ANY class is allowed and no
+// class is denied. Used by api.authorizeAny to dispatch CR + cluster-scoped kind URLs.
+func TestEnforceAny(t *testing.T) {
+	tests := []struct {
+		name      string
+		policy    string
+		user      string
+		resources []string
+		want      bool
+	}{
+		{
+			name:      "allow via legacy class while group has no rule",
+			policy:    "p, alice, *, workloads, *, allow",
+			user:      "alice",
+			resources: []string{"workloads", "argoproj.io"},
+			want:      true,
+		},
+		{
+			name:      "allow via group class while legacy has no rule",
+			policy:    "p, alice, *, argoproj.io, *, allow",
+			user:      "alice",
+			resources: []string{"workloads", "argoproj.io"},
+			want:      true,
+		},
+		{
+			name:      "deny on EITHER class wins (global deny-override across classes)",
+			policy:    "p, alice, *, workloads, *, allow\np, alice, *, argoproj.io, *, deny",
+			user:      "alice",
+			resources: []string{"workloads", "argoproj.io"},
+			want:      false,
+		},
+		{
+			name:      "no matching rule on either class → forbid",
+			policy:    "p, alice, *, pods, *, allow",
+			user:      "alice",
+			resources: []string{"workloads", "argoproj.io"},
+			want:      false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := mustEnforcer(t, tc.policy, "")
+			got := e.EnforceAny(tc.user, nil, "shop", tc.resources, "get")
+			if got != tc.want {
+				t.Errorf("EnforceAny = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVisibleNamespaces(t *testing.T) {
 	all := []string{"default", "prod", "secret-ns", "team-a-web"}
 

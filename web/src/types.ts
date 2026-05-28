@@ -10,6 +10,10 @@ export type EdgeType =
   | 'mounts'
   | 'usesServiceAccount'
   | 'binds'
+  // 'refers' is the CR-defined relationship (Workflow → WorkflowTemplate, Certificate →
+  // Issuer/Secret, ExternalSecret → SecretStore, generic *Ref fields from the convention
+  // scanner). Rendered subtler than ownership so the topology backbone stays the primary read.
+  | 'refers'
 
 export type View = 'ownership' | 'nodes' | 'network' | 'rbac' | 'volumes' | 'all'
 

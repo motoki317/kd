@@ -14,13 +14,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/motoki317/kd/internal/api"
 	"github.com/motoki317/kd/internal/auth"
+	"github.com/motoki317/kd/internal/kube/discovery"
 	"github.com/motoki317/kd/internal/kube/graph"
 	"github.com/motoki317/kd/internal/kube/registry"
+	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 )
 
@@ -32,15 +37,47 @@ func meta(ns, name, uid string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Namespace: ns, Name: name, UID: types.UID(uid)}
 }
 
+// fixtureResources is the closed GVR set the api tests inject through a static discoverer,
+// covering every kind referenced by fixtureObjs and the events/logs endpoints.
+var fixtureResources = []discovery.Resource{
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, Kind: "Namespace", Namespaced: false},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}, Kind: "Node", Namespaced: false},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, Kind: "Service", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, Kind: "Secret", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}, Kind: "Event", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, Kind: "Deployment", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, Kind: "ReplicaSet", Namespaced: true},
+}
+
+// newServer builds an in-cluster registry over a fake typed clientset (for log streaming)
+// and a fake dynamic clientset (for cached reads), then prewarms it and wires the API. The
+// static discoverer is required because the fake typed clientset's discovery returns nil
+// for ServerPreferredResources — we have to inject the GVR set explicitly.
 func newServer(t *testing.T, policy string, objs ...runtime.Object) *httptest.Server {
+	return newServerWithDefault(t, policy, "role:readonly", objs...)
+}
+
+// newServerWithDefault is the explicit-default variant of newServer for the few tests that
+// need to assert behavior under a deny-by-default policy (e.g. cluster-scope visibility).
+func newServerWithDefault(t *testing.T, policy, defaultRole string, objs ...runtime.Object) *httptest.Server {
 	t.Helper()
-	reg := registry.NewInCluster(fake.NewSimpleClientset(objs...), 0)
+	typed := fake.NewSimpleClientset(objs...)
+	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
+	// EagerKinds opts events back in (it's in DefaultSkipKinds) so the events-tab tests
+	// see them in the cache. Discoverer overrides the fake clientset's empty discovery.
+	opts := store.Options{
+		EagerKinds: []string{"events"},
+		Discoverer: discovery.Static(fixtureResources),
+	}
+	reg := registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, 0, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
 		t.Fatalf("prewarm registry: %v", err)
 	}
-	p, err := rbac.Parse(policy, "role:readonly")
+	p, err := rbac.Parse(policy, defaultRole)
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}
@@ -360,6 +397,85 @@ func TestContextsHandlerInClusterMode(t *testing.T) {
 
 // TestUnknownContext404 ensures path-level ctx mismatches surface as 404 rather than 500,
 // so a stale ?ctx= bookmark doesn't crash the client.
+// TestNamespacesIncludesClusterPseudoEntry covers FR-004: the [cluster] pseudo-namespace
+// is listed alongside real namespaces (pinned first by handleNamespaces) so the client can
+// surface it in the sidebar without the operator having to know the sentinel name.
+func TestNamespacesIncludesClusterPseudoEntry(t *testing.T) {
+	srv := newServer(t, "", fixtureObjs...)
+	resp, body := get(t, srv, ctxPath+"/namespaces", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var out struct {
+		Namespaces []struct{ Name string } `json:"namespaces"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	if len(out.Namespaces) == 0 || out.Namespaces[0].Name != api.ClusterScopeNamespace {
+		t.Errorf("namespaces[0] = %+v, want pinned %q first", out.Namespaces, api.ClusterScopeNamespace)
+	}
+}
+
+// TestNamespacesHidesClusterPseudoEntryWhenDenied covers the RBAC gate on the cluster
+// pseudo-namespace: a user with only namespaced grants (no cluster-scoped read like nodes)
+// gets the namespace list without a [cluster] entry, so the sidebar doesn't surface a row
+// that 403s on every drill-in. Default policy is empty; the rule grants alice every action
+// in `shop` only.
+func TestNamespacesHidesClusterPseudoEntryWhenDenied(t *testing.T) {
+	srv := newServerWithDefault(t, "p, alice, shop, *, *, allow", "", fixtureObjs...)
+	resp, body := get(t, srv, ctxPath+"/namespaces", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var out struct {
+		Namespaces []struct{ Name string } `json:"namespaces"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	for _, ns := range out.Namespaces {
+		if ns.Name == api.ClusterScopeNamespace {
+			t.Errorf("namespaces should NOT include %q for a user without cluster-scope read", api.ClusterScopeNamespace)
+		}
+	}
+}
+
+// TestClusterScopeGraph covers the routing contract: GET /namespaces/__cluster__/graph
+// serves the cluster snapshot (cluster-scoped objects, no namespaced ones) via the same
+// handler path as a real namespace.
+func TestClusterScopeGraph(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", UID: "n1"}},
+		&corev1.Pod{ObjectMeta: meta("shop", "web-1", "p1"), Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+	}
+	srv := newServer(t, "", objs...)
+	resp, body := get(t, srv, ctxPath+"/namespaces/"+api.ClusterScopeNamespace+"/graph?view=all", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var g graph.Graph
+	if err := json.Unmarshal(body, &g); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	var hasNode, hasPod bool
+	for _, n := range g.Nodes {
+		switch n.Kind {
+		case "Node":
+			hasNode = true
+		case "Pod":
+			hasPod = true
+		}
+	}
+	if !hasNode {
+		t.Error("cluster snapshot should include the Node")
+	}
+	if hasPod {
+		t.Error("cluster snapshot should NOT include namespaced Pods")
+	}
+}
+
 func TestUnknownContext404(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	resp, _ := get(t, srv, "/api/v1/contexts/missing/namespaces", "alice")

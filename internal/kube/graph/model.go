@@ -23,6 +23,10 @@ const (
 	EdgeUsesServiceAccount EdgeType = "usesServiceAccount"
 	// EdgeBinds links a RoleBinding/ClusterRoleBinding to its Role and subjects.
 	EdgeBinds EdgeType = "binds"
+	// EdgeRefers links a CR to another resource it references through a non-owner field
+	// (a Workflow's WorkflowTemplate, a Certificate's Issuer, an ExternalSecret's
+	// SecretStore, …). Inferred by the convention scanner or by a curated CRD ref rule.
+	EdgeRefers EdgeType = "refers"
 )
 
 // Health is the normalized status shared across kinds, so the UI colors nodes uniformly.

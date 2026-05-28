@@ -30,14 +30,16 @@ type eventsResponse struct {
 // resource is enough to see what happened to it.
 func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	ns, kind, name := r.PathValue("ns"), r.PathValue("kind"), r.PathValue("name")
-	if _, ok := a.authorize(w, r, ns, resourceClass(kind), "get"); !ok {
-		return
-	}
 	store, ok := a.resolveStore(w, r)
 	if !ok {
 		return
 	}
-	snapshot := store.SnapshotNamespace(ns)
+	if _, ok := a.authorizeKind(w, r, store, ns, kind, "get"); !ok {
+		return
+	}
+	// Snapshots arrive as *unstructured.Unstructured from the dynamic-informer store.
+	// Convert known kinds (Event included) once so downstream typed assertions work.
+	snapshot := graph.AsTypedSlice(store.SnapshotNamespace(ns))
 	g := graph.Build(snapshot)
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {

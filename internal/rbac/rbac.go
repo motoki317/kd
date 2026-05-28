@@ -131,6 +131,21 @@ func (e *Enforcer) Replace(p *Policy) {
 
 // Enforce reports whether the caller {user, groups} may perform action on resource in namespace.
 func (e *Enforcer) Enforce(user string, groups []string, namespace, resource, action string) bool {
+	return e.EnforceAny(user, groups, namespace, []string{resource}, action)
+}
+
+// EnforceAny reports whether the caller may perform action in namespace against ANY of the
+// given resource classes. The semantics match Enforce when len(resources) == 1, and extend
+// it to multi-class dispatch:
+//   - Allow if some rule matching some-of-resources allows AND no rule matching
+//     any-of-resources denies.
+//   - Deny if any rule matching any-of-resources denies, regardless of allows (the
+//     existing global deny-override extended across classes).
+//
+// kd uses this so a kind can be authorized by EITHER its legacy class (pods/nodes/workloads/…)
+// OR its GVR group (argoproj.io/cert-manager.io/…) — operators can write rules in whichever
+// dimension is more natural without breaking back-compat.
+func (e *Enforcer) EnforceAny(user string, groups []string, namespace string, resources []string, action string) bool {
 	e.mu.RLock()
 	p := e.policy
 	e.mu.RUnlock()
@@ -141,11 +156,21 @@ func (e *Enforcer) Enforce(user string, groups []string, namespace, resource, ac
 		if !principals[r.subject] {
 			continue
 		}
-		if !globMatch(r.namespace, namespace) || !globMatch(r.resource, resource) || !globMatch(r.action, action) {
+		if !globMatch(r.namespace, namespace) || !globMatch(r.action, action) {
+			continue
+		}
+		matchesResource := false
+		for _, res := range resources {
+			if globMatch(r.resource, res) {
+				matchesResource = true
+				break
+			}
+		}
+		if !matchesResource {
 			continue
 		}
 		if r.effect == effectDeny {
-			return false // global deny-override
+			return false
 		}
 		allowed = true
 	}

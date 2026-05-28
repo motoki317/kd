@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/motoki317/kd/internal/config"
 	"github.com/motoki317/kd/internal/kube/kubeconfig"
 	"github.com/motoki317/kd/internal/kube/registry"
+	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 	"github.com/motoki317/kd/internal/server"
 )
@@ -43,7 +45,10 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	reg, err := newRegistry(cfg.Kubeconfig, cfg.Resync)
+	reg, err := newRegistry(cfg.Kubeconfig, cfg.Resync, store.Options{
+		SkipKinds:  cfg.SkipKinds,
+		EagerKinds: cfg.EagerKinds,
+	})
 	if err != nil {
 		return err
 	}
@@ -103,19 +108,23 @@ func run() error {
 // newRegistry chooses between in-cluster mode (single hidden context) and kubeconfig mode
 // (UI-selectable contexts). In-cluster is preferred only when no explicit --kubeconfig was
 // given AND rest.InClusterConfig() succeeds — matching the prior single-client behavior.
-func newRegistry(kubeconfigPath string, resync time.Duration) (*registry.Registry, error) {
+func newRegistry(kubeconfigPath string, resync time.Duration, storeOpts store.Options) (*registry.Registry, error) {
 	if kubeconfigPath == "" {
 		if cfg, err := rest.InClusterConfig(); err == nil {
-			client, err := kubernetes.NewForConfig(cfg)
+			typed, err := kubernetes.NewForConfig(cfg)
 			if err != nil {
 				return nil, err
 			}
-			return registry.NewInCluster(client, resync), nil
+			dyn, err := dynamic.NewForConfig(cfg)
+			if err != nil {
+				return nil, err
+			}
+			return registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, resync, storeOpts), nil
 		}
 	}
 	loader, err := kubeconfig.Load(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
-	return registry.NewKubeconfig(loader, resync), nil
+	return registry.NewKubeconfig(loader, resync, storeOpts), nil
 }

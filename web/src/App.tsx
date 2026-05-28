@@ -11,14 +11,17 @@ import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 
-// Each view is a relationship lens the user explicitly asked for. There is no "everything at
-// once" view on purpose: a whole-namespace hairball is the opposite of reading state at a glance.
+// Each view is a relationship lens the user explicitly asked for. 'All' is the kind-grouped
+// catch-all (FR-006): every node lays out in per-kind boxes, ownership edges still drawn —
+// the readable replacement for the previously-removed hairball, important once CRs (which
+// have no edges to the workload kinds) enter the picture.
 const VIEWS: { id: View; label: string }[] = [
   { id: 'ownership', label: 'Ownership' },
   { id: 'network', label: 'Network' },
   { id: 'nodes', label: 'Nodes' },
   { id: 'volumes', label: 'Volumes' },
   { id: 'rbac', label: 'RBAC' },
+  { id: 'all', label: 'All' },
 ]
 
 export default function App() {
@@ -311,6 +314,7 @@ export default function App() {
             healthFilter={healthFilter()}
             connected={connected()}
             viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
+            viewId={view()}
             search={search()}
             onSearch={setSearch}
             onSelect={setSelectedId}

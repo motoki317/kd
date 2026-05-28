@@ -16,8 +16,14 @@ import (
 	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/graph"
 	"github.com/motoki317/kd/internal/kube/registry"
+	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 )
+
+// ClusterScopeNamespace is the sentinel namespace value used in API URLs for cluster-scoped
+// resources. The client uses this exact string in `?ns=`; handlers route it into the cluster
+// snapshot and authorize it as the empty (cluster-scope) namespace.
+const ClusterScopeNamespace = store.ClusterScope
 
 // Store is the read surface the API needs from a single context's informer cache.
 type Store interface {
@@ -25,6 +31,10 @@ type Store interface {
 	SnapshotNamespace(namespace string) []runtime.Object
 	Subscribe() (<-chan struct{}, func())
 	Client() kubernetes.Interface
+	// GroupForKind returns the GVR group of the first registered resource matching kind,
+	// so the API can authorize a kind-named URL against group-keyed policy.csv rules.
+	// Returns ("", false) when no registered resource has that kind.
+	GroupForKind(kind string) (string, bool)
 }
 
 // Contexts is the registry surface the API depends on. *registry.Registry satisfies it;
@@ -96,17 +106,39 @@ func (a *API) resolveStore(w http.ResponseWriter, r *http.Request) (Store, bool)
 
 // authorize resolves the caller and checks the policy, writing 401/403 and returning false on
 // failure so handlers can `if id, ok := a.authorize(...); !ok { return }`.
+//
+// The cluster pseudo-namespace (ClusterScopeNamespace) is mapped to the empty namespace
+// string for the policy check, matching Kubernetes' convention for cluster-scoped resources
+// — so a rule like `p, alice, "", *, *, allow` authorizes the cluster scope.
 func (a *API) authorize(w http.ResponseWriter, r *http.Request, namespace, resource, action string) (auth.Identity, bool) {
+	return a.authorizeAny(w, r, namespace, []string{resource}, action)
+}
+
+// authorizeAny is the multi-class variant of authorize — allows if any of resources passes.
+// Used by the kind-named endpoints (resource, events) to allow EITHER the legacy class
+// (pods/nodes/workloads/…) or the GVR group rule to authorize.
+func (a *API) authorizeAny(w http.ResponseWriter, r *http.Request, namespace string, resources []string, action string) (auth.Identity, bool) {
 	id, ok := auth.FromContext(r.Context())
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return id, false
 	}
-	if !a.enforcer.Enforce(id.User, id.Groups, namespace, resource, action) {
+	if namespace == ClusterScopeNamespace {
+		namespace = ""
+	}
+	if !a.enforcer.EnforceAny(id.User, id.Groups, namespace, resources, action) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return id, false
 	}
 	return id, true
+}
+
+// authorizeKind authorizes a kind-named URL by resolving the GVR group from the store and
+// expanding to both the legacy resource class and the group, so policy.csv rules written
+// against either still grant access. Single call site for what was three lines of glue.
+func (a *API) authorizeKind(w http.ResponseWriter, r *http.Request, s Store, namespace, kind, action string) (auth.Identity, bool) {
+	group, _ := s.GroupForKind(kind)
+	return a.authorizeAny(w, r, namespace, resourceClasses(kind, group), action)
 }
 
 type contextEntry struct {
@@ -160,7 +192,15 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, store.ListNamespaces())
-	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible))}
+	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible)+1)}
+	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real
+	// namespaces (FR-004). Gate on a cluster-scoped class — "nodes" is the most universal
+	// cluster-scoped read kd exposes. A viewer with only namespaced grants gets no entry,
+	// matching the fact that they have nothing cluster-scoped to drill into.
+	if a.enforcer.Enforce(id.User, id.Groups, "", "nodes", "list") {
+		cs := graph.SummarizeCluster(store.SnapshotNamespace(ClusterScopeNamespace))
+		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: ClusterScopeNamespace, Health: string(cs.Health), NonReady: cs.NonReady})
+	}
 	for _, n := range visible {
 		s := graph.Summarize(store.SnapshotNamespace(n))
 		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(s.Health), NonReady: s.NonReady})
@@ -184,11 +224,11 @@ func (a *API) handleGraph(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 	ns, kind, name := r.PathValue("ns"), r.PathValue("kind"), r.PathValue("name")
-	if _, ok := a.authorize(w, r, ns, resourceClass(kind), "get"); !ok {
-		return
-	}
 	store, ok := a.resolveStore(w, r)
 	if !ok {
+		return
+	}
+	if _, ok := a.authorizeKind(w, r, store, ns, kind, "get"); !ok {
 		return
 	}
 	obj, found := findResource(store.SnapshotNamespace(ns), kind, name)

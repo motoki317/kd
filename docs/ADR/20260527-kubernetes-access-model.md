@@ -57,3 +57,7 @@ application layer** via policy.csv (see declarative-rbac-policy-csv ADR).
 
 - Future "strict mode" could add SubjectAccessReview checks layered on top of policy.csv for
   defense-in-depth, or per-request impersonation for high-security clusters.
+- Partially amended by [`20260528-dynamic-informers-and-cluster-scope.md`](./20260528-dynamic-informers-and-cluster-scope.md):
+  the ClusterRole now grants wildcard read (`*` `*` get/list/watch) so the dynamic-informer
+  factory can discover and watch every API resource the cluster exposes, including CRDs
+  installed at runtime. The single-ServiceAccount + app-level authz model is unchanged.

@@ -46,6 +46,12 @@ export async function fetchNamespaces(ctx: string): Promise<NamespaceInfo[]> {
   return body.namespaces
 }
 
+// CLUSTER_SCOPE is the sentinel namespace name kd uses in URLs for cluster-scoped resources.
+// The client treats it as a pinned synthetic entry in the sidebar (FR-004); the server maps
+// it to its cluster-scope snapshot. Underscores aren't valid in DNS-1123 namespace names, so
+// it can never collide with a real namespace.
+export const CLUSTER_SCOPE = '__cluster__'
+
 export type ManifestFormat = 'yaml' | 'json'
 
 // fetchResource returns the resource manifest already rendered as text by the server (YAML or

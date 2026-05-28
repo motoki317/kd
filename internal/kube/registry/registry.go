@@ -13,8 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/motoki317/kd/internal/kube/discovery"
 	"github.com/motoki317/kd/internal/kube/kubeconfig"
 	"github.com/motoki317/kd/internal/kube/store"
 )
@@ -44,12 +46,22 @@ type ContextInfo struct {
 	Error  string
 }
 
+// Clients bundles the typed + dynamic Kubernetes clients a Cache needs. The typed client
+// drives discovery and log streaming; the dynamic client backs every cached read.
+type Clients struct {
+	Typed   kubernetes.Interface
+	Dynamic dynamic.Interface
+}
+
 // Registry resolves a context name to its *store.Cache, lazily.
 type Registry struct {
 	resync  time.Duration
 	mode    mode
 	current string
-	build   func(name string) (kubernetes.Interface, error)
+	build   func(name string) (Clients, error)
+	// storeOpts is forwarded to store.New (eager/skip kind overrides, …). Resync is
+	// supplied from r.resync; SkipKinds/EagerKinds come from this template.
+	storeOpts store.Options
 
 	// listed contexts (kubeconfig only; "in-cluster" mode keeps this empty so the API can
 	// report enabled=false and the UI hides the switcher).
@@ -74,40 +86,51 @@ type entry struct {
 	status Status // updated under registry.mu
 }
 
-// NewInCluster returns a single-context registry over the given in-cluster client. The
+// NewInCluster returns a single-context registry over the given in-cluster clients. The
 // reported default context name is InClusterContext.
-func NewInCluster(client kubernetes.Interface, resync time.Duration) *Registry {
+func NewInCluster(clients Clients, resync time.Duration, storeOpts store.Options) *Registry {
 	return &Registry{
-		resync:  resync,
-		mode:    modeInCluster,
-		current: InClusterContext,
-		build:   func(string) (kubernetes.Interface, error) { return client, nil },
-		entries: map[string]*entry{},
+		resync:    resync,
+		mode:      modeInCluster,
+		current:   InClusterContext,
+		build:     func(string) (Clients, error) { return clients, nil },
+		storeOpts: storeOpts,
+		entries:   map[string]*entry{},
 	}
 }
 
 // NewKubeconfig returns a registry that lazily builds one cache per declared kubeconfig
-// context. The default context is the kubeconfig's current-context.
-func NewKubeconfig(loader *kubeconfig.Loader, resync time.Duration) *Registry {
-	return NewWithBuilder(loader.Current(), loader.Contexts(), resync, func(name string) (kubernetes.Interface, error) {
+// context. The default context is the kubeconfig's current-context. Each context's typed +
+// dynamic clients are built from its rest.Config on first access.
+func NewKubeconfig(loader *kubeconfig.Loader, resync time.Duration, storeOpts store.Options) *Registry {
+	return NewWithBuilder(loader.Current(), loader.Contexts(), resync, storeOpts, func(name string) (Clients, error) {
 		cfg, err := loader.RESTConfig(name)
 		if err != nil {
-			return nil, err
+			return Clients{}, err
 		}
-		return kubernetes.NewForConfig(cfg)
+		typed, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return Clients{}, err
+		}
+		dyn, err := dynamic.NewForConfig(cfg)
+		if err != nil {
+			return Clients{}, err
+		}
+		return Clients{Typed: typed, Dynamic: dyn}, nil
 	})
 }
 
 // NewWithBuilder is the lower-level constructor behind NewKubeconfig. Tests use it to inject
-// a fake clientset builder; production callers should prefer NewKubeconfig / NewInCluster.
-func NewWithBuilder(current string, contexts []string, resync time.Duration, build func(name string) (kubernetes.Interface, error)) *Registry {
+// a fake clients builder; production callers should prefer NewKubeconfig / NewInCluster.
+func NewWithBuilder(current string, contexts []string, resync time.Duration, storeOpts store.Options, build func(name string) (Clients, error)) *Registry {
 	return &Registry{
-		resync:   resync,
-		mode:     modeKubeconfig,
-		current:  current,
-		contexts: append([]string(nil), contexts...),
-		build:    build,
-		entries:  map[string]*entry{},
+		resync:    resync,
+		mode:      modeKubeconfig,
+		current:   current,
+		contexts:  append([]string(nil), contexts...),
+		build:     build,
+		storeOpts: storeOpts,
+		entries:   map[string]*entry{},
 	}
 }
 
@@ -202,16 +225,18 @@ func (r *Registry) getOrCreate(name string) *entry {
 	return e
 }
 
-// runBuild constructs the client + cache for one context and starts its informers. Runs once
-// per entry (guarded by entry.once). Closes ready so waiters can proceed.
+// runBuild constructs the clients + cache for one context and starts its informers. Runs
+// once per entry (guarded by entry.once). Closes ready so waiters can proceed.
 func (r *Registry) runBuild(name string, e *entry) {
 	defer close(e.ready)
-	client, err := r.build(name)
+	clients, err := r.build(name)
 	if err != nil {
 		r.setStatus(e, StatusError, err)
 		return
 	}
-	c := store.New(client, r.resync)
+	opts := r.storeOpts
+	opts.Resync = r.resync
+	c := store.New(clients.Typed, clients.Dynamic, discovery.FromClient(clients.Typed.Discovery()), opts)
 	// Cache lifetime is tied to the process — once started, informers run until the kd
 	// process exits. A dedicated context keeps Start() independent of any single HTTP request.
 	startCtx := context.Background()

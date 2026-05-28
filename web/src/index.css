@@ -477,6 +477,34 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The cluster pseudo-namespace gets a quieter, italicized label so it reads as scope rather
+   than as a regular namespace — same row geometry though, so the dot+count layout matches. */
+.ns-name-cluster {
+  font-style: italic;
+  color: var(--text-dim);
+}
+.ns-list button.ns-cluster {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+/* All view: faint kind label sitting above each kind group. Underlay only, no pointer
+   events — operators still click the cards inside normally. */
+.kind-groups text.kind-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-dim);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.kind-groups .kind-group-count {
+  font-weight: 400;
+  font-size: 11px;
+  fill: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {
   flex: none;
