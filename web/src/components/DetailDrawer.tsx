@@ -1,29 +1,10 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
-import { healthColor } from '../health'
 import { relativeAge } from '../time'
-import type { ContainerStatus, Health, KNode } from '../types'
+import type { KNode } from '../types'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
-
-// containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
-// same colors as the rest of the UI: a crash-loop or non-Completed exit is Degraded, a not-yet-ready
-// Running container is Progressing, a completed init container is Healthy (done).
-function containerHealth(cs: ContainerStatus): Health {
-  if (cs.state.startsWith('Waiting:')) return 'Degraded'
-  if (cs.state.startsWith('Terminated:')) return cs.state.includes('Completed') ? 'Healthy' : 'Degraded'
-  if (cs.state === 'Running') return cs.ready ? 'Healthy' : 'Progressing'
-  return 'Unknown'
-}
-
-// endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
-// Degraded misconfiguration (selector matches nothing), some-but-not-all ready is Progressing (a
-// rollout), and fully ready is Healthy.
-function endpointHealth(ep: { ready: number; total: number }): Health {
-  if (ep.total === 0) return 'Degraded'
-  if (ep.ready < ep.total) return 'Progressing'
-  return 'Healthy'
-}
+import ResourceSummary from './ResourceSummary'
 
 interface Props {
   node: KNode | null
@@ -44,11 +25,6 @@ const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'Dae
 export default function DetailDrawer(props: Props) {
   const isPod = createMemo(() => props.node?.kind === 'Pod')
   const loggable = createMemo(() => (props.node ? LOGGABLE.has(props.node.kind) : false))
-  // Labels are high-signal metadata (app, version, team) the operator otherwise has to dig out of
-  // the manifest. Sort by key for a stable, scannable order.
-  const labels = createMemo(() =>
-    Object.entries(props.node?.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)),
-  )
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
@@ -88,150 +64,7 @@ export default function DetailDrawer(props: Props) {
       {(node) => (
         <aside class="drawer">
           <header class="drawer-header">
-            <div>
-              <div class="drawer-kind">
-                <span class="dot" style={{ background: healthColor(node().health) }} />
-                {node().kind}
-              </div>
-              <div class="drawer-name">
-                {node().name}
-                <CopyButton text={() => node().name} title="Copy name" />
-              </div>
-              <div class="drawer-meta">
-                <Show when={node().namespace}>
-                  <span>{node().namespace}</span>
-                </Show>
-                <Show when={node().createdAt}>
-                  <span class="drawer-age" title={node().createdAt}>
-                    {relativeAge(node().createdAt!)} old
-                  </span>
-                </Show>
-                <Show when={(node().restarts ?? 0) > 0}>
-                  <span class="drawer-age">↻ {node().restarts} restarts</span>
-                </Show>
-                <Show when={node().host}>
-                  <span class="drawer-age">on {node().host}</span>
-                </Show>
-                <Show when={node().capacity}>
-                  <span class="drawer-age">{node().capacity}</span>
-                </Show>
-              </div>
-              {/* A Service's reachable address and port mappings — the network view's core question
-                  ("what routes here, on which port?"), otherwise buried in the manifest. The address
-                  is copyable for pasting into a curl/port-forward. */}
-              <Show when={node().clusterIP || (node().ports?.length ?? 0) > 0}>
-                <div class="drawer-ports">
-                  <Show when={node().clusterIP}>
-                    <span class="port-addr">
-                      <code>{node().clusterIP}</code>
-                      <CopyButton text={() => node().clusterIP!} title="Copy address" />
-                    </span>
-                  </Show>
-                  <For each={node().ports}>{(p) => <span class="port-chip">{p}</span>}</For>
-                  <Show when={node().endpoints}>
-                    {(ep) => (
-                      <span class="endpoint-stat" title="Ready pods backing this Service">
-                        <span class="dot" style={{ background: healthColor(endpointHealth(ep())) }} />
-                        {ep().total === 0 ? 'no endpoints' : `${ep().ready}/${ep().total} ready`}
-                      </span>
-                    )}
-                  </Show>
-                </div>
-              </Show>
-              {/* An Ingress's routing table (host/path → backend) — the network view's entry point, so
-                  it should say where external traffic goes without opening the manifest. */}
-              <Show when={(node().routes?.length ?? 0) > 0}>
-                <div class="drawer-routes">
-                  <For each={node().routes}>{(r) => <code class="route-row">{r}</code>}</For>
-                </div>
-              </Show>
-              {/* A Role/ClusterRole's grants ("resources: verbs") — the whole point of the resource,
-                  surfaced for the RBAC view instead of buried in the manifest. */}
-              <Show when={(node().rules?.length ?? 0) > 0}>
-                <div class="drawer-routes">
-                  <For each={node().rules}>{(r) => <code class="route-row">{r}</code>}</For>
-                </div>
-              </Show>
-              {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
-                  only place they're visible — the "who got access" answer for an RBAC audit. */}
-              <Show when={node().roleRef || (node().subjects?.length ?? 0) > 0}>
-                <div class="drawer-routes">
-                  <Show when={node().roleRef}>
-                    <code class="route-row">→ {node().roleRef}</code>
-                  </Show>
-                  <For each={node().subjects}>{(s) => <code class="route-row">{s}</code>}</For>
-                </div>
-              </Show>
-              {/* The image(s) are usually the first thing checked ("what version is live?"), so
-                  surface them prominently with per-image copy for pasting into kubectl/registry. */}
-              <Show when={(node().images?.length ?? 0) > 0}>
-                <div class="drawer-images">
-                  <For each={node().images}>
-                    {(img) => (
-                      <div class="drawer-image" title={img}>
-                        <code>{img}</code>
-                        <CopyButton text={() => img} title="Copy image" />
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              {/* Per-container state so a multi-container pod reveals which container is unready or
-                  crash-looping, not just an aggregate restart count. */}
-              <Show when={(node().containerStatuses?.length ?? 0) > 0}>
-                <div class="drawer-containers">
-                  <For each={node().containerStatuses}>
-                    {(cs) => (
-                      <div class="container-row" classList={{ 'not-ready': !cs.ready && !cs.init }}>
-                        <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
-                        <span class="container-name">
-                          {cs.name}
-                          <Show when={cs.init}>
-                            <span class="container-init"> init</span>
-                          </Show>
-                        </span>
-                        <span class="container-state">{cs.state}</span>
-                        <Show when={(cs.restarts ?? 0) > 0}>
-                          <span class="container-restarts" title={`${cs.restarts} restarts`}>
-                            ↻ {cs.restarts}
-                          </span>
-                        </Show>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              <Show when={props.owners.length > 0}>
-                <div class="drawer-owners">
-                  <For each={props.owners}>
-                    {(o) => (
-                      <button class="owner-chip" onClick={() => props.onNavigate(o.id)} title={`Go to ${o.kind} ${o.name}`}>
-                        ↑ {o.kind} <span class="owner-name">{o.name}</span>
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </Show>
-              {/* Collapsible so a Helm-managed resource's label noise can be tucked away, but open
-                  by default since labels are usually what the operator came to check. */}
-              <Show when={labels().length > 0}>
-                <details class="drawer-labels" open>
-                  <summary>Labels · {labels().length}</summary>
-                  <div class="label-chips">
-                    <For each={labels()}>
-                      {([k, v]) => (
-                        <span class="label-chip" title={`${k}=${v}`}>
-                          <span class="label-key">{k}</span>
-                          <Show when={v}>
-                            <span class="label-val">{v}</span>
-                          </Show>
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </details>
-              </Show>
-            </div>
+            <ResourceSummary node={node()} owners={props.owners} onNavigate={props.onNavigate} />
             <button class="drawer-close" onClick={props.onClose} title="Close">
               ×
             </button>
