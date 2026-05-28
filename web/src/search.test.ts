@@ -73,4 +73,40 @@ describe('nodeMatches', () => {
     expect(nodeMatches(svc, 'svc')).toBe(true)
     expect(nodeMatches(sts, 'sts')).toBe(true)
   })
+
+  describe('Kind/name predicate (cycle 295)', () => {
+    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', health: 'Healthy' }
+    const dep: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const cm: KNode = { id: 'cm1', kind: 'ConfigMap', name: 'web-config', health: 'Healthy' }
+
+    it('"Pod/web" matches a Pod whose name contains "web" but not a Deployment "web"', () => {
+      expect(nodeMatches(pod, 'Pod/web')).toBe(true)
+      expect(nodeMatches(dep, 'Pod/web')).toBe(false)
+      expect(nodeMatches(cm, 'Pod/web')).toBe(false)
+    })
+
+    it('kubectl short names work on the kind side too: "po/web" → Pod', () => {
+      expect(nodeMatches(pod, 'po/web')).toBe(true)
+      expect(nodeMatches(dep, 'deploy/web')).toBe(true)
+    })
+
+    it('"Pod/" with empty name half lights up every Pod (mid-edit case)', () => {
+      // The empty name half means "don't constrain the name", so the operator partway through
+      // typing "Pod/web…" sees all Pods light up until they commit to a name. The alternative
+      // (hide everything) feels broken mid-keystroke.
+      expect(nodeMatches(pod, 'Pod/')).toBe(true)
+      expect(nodeMatches(dep, 'Pod/')).toBe(false) // Deployment is still excluded
+    })
+
+    it('"/web" with empty kind half is name-only — matches the Deployment too', () => {
+      expect(nodeMatches(dep, '/web')).toBe(true)
+      expect(nodeMatches(pod, '/web')).toBe(true)
+      expect(nodeMatches(cm, '/web')).toBe(true) // name contains 'web'
+    })
+
+    it('more than one slash is treated as plain substring (paths in labels etc.)', () => {
+      const labeled: KNode = { id: 'l1', kind: 'Pod', name: 'x', health: 'Healthy', labels: { path: 'a/b/c' } }
+      expect(nodeMatches(labeled, 'a/b/c')).toBe(true)
+    })
+  })
 })
