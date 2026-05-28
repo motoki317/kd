@@ -549,6 +549,9 @@ export default function App() {
                   Click owner chip Walk up the ownership tree
                 </li>
                 <li>
+                  <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)
+                </li>
+                <li>
                   <strong>[cluster]</strong> Pinned sidebar entry — cluster-scoped resources (Nodes, PVs, CRDs, cluster CRs)
                 </li>
               </ul>

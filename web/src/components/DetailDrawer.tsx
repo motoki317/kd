@@ -69,6 +69,28 @@ export default function DetailDrawer(props: Props) {
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
+
+  // [ / ] cycle the drawer's tabs (cycle 292). Only active while the drawer is visible and the
+  // operator isn't typing into a field. Lets keyboard users flip between Logs/Events/Manifest
+  // without reaching for the mouse — common during triage ("does the log say anything? what
+  // events fired? show me the manifest").
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key !== '[' && e.key !== ']') return
+      if (!displayNode()) return
+      const el = e.target as HTMLElement | null
+      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return
+      const list = tabs()
+      const cur = list.indexOf(tab())
+      if (cur < 0) return
+      const dir = e.key === ']' ? 1 : -1
+      e.preventDefault()
+      setTab(list[(cur + dir + list.length) % list.length])
+    }
+    window.addEventListener('keydown', onKey)
+    onCleanup(() => window.removeEventListener('keydown', onKey))
+  })
   // On selection change, keep the current tab if the new resource has it — so triaging the same tab
   // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
   // default only when the tab isn't available (e.g. Logs → a non-loggable resource).

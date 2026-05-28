@@ -44,6 +44,28 @@ describe('DetailDrawer', () => {
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
+  it('[ and ] cycle the drawer tabs (cycle 292)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    // ConfigMap is not loggable: tabs = [Events, Manifest]; non-loggable resources default to
+    // Manifest (line 106 in DetailDrawer.tsx).
+    const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+    expect(active()).toBe('Manifest')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
+    expect(active()).toBe('Events') // wraps forward
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
+    expect(active()).toBe('Manifest')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
+    expect(active()).toBe('Events') // backward
+  })
+
+  it('[ / ] do nothing when no node is shown (cycle 292)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    // Should be empty — no drawer rendered.
+    expect(container.querySelector('.drawer-tabs')).toBeFalsy()
+    // Dispatching keydown should not throw.
+    expect(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))).not.toThrow()
+  })
+
   it('renders labels as key/value chips, sorted by key', () => {
     const labeled: KNode = { ...configMap, labels: { tier: 'backend', app: 'shop' } }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
