@@ -85,6 +85,30 @@ describe('LogViewer', () => {
     await findByText('stream interrupted')
   })
 
+  it('Latest button advertises unseen line count while scrolled up (cycle 266)', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    // First line: the viewer is still "pinned" (default true), so no badge.
+    es.emit('log', { line: 'first' })
+    await findByText('first')
+    expect(container.querySelector('.logs-jump')).toBeNull()
+    // Force "unpinned" by faking a scroll event after positioning above the bottom. The viewer's
+    // toBottom() also assigns scrollTop on incoming lines, so define it writable.
+    const pre = container.querySelector('pre.logs-body') as HTMLElement
+    Object.defineProperty(pre, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(pre, 'scrollTop', { value: 100, configurable: true, writable: true })
+    Object.defineProperty(pre, 'clientHeight', { value: 200, configurable: true })
+    pre.dispatchEvent(new Event('scroll'))
+    // Three lines arrive while scrolled up → Latest button shows the count.
+    es.emit('log', { line: 'a' })
+    es.emit('log', { line: 'b' })
+    es.emit('log', { line: 'c' })
+    await findByText('↓ Latest', { exact: false })
+    expect(container.querySelector('.logs-jump-count')?.textContent).toBe('3')
+  })
+
   it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
     const { container, findByPlaceholderText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
