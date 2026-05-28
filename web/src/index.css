@@ -1999,3 +1999,11 @@ button.event-source:hover {
 .logs-waiting {
   color: #6b7888;
 }
+/* Filter-match highlight: a soft amber wash + inherited text color so the hit reads as
+   "this is what your query matched" without losing legibility on the dark logs background. */
+.log-match {
+  background: color-mix(in srgb, #f0a92a 38%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}

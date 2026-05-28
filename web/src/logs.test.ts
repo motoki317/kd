@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines } from './logs'
+import { filterLogLines, splitByMatch } from './logs'
 import type { LogEntry } from './api'
 
 const lines: LogEntry[] = [
@@ -26,5 +26,33 @@ describe('filterLogLines', () => {
 
   it('returns nothing when no line matches', () => {
     expect(filterLogLines(lines, 'timeout')).toEqual([])
+  })
+})
+
+describe('splitByMatch', () => {
+  it('returns the whole line as a single non-match for an empty query', () => {
+    expect(splitByMatch('hello world', '')).toEqual([{ text: 'hello world', match: false }])
+  })
+
+  it('splits a line into alternating non-match / match segments, case-insensitively', () => {
+    expect(splitByMatch('connect to DB and ConneCT again', 'connect')).toEqual([
+      { text: 'connect', match: true },
+      { text: ' to DB and ', match: false },
+      { text: 'ConneCT', match: true },
+      { text: ' again', match: false },
+    ])
+  })
+
+  it('handles a query that does not appear in the line', () => {
+    expect(splitByMatch('hello world', 'xyz')).toEqual([{ text: 'hello world', match: false }])
+  })
+
+  it('preserves consecutive matches without empty segments between them', () => {
+    expect(splitByMatch('aaaa', 'a')).toEqual([
+      { text: 'a', match: true },
+      { text: 'a', match: true },
+      { text: 'a', match: true },
+      { text: 'a', match: true },
+    ])
   })
 })

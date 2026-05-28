@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
-import { filterLogLines } from '../logs'
+import { filterLogLines, splitByMatch } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -193,11 +193,27 @@ export default function LogViewer(props: Props) {
               <Show when={l.time}>
                 <span class="log-time">{l.time}</span>
               </Show>
-              {/* Plain lines (the common case) skip the parser to keep allocations down — ANSI
-                  segmentation only kicks in for lines that actually contain a CSI escape. */}
-              <Show when={hasAnsi(l.line)} fallback={l.line}>
+              {/* Plain lines (the common case) skip the ANSI parser to keep allocations down —
+                  ANSI segmentation only kicks in for lines that actually contain a CSI escape.
+                  Both branches further chunk each segment via splitByMatch so a typed filter
+                  also highlights the matched substring inline (cycle 249), making the position
+                  of the hit obvious in a long line. */}
+              <Show
+                when={hasAnsi(l.line)}
+                fallback={
+                  <For each={splitByMatch(l.line, filter())}>
+                    {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
+                  </For>
+                }
+              >
                 <For each={parseAnsi(l.line)}>
-                  {(seg) => <span style={ansiStyleToCss(seg.style)}>{seg.text}</span>}
+                  {(seg) => (
+                    <span style={ansiStyleToCss(seg.style)}>
+                      <For each={splitByMatch(seg.text, filter())}>
+                        {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
+                      </For>
+                    </span>
+                  )}
                 </For>
               </Show>
             </div>
