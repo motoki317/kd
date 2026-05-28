@@ -24,11 +24,18 @@ export function applyPatch(state: GraphState, p: Patch): GraphState {
   for (const n of p.upsertNodes ?? []) nodes[n.id] = n
   for (const id of p.removeNodeIds ?? []) delete nodes[id]
 
+  // Apply removes first, then upserts onto the result — so a "remove + upsert" for the same edge
+  // in one patch ends with the edge present (upsert wins), and an upsert of an already-present key
+  // is a no-op rather than a duplicate.
   const removed = new Set((p.removeEdges ?? []).map(edgeKey))
-  const present = new Set(state.edges.map(edgeKey))
   const edges = state.edges.filter((e) => !removed.has(edgeKey(e)))
+  const present = new Set(edges.map(edgeKey))
   for (const e of p.upsertEdges ?? []) {
-    if (!present.has(edgeKey(e)) && !removed.has(edgeKey(e))) edges.push(e)
+    const k = edgeKey(e)
+    if (!present.has(k)) {
+      edges.push(e)
+      present.add(k)
+    }
   }
   return { nodes, edges }
 }

@@ -47,4 +47,13 @@ describe('graphState', () => {
     expect(s0.nodes['a']).toBeDefined()
     expect(s1.nodes['a']).toBeUndefined()
   })
+
+  // The server happens not to emit remove+upsert for the same edge today (its Diff only emits a
+  // delta), but if it ever does — e.g. as a re-affirmation — the upsert should win and the edge
+  // stays. The old code's "skip upsert if already in the prior state" lost it instead.
+  it('keeps an edge when the same patch both removes and upserts it (upsert wins)', () => {
+    const e = { from: 'a', to: 'b', type: 'ownerReference' } as const
+    const s = applyPatch(fromSnapshot(snapshot), { removeEdges: [e], upsertEdges: [e] })
+    expect(s.edges.map(edgeKey)).toEqual(['a|b|ownerReference'])
+  })
 })
