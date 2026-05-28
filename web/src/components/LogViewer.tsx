@@ -153,7 +153,7 @@ export default function LogViewer(props: Props) {
       <div class="logs-header">
         <span>Logs</span>
         <Show when={!props.aggregated && props.containers.length > 1}>
-          <select class="logs-container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
+          <select class="logs-container" aria-label="Container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
             <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
         </Show>

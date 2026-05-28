@@ -32,6 +32,7 @@ export default function ContextSwitcher(props: Props) {
       <select
         class="ctx-switcher"
         title="Kubernetes context"
+        aria-label="Kubernetes context"
         value={props.current ?? props.info!.default}
         onChange={(e) => props.onSelect(e.currentTarget.value)}
       >
