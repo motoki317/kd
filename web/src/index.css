@@ -574,6 +574,13 @@ body {
   color: var(--text-dim);
   pointer-events: none;
 }
+.host-groups .host-group-count {
+  font-weight: 400;
+  font-size: 11px;
+  fill: var(--text-dim);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
 .kind-groups .kind-group-count {
   font-weight: 400;
   font-size: 11px;

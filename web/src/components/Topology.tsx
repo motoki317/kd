@@ -119,6 +119,20 @@ export default function Topology(props: Props) {
   const groups = createMemo(() => (props.viewId === 'all' ? kindGroups(layout()) : []))
   // Nodes view: per-host group bounding boxes for the host-container bg rect + header label.
   const hosts = createMemo(() => (props.viewId === 'nodes' ? hostGroups(layout()) : []))
+  // Pod count per host, used in the host-group header chip — derived once to keep the SVG
+  // markup clean (the alternative is an inline expression that has to re-derive the orphan
+  // bucket condition every render). The orphan host bucket counts pods that have either no
+  // host string or a host with no matching Node card in the current graph.
+  const podsPerHost = createMemo<Record<string, number>>(() => {
+    const c: Record<string, number> = {}
+    const nodeNames = new Set(props.nodes.filter((n) => n.kind === 'Node').map((n) => n.name))
+    for (const n of props.nodes) {
+      if (n.kind !== 'Pod') continue
+      const key = n.host && nodeNames.has(n.host) ? n.host : '__orphan__'
+      c[key] = (c[key] ?? 0) + 1
+    }
+    return c
+  })
 
   // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
@@ -574,6 +588,9 @@ export default function Topology(props: Props) {
                     </svg>
                     <text class="host-group-label" x={h.x + 16} y={h.y + 14}>
                       {h.label}
+                      {/* Pod count at a glance: lighter weight + tabular nums, separated by a
+                          middle-dot so a long host name + count still reads as one label. */}
+                      <tspan class="host-group-count"> · {podsPerHost()[h.host] ?? 0} pods</tspan>
                     </text>
                   </g>
                 )}
