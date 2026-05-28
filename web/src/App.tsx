@@ -68,8 +68,12 @@ export default function App() {
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
-  // healthFilter. Lives in App so it resets on namespace/view change alongside the others.
-  const [kindFilter, setKindFilter] = createSignal<Set<string>>(new Set())
+  // healthFilter. Lives in App so it resets on namespace/view change alongside the others. Seed
+  // from `?kinds=` so a shared URL restores the filtered view (cycle 217).
+  const urlKinds = params.get('kinds')
+  const [kindFilter, setKindFilter] = createSignal<Set<string>>(
+    new Set(urlKinds ? urlKinds.split(',').filter(Boolean) : []),
+  )
   const toggleKind = (k: string) => {
     const s = new Set(kindFilter())
     if (s.has(k)) s.delete(k)
@@ -98,6 +102,8 @@ export default function App() {
 
   // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
   // ctx is included only when the switcher is enabled (kubeconfig mode); in-cluster keeps URLs clean.
+  // Kind filter (cycle 217) is included so a filtered view ("pods only") is shareable via URL.
+  // Search and healthFilter are kept ephemeral — those are mid-investigation state, not view config.
   createEffect(() => {
     const p = new URLSearchParams()
     if (ctx() && contextsInfo()?.enabled) p.set('ctx', ctx()!)
@@ -106,6 +112,7 @@ export default function App() {
     const id = selectedId()
     const n = id ? graph.nodes[id] : null
     if (n) p.set('sel', `${n.kind}/${n.name}`)
+    if (kindFilter().size > 0) p.set('kinds', [...kindFilter()].sort().join(','))
     history.replaceState(null, '', `${location.pathname}?${p}`)
   })
 
@@ -167,6 +174,8 @@ export default function App() {
 
   // (Re)subscribe to the graph feed whenever the context, namespace, or view changes. A context
   // switch closes the old SSE stream and opens a fresh one against the new cluster's cache.
+  // The first run keeps URL-seeded filters (?kinds=) — only an actual change resets them.
+  let firstSubscribe = true
   createEffect(() => {
     const c = ctx()
     const ns = namespace()
@@ -177,9 +186,14 @@ export default function App() {
     // namespace change naturally clears it: the old UID won't be in the new namespace's graph.
     // untrack so reading the current selection doesn't make this effect re-subscribe on selection.
     const keepSel = untrack(selectedId)
-    setSearch('') // a stale search/health/kind filter would fade the whole new graph
-    setHealthFilter(null)
-    setKindFilter(new Set<string>())
+    if (!firstSubscribe) {
+      // A stale search/health/kind filter would fade the whole new graph. Cleared only on
+      // real transitions — initial mount keeps URL-seeded filters.
+      setSearch('')
+      setHealthFilter(null)
+      setKindFilter(new Set<string>())
+    }
+    firstSubscribe = false
     setGraph(reconcile(emptyState()))
     setLiveSummary(null) // previous stream's summary belongs to the previous (ns, view) — clear it
     setConnState('connecting')
