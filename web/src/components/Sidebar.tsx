@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 import { healthColor } from '../health'
 import { compareNamespaces } from '../ns'
@@ -42,6 +42,22 @@ export default function Sidebar(props: Props) {
     const firstHealthy = list.findIndex((n) => n.health === 'Healthy')
     return firstHealthy > 0 && firstHealthy < list.length ? firstHealthy : -1
   })
+
+  // Scroll the active ns into view when the selection changes externally — e.g. on first load
+  // when mostTroubled() picks the auto-selected namespace, or when a URL change navigates to
+  // one not currently visible (long list, scrolled away). Block: 'nearest' so we don't jump
+  // when the item is already in view (cycle 242).
+  let listRef: HTMLUListElement | undefined
+  createEffect(
+    on(
+      () => props.selected,
+      (sel) => {
+        if (!sel || !listRef) return
+        const el = listRef.querySelector('.active') as HTMLElement | null
+        el?.scrollIntoView({ block: 'nearest' })
+      },
+    ),
+  )
 
   return (
     <nav class="sidebar">
@@ -105,7 +121,7 @@ export default function Sidebar(props: Props) {
             </div>
           }
         >
-          <ul class="ns-list">
+          <ul class="ns-list" ref={listRef}>
             {/* Pinned cluster pseudo-namespace (FR-004): always above the namespace list and
                 outside the filter, so the operator can always jump to cluster-scoped state
                 — Nodes, PVs, ClusterRoles, cluster-scoped CRs — in one click. Visually
