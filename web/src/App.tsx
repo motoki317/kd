@@ -436,7 +436,7 @@ export default function App() {
               <h4>Actions</h4>
               <ul>
                 <li>
-                  <kbd>Esc</kbd> Help → field blur → drawer → clear search / health filter
+                  <kbd>Esc</kbd> Help → field blur → drawer → clear all filters
                 </li>
                 <li>
                   <kbd>?</kbd> Toggle this help
