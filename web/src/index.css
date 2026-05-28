@@ -910,6 +910,20 @@ button.drawer-host:hover {
   gap: 7px;
   font-size: 12px;
   min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+}
+/* Health tint per container row (cycle 137): mirrors the topology card body — a crash-looping
+   container reads as "row of trouble" instead of "dot of trouble next to other dots". Healthy /
+   Unknown stay neutral so the eye lands on real issues. */
+.container-row.h-degraded {
+  background: color-mix(in srgb, var(--health-degraded) 6%, transparent);
+  border-left-color: var(--health-degraded);
+}
+.container-row.h-progressing {
+  background: color-mix(in srgb, var(--health-progressing) 6%, transparent);
+  border-left-color: var(--health-progressing);
 }
 .container-row .dot {
   flex: none;

@@ -187,7 +187,13 @@ export default function ResourceSummary(props: Props) {
         <div class="drawer-containers">
           <For each={props.node.containerStatuses}>
             {(cs) => (
-              <div class="container-row" classList={{ 'not-ready': !cs.ready && !cs.init }}>
+              <div
+                class="container-row"
+                classList={{
+                  'not-ready': !cs.ready && !cs.init,
+                  [`h-${containerHealth(cs).toLowerCase()}`]: true,
+                }}
+              >
                 <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
                 <span class="container-name">
                   {cs.name}
