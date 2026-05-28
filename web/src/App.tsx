@@ -92,7 +92,7 @@ export default function App() {
         e.preventDefault()
         filterEl?.focus()
       } else if (!typing && num >= 1 && num <= VIEWS.length) {
-        setView(VIEWS[num - 1].id) // 1-4 jump between Ownership/Network/Nodes/RBAC
+        setView(VIEWS[num - 1].id) // 1-5: Ownership / Network / Nodes / Volumes / RBAC
       } else if (!typing && (e.key === 'j' || e.key === 'ArrowDown')) {
         // Walk selection through the graph, troubled-first, so stepping surfaces problems before
         // healthy nodes. Scoped to the active search/health filter so stepping visits only what's
@@ -256,7 +256,7 @@ export default function App() {
                 <kbd>1</kbd>–<kbd>5</kbd> Switch views
               </li>
               <li>
-                <kbd>j</kbd>/<kbd>k</kbd> Next / previous resource (troubled first)
+                <kbd>j</kbd>/<kbd>k</kbd> or <kbd>↓</kbd>/<kbd>↑</kbd> Next / previous resource (troubled first)
               </li>
               <li>
                 <kbd>Esc</kbd> Close drawer / clear filters
