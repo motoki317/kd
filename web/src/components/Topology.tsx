@@ -481,6 +481,25 @@ export default function Topology(props: Props) {
 
   return (
     <div class="topology">
+      {/* Filtered-everything-out overlay (cycle 219): when a filter is active and nothing
+          is lit, surface that clearly + a one-click clear button so the operator doesn't have
+          to guess why the canvas looks dim. Sits above the canvas like the empty state. */}
+      <Show
+        when={
+          props.nodes.length > 0 &&
+          (matches() || props.healthFilter || activeKinds()) &&
+          layout().nodes.every((n) => nodeFaded(n))
+        }
+      >
+        <div class="topology-empty topology-filtered-out">
+          <div class="topology-empty-text">No resources match the active filter.</div>
+          <Show when={props.onClearFilters}>
+            <button class="topology-clear" onClick={() => props.onClearFilters?.()}>
+              clear all filters
+            </button>
+          </Show>
+        </div>
+      </Show>
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
           {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a

@@ -692,6 +692,21 @@ body {
 .topology-empty-text {
   font-size: 13px;
 }
+/* Variant of .topology-empty used when a filter (not absence of data) emptied the canvas. The
+   pointer-events override lets the clear button inside actually be clickable. */
+.topology-filtered-out {
+  pointer-events: none;
+}
+.topology-filtered-out .topology-clear {
+  pointer-events: auto;
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+}
+.topology-filtered-out .topology-clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .topology-empty-hint {
   font-size: 12px;
   font-style: italic;
