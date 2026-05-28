@@ -513,6 +513,22 @@ export default function Topology(props: Props) {
   function resetView() {
     const l = layout()
     if (!svg || l.width === 0) return
+    // Cycle 293: when a selection is active, 'f' re-frames the selection's connected subtree
+    // (same set the click-into-selection effect targets). Otherwise it falls back to the
+    // filter-aware fit-all from cycle 214. Without this, the operator who manually panned
+    // away from their selected subtree would lose it on 'f' — they'd have to click the
+    // selection again to recover the frame.
+    if (props.selectedId) {
+      const r = related()
+      const inSet = r ? l.nodes.filter((n) => r.nodes.has(n.id)) : []
+      if (inSet.length > 0) {
+        const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
+        const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
+        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
+        animateTo(target)
+        return
+      }
+    }
     // When any filter is active, frame just the lit subset — otherwise "Fit" gives you a
     // viewport of mostly-faded cards with the actual interesting nodes shrunk down. With no
     // filter the full layout is the right frame (cycle 214).
