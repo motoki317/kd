@@ -341,6 +341,13 @@ export default function App() {
           classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}
           role="status"
           aria-live="polite"
+          title={
+            connState() === 'live'
+              ? 'Live updates via SSE — graph reflects cluster state in real time'
+              : connState() === 'connecting'
+                ? 'Opening the SSE stream to the cluster'
+                : 'No connection to the server. The page will reconnect automatically when reachable.'
+          }
         >
           {connState() === 'live' ? 'live' : connState() === 'connecting' ? 'connecting…' : 'offline'}
         </span>

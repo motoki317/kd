@@ -465,6 +465,18 @@ export default function Topology(props: Props) {
     props.onDeselect()
   }
 
+  // Double-clicking empty canvas re-fits the view. A common gesture in graph editors; cheaper to
+  // discover than the 'f' shortcut for new operators. Card hit-test walks ancestors the same way
+  // onPointerUp does, so a stray double-click on a node title runs the node's own behavior.
+  function onBackgroundDblClick(e: MouseEvent) {
+    let el: Element | null = e.target as Element | null
+    while (el && el !== svg) {
+      if ((el as Element).classList?.contains('node')) return
+      el = el.parentElement
+    }
+    resetView()
+  }
+
   function resetView() {
     const l = layout()
     if (!svg || l.width === 0) return
@@ -623,6 +635,7 @@ export default function Topology(props: Props) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onDblClick={onBackgroundDblClick}
       >
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
