@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -50,6 +51,16 @@ func TestPresentableBlanksSecretValues(t *testing.T) {
 	}
 	if string(secret.Data["token"]) != "super-secret" {
 		t.Error("presentable must not mutate the cached original secret")
+	}
+}
+
+func TestPresentableStampsGVK(t *testing.T) {
+	// Objects from the informer lister carry empty TypeMeta, so a served manifest would omit
+	// apiVersion/kind and not apply. presentable must recover and stamp the GVK back.
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "web"}}
+	gvk := presentable(dep).GetObjectKind().GroupVersionKind()
+	if gvk.Kind != "Deployment" || gvk.GroupVersion().String() != "apps/v1" {
+		t.Errorf("GVK = %q/%q, want apps/v1/Deployment", gvk.GroupVersion().String(), gvk.Kind)
 	}
 }
 

@@ -86,6 +86,14 @@ func KindOf(obj runtime.Object) string {
 	return kind
 }
 
+// GVKOf returns an object's apiVersion and kind, recovered from the Go type when it came from an
+// informer lister (whose TypeMeta is empty). Lets a caller stamp the GVK back onto a manifest so the
+// served YAML/JSON carries apiVersion/kind and applies cleanly.
+func GVKOf(obj runtime.Object) (apiVersion, kind string) {
+	k, av, _, _ := describe(obj)
+	return av, k
+}
+
 // creationTime renders an object's creation timestamp as RFC3339, or "" when unset (e.g. fixtures),
 // so the client can show a relative age.
 func creationTime(m metav1.Object) string {

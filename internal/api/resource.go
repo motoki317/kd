@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 
 	"github.com/motoki317/kd/internal/kube/graph"
@@ -55,6 +56,12 @@ func findResource(objs []runtime.Object, kind, name string) (runtime.Object, boo
 //     API-server bookkeeping that otherwise dominates the manifest and bloats the payload.
 func presentable(obj runtime.Object) runtime.Object {
 	obj = obj.DeepCopyObject()
+	// Informer-listed objects have empty TypeMeta, so the manifest would omit apiVersion/kind and
+	// not apply. Stamp the GVK back (recovered from the Go type) when it's missing.
+	if obj.GetObjectKind().GroupVersionKind().Empty() {
+		apiVersion, kind := graph.GVKOf(obj)
+		obj.GetObjectKind().SetGroupVersionKind(schema.FromAPIVersionAndKind(apiVersion, kind))
+	}
 	if s, ok := obj.(*corev1.Secret); ok {
 		for k := range s.Data {
 			s.Data[k] = []byte{}
