@@ -1473,12 +1473,24 @@ button.event-source:hover {
   text-transform: none;
   letter-spacing: normal;
   cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+.logs-prev:hover,
+.logs-ts:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 .logs-prev.active,
 .logs-ts.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+.logs-prev.active:hover,
+.logs-ts.active:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 90%, white);
+  border-color: color-mix(in srgb, var(--accent) 90%, white);
 }
 .logs-filter {
   border: 1px solid var(--border);
