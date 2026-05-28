@@ -687,16 +687,23 @@ body {
   stroke: var(--health-degraded);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-degraded) 9%, var(--surface));
+  /* Soft health-tinted halo (cycle 136): only non-healthy states wear it, so trouble cards
+     announce themselves from across a packed canvas before the eye reads the border color. The
+     glow lives on .node-bg (not .node) so it doesn't replace the hover/selected lift filter on
+     the parent group. */
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--health-degraded) 38%, transparent));
 }
 .node.h-progressing .node-bg {
   stroke: var(--health-progressing);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-progressing) 8%, var(--surface));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-progressing) 28%, transparent));
 }
 .node.h-suspended .node-bg {
   stroke: var(--health-suspended);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-suspended) 9%, var(--surface));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-suspended) 28%, transparent));
 }
 .node.h-unknown .node-bg {
   stroke: var(--health-unknown);
