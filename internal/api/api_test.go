@@ -253,7 +253,7 @@ func TestGraphStreamSendsSnapshot(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+ctxPath + "/namespaces/shop/graph/stream", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+ctxPath+"/namespaces/shop/graph/stream", nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -264,15 +264,26 @@ func TestGraphStreamSendsSnapshot(t *testing.T) {
 		t.Errorf("content-type = %q, want text/event-stream", ct)
 	}
 	sc := bufio.NewScanner(resp.Body)
-	sawSnapshot := false
+	sawSnapshot, sawSummary := false, false
 	for sc.Scan() {
 		if strings.HasPrefix(sc.Text(), "event: snapshot") {
 			sawSnapshot = true
+		}
+		// The summary event lets the sidebar override the polled /namespaces health from the
+		// UNFILTERED graph — so the sidebar can't disagree with /namespaces just because the
+		// current view filtered out a degraded resource.
+		if strings.HasPrefix(sc.Text(), "event: summary") {
+			sawSummary = true
+		}
+		if sawSnapshot && sawSummary {
 			break
 		}
 	}
 	if !sawSnapshot {
 		t.Error("expected an initial 'snapshot' event on the graph stream")
+	}
+	if !sawSummary {
+		t.Error("expected a 'summary' event on the graph stream")
 	}
 }
 

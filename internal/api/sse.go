@@ -40,10 +40,21 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 
 	view := graph.ParseView(r.URL.Query().Get("view"))
-	build := func() *graph.Graph { return graph.Build(store.SnapshotNamespace(ns)).Filter(view) }
+	clusterScope := ns == ClusterScopeNamespace
+	// Build the unfiltered graph once per tick: the filtered projection drives the topology, and
+	// the same unfiltered graph drives the namespace rollup. Otherwise the sidebar's "is this ns
+	// healthy?" would only see kinds the current view keeps — a Service with no endpoints would
+	// look healthy from the ownership view, contradicting /namespaces.
+	build := func() (*graph.Graph, graph.Summary) {
+		full := graph.Build(store.SnapshotNamespace(ns))
+		return full.Filter(view), graph.SummarizeBuilt(full, clusterScope)
+	}
 
-	prev := build()
+	prev, prevSummary := build()
 	if !writeSSE(w, "snapshot", prev) {
+		return
+	}
+	if !writeSSE(w, "summary", prevSummary) {
 		return
 	}
 	flusher.Flush()
@@ -69,14 +80,20 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-debounce.C:
 			armed = false
-			next := build()
+			next, nextSummary := build()
 			if patch := graph.Diff(prev, next); !patch.Empty() {
 				if !writeSSE(w, "patch", patch) {
 					return
 				}
 				flusher.Flush()
 			}
-			prev = next
+			if nextSummary != prevSummary {
+				if !writeSSE(w, "summary", nextSummary) {
+					return
+				}
+				flusher.Flush()
+			}
+			prev, prevSummary = next, nextSummary
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 				return

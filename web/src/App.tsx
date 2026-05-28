@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph } from './api'
+import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
-import { HEALTH_ORDER, healthColor, rollupHealth } from './health'
+import { HEALTH_ORDER, healthColor } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
 import type { Health, KNode, View } from './types'
@@ -69,6 +69,11 @@ export default function App() {
   const [showHelp, setShowHelp] = createSignal(false)
 
   const [graph, setGraph] = createStore<GraphState>(emptyState())
+  // Live namespace summary from the SSE feed, computed server-side over the UNFILTERED graph so
+  // it doesn't disagree with /namespaces. When unset (no live stream yet) we fall back to the
+  // polled list — keeping the sidebar from briefly flipping a degraded ns to healthy on click
+  // just because the current view (e.g. ownership) doesn't include the unhealthy resource.
+  const [liveSummary, setLiveSummary] = createSignal<NamespaceSummary | null>(null)
 
   // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
   // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
@@ -162,6 +167,7 @@ export default function App() {
     setSearch('') // a stale search/health filter would fade the whole new graph
     setHealthFilter(null)
     setGraph(reconcile(emptyState()))
+    setLiveSummary(null) // previous stream's summary belongs to the previous (ns, view) — clear it
     setConnState('connecting')
     const close = streamGraph(c, ns, v, {
       snapshot: (g) => {
@@ -175,6 +181,7 @@ export default function App() {
         setSelectedId(sel.id)
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
+      summary: (s) => setLiveSummary(s),
       error: () => setConnState('offline'),
     })
     onCleanup(close)
@@ -189,16 +196,17 @@ export default function App() {
     return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
   })
 
-  // Keep the sidebar entry for the namespace being viewed live from the streamed graph, instead of
-  // letting it lag up to 15s behind the /namespaces poll. Only override once the graph has loaded, so
-  // a still-empty stream doesn't briefly flash the namespace healthy.
+  // Keep the sidebar entry for the namespace being viewed live from the SSE `summary` event,
+  // instead of letting it lag up to 15s behind the /namespaces poll. The server computes summary
+  // from the UNFILTERED graph (same as /namespaces), so it never disagrees with the polled
+  // value — fixes the old bug where opening a degraded namespace in ownership view "healed" it
+  // because the filtered topology omitted the actually-degraded resource (e.g. an endpointless
+  // Service that lives in network view).
   const sidebarNamespaces = createMemo(() => {
     const list = namespaceList()
     const ns = namespace()
-    if (!connected() || !ns || nodes().length === 0) return list
-    // Exclude cluster-scoped resources (the shared Node, ClusterRoles): they ride along in every
-    // namespace's graph but aren't this namespace's health — mirrors the server's Summarize.
-    const live = rollupHealth(nodes().filter((n) => n.namespace))
+    const live = liveSummary()
+    if (!connected() || !ns || !live) return list
     return list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
   })
 

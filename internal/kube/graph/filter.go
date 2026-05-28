@@ -17,10 +17,11 @@ var severity = map[Health]int{
 }
 
 // Summary rolls a namespace up to its worst resource health plus how many resources are not Healthy,
-// so the sidebar can both flag trouble (the dot color) and convey its scale (the count).
+// so the sidebar can both flag trouble (the dot color) and convey its scale (the count). JSON tags
+// match the /namespaces and SSE `summary` event wire format, so the client uses one shape for both.
 type Summary struct {
-	Health   Health
-	NonReady int // resources whose health != Healthy (the count behind the dot)
+	Health   Health `json:"health"`
+	NonReady int    `json:"nonReady,omitempty"` // resources whose health != Healthy (the count behind the dot)
 }
 
 // Summarize rolls a namespace snapshot up to its worst resource health and non-ready count, so the
@@ -41,7 +42,14 @@ func SummarizeCluster(objs []runtime.Object) Summary {
 }
 
 func summarize(objs []runtime.Object, clusterScope bool) Summary {
-	g := Build(objs)
+	return SummarizeBuilt(Build(objs), clusterScope)
+}
+
+// SummarizeBuilt rolls up an already-built graph (no rebuild), so callers that already have one
+// — the SSE stream computes both the filtered graph and the namespace's summary from the same
+// source — don't pay for two builds. clusterScope picks per-namespace (false) vs cluster-scope
+// (true) rollup, mirroring Summarize/SummarizeCluster.
+func SummarizeBuilt(g *Graph, clusterScope bool) Summary {
 	s := Summary{Health: HealthHealthy}
 	for _, n := range g.Nodes {
 		// Per-namespace rollup skips cluster-scoped ride-along (a cordoned Node would otherwise

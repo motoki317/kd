@@ -88,9 +88,19 @@ export async function fetchEvents(ctx: string, ns: string, kind: string, name: s
   return ((await res.json()) as { events: EventEntry[] }).events ?? []
 }
 
+// NamespaceSummary mirrors the server's graph.Summary: the namespace's worst health and the
+// count of non-Healthy nodes, both computed from the UNFILTERED graph. The sidebar uses this
+// instead of rolling up the filtered topology, so a degraded resource not in the current view
+// (e.g. a Service with no endpoints while the user is in the ownership view) still surfaces.
+export interface NamespaceSummary {
+  health: Health
+  nonReady?: number
+}
+
 export interface GraphStreamHandlers {
   snapshot: (g: KGraph) => void
   patch: (p: Patch) => void
+  summary?: (s: NamespaceSummary) => void
   error?: () => void
 }
 
@@ -99,6 +109,7 @@ export function streamGraph(ctx: string, ns: string, view: View, h: GraphStreamH
   const es = new EventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream?view=${view}`)
   es.addEventListener('snapshot', (e) => h.snapshot(JSON.parse((e as MessageEvent).data)))
   es.addEventListener('patch', (e) => h.patch(JSON.parse((e as MessageEvent).data)))
+  es.addEventListener('summary', (e) => h.summary?.(JSON.parse((e as MessageEvent).data) as NamespaceSummary))
   es.onerror = () => h.error?.()
   return () => es.close()
 }
