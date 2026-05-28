@@ -223,6 +223,12 @@ export default function App() {
     onCleanup(() => window.removeEventListener('keydown', onKey))
   })
 
+  // Manual reconnect signal (cycle 291): clicking the offline conn pill bumps this counter,
+  // which the SSE subscription effect tracks — incrementing tears down the stale EventSource and
+  // opens a fresh one. EventSource auto-reconnects with backoff, but the operator sometimes knows
+  // the server just came back and doesn't want to wait the rest of the backoff window.
+  const [reconnectTick, setReconnectTick] = createSignal(0)
+
   // (Re)subscribe to the graph feed whenever the context, namespace, or view changes. A context
   // switch closes the old SSE stream and opens a fresh one against the new cluster's cache.
   // The first run keeps URL-seeded filters (?kinds=) — only an actual change resets them.
@@ -231,6 +237,7 @@ export default function App() {
     const c = ctx()
     const ns = namespace()
     const v = view()
+    reconnectTick() // tracked: a manual reconnect (cycle 291) re-fires the effect
     if (!c || !ns) return
     // Preserve the selection across a view switch when the same resource exists in the new view
     // (UIDs are stable across views), so "look at pod X, switch to Volumes" keeps X selected. A
@@ -402,21 +409,37 @@ export default function App() {
             )}
           </For>
         </div>
-        <span
-          class="conn"
-          classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}
-          role="status"
-          aria-live="polite"
-          title={
-            connState() === 'live'
-              ? 'Live updates via SSE — graph reflects cluster state in real time'
-              : connState() === 'connecting'
-                ? 'Opening the SSE stream to the cluster'
-                : 'No connection to the server. The page will reconnect automatically when reachable.'
+        {/* When offline (cycle 291), the conn pill becomes clickable as a manual reconnect:
+            EventSource auto-reconnects, but on a long backoff — operators who know the server is
+            back shouldn't have to wait it out. role/title shift to reflect the affordance. */}
+        <Show
+          when={connState() === 'offline'}
+          fallback={
+            <span
+              class="conn"
+              classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}
+              role="status"
+              aria-live="polite"
+              title={
+                connState() === 'live'
+                  ? 'Live updates via SSE — graph reflects cluster state in real time'
+                  : 'Opening the SSE stream to the cluster'
+              }
+            >
+              {connState() === 'live' ? 'live' : 'connecting…'}
+            </span>
           }
         >
-          {connState() === 'live' ? 'live' : connState() === 'connecting' ? 'connecting…' : 'offline'}
-        </span>
+          <button
+            class="conn conn-retry"
+            type="button"
+            aria-label="Reconnect to the cluster"
+            title="No connection to the server. Click to reconnect now."
+            onClick={() => setReconnectTick((n) => n + 1)}
+          >
+            offline · retry
+          </button>
+        </Show>
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
           ?
         </button>

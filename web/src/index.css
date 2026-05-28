@@ -337,6 +337,20 @@ body {
   .conn.live::before,
   .conn.connecting { animation: none; }
 }
+/* Offline-as-button (cycle 291): when offline, the pill becomes a clickable retry. Inherit the
+   .conn shape but add hover/focus affordance so the operator can tell it's actionable. */
+button.conn.conn-retry {
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+button.conn.conn-retry:hover {
+  background: color-mix(in srgb, var(--health-degraded) 12%, transparent);
+}
+button.conn.conn-retry:focus-visible {
+  outline: 2px solid var(--health-degraded);
+  outline-offset: 2px;
+}
 .help-btn {
   width: 24px;
   height: 24px;
