@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
+import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
 import type { KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -96,6 +97,17 @@ export default function DetailDrawer(props: Props) {
   // the filter doesn't silently follow operators into a new context.
   const [warnOnly, setWarnOnly] = createSignal(false)
   createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
+  // Within-manifest search: long YAMLs hide an env var or a strategy buried 80 lines down. Resets
+  // on selection change so the query doesn't follow into a new resource's manifest. The memo guards
+  // detail.error the same way shownEvents does — the resource throws on read when errored.
+  const [manifestQuery, setManifestQuery] = createSignal('')
+  createEffect(on(() => displayNode()?.id, () => setManifestQuery('')))
+  const manifestSegments = createMemo(() => {
+    if (detail.error) return []
+    return splitByMatch(detail() ?? '', manifestQuery())
+  })
+  const manifestMatchCount = createMemo(() => (manifestQuery() ? manifestSegments().filter((s) => s.match).length : 0))
+
   const shownEvents = createMemo(() => {
     // The resource throws when errored; reading events() then surfaces an uncaught rejection. The
     // outer Show gates the JSX, but the memo also runs reactively so we must short-circuit here.
@@ -249,12 +261,33 @@ export default function DetailDrawer(props: Props) {
                   JSON
                 </button>
               </span>
+              {/* Within-manifest find: case-insensitive substring highlight. Esc clears the field
+                  without leaving the drawer. */}
+              <input
+                class="manifest-find"
+                placeholder="find in manifest…"
+                aria-label="Find in manifest"
+                value={manifestQuery()}
+                onInput={(e) => setManifestQuery(e.currentTarget.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setManifestQuery('')}
+              />
+              <Show when={manifestQuery()}>
+                <span class="manifest-find-count" classList={{ none: manifestMatchCount() === 0 }}>
+                  {manifestMatchCount() === 0 ? 'no matches' : `${manifestMatchCount()} match${manifestMatchCount() === 1 ? '' : 'es'}`}
+                </span>
+              </Show>
               <CopyButton text={() => detail() ?? ''} title="Copy manifest" />
             </div>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               {/* detail() throws if the fetch errored, so check detail.error before reading it. */}
               <Show when={!detail.error && detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
-                <pre class="manifest">{detail()}</pre>
+                <pre class="manifest">
+                  <Show when={manifestQuery()} fallback={detail()}>
+                    <For each={manifestSegments()}>
+                      {(p) => (p.match ? <mark class="manifest-match">{p.text}</mark> : <>{p.text}</>)}
+                    </For>
+                  </Show>
+                </pre>
               </Show>
             </Suspense>
           </section>

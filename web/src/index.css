@@ -1805,9 +1805,43 @@ button.event-source:hover {
   color: var(--text-dim);
 }
 .manifest-format {
-  margin-left: auto; /* right-align the toggle whether or not a label precedes it */
   display: inline-flex;
   gap: 2px;
+}
+/* Within-manifest find: a quiet inline input that grows to fill the head row, sitting between
+   the YAML|JSON toggle and the Copy button. Mirrors logs-filter chrome so the drawer reads as
+   one component. The match counter dimms to "no matches" red when the query has zero hits. */
+.manifest-find {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 3px 9px;
+}
+.manifest-find:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.manifest-find-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.manifest-find-count.none {
+  color: var(--health-degraded);
+}
+.manifest-match {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: inherit;
+  border-radius: 2px;
 }
 .manifest-format button {
   border: 1px solid var(--border);

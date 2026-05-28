@@ -246,6 +246,29 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.events-filter-chip')).toBeNull()
   })
 
+  it('manifest find highlights matches and shows a count', async () => {
+    const yaml = 'kind: ConfigMap\ndata:\n  feature: true\n  feature_flag: enabled\n'
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
+          : new Response(yaml, { status: 200 }),
+      ),
+    )
+    const { container, findByPlaceholderText, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    // Wait until the manifest text actually loads — find runs against detail(), so an early
+    // dispatch fires before the resource resolves and reports 0 matches.
+    await findByText((_t, el) => el?.classList.contains('manifest') && (el?.textContent ?? '').includes('feature_flag'))
+    const find = (await findByPlaceholderText('find in manifest…')) as HTMLInputElement
+    find.value = 'feature'
+    find.dispatchEvent(new Event('input', { bubbles: true }))
+    // Two case-insensitive hits in the body.
+    expect(container.querySelectorAll('.manifest-match').length).toBe(2)
+    expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/2 match/)
+  })
+
   it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
     // Stub the events fetch to return an event whose source differs from the root resource —
     // i.e. an aggregated event from a descendant pod.
