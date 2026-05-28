@@ -36,13 +36,25 @@ export default function Sidebar(props: Props) {
           <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled()}</span>
         </Show>
       </div>
-      <input
-        ref={props.filterRef}
-        class="sidebar-filter"
-        placeholder="Filter…  ( / )"
-        value={filter()}
-        onInput={(e) => setFilter(e.currentTarget.value)}
-      />
+      <div class="sidebar-filter-field">
+        <svg class="topology-search-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+          <circle cx="6" cy="6" r="3.5" />
+          <line x1="8.6" y1="8.6" x2="12" y2="12" />
+        </svg>
+        <input
+          ref={props.filterRef}
+          class="sidebar-filter"
+          placeholder="Filter…  ( / )"
+          value={filter()}
+          onInput={(e) => setFilter(e.currentTarget.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
+        />
+        <Show when={filter()}>
+          <button class="topology-search-clear" onClick={() => setFilter('')} title="Clear (Esc)">
+            ×
+          </button>
+        </Show>
+      </div>
       <Show when={!props.loading} fallback={<div class="sidebar-loading">loading…</div>}>
         <Show when={!props.failed} fallback={<div class="sidebar-loading">Couldn't load namespaces.</div>}>
           <ul class="ns-list">

@@ -275,10 +275,16 @@ body {
   font-size: 10px;
   font-weight: 700;
 }
+.sidebar-filter-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 .sidebar-filter {
+  flex: 1;
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 6px 9px;
+  padding: 6px 26px 6px 28px;
   font-size: 13px;
   outline: none;
 }
