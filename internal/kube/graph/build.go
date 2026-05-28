@@ -155,6 +155,8 @@ func kindFromType(obj runtime.Object) (kind, apiVersion string) {
 		return "Secret", "v1"
 	case *corev1.PersistentVolumeClaim:
 		return "PersistentVolumeClaim", "v1"
+	case *corev1.PersistentVolume:
+		return "PersistentVolume", "v1"
 	case *corev1.ServiceAccount:
 		return "ServiceAccount", "v1"
 	case *corev1.Endpoints:

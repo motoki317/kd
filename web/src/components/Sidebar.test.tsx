@@ -73,6 +73,24 @@ describe('Sidebar', () => {
     expect(onSelect).toHaveBeenCalledWith(CLUSTER_SCOPE)
   })
 
+  it('degraded [cluster] entry does not shift the divider (cluster scope excluded from dividerAt)', () => {
+    // A degraded [cluster] entry + one troubled namespace + two healthy ones: the divider
+    // should appear between the one troubled namespace and the two healthy ones — [cluster]
+    // must not count as the first troubled namespace, which would place the divider at index 0
+    // (hiding the boundary).
+    const withClusterDegraded: NamespaceInfo[] = [
+      { name: CLUSTER_SCOPE, health: 'Degraded', nonReady: 2 },
+      { name: 'a', health: 'Degraded', nonReady: 1 },
+      { name: 'b', health: 'Healthy' },
+      { name: 'c', health: 'Healthy' },
+    ]
+    const { container } = render(() => (
+      <Sidebar namespaces={withClusterDegraded} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // Exactly one divider between the troubled and healthy namespaces (not zero).
+    expect(container.querySelectorAll('.ns-divider').length).toBe(1)
+  })
+
   it('inserts a divider between troubled and healthy namespaces (none when all-troubled / all-healthy)', () => {
     // Mixed: divider should render once between the troubled group and the healthy group.
     const mixed = render(() => (

@@ -27,6 +27,10 @@ describe('kindIcon', () => {
       'RoleBinding',
       'ClusterRole',
       'ClusterRoleBinding',
+      // Cluster-scoped kinds surfaced by the dynamic-informer store (cycle 177).
+      'PersistentVolume',
+      'CustomResourceDefinition',
+      'StorageClass',
     ]
     for (const k of kinds) expect(hasKindIcon(k), `missing icon for ${k}`).toBe(true)
   })

@@ -54,9 +54,9 @@ interface Component {
   height: number
 }
 
-// KIND_HEADER_HEIGHT reserves vertical space at the top of each kind box for the kind label
-// rendered by the Topology, so the body grid doesn't overlap the heading text.
-export const KIND_HEADER_HEIGHT = 26
+// KIND_HEADER_HEIGHT reserves vertical space at the top of each kind box for the kind icon + label
+// rendered by the Topology (a 12px icon at top, then a text row). 30px gives comfortable padding.
+export const KIND_HEADER_HEIGHT = 30
 
 // layoutGraphByKind is the "All" view variant: instead of connectivity-based components, nodes
 // are grouped by Kind (every Pod in one box, every Service in another, …) and laid out in a
@@ -97,7 +97,10 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[]): Layout {
     })
   }
 
-  const packed = packComponents(components)
+  // Use a wider gap between kind boxes than between connectivity components: the kind group
+  // background rects need breathing room so they don't visually merge into each other.
+  const KIND_BOX_GAP = 64
+  const packed = packComponents(components, KIND_BOX_GAP)
 
   // Resolve cross-kind edges against the packed global positions, so ownership backbone
   // (Deployment→ReplicaSet→Pod) and CR refs draw as straight lines across kind boxes.
@@ -326,11 +329,12 @@ function placeLeaves(hub: Hub, centerX: number, gridTop: number, out: Positioned
 
 // packComponents lays component boxes left-to-right into shelves, wrapping at a target row width
 // chosen so the whole block is about TARGET_ASPECT wide-to-tall. Tallest-first keeps shelves tidy.
-function packComponents(components: Component[]): Layout {
+// gap overrides COMPONENT_GAP when the caller needs more spacing (e.g. kind-grouped All view).
+function packComponents(components: Component[], gap = COMPONENT_GAP): Layout {
   if (components.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
   const sorted = [...components].sort((a, b) => b.height - a.height)
-  const totalArea = sorted.reduce((s, c) => s + (c.width + COMPONENT_GAP) * (c.height + COMPONENT_GAP), 0)
+  const totalArea = sorted.reduce((s, c) => s + (c.width + gap) * (c.height + gap), 0)
   const maxWidth = Math.max(...sorted.map((c) => c.width))
   const targetWidth = Math.max(maxWidth, Math.sqrt(totalArea * TARGET_ASPECT))
 
@@ -343,7 +347,7 @@ function packComponents(components: Component[]): Layout {
 
   for (const c of sorted) {
     if (cursorX > 0 && cursorX + c.width > targetWidth) {
-      shelfY += shelfHeight + COMPONENT_GAP
+      shelfY += shelfHeight + gap
       cursorX = 0
       shelfHeight = 0
     }
@@ -351,9 +355,9 @@ function packComponents(components: Component[]): Layout {
     const dy = shelfY
     for (const n of c.nodes) allNodes.push({ ...n, x: n.x + dx, y: n.y + dy })
     for (const e of c.edges) allEdges.push({ ...e, points: e.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) })
-    cursorX += c.width + COMPONENT_GAP
+    cursorX += c.width + gap
     shelfHeight = Math.max(shelfHeight, c.height)
-    totalWidth = Math.max(totalWidth, cursorX - COMPONENT_GAP)
+    totalWidth = Math.max(totalWidth, cursorX - gap)
   }
 
   const margin = 28

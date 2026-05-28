@@ -7,6 +7,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -33,6 +34,8 @@ func statusSummary(obj runtime.Object) string {
 		return ingressStatus(o)
 	case *corev1.PersistentVolumeClaim:
 		return pvcStatus(o)
+	case *corev1.PersistentVolume:
+		return pvStatus(o)
 	case *batchv1.Job:
 		if o.Spec.Suspend != nil && *o.Spec.Suspend {
 			return "Suspended"
@@ -48,6 +51,15 @@ func statusSummary(obj runtime.Object) string {
 		}
 		return o.Spec.Schedule
 	default:
+		// For custom resources that went through crHealth: surface a minimal status string so
+		// the card isn't completely blank. "Unknown" means conditions present but uninterpretable;
+		// a healthy-by-existence CR (no conditions) stays silent.
+		if IsUnstructuredCR(obj) {
+			h := crHealth(obj.(*unstructured.Unstructured))
+			if h == HealthUnknown {
+				return "unknown state"
+			}
+		}
 		return ""
 	}
 }
@@ -157,6 +169,18 @@ func pvcStatus(p *corev1.PersistentVolumeClaim) string {
 		return ""
 	}
 	if q, ok := p.Status.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
+		return phase + " " + q.String()
+	}
+	return phase
+}
+
+// pvStatus shows the volume phase plus its capacity (e.g. "Bound 10Gi"), symmetric to pvcStatus.
+func pvStatus(p *corev1.PersistentVolume) string {
+	phase := string(p.Status.Phase)
+	if phase == "" {
+		return ""
+	}
+	if q, ok := p.Spec.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
 		return phase + " " + q.String()
 	}
 	return phase

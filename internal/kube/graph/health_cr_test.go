@@ -6,6 +6,32 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+// TestCRStatusUnknownHint asserts that a CR with Unknown health (conditions present but
+// uninterpretable) carries "unknown state" as its status text, so the topology card is
+// not silently blank when the health dot shows grey.
+func TestCRStatusUnknownHint(t *testing.T) {
+	cr := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Workflow",
+		"metadata":   map[string]any{"name": "wf-1"},
+		"status": map[string]any{
+			"conditions": []any{map[string]any{"type": "Reconciled", "status": "True"}},
+		},
+	}}
+	if got := statusSummary(cr); got != "unknown state" {
+		t.Errorf("statusSummary(Unknown CR) = %q, want \"unknown state\"", got)
+	}
+	// A healthy-by-existence CR (no conditions) must stay silent — no false alarm.
+	crNoStatus := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1",
+		"kind":       "Workflow",
+		"metadata":   map[string]any{"name": "wf-2"},
+	}}
+	if got := statusSummary(crNoStatus); got != "" {
+		t.Errorf("statusSummary(healthy-by-existence CR) = %q, want \"\"", got)
+	}
+}
+
 // TestCRHealthFromConditions covers the heuristic kd uses to give a custom resource a
 // Health value when there's no per-kind rule. The contract: Ready/Available conditions
 // drive the result; no conditions falls back to Healthy (existence == health); conditions

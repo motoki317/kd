@@ -196,6 +196,36 @@ const icons: Record<string, () => JSX.Element> = {
       <line x1="10.5" y1="7" x2="7" y2="3" />
     </>
   ),
+  // Closed cylinder — the actual backing volume (vs PVC's open cylinder = the claim).
+  PersistentVolume: () => (
+    <>
+      <ellipse cx="7" cy="3.5" rx="4.5" ry="1.5" />
+      <line x1="2.5" y1="3.5" x2="2.5" y2="10.5" />
+      <line x1="11.5" y1="3.5" x2="11.5" y2="10.5" />
+      <ellipse cx="7" cy="10.5" rx="4.5" ry="1.5" />
+    </>
+  ),
+  // Document with a + badge overlay — a CRD extends the cluster's API vocabulary.
+  CustomResourceDefinition: () => (
+    <>
+      <path d="M 2 2.5 L 7.5 2.5 L 7.5 11.5 L 2 11.5 z" />
+      <line x1="3" y1="5" x2="6.5" y2="5" />
+      <line x1="3" y1="7" x2="6.5" y2="7" />
+      <line x1="3" y1="9" x2="5.5" y2="9" />
+      {/* Plus badge: offset top-right, signals "custom addition" */}
+      <circle cx="11" cy="4" r="2.8" class="crd-badge-bg" fill="var(--surface)" stroke="none" />
+      <line x1="11" y1="2.2" x2="11" y2="5.8" />
+      <line x1="9.2" y1="4" x2="12.8" y2="4" />
+    </>
+  ),
+  // Stacked layers with a globe ring — a StorageClass is a cluster-wide storage policy.
+  StorageClass: () => (
+    <>
+      <rect x="2.5" y="3.5" width="9" height="2" rx="0.5" />
+      <rect x="2.5" y="7" width="9" height="2" rx="0.5" />
+      <line x1="11.5" y1="2" x2="11.5" y2="12" />
+    </>
+  ),
 }
 
 // Fallback for kinds without a dedicated icon (CRDs, future additions): a generic squared outline so

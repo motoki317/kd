@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { fetchContexts, fetchNamespaces, streamGraph } from './api'
+import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor, rollupHealth } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
@@ -120,7 +120,7 @@ export default function App() {
         e.preventDefault()
         filterEl?.focus()
       } else if (!typing && num >= 1 && num <= VIEWS.length) {
-        setView(VIEWS[num - 1].id) // 1-5: Ownership / Network / Nodes / Volumes / RBAC
+        setView(VIEWS[num - 1].id) // 1-6: Ownership / Network / Nodes / Volumes / RBAC / All
       } else if (!typing && (e.key === 'j' || e.key === 'ArrowDown')) {
         // Walk selection through the graph, troubled-first, so stepping surfaces problems before
         // healthy nodes. Scoped to the active search/health filter so stepping visits only what's
@@ -229,10 +229,21 @@ export default function App() {
         <ContextSwitcher info={contextsInfo()} current={ctx()} onSelect={setCtx} />
         <Show when={namespace()}>
           {/* Breadcrumb keeps context (which ns + view) visible regardless of where the eye is —
-              sidebar highlight only helps when the operator is looking at the sidebar. */}
+              sidebar highlight only helps when the operator is looking at the sidebar. When the
+              cluster pseudo-namespace is active, a server-box icon precedes the text to reinforce
+              "this is cluster scope, not a namespace" without requiring the user to read the
+              brackets. */}
           <span class="crumb">
             <span class="crumb-sep">›</span>
-            <span class="crumb-ns">{namespace()}</span>
+            <Show when={namespace() === CLUSTER_SCOPE}>
+              <svg class="crumb-cluster-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                <rect x="1" y="2.5" width="10" height="7" rx="1" />
+                <line x1="1" y1="6" x2="11" y2="6" />
+                <circle cx="2.8" cy="4.2" r="0.5" fill="currentColor" />
+                <circle cx="2.8" cy="8" r="0.5" fill="currentColor" />
+              </svg>
+            </Show>
+            <span class="crumb-ns" classList={{ 'crumb-ns-cluster': namespace() === CLUSTER_SCOPE }}>{namespace()}</span>
           </span>
         </Show>
         <div class="topbar-spacer" />
@@ -355,6 +366,9 @@ export default function App() {
                 </li>
                 <li>
                   Click owner chip Walk up the ownership tree
+                </li>
+                <li>
+                  <strong>[cluster]</strong> Pinned sidebar entry — cluster-scoped resources (Nodes, PVs, CRDs, cluster CRs)
                 </li>
               </ul>
             </section>

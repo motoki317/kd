@@ -88,4 +88,19 @@ describe('Topology', () => {
     fireEvent.pointerUp(node, { clientX: 10, clientY: 10, pointerId: 1 })
     expect(onDeselect).not.toHaveBeenCalled()
   })
+
+  it('All view: renders all 3 nodes in kind-grouped layout (viewId=all)', () => {
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" />
+    ))
+    // The All view should still render one chip per node regardless of layout strategy.
+    expect(container.querySelectorAll('g.node').length).toBe(3)
+  })
+
+  it('All view: search still fades non-matching nodes when viewId=all', () => {
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="web" viewId="all" {...base} viewLabel="All" />
+    ))
+    expect(faded(container)).toBe(1) // api-xyz is faded
+  })
 })

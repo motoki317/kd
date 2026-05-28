@@ -73,11 +73,16 @@ const EDGE_LABELS: Record<EdgeType, string> = {
   refers: 'refers to',
 }
 
+function nodeLabel(n: KNode): string {
+  const ns = n.namespace ? `${n.namespace}/` : ''
+  return `${n.kind} ${ns}${n.name}`
+}
+
 function edgeTitle(e: KEdge, nodes: KNode[]): string {
   const fromN = nodes.find((n) => n.id === e.from)
   const toN = nodes.find((n) => n.id === e.to)
-  const fromS = fromN ? `${fromN.kind} ${fromN.name}` : e.from
-  const toS = toN ? `${toN.kind} ${toN.name}` : e.to
+  const fromS = fromN ? nodeLabel(fromN) : e.from
+  const toS = toN ? nodeLabel(toN) : e.to
   return `${fromS} ${EDGE_LABELS[e.type]} ${toS}`
 }
 
@@ -449,6 +454,11 @@ export default function Topology(props: Props) {
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge-color)" />
           </marker>
+          {/* Separate arrowhead for 'refers' edges so the head color matches the violet body
+              instead of inheriting the grey --edge-color. */}
+          <marker id="arrow-refers" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge-refers)" />
+          </marker>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
           {/* All view: a faint kind label sits above each kind group, so the eye can sweep
@@ -459,7 +469,23 @@ export default function Topology(props: Props) {
               <For each={groups()}>
                 {(g) => (
                   <g class="kind-group">
-                    <text class="kind-group-label" x={g.x} y={g.y + 14}>
+                    {/* Subtle background rect behind the whole kind group (label + cards) gives the
+                        grouping a tactile container so kind boundaries read spatially, not just via
+                        spacing. Drawn before the icon and label so it's the underlay. */}
+                    <rect
+                      class="kind-group-bg"
+                      x={g.x - 10}
+                      y={g.y - 6}
+                      width={g.width + 20}
+                      height={g.height + 16}
+                      rx="8"
+                    />
+                    {/* A 12px kind icon at the label's y-baseline (icon is 14×14 in viewBox space;
+                        translate so it centers vertically on the text baseline). */}
+                    <g class="kind-group-icon" transform={`translate(${g.x}, ${g.y + 1}) scale(0.86)`}>
+                      {kindIcon(g.kind)}
+                    </g>
+                    <text class="kind-group-label" x={g.x + 16} y={g.y + 14}>
                       {g.kind} <tspan class="kind-group-count">{props.nodes.filter((n) => n.kind === g.kind).length}</tspan>
                     </text>
                   </g>
@@ -479,10 +505,10 @@ export default function Topology(props: Props) {
                     classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e), owner: e.type === 'ownerReference' }}
                     d={edgePath(e.points)}
                     fill="none"
-                    stroke="var(--edge-color)"
+                    stroke={e.type === 'refers' ? 'var(--edge-refers)' : 'var(--edge-color)'}
                     stroke-width={e.type === 'ownerReference' ? 1.8 : 1.2}
                     stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
-                    marker-end="url(#arrow)"
+                    marker-end={e.type === 'refers' ? 'url(#arrow-refers)' : 'url(#arrow)'}
                   />
                 </g>
               )}
@@ -557,7 +583,16 @@ export default function Topology(props: Props) {
         <div class="topology-count">
           <Show
             when={matches() || props.healthFilter}
-            fallback={<>{props.nodes.length} resources</>}
+            fallback={
+              <>
+                {props.nodes.length} resources
+                {/* In the All view, append "· K kinds" so the operator can see the breadth
+                    of what's loaded at a glance — useful when CRDs bring dozens of new kinds. */}
+                <Show when={props.viewId === 'all' && groups().length > 1}>
+                  {' '}· {groups().length} kinds
+                </Show>
+              </>
+            }
           >
             {(matches()?.size ?? props.nodes.filter((n) => n.health === props.healthFilter).length)} of {props.nodes.length}
           </Show>

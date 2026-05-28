@@ -38,6 +38,7 @@ const KIND_SHORT_LABELS: Record<string, string> = {
   ConfigMap: 'CMAP',
   Secret: 'SECRT',
   PersistentVolumeClaim: 'PVC',
+  PersistentVolume: 'PV',
   Namespace: 'NS',
   ServiceAccount: 'SA',
   Group: 'GRP',
@@ -45,6 +46,9 @@ const KIND_SHORT_LABELS: Record<string, string> = {
   RoleBinding: 'RB',
   ClusterRoleBinding: 'CRB',
   Endpoints: 'EP',
+  // Cluster-scope kinds introduced with the dynamic-informer store.
+  CustomResourceDefinition: 'CRD',
+  StorageClass: 'SC',
 }
 
 export function kindShortLabel(kind: string): string {
@@ -58,6 +62,10 @@ export function kindShortLabel(kind: string): string {
 const KIND_ALIASES: Record<string, string[]> = {
   Service: ['svc'],
   StatefulSet: ['sts'],
+  // Cluster-scope kinds not matched by substring of their full name.
+  CustomResourceDefinition: ['crd'],
+  PersistentVolume: ['pv'],
+  StorageClass: ['sc'],
 }
 
 // kindAliases returns extra search-only synonyms for a kind. The full kind and the kindLabel are

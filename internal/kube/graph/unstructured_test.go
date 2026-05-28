@@ -45,6 +45,35 @@ func TestBuildCRPassesThroughAsUnstructured(t *testing.T) {
 	}
 }
 
+// TestPersistentVolumeUnstructuredRoundTrip verifies that a PV coming through the dynamic
+// store (as *unstructured.Unstructured) is correctly converted back to *corev1.PersistentVolume
+// so pvHealth and pvStatus can run their typed path rather than falling through to crHealth.
+func TestPersistentVolumeUnstructuredRoundTrip(t *testing.T) {
+	pvU := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1",
+		"kind":       "PersistentVolume",
+		"metadata":   map[string]any{"name": "pv-1", "uid": "pv-uid"},
+		"spec": map[string]any{
+			"capacity": map[string]any{"storage": "20Gi"},
+		},
+		"status": map[string]any{"phase": "Bound"},
+	}}
+	g := Build([]runtime.Object{pvU})
+	if len(g.Nodes) != 1 {
+		t.Fatalf("PV Build: got %d nodes, want 1", len(g.Nodes))
+	}
+	n := g.Nodes[0]
+	if n.Kind != "PersistentVolume" {
+		t.Errorf("PV node.Kind = %q, want PersistentVolume", n.Kind)
+	}
+	if n.Health != HealthHealthy {
+		t.Errorf("PV health = %q, want Healthy (Bound phase)", n.Health)
+	}
+	if n.Status != "Bound 20Gi" {
+		t.Errorf("PV status = %q, want \"Bound 20Gi\"", n.Status)
+	}
+}
+
 // toUnstructuredSlice converts typed objects to their unstructured-map form via the
 // default converter, mirroring what an informer's reflector would yield through the
 // dynamic factory.

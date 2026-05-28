@@ -160,6 +160,37 @@ func TestStatusSummaryIngress(t *testing.T) {
 	}
 }
 
+func TestPVHealthAndStatus(t *testing.T) {
+	pv := func(phase corev1.PersistentVolumePhase, capacity string) *corev1.PersistentVolume {
+		p := &corev1.PersistentVolume{Status: corev1.PersistentVolumeStatus{Phase: phase}}
+		if capacity != "" {
+			p.Spec.Capacity = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(capacity)}
+		}
+		return p
+	}
+	tests := []struct {
+		name       string
+		pv         *corev1.PersistentVolume
+		wantHealth Health
+		wantStatus string
+	}{
+		{"available", pv(corev1.VolumeAvailable, "20Gi"), HealthHealthy, "Available 20Gi"},
+		{"bound", pv(corev1.VolumeBound, "20Gi"), HealthHealthy, "Bound 20Gi"},
+		{"released", pv(corev1.VolumeReleased, ""), HealthProgressing, "Released"},
+		{"failed", pv(corev1.VolumeFailed, ""), HealthDegraded, "Failed"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := health(tc.pv); got != tc.wantHealth {
+				t.Errorf("health(PV %s) = %q, want %q", tc.name, got, tc.wantHealth)
+			}
+			if got := statusSummary(tc.pv); got != tc.wantStatus {
+				t.Errorf("statusSummary(PV %s) = %q, want %q", tc.name, got, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestPVCHealthAndStatus(t *testing.T) {
 	pvc := func(phase corev1.PersistentVolumeClaimPhase, capacity string) *corev1.PersistentVolumeClaim {
 		p := &corev1.PersistentVolumeClaim{Status: corev1.PersistentVolumeClaimStatus{Phase: phase}}

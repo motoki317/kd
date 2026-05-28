@@ -34,6 +34,8 @@ func health(obj runtime.Object) Health {
 		return nodeHealth(o)
 	case *corev1.PersistentVolumeClaim:
 		return pvcHealth(o)
+	case *corev1.PersistentVolume:
+		return pvHealth(o)
 	case *unstructured.Unstructured:
 		return crHealth(o)
 	default:
@@ -76,6 +78,22 @@ func crHealth(u *unstructured.Unstructured) Health {
 		}
 	}
 	return HealthUnknown
+}
+
+// pvHealth mirrors pvcHealth for the backing volume: Available (unbound) is healthy (it exists and is
+// ready for a PVC to claim it), Bound (claimed) is healthy, Released is Progressing (waiting for a new
+// claim or to be reclaimed), Failed means the recycler/reclaimer failed (Degraded).
+func pvHealth(p *corev1.PersistentVolume) Health {
+	switch p.Status.Phase {
+	case corev1.VolumeAvailable, corev1.VolumeBound:
+		return HealthHealthy
+	case corev1.VolumeReleased:
+		return HealthProgressing
+	case corev1.VolumeFailed:
+		return HealthDegraded
+	default:
+		return HealthUnknown
+	}
 }
 
 // pvcHealth follows the claim phase: Bound is healthy, Pending is still binding (and blocks the pods

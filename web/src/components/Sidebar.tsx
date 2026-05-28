@@ -85,6 +85,14 @@ export default function Sidebar(props: Props) {
                     <Show when={c().health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
                       <span class="ns-dot" style={{ background: healthColor(c().health) }} title={c().health} />
                     </Show>
+                    {/* Tiny cluster/server glyph echoes the Node icon and signals "cluster scope"
+                        without requiring the user to read the bracketed text first. */}
+                    <svg class="ns-cluster-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                      <rect x="1" y="2.5" width="10" height="7" rx="1" />
+                      <line x1="1" y1="6" x2="11" y2="6" />
+                      <circle cx="2.8" cy="4.2" r="0.5" fill="currentColor" />
+                      <circle cx="2.8" cy="8" r="0.5" fill="currentColor" />
+                    </svg>
                     <span class="ns-name ns-name-cluster">[cluster]</span>
                     <Show when={(c().nonReady ?? 0) > 0}>
                       <span
