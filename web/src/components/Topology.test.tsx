@@ -180,6 +180,20 @@ describe('Topology', () => {
     expect(onSelect2).toHaveBeenCalledWith('2')
   })
 
+  it('clicking the already-selected card calls onDeselect (cycle 298 toggle)', () => {
+    const onSelect = vi.fn()
+    const onDeselect = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="2" onSelect={onSelect} onDeselect={onDeselect} />
+    ))
+    // Node id=2 is selected. Click it again — should deselect, not re-select.
+    const card = container.querySelector('g.node.selected') as SVGGElement
+    expect(card).toBeTruthy()
+    fireEvent.click(card)
+    expect(onDeselect).toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('clicking an All-view kind group bg solos that kind (cycle 276)', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (

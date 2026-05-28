@@ -922,7 +922,13 @@ export default function Topology(props: Props) {
                      changes — when SSE patches shift the Dagre layout, cards glide to their new
                      spots instead of teleporting. See .node { transition: transform … } in CSS. */
                   style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
-                  onClick={() => props.onSelect(n.id)}
+                  /* Cycle 298: clicking the already-selected card deselects (mirrors how the
+                     legend pills and kind chips toggle their own state on a repeat click). With
+                     no deselect callback the click still selects — the toggle is purely additive. */
+                  onClick={() => {
+                    if (n.id === props.selectedId && props.onDeselect) props.onDeselect()
+                    else props.onSelect(n.id)
+                  }}
                 >
                   {/* Hover tooltip: a compact "everything on the card + a little more" view, so
                       a tightly-truncated card in a zoomed-out graph still reveals the full name,
