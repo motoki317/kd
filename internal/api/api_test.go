@@ -20,9 +20,13 @@ import (
 	"github.com/motoki317/kd/internal/api"
 	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/graph"
-	"github.com/motoki317/kd/internal/kube/store"
+	"github.com/motoki317/kd/internal/kube/registry"
 	"github.com/motoki317/kd/internal/rbac"
 )
+
+// ctxPath is the context segment used in every test URL below — newServer always builds an
+// in-cluster registry, which serves a single cache under this sentinel name.
+const ctxPath = "/api/v1/contexts/" + registry.InClusterContext
 
 func meta(ns, name, uid string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Namespace: ns, Name: name, UID: types.UID(uid)}
@@ -30,17 +34,17 @@ func meta(ns, name, uid string) metav1.ObjectMeta {
 
 func newServer(t *testing.T, policy string, objs ...runtime.Object) *httptest.Server {
 	t.Helper()
-	st := store.New(fake.NewSimpleClientset(objs...), 0)
+	reg := registry.NewInCluster(fake.NewSimpleClientset(objs...), 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if err := st.Start(ctx); err != nil {
-		t.Fatalf("start store: %v", err)
+	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
+		t.Fatalf("prewarm registry: %v", err)
 	}
 	p, err := rbac.Parse(policy, "role:readonly")
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}
-	a := api.New(st, rbac.NewEnforcer(p))
+	a := api.New(api.FromRegistry(reg), rbac.NewEnforcer(p))
 	authCfg := auth.Config{UserHeader: "X-Forwarded-User"}
 	srv := httptest.NewServer(authCfg.Middleware(a.Routes()))
 	t.Cleanup(srv.Close)
@@ -85,7 +89,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 	// dev is denied secret-ns; admin sees everything.
 	srv := newServer(t, "p, dev, secret-ns, *, *, deny\ng, admin, role:admin", fixtureObjs...)
 
-	resp, body := get(t, srv, "/api/v1/namespaces", "dev")
+	resp, body := get(t, srv, ctxPath + "/namespaces", "dev")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -106,7 +110,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 		t.Error("dev should not see denied secret-ns")
 	}
 
-	_, adminBody := get(t, srv, "/api/v1/namespaces", "admin")
+	_, adminBody := get(t, srv, ctxPath + "/namespaces", "admin")
 	if !strings.Contains(string(adminBody), "secret-ns") {
 		t.Error("admin should see secret-ns")
 	}
@@ -114,7 +118,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 
 func TestGetGraph(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, body := get(t, srv, "/api/v1/namespaces/shop/graph", "alice")
+	resp, body := get(t, srv, ctxPath + "/namespaces/shop/graph", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
 	}
@@ -133,7 +137,7 @@ func TestGetGraph(t *testing.T) {
 
 func TestGetGraphForbidden(t *testing.T) {
 	srv := newServer(t, "p, dev, secret-ns, *, *, deny", fixtureObjs...)
-	resp, _ := get(t, srv, "/api/v1/namespaces/secret-ns/graph", "dev")
+	resp, _ := get(t, srv, ctxPath + "/namespaces/secret-ns/graph", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
 	}
@@ -141,7 +145,7 @@ func TestGetGraphForbidden(t *testing.T) {
 
 func TestResourceDetailRedactsSecret(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, body := get(t, srv, "/api/v1/namespaces/shop/resources/Secret/creds", "alice")
+	resp, body := get(t, srv, ctxPath + "/namespaces/shop/resources/Secret/creds", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
 	}
@@ -156,7 +160,7 @@ func TestResourceDetailRedactsSecret(t *testing.T) {
 
 func TestUnauthenticatedRejected(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, _ := get(t, srv, "/api/v1/namespaces", "")
+	resp, _ := get(t, srv, ctxPath + "/namespaces", "")
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -185,7 +189,7 @@ func TestResourceEventsHandler(t *testing.T) {
 	}
 	srv := newServer(t, "", objs...)
 
-	resp, body := get(t, srv, "/api/v1/namespaces/shop/resources/Deployment/web/events", "alice")
+	resp, body := get(t, srv, ctxPath + "/namespaces/shop/resources/Deployment/web/events", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -203,7 +207,7 @@ func TestResourceEventsHandler(t *testing.T) {
 		t.Errorf("Deployment events = %v, want the pod's FailedScheduling (subtree aggregation)", reasons)
 	}
 
-	if resp, _ := get(t, srv, "/api/v1/namespaces/shop/resources/Pod/nope/events", "alice"); resp.StatusCode != http.StatusNotFound {
+	if resp, _ := get(t, srv, ctxPath + "/namespaces/shop/resources/Pod/nope/events", "alice"); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("missing resource events status = %d, want 404", resp.StatusCode)
 	}
 }
@@ -212,7 +216,7 @@ func TestGraphStreamSendsSnapshot(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/namespaces/shop/graph/stream", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+ctxPath + "/namespaces/shop/graph/stream", nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -239,7 +243,7 @@ func TestLogStream(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	url := srv.URL + "/api/v1/namespaces/shop/resources/Pod/web-1/log/stream?follow=false"
+	url := srv.URL + ctxPath + "/namespaces/shop/resources/Pod/web-1/log/stream?follow=false"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
@@ -282,7 +286,7 @@ func TestAggregatedLogStream(t *testing.T) {
 	srv := newServer(t, "", objs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	url := srv.URL + "/api/v1/namespaces/shop/resources/Deployment/web/log/stream?follow=false"
+	url := srv.URL + ctxPath + "/namespaces/shop/resources/Deployment/web/log/stream?follow=false"
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
@@ -317,9 +321,50 @@ func ptr[T any](v T) *T { return &v }
 
 func TestLogStreamForbidden(t *testing.T) {
 	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
-	resp, _ := get(t, srv, "/api/v1/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
+	resp, _ := get(t, srv, ctxPath + "/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+// TestContextsHandlerInClusterMode covers the gating contract used by the client switcher:
+// in-cluster mode reports enabled=false and a single ready context, so the UI knows to hide
+// the switcher (FR-001 / FR-005).
+func TestContextsHandlerInClusterMode(t *testing.T) {
+	srv := newServer(t, "", fixtureObjs...)
+	resp, body := get(t, srv, "/api/v1/contexts", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var out struct {
+		Enabled  bool   `json:"enabled"`
+		Default  string `json:"default"`
+		Contexts []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"contexts"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	if out.Enabled {
+		t.Error("enabled = true, want false in in-cluster mode")
+	}
+	if out.Default != registry.InClusterContext {
+		t.Errorf("default = %q, want %q", out.Default, registry.InClusterContext)
+	}
+	if len(out.Contexts) != 1 || out.Contexts[0].Name != registry.InClusterContext || out.Contexts[0].Status != "ready" {
+		t.Errorf("contexts = %+v, want one ready %q entry", out.Contexts, registry.InClusterContext)
+	}
+}
+
+// TestUnknownContext404 ensures path-level ctx mismatches surface as 404 rather than 500,
+// so a stale ?ctx= bookmark doesn't crash the client.
+func TestUnknownContext404(t *testing.T) {
+	srv := newServer(t, "", fixtureObjs...)
+	resp, _ := get(t, srv, "/api/v1/contexts/missing/namespaces", "alice")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
 

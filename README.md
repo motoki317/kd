@@ -83,6 +83,12 @@ just build           # build client, embed, build the kd binary
 In dev, the Vite server proxies `/api` to the Go server and injects a `dev` identity, so no
 forward-auth proxy is needed locally.
 
+When kd loads a local kubeconfig (instead of in-cluster config), the topbar gains a context
+switcher listing every context in the merged kubeconfig — switching reloads the dashboard
+against that cluster's API server without touching your host's `kubectl config current-context`.
+Only the kubeconfig's `current-context` is pre-synced at startup; other contexts pay a one-time
+informer sync on first selection. The switcher is hidden in deployed (in-cluster) mode.
+
 ## Deployment
 
 `docker build -t <ref> .` builds a single static image (client embedded). Then:

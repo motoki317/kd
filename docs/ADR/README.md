@@ -33,3 +33,4 @@ authoritative timeline; the filename date is a convenience for sorting.
 | 2026-05-27 | [Resource relationship graph](./20260527-resource-relationship-graph.md) | ownerReferences + inferred edges, server-built graph model |
 | 2026-05-27 | [Real-time transport (SSE)](./20260527-realtime-transport-sse.md) | Server-Sent Events for watch updates and log streaming |
 | 2026-05-27 | [Frontend stack](./20260527-frontend-stack.md) | Solid.js + Vite + TypeScript, Dagre layout, SVG topology |
+| 2026-05-28 | [Kubeconfig context switcher](./20260528-kubeconfig-context-switcher.md) | Parallel per-context informer caches in kubeconfig mode; hidden in-cluster |

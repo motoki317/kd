@@ -1,0 +1,237 @@
+// Package registry maps kubeconfig context names to live informer caches. The first request
+// for a context builds its client + cache and starts informers; subsequent callers share the
+// same cache. Single-flight protects concurrent first-callers from double-building.
+//
+// In in-cluster mode the registry holds exactly one cache under the sentinel name
+// "in-cluster"; the multi-context UI is gated off by the API's /contexts response.
+package registry
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/motoki317/kd/internal/kube/kubeconfig"
+	"github.com/motoki317/kd/internal/kube/store"
+)
+
+// ErrUnknownContext is returned by Get when the caller names a context the registry does
+// not know. API handlers use errors.Is to map this to a 404.
+var ErrUnknownContext = errors.New("registry: unknown context")
+
+// InClusterContext is the sentinel context name used when kd runs against in-cluster config —
+// there is no real kubeconfig context, but the API path still needs a name to route on.
+const InClusterContext = "in-cluster"
+
+// Status describes a context's cache lifecycle as seen by callers.
+type Status string
+
+const (
+	StatusPending Status = "pending" // never accessed; no build attempted yet
+	StatusSyncing Status = "syncing" // build started, informers not yet ready
+	StatusReady   Status = "ready"   // informers synced; cache serves snapshots
+	StatusError   Status = "error"   // build or sync failed; Err() carries the cause
+)
+
+// ContextInfo is a per-context status snapshot for the API surface.
+type ContextInfo struct {
+	Name   string
+	Status Status
+	Error  string
+}
+
+// Registry resolves a context name to its *store.Cache, lazily.
+type Registry struct {
+	resync  time.Duration
+	mode    mode
+	current string
+	build   func(name string) (kubernetes.Interface, error)
+
+	// listed contexts (kubeconfig only; "in-cluster" mode keeps this empty so the API can
+	// report enabled=false and the UI hides the switcher).
+	contexts []string
+
+	mu      sync.Mutex
+	entries map[string]*entry
+}
+
+type mode int
+
+const (
+	modeInCluster mode = iota
+	modeKubeconfig
+)
+
+type entry struct {
+	once   sync.Once
+	ready  chan struct{} // closed when the build finishes (success or error)
+	cache  *store.Cache
+	err    error
+	status Status // updated under registry.mu
+}
+
+// NewInCluster returns a single-context registry over the given in-cluster client. The
+// reported default context name is InClusterContext.
+func NewInCluster(client kubernetes.Interface, resync time.Duration) *Registry {
+	return &Registry{
+		resync:  resync,
+		mode:    modeInCluster,
+		current: InClusterContext,
+		build:   func(string) (kubernetes.Interface, error) { return client, nil },
+		entries: map[string]*entry{},
+	}
+}
+
+// NewKubeconfig returns a registry that lazily builds one cache per declared kubeconfig
+// context. The default context is the kubeconfig's current-context.
+func NewKubeconfig(loader *kubeconfig.Loader, resync time.Duration) *Registry {
+	return NewWithBuilder(loader.Current(), loader.Contexts(), resync, func(name string) (kubernetes.Interface, error) {
+		cfg, err := loader.RESTConfig(name)
+		if err != nil {
+			return nil, err
+		}
+		return kubernetes.NewForConfig(cfg)
+	})
+}
+
+// NewWithBuilder is the lower-level constructor behind NewKubeconfig. Tests use it to inject
+// a fake clientset builder; production callers should prefer NewKubeconfig / NewInCluster.
+func NewWithBuilder(current string, contexts []string, resync time.Duration, build func(name string) (kubernetes.Interface, error)) *Registry {
+	return &Registry{
+		resync:   resync,
+		mode:     modeKubeconfig,
+		current:  current,
+		contexts: append([]string(nil), contexts...),
+		build:    build,
+		entries:  map[string]*entry{},
+	}
+}
+
+// Enabled reports whether the multi-context UI should be shown. False when running against
+// in-cluster config (only one context exists), true otherwise.
+func (r *Registry) Enabled() bool { return r.mode == modeKubeconfig }
+
+// Default returns the default context name (kubeconfig's current-context, or InClusterContext).
+func (r *Registry) Default() string { return r.current }
+
+// List returns every context the registry knows about, with its current status. Pending
+// entries (never accessed) appear with Status=StatusPending.
+func (r *Registry) List() []ContextInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	names := r.knownNamesLocked()
+	out := make([]ContextInfo, 0, len(names))
+	for _, n := range names {
+		info := ContextInfo{Name: n, Status: StatusPending}
+		if e, ok := r.entries[n]; ok {
+			info.Status = e.status
+			if e.err != nil {
+				info.Error = e.err.Error()
+			}
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+// knownNamesLocked returns the union of declared contexts and any accessed sentinel names.
+// (In-cluster mode declares no contexts up front but lazily registers "in-cluster" on first Get.)
+func (r *Registry) knownNamesLocked() []string {
+	if r.mode == modeKubeconfig {
+		return r.contexts
+	}
+	out := make([]string, 0, len(r.entries))
+	for n := range r.entries {
+		out = append(out, n)
+	}
+	return out
+}
+
+// Get returns the cache for the named context, building it (and waiting for the initial
+// informer sync) on first access. Concurrent first-callers share one build via single-flight.
+// Empty name resolves to the default context.
+func (r *Registry) Get(ctx context.Context, name string) (*store.Cache, error) {
+	if name == "" {
+		name = r.current
+	}
+	if !r.known(name) {
+		return nil, fmt.Errorf("%w: %q", ErrUnknownContext, name)
+	}
+	e := r.getOrCreate(name)
+	// Kick the build off lazily; once.Do guarantees a single build per entry across goroutines.
+	go e.once.Do(func() { r.runBuild(name, e) })
+	select {
+	case <-e.ready:
+		return e.cache, e.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// Prewarm builds the cache for the named context synchronously, returning the build error.
+// Intended for the default context on startup so the UI lands ready-to-use.
+func (r *Registry) Prewarm(ctx context.Context, name string) error {
+	_, err := r.Get(ctx, name)
+	return err
+}
+
+func (r *Registry) known(name string) bool {
+	if r.mode == modeInCluster {
+		return name == InClusterContext
+	}
+	for _, n := range r.contexts {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Registry) getOrCreate(name string) *entry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if e, ok := r.entries[name]; ok {
+		return e
+	}
+	e := &entry{ready: make(chan struct{}), status: StatusSyncing}
+	r.entries[name] = e
+	return e
+}
+
+// runBuild constructs the client + cache for one context and starts its informers. Runs once
+// per entry (guarded by entry.once). Closes ready so waiters can proceed.
+func (r *Registry) runBuild(name string, e *entry) {
+	defer close(e.ready)
+	client, err := r.build(name)
+	if err != nil {
+		r.setStatus(e, StatusError, err)
+		return
+	}
+	c := store.New(client, r.resync)
+	// Cache lifetime is tied to the process — once started, informers run until the kd
+	// process exits. A dedicated context keeps Start() independent of any single HTTP request.
+	startCtx := context.Background()
+	if err := c.Start(startCtx); err != nil {
+		r.setStatus(e, StatusError, fmt.Errorf("registry: start cache for %q: %w", name, err))
+		return
+	}
+	r.mu.Lock()
+	e.cache = c
+	e.err = nil
+	e.status = StatusReady
+	r.mu.Unlock()
+}
+
+func (r *Registry) setStatus(e *entry, s Status, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e.status = s
+	if err != nil {
+		e.err = err
+	}
+}
+

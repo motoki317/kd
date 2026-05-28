@@ -6,14 +6,41 @@ import type { Health, KGraph, Patch, View } from './types'
 
 const base = '/api/v1'
 
+// ctxBase scopes namespaced reads to one kubeconfig context. The /api/v1/contexts/<ctx>
+// prefix is required by the server (no fallback), so callers always pass the context the UI
+// is currently rendering.
+const ctxBase = (ctx: string) => `${base}/contexts/${encodeURIComponent(ctx)}`
+
+export type ContextStatus = 'pending' | 'syncing' | 'ready' | 'error'
+
+export interface ContextInfo {
+  name: string
+  status: ContextStatus
+  error?: string
+}
+
+export interface ContextsResponse {
+  // enabled is false in in-cluster mode (only one cache, no kubeconfig) — the UI hides the
+  // switcher in that case so deployed kd looks identical to the pre-multi-context UX.
+  enabled: boolean
+  default: string
+  contexts: ContextInfo[]
+}
+
+export async function fetchContexts(): Promise<ContextsResponse> {
+  const res = await fetch(`${base}/contexts`)
+  if (!res.ok) throw new Error(`contexts: ${res.status}`)
+  return (await res.json()) as ContextsResponse
+}
+
 export interface NamespaceInfo {
   name: string
   health: Health
   nonReady?: number // count of non-Healthy resources, the scale behind the health dot
 }
 
-export async function fetchNamespaces(): Promise<NamespaceInfo[]> {
-  const res = await fetch(`${base}/namespaces`)
+export async function fetchNamespaces(ctx: string): Promise<NamespaceInfo[]> {
+  const res = await fetch(`${ctxBase(ctx)}/namespaces`)
   if (!res.ok) throw new Error(`namespaces: ${res.status}`)
   const body = (await res.json()) as { namespaces: NamespaceInfo[] }
   return body.namespaces
@@ -23,9 +50,15 @@ export type ManifestFormat = 'yaml' | 'json'
 
 // fetchResource returns the resource manifest already rendered as text by the server (YAML or
 // JSON), so the client just displays it — the structure is never inspected on this path.
-export async function fetchResource(ns: string, kind: string, name: string, format: ManifestFormat): Promise<string> {
+export async function fetchResource(
+  ctx: string,
+  ns: string,
+  kind: string,
+  name: string,
+  format: ManifestFormat,
+): Promise<string> {
   const res = await fetch(
-    `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}?format=${format}`,
+    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}?format=${format}`,
   )
   if (!res.ok) throw new Error(`resource: ${res.status}`)
   return res.text()
@@ -41,8 +74,10 @@ export interface EventEntry {
 }
 
 // fetchEvents returns the Kubernetes events about a resource, newest-first.
-export async function fetchEvents(ns: string, kind: string, name: string): Promise<EventEntry[]> {
-  const res = await fetch(`${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/events`)
+export async function fetchEvents(ctx: string, ns: string, kind: string, name: string): Promise<EventEntry[]> {
+  const res = await fetch(
+    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/events`,
+  )
   if (!res.ok) throw new Error(`events: ${res.status}`)
   return ((await res.json()) as { events: EventEntry[] }).events ?? []
 }
@@ -54,8 +89,8 @@ export interface GraphStreamHandlers {
 }
 
 // streamGraph opens the SSE graph feed and returns a function that closes it.
-export function streamGraph(ns: string, view: View, h: GraphStreamHandlers): () => void {
-  const es = new EventSource(`${base}/namespaces/${encodeURIComponent(ns)}/graph/stream?view=${view}`)
+export function streamGraph(ctx: string, ns: string, view: View, h: GraphStreamHandlers): () => void {
+  const es = new EventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream?view=${view}`)
   es.addEventListener('snapshot', (e) => h.snapshot(JSON.parse((e as MessageEvent).data)))
   es.addEventListener('patch', (e) => h.patch(JSON.parse((e as MessageEvent).data)))
   es.onerror = () => h.error?.()
@@ -72,6 +107,7 @@ export interface LogEntry {
 // is the pod's own log; for a workload (Deployment, ReplicaSet, ...) the server merges every
 // descendant pod's log into one stream, tagging each line with its source pod.
 export function streamLogs(
+  ctx: string,
   ns: string,
   kind: string,
   name: string,
@@ -85,7 +121,7 @@ export function streamLogs(
   if (opts.previous) params.set('previous', 'true')
   if (opts.timestamps) params.set('timestamps', 'true')
   const es = new EventSource(
-    `${base}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
+    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )
   es.addEventListener('log', (e) => onLine(JSON.parse((e as MessageEvent).data) as LogEntry))
   es.onerror = () => onError?.()

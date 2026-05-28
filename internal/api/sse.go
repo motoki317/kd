@@ -25,6 +25,10 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.authorize(w, r, ns, "pods", "list"); !ok {
 		return
 	}
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -32,11 +36,11 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	}
 	setSSEHeaders(w)
 
-	changes, unsubscribe := a.store.Subscribe()
+	changes, unsubscribe := store.Subscribe()
 	defer unsubscribe()
 
 	view := graph.ParseView(r.URL.Query().Get("view"))
-	build := func() *graph.Graph { return graph.Build(a.store.SnapshotNamespace(ns)).Filter(view) }
+	build := func() *graph.Graph { return graph.Build(store.SnapshotNamespace(ns)).Filter(view) }
 
 	prev := build()
 	if !writeSSE(w, "snapshot", prev) {
@@ -101,6 +105,10 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.authorize(w, r, ns, "logs", "get"); !ok {
 		return
 	}
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -126,16 +134,16 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		// created mid-rollout join the stream. It never closes `lines`; the writer loop below ends
 		// only when the client disconnects (ctx done), so a momentary zero-pod gap mid-rollout no
 		// longer tears the stream down.
-		go a.superviseLogStreams(r.Context(), ns, kind, name, container, timestamps, tail, lines)
+		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, lines)
 	} else {
 		// One-shot: resolve the descendant pods once, dump each, and close when all are done.
-		pods := podsForResource(a.store.SnapshotNamespace(ns), kind, name)
+		pods := podsForResource(store.SnapshotNamespace(ns), kind, name)
 		var wg sync.WaitGroup
 		for _, pod := range pods {
 			wg.Add(1)
 			go func(pod *corev1.Pod) {
 				defer wg.Done()
-				streamPodLogs(r.Context(), a.store.Client(), pod, container, false, previous, timestamps, tail, lines)
+				streamPodLogs(r.Context(), store.Client(), pod, container, false, previous, timestamps, tail, lines)
 			}(pod)
 		}
 		go func() { wg.Wait(); close(lines) }()
@@ -178,12 +186,12 @@ var logResolveInterval = 3 * time.Second
 // being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted StatefulSet
 // member) join the merged stream without the client reconnecting. Each streamer removes itself when
 // its pod's log ends. Runs until ctx is cancelled; never closes out.
-func (a *API) superviseLogStreams(ctx context.Context, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine) {
+func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine) {
 	var mu sync.Mutex
 	streaming := make(map[string]bool) // pod names with a live streamer, so we never double-stream
 
 	resolve := func() {
-		for _, pod := range podsForResource(a.store.SnapshotNamespace(ns), kind, name) {
+		for _, pod := range podsForResource(store.SnapshotNamespace(ns), kind, name) {
 			mu.Lock()
 			if streaming[pod.Name] {
 				mu.Unlock()
@@ -192,7 +200,7 @@ func (a *API) superviseLogStreams(ctx context.Context, ns, kind, name, container
 			streaming[pod.Name] = true
 			mu.Unlock()
 			go func(pod *corev1.Pod) {
-				streamPodLogs(ctx, a.store.Client(), pod, container, true, false, timestamps, tail, out)
+				streamPodLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
 				mu.Lock()
 				delete(streaming, pod.Name)
 				mu.Unlock()

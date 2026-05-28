@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { fetchNamespaces, streamGraph } from './api'
+import { fetchContexts, fetchNamespaces, streamGraph } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { HEALTH_ORDER, healthColor, rollupHealth } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
@@ -9,6 +9,7 @@ import type { Health, KNode, View } from './types'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
+import ContextSwitcher from './components/ContextSwitcher'
 
 // Each view is a relationship lens the user explicitly asked for. There is no "everything at
 // once" view on purpose: a whole-namespace hairball is the opposite of reading state at a glance.
@@ -21,17 +22,35 @@ const VIEWS: { id: View; label: string }[] = [
 ]
 
 export default function App() {
-  const [namespaces, { refetch: refetchNamespaces }] = createResource(fetchNamespaces)
+  // The contexts list drives the topbar switcher (FR-005) and the default context the URL falls back
+  // to (FR-004). It loads once on mount; the kubeconfig is snapshot at server start so a poll would
+  // never change the set.
+  const [contextsRes] = createResource(fetchContexts)
+  const contextsInfo = createMemo(() => (contextsRes.error ? null : contextsRes() ?? null))
+  // Seed namespace/view/ctx from the URL so a link or reload restores the same place.
+  const params = new URLSearchParams(location.search)
+  const urlView = params.get('view') as View
+  const [ctx, setCtx] = createSignal<string | null>(params.get('ctx'))
+  const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
+  const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
+  const [selectedId, setSelectedId] = createSignal<string | null>(null)
+
+  // Resolve ?ctx= once the contexts list arrives: keep a known URL-supplied context, otherwise fall
+  // back to the server-reported default (kubeconfig current-context, or the in-cluster sentinel).
+  createEffect(() => {
+    const info = contextsInfo()
+    if (!info) return
+    const known = info.contexts.some((c) => c.name === ctx())
+    if (!known) setCtx(info.default)
+  })
+
+  // Namespace list is keyed on ctx so a context switch refetches against the new cluster. Wait for
+  // ctx to resolve so the first fetch hits the right URL (avoids a doomed call to /contexts/null/).
+  const [namespaces, { refetch: refetchNamespaces }] = createResource(ctx, (c) => fetchNamespaces(c))
   // namespaces() rethrows if the fetch errored (Solid resources throw on read in an error state), which
   // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
   // read the list through this guard, which yields [] on error/while loading.
   const namespaceList = createMemo(() => (namespaces.error ? [] : namespaces() ?? []))
-  // Seed namespace/view from the URL so a link or reload restores the same place.
-  const params = new URLSearchParams(location.search)
-  const urlView = params.get('view') as View
-  const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
-  const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
-  const [selectedId, setSelectedId] = createSignal<string | null>(null)
   // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
   // stable across reloads, so we key the link on the stable identity).
   let pendingSel = params.get('sel')
@@ -57,9 +76,11 @@ export default function App() {
     if (!list.some((n) => n.name === namespace())) setNamespace(mostTroubled(list)!.name)
   })
 
-  // Mirror namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
+  // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
+  // ctx is included only when the switcher is enabled (kubeconfig mode); in-cluster keeps URLs clean.
   createEffect(() => {
     const p = new URLSearchParams()
+    if (ctx() && contextsInfo()?.enabled) p.set('ctx', ctx()!)
     if (namespace()) p.set('ns', namespace()!)
     p.set('view', view())
     const id = selectedId()
@@ -123,11 +144,13 @@ export default function App() {
     onCleanup(() => window.removeEventListener('keydown', onKey))
   })
 
-  // (Re)subscribe to the graph feed whenever the namespace or view changes.
+  // (Re)subscribe to the graph feed whenever the context, namespace, or view changes. A context
+  // switch closes the old SSE stream and opens a fresh one against the new cluster's cache.
   createEffect(() => {
+    const c = ctx()
     const ns = namespace()
     const v = view()
-    if (!ns) return
+    if (!c || !ns) return
     // Preserve the selection across a view switch when the same resource exists in the new view
     // (UIDs are stable across views), so "look at pod X, switch to Volumes" keeps X selected. A
     // namespace change naturally clears it: the old UID won't be in the new namespace's graph.
@@ -137,7 +160,7 @@ export default function App() {
     setHealthFilter(null)
     setGraph(reconcile(emptyState()))
     setConnState('connecting')
-    const close = streamGraph(ns, v, {
+    const close = streamGraph(c, ns, v, {
       snapshot: (g) => {
         // Decide the selection from the snapshot's own nodes BEFORE mutating the store, so this set
         // is authoritative over the reactive deep-link restore below (which would otherwise race and
@@ -200,6 +223,7 @@ export default function App() {
           </svg>
           <span class="brand-text">kd</span>
         </div>
+        <ContextSwitcher info={contextsInfo()} current={ctx()} onSelect={setCtx} />
         <Show when={namespace()}>
           {/* Breadcrumb keeps context (which ns + view) visible regardless of where the eye is —
               sidebar highlight only helps when the operator is looking at the sidebar. */}
@@ -293,6 +317,7 @@ export default function App() {
             onDeselect={() => setSelectedId(null)}
           />
           <DetailDrawer
+            ctx={ctx() ?? ''}
             node={selectedNode()}
             owners={ownerNodes()}
             onNavigate={setSelectedId}

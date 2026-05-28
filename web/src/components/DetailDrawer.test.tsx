@@ -39,14 +39,14 @@ const configMap: KNode = {
 
 describe('DetailDrawer', () => {
   it('shows Events/Manifest tabs (no Logs) for a non-loggable resource', () => {
-    const { container } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const tabs = [...container.querySelectorAll('.drawer-tabs button')].map((b) => b.textContent?.trim())
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
   it('renders labels as key/value chips, sorted by key', () => {
     const labeled: KNode = { ...configMap, labels: { tier: 'backend', app: 'shop' } }
-    const { container } = render(() => <DetailDrawer node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const keys = [...container.querySelectorAll('.label-chip .label-key')].map((e) => e.textContent)
     const vals = [...container.querySelectorAll('.label-chip .label-val')].map((e) => e.textContent)
     expect(keys).toEqual(['app', 'tier'])
@@ -55,12 +55,12 @@ describe('DetailDrawer', () => {
 
   it('shows node capacity in the meta line when present', () => {
     const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', health: 'Healthy', capacity: '8 vCPU · 16Gi · 110 pods' }
-    const { container } = render(() => <DetailDrawer node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('8 vCPU · 16Gi · 110 pods')
   })
 
   it('offers a copy-name button in the header', () => {
-    const { getByTitle } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { getByTitle } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     expect(getByTitle('Copy name')).toBeTruthy()
   })
 
@@ -73,7 +73,7 @@ describe('DetailDrawer', () => {
         { name: 'sidecar', ready: false, restarts: 4, state: 'Waiting: CrashLoopBackOff' },
       ],
     }
-    const { container } = render(() => <DetailDrawer node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const names = [...container.querySelectorAll('.container-row .container-name')].map((e) => e.textContent)
     const states = [...container.querySelectorAll('.container-row .container-state')].map((e) => e.textContent)
     expect(names).toEqual(['app', 'sidecar'])
@@ -83,13 +83,13 @@ describe('DetailDrawer', () => {
 
   it('renders each container image', () => {
     const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
-    const { container } = render(() => <DetailDrawer node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const imgs = [...container.querySelectorAll('.drawer-image code')].map((e) => e.textContent)
     expect(imgs).toEqual(['nginx:1.25', 'envoy:1.29'])
   })
 
   it('omits the labels section when there are none', () => {
-    const { container } = render(() => <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     expect(container.querySelector('.drawer-labels')).toBeNull()
   })
 
@@ -102,7 +102,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     await findByText("Couldn't load events.")
     // The drawer itself still rendered (a thrown resource error would have torn it down).
@@ -118,7 +118,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     await findByText('unavailable')
     expect(container.querySelector('.drawer')).toBeTruthy()
@@ -128,7 +128,7 @@ describe('DetailDrawer', () => {
     const podA: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
     const podB: KNode = { id: 'pb', kind: 'Pod', name: 'pod-b', namespace: 'shop', health: 'Healthy' }
     const [node, setNode] = createSignal<KNode>(podA)
-    const { container } = render(() => <DetailDrawer node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const tabBtn = (label: string) =>
       [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim().startsWith(label)) as HTMLButtonElement
     const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
@@ -142,7 +142,7 @@ describe('DetailDrawer', () => {
   it('falls back to the default tab when the new resource lacks the current one', () => {
     const pod: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
     const [node, setNode] = createSignal<KNode>(pod)
-    const { container } = render(() => <DetailDrawer node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
     // Pod defaults to Logs; switching to a non-loggable ConfigMap (no Logs tab) must fall back.
     expect(activeTab()).toBe('Logs')
@@ -154,7 +154,7 @@ describe('DetailDrawer', () => {
     const owner: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const navigated: string[] = []
     const { container, getByTitle } = render(() => (
-      <DetailDrawer node={configMap} owners={[owner]} onNavigate={(id) => navigated.push(id)} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[owner]} onNavigate={(id) => navigated.push(id)} onClose={() => {}} />
     ))
     expect(container.querySelector('.drawer-age')?.textContent).toContain('3d')
     const chip = getByTitle('Go to Deployment web')
@@ -166,7 +166,7 @@ describe('DetailDrawer', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
     const refNavigated: string[] = []
     const { container } = render(() => (
-      <DetailDrawer
+      <DetailDrawer ctx="test-ctx"
         node={pod}
         owners={[]}
         onNavigate={() => {}}
@@ -185,7 +185,7 @@ describe('DetailDrawer', () => {
 
   it('host meta is a static span when onNavigateRef is omitted (no nav available)', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
-    const { container } = render(() => <DetailDrawer node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     expect(container.querySelector('button.drawer-host')).toBeNull()
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('on worker-1')
   })
@@ -217,7 +217,7 @@ describe('DetailDrawer', () => {
     const deploy: KNode = { id: 'd1', kind: 'Deployment', name: 'web', namespace: 'shop', health: 'Degraded' }
     const refNavigated: string[] = []
     const { container, findByTitle } = render(() => (
-      <DetailDrawer
+      <DetailDrawer ctx="test-ctx"
         node={deploy}
         owners={[]}
         onNavigate={() => {}}

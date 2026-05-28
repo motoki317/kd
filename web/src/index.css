@@ -112,6 +112,30 @@ body {
 .topbar-spacer {
   flex: 1;
 }
+/* Context switcher pill — sits beside the brand when kd is in kubeconfig mode and the user has
+   more than one context. Sized to match .conn / .crumb so it doesn't shout for attention. */
+.ctx-switcher {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 22px 3px 10px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.ctx-switcher:hover {
+  border-color: var(--border-strong);
+}
 /* Breadcrumb beside the brand: dim separator, slightly heavier namespace name so the eye lands on
    the ns first (the brand is the constant; the ns is the context). */
 .crumb {

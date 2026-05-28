@@ -17,12 +17,12 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/motoki317/kd/internal/api"
 	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/config"
-	"github.com/motoki317/kd/internal/kube/store"
+	"github.com/motoki317/kd/internal/kube/kubeconfig"
+	"github.com/motoki317/kd/internal/kube/registry"
 	"github.com/motoki317/kd/internal/rbac"
 	"github.com/motoki317/kd/internal/server"
 )
@@ -43,14 +43,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	client, err := newKubeClient(cfg.Kubeconfig)
+	reg, err := newRegistry(cfg.Kubeconfig, cfg.Resync)
 	if err != nil {
 		return err
 	}
-
-	st := store.New(client, cfg.Resync)
-	slog.Info("syncing informer cache")
-	if err := st.Start(ctx); err != nil {
+	slog.Info("syncing informer cache", "context", reg.Default())
+	if err := reg.Prewarm(ctx, reg.Default()); err != nil {
 		return err
 	}
 
@@ -76,7 +74,7 @@ func run() error {
 		TrustedProxies:  cfg.TrustedProxies,
 		DevUser:         cfg.DevUser,
 	}
-	handler := server.New(authCfg, api.New(st, enforcer).Routes())
+	handler := server.New(authCfg, api.New(api.FromRegistry(reg), enforcer).Routes())
 
 	srv := &http.Server{
 		Addr:    cfg.Addr,
@@ -102,25 +100,22 @@ func run() error {
 	return nil
 }
 
-// newKubeClient builds a clientset, preferring in-cluster config and falling back to the
-// kubeconfig (explicit path, then the default loading rules).
-func newKubeClient(kubeconfig string) (kubernetes.Interface, error) {
-	cfg, err := restConfig(kubeconfig)
+// newRegistry chooses between in-cluster mode (single hidden context) and kubeconfig mode
+// (UI-selectable contexts). In-cluster is preferred only when no explicit --kubeconfig was
+// given AND rest.InClusterConfig() succeeds — matching the prior single-client behavior.
+func newRegistry(kubeconfigPath string, resync time.Duration) (*registry.Registry, error) {
+	if kubeconfigPath == "" {
+		if cfg, err := rest.InClusterConfig(); err == nil {
+			client, err := kubernetes.NewForConfig(cfg)
+			if err != nil {
+				return nil, err
+			}
+			return registry.NewInCluster(client, resync), nil
+		}
+	}
+	loader, err := kubeconfig.Load(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
-	return kubernetes.NewForConfig(cfg)
-}
-
-func restConfig(kubeconfig string) (*rest.Config, error) {
-	if kubeconfig == "" {
-		if cfg, err := rest.InClusterConfig(); err == nil {
-			return cfg, nil
-		}
-	}
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		rules.ExplicitPath = kubeconfig
-	}
-	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).ClientConfig()
+	return registry.NewKubeconfig(loader, resync), nil
 }

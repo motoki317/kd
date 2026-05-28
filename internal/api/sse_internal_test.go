@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/motoki317/kd/internal/auth"
-	"github.com/motoki317/kd/internal/kube/store"
+	"github.com/motoki317/kd/internal/kube/registry"
 	"github.com/motoki317/kd/internal/rbac"
 )
 
@@ -81,22 +81,22 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-a", UID: "pa", OwnerReferences: rsOwner}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
 	)
 
-	st := store.New(client, 0)
+	reg := registry.NewInCluster(client, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if err := st.Start(ctx); err != nil {
-		t.Fatalf("start store: %v", err)
+	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
+		t.Fatalf("prewarm registry: %v", err)
 	}
 	p, err := rbac.Parse("", "role:readonly")
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}
-	srv := httptest.NewServer(auth.Config{UserHeader: "X-Forwarded-User"}.Middleware(New(st, rbac.NewEnforcer(p)).Routes()))
+	srv := httptest.NewServer(auth.Config{UserHeader: "X-Forwarded-User"}.Middleware(New(FromRegistry(reg), rbac.NewEnforcer(p)).Routes()))
 	t.Cleanup(srv.Close)
 
 	reqCtx, reqCancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer reqCancel()
-	req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, srv.URL+"/api/v1/namespaces/shop/resources/Deployment/web/log/stream", nil)
+	req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, srv.URL+"/api/v1/contexts/"+registry.InClusterContext+"/namespaces/shop/resources/Deployment/web/log/stream", nil)
 	req.Header.Set("X-Forwarded-User", "alice")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

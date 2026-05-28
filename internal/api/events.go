@@ -33,7 +33,11 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.authorize(w, r, ns, resourceClass(kind), "get"); !ok {
 		return
 	}
-	snapshot := a.store.SnapshotNamespace(ns)
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
+	snapshot := store.SnapshotNamespace(ns)
 	g := graph.Build(snapshot)
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {

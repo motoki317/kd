@@ -5,6 +5,8 @@ import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
 interface Props {
+  // ctx names the kubeconfig context whose API server backs this stream.
+  ctx: string
   namespace: string
   kind: string
   name: string
@@ -57,7 +59,8 @@ export default function LogViewer(props: Props) {
   )
 
   createEffect(() => {
-    // Re-subscribe whenever the target resource, container, or previous toggle changes.
+    // Re-subscribe whenever the target context, resource, container, or previous toggle changes.
+    const ctx = props.ctx
     const ns = props.namespace
     const kind = props.kind
     const name = props.name
@@ -68,6 +71,7 @@ export default function LogViewer(props: Props) {
     setError(false)
     setPinned(true)
     const close = streamLogs(
+      ctx,
       ns,
       kind,
       name,

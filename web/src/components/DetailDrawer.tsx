@@ -8,6 +8,9 @@ import LogViewer from './LogViewer'
 import ResourceSummary from './ResourceSummary'
 
 interface Props {
+  // ctx names the kubeconfig context whose cache this drawer reads. Threaded through so events
+  // and manifest fetches stay scoped to the cluster the operator is currently viewing.
+  ctx: string
   node: KNode | null
   owners: KNode[]
   onNavigate: (id: string) => void
@@ -44,7 +47,7 @@ export default function DetailDrawer(props: Props) {
   )
 
   const key = () =>
-    props.node ? { ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name } : null
+    props.node ? { ctx: props.ctx, ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name } : null
 
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
   // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events
@@ -52,9 +55,9 @@ export default function DetailDrawer(props: Props) {
   const [format, setFormat] = createSignal<ManifestFormat>('yaml')
   const [detail] = createResource(
     () => (props.node ? { ...key()!, format: format() } : null),
-    (k) => fetchResource(k.ns, k.kind, k.name, k.format),
+    (k) => fetchResource(k.ctx, k.ns, k.kind, k.name, k.format),
   )
-  const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ns, k.kind, k.name))
+  const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ctx, k.ns, k.kind, k.name))
   const warnings = () => events()?.filter((e) => e.type === 'Warning').length ?? 0
 
   // Events are transient and a failing resource keeps emitting them, so poll while the drawer is
@@ -100,6 +103,7 @@ export default function DetailDrawer(props: Props) {
                 visit to another tab. */}
             <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
               <LogViewer
+                ctx={props.ctx}
                 namespace={node().namespace ?? ''}
                 kind={node().kind}
                 name={node().name}
