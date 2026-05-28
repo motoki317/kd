@@ -168,7 +168,7 @@ export default function Sidebar(props: Props) {
                         style={{ color: healthColor(c().health) }}
                         title={`${c().nonReady} not healthy`}
                       >
-                        {c().nonReady}
+                        {(c().nonReady ?? 0) > 99 ? '99+' : c().nonReady}
                       </span>
                     </Show>
                   </button>
@@ -194,13 +194,14 @@ export default function Sidebar(props: Props) {
                       {/* Inline color matches the dot (and the topology health-stroke), so the
                           count reads as "this many of THAT color need a look", not as a neutral
                           stat. Healthy ns never carries a count, so falling back to text-dim is
-                          only for the (rare) Unknown case. */}
+                          only for the (rare) Unknown case. Clamp at "99+" so a runaway namespace
+                          (rare, but possible after a node-loss cascade) doesn't widen the row. */}
                       <span
                         class="ns-count"
                         style={{ color: healthColor(ns.health) }}
                         title={`${ns.nonReady} not healthy`}
                       >
-                        {ns.nonReady}
+                        {(ns.nonReady ?? 0) > 99 ? '99+' : ns.nonReady}
                       </span>
                     </Show>
                   </button>
