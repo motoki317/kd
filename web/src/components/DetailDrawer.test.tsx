@@ -345,7 +345,7 @@ describe('DetailDrawer', () => {
     ))
     // Wait until the manifest text actually loads — find runs against detail(), so an early
     // dispatch fires before the resource resolves and reports 0 matches.
-    await findByText((_t, el) => el?.classList.contains('manifest') && (el?.textContent ?? '').includes('feature_flag'))
+    await findByText((_t, el) => !!el?.classList.contains('manifest') && (el?.textContent ?? '').includes('feature_flag'))
     const find = (await findByPlaceholderText(/find in manifest/)) as HTMLInputElement
     find.value = 'feature'
     find.dispatchEvent(new Event('input', { bubbles: true }))
