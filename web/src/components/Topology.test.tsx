@@ -143,6 +143,31 @@ describe('Topology', () => {
     expect(onSelect2).toHaveBeenCalledWith('2')
   })
 
+  it('clicking an All-view kind group bg solos that kind (cycle 276)', () => {
+    const onKindFilter = vi.fn()
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search=""
+        {...base}
+        onKindFilter={onKindFilter}
+        kindFilter={new Set<string>()}
+        viewId="all"
+      />
+    ))
+    // First kind group's bg rect is the click target since it covers the area. Group order is
+    // layout-driven, not count-driven — assert on the dispatched kind shape, not which group.
+    const groupBg = container.querySelector('.kind-group .kind-group-bg') as SVGRectElement
+    expect(groupBg).toBeTruthy()
+    fireEvent.click(groupBg)
+    // Either Pod or Deployment (the two kinds in the test fixture); both call with solo=true.
+    expect(onKindFilter).toHaveBeenCalledOnce()
+    const [kind, solo] = onKindFilter.mock.calls[0]
+    expect(['Pod', 'Deployment']).toContain(kind)
+    expect(solo).toBe(true)
+  })
+
   it('Shift+click on a kind chip dispatches solo=true (cycle 255)', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
