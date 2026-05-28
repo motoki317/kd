@@ -864,26 +864,33 @@ body {
 }
 .drawer-meta {
   display: flex;
-  gap: 10px;
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 8px;
 }
-.drawer-age::before {
-  content: '· ';
+/* Cycle 146: each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
+   the row reads as a strip of discrete facts instead of a dot-separated run-on. */
+.drawer-meta > span,
+.drawer-meta > button.drawer-age {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 /* Host meta rendered as a button (cycle 116) so it can navigate to its Node; strip default chrome
    to match the sibling spans, and add a quiet hover so the click affordance is visible. */
 button.drawer-age {
-  border: 0;
-  background: transparent;
-  padding: 0;
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
 }
 button.drawer-host:hover {
   color: var(--accent);
+  border-color: var(--accent);
 }
 .drawer-owners {
   display: flex;
