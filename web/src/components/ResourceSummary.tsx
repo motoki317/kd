@@ -209,10 +209,11 @@ export default function ResourceSummary(props: Props) {
         </div>
       </Show>
       {/* Per-container state so a multi-container pod reveals which container is unready or
-          crash-looping, not just an aggregate restart count. */}
+          crash-looping, not just an aggregate restart count. Init containers come first (mirrors
+          execution order); within each group the server's order is preserved. */}
       <Show when={(props.node.containerStatuses?.length ?? 0) > 0}>
         <div class="drawer-containers">
-          <For each={props.node.containerStatuses}>
+          <For each={[...(props.node.containerStatuses ?? [])].sort((a, b) => Number(!!b.init) - Number(!!a.init))}>
             {(cs) => (
               <div
                 class="container-row"

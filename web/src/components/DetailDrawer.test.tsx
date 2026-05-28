@@ -81,6 +81,23 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.container-restarts')?.textContent).toContain('4')
   })
 
+  it('init containers come before main containers (cycle 274)', () => {
+    const pod: KNode = {
+      ...configMap,
+      kind: 'Pod',
+      // Server-side order interleaves init + main; the drawer should re-group so init comes first.
+      containerStatuses: [
+        { name: 'app', ready: true, state: 'Running' },
+        { name: 'wait-for-db', ready: true, state: 'Terminated: Completed', init: true },
+        { name: 'sidecar', ready: true, state: 'Running' },
+        { name: 'migrate', ready: true, state: 'Terminated: Completed', init: true },
+      ],
+    }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const names = [...container.querySelectorAll('.container-row .container-name')].map((e) => e.textContent?.trim().replace(/\s+init$/, ''))
+    expect(names).toEqual(['wait-for-db', 'migrate', 'app', 'sidecar'])
+  })
+
   it('renders each container image', () => {
     const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
