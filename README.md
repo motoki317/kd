@@ -29,12 +29,14 @@ state at a glance and app developers can jump straight to pod status and logs.
 - Detail drawer with Logs / Events / Manifest tabs. Owner chips walk up the tree (Pod → ReplicaSet →
   Deployment); age, restart count, host, node capacity, container images, labels, and per-container
   status inline; one-click copy of the name.
-- Each kind surfaces its essential spec without opening the manifest: a Service's cluster IP, ports,
-  and endpoint readiness; an Ingress's host/path → backend routes; a Role's granted resources/verbs;
-  a RoleBinding's role and subjects (including the Users/Groups that aren't graph nodes).
+- Each kind surfaces its essential spec without opening the manifest: a Service's cluster IP,
+  external address (LoadBalancer / externalIPs), ports, and endpoint readiness; an Ingress's
+  host/path → backend routes; a Role's granted resources/verbs; a RoleBinding's role and subjects
+  (including the Users/Groups that aren't graph nodes).
 - Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs,
   a line filter, an optional timestamps toggle, and aggregated logs across all of a controller's pods
-  (including pods created mid-rollout). Manifest as YAML (default) or JSON, copyable.
+  (including pods created mid-rollout). Manifest as YAML (default) or JSON, with `apiVersion`/`kind`
+  stamped on so a copy applies cleanly.
 - Events: the resource and its descendants' Kubernetes events (newest first, warnings highlighted),
   with a live count badge.
 
