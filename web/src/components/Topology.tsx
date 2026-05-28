@@ -17,7 +17,9 @@ interface Props {
   // non-empty set fades every node whose kind isn't in it. The parent owns the set so it
   // survives namespace/view transitions when desired (currently cleared on view change).
   kindFilter?: Set<string> | null
-  onKindFilter?: (k: string) => void
+  // Toggle (or "solo" with Shift) a kind in the filter. `solo` clears the existing set and sets
+  // the filter to exactly this kind — paired with the chip's onClick passing e.shiftKey.
+  onKindFilter?: (k: string, solo?: boolean) => void
   connected: boolean
   viewLabel: string
   // viewHint is the "what this view shows" tagline, displayed in the empty state so the operator
@@ -613,8 +615,8 @@ export default function Topology(props: Props) {
                 <button
                   class="kind-chip"
                   classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod' }}
-                  onClick={() => props.onKindFilter?.(c.kind)}
-                  title={`Spotlight ${c.kind} resources`}
+                  onClick={(e) => props.onKindFilter?.(c.kind, e.shiftKey)}
+                  title={`Click to toggle ${c.kind} · Shift+click to solo`}
                   aria-pressed={activeKinds()?.has(c.kind) ?? false}
                 >
                   <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">

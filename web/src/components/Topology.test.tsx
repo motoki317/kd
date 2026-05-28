@@ -106,8 +106,19 @@ describe('Topology', () => {
     ))
     const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
     fireEvent.click(firstChip)
-    // The most common kind (Pod) sits first, so clicking the first chip dispatches 'Pod'.
-    expect(onKindFilter).toHaveBeenCalledWith('Pod')
+    // The most common kind (Pod) sits first, so clicking the first chip dispatches 'Pod'. The
+    // second arg is `solo` (cycle 255) — false on a plain click; Shift+click sets it true.
+    expect(onKindFilter).toHaveBeenCalledWith('Pod', false)
+  })
+
+  it('Shift+click on a kind chip dispatches solo=true (cycle 255)', () => {
+    const onKindFilter = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
+    ))
+    const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
+    fireEvent.click(firstChip, { shiftKey: true })
+    expect(onKindFilter).toHaveBeenCalledWith('Pod', true)
   })
 
   it('Nodes view renders a host-group rect for each unique host (cycle 205)', () => {

@@ -74,7 +74,17 @@ export default function App() {
   const [kindFilter, setKindFilter] = createSignal<Set<string>>(
     new Set(urlKinds ? urlKinds.split(',').filter(Boolean) : []),
   )
-  const toggleKind = (k: string) => {
+  // Click toggles the kind in/out of the set; Shift+click "solos" — sets the filter to exactly
+  // this kind, clearing everything else. Operators reach for solo when they want "show me ONLY
+  // Pods" without first clearing the prior multi-select.
+  const toggleKind = (k: string, solo = false) => {
+    if (solo) {
+      const s = new Set<string>([k])
+      // Clicking the only-active kind a second time with Shift turns the filter off.
+      if (kindFilter().size === 1 && kindFilter().has(k)) setKindFilter(new Set<string>())
+      else setKindFilter(s)
+      return
+    }
     const s = new Set(kindFilter())
     if (s.has(k)) s.delete(k)
     else s.add(k)
@@ -486,7 +496,7 @@ export default function App() {
                   <kbd>?</kbd> Toggle this help
                 </li>
                 <li>Click a legend health Spotlight only those resources</li>
-                <li>Click a kind chip Toggle that kind in the filter (multi-select)</li>
+                <li>Click a kind chip Toggle that kind in the filter (multi-select) · <kbd>Shift</kbd>+click solos</li>
                 <li><kbd>f</kbd> Fit the topology to view</li>
               </ul>
             </section>
