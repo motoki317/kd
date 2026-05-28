@@ -1,5 +1,6 @@
 import { createMemo, For, Show } from 'solid-js'
 import { healthColor } from '../health'
+import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -43,6 +44,11 @@ export default function ResourceSummary(props: Props) {
     <div>
       <div class="drawer-kind">
         <span class="dot" style={{ background: healthColor(props.node.health) }} />
+        {/* Same silhouette as the topology card so the drawer reads as the "expanded view" of
+            the resource you clicked — visual continuity across click. */}
+        <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+          {kindIcon(props.node.kind)}
+        </svg>
         {props.node.kind}
       </div>
       <div class="drawer-name">

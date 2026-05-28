@@ -518,6 +518,13 @@ body {
   align-items: center;
   gap: 6px;
 }
+.drawer-kind-icon {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .drawer-name {
   font-size: 16px;
   font-weight: 700;
