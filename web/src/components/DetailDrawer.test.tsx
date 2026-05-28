@@ -189,4 +189,50 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('button.drawer-host')).toBeNull()
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('on worker-1')
   })
+
+  it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
+    // Stub the events fetch to return an event whose source differs from the root resource —
+    // i.e. an aggregated event from a descendant pod.
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(
+              JSON.stringify({
+                events: [
+                  {
+                    type: 'Warning',
+                    reason: 'BackOff',
+                    message: 'crash-looping',
+                    count: 3,
+                    last: new Date().toISOString(),
+                    source: 'Pod/web-7d9f-2xkp',
+                  },
+                ],
+              }),
+              { status: 200 },
+            )
+          : new Response('kind: Deployment\n', { status: 200 }),
+      ),
+    )
+    const deploy: KNode = { id: 'd1', kind: 'Deployment', name: 'web', namespace: 'shop', health: 'Degraded' }
+    const refNavigated: string[] = []
+    const { container, findByTitle } = render(() => (
+      <DetailDrawer
+        node={deploy}
+        owners={[]}
+        onNavigate={() => {}}
+        onNavigateRef={(ref) => {
+          refNavigated.push(ref)
+          return true
+        }}
+        onClose={() => {}}
+      />
+    ))
+    // The drawer opens to Logs by default for a Deployment; flip to Events to render the list.
+    const tabs = [...container.querySelectorAll('.drawer-tabs button')] as HTMLButtonElement[]
+    tabs.find((b) => b.textContent?.includes('Events'))!.click()
+    const pill = (await findByTitle('Go to Pod/web-7d9f-2xkp')) as HTMLButtonElement
+    pill.click()
+    expect(refNavigated).toEqual(['Pod/web-7d9f-2xkp'])
+  })
 })
