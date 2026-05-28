@@ -33,4 +33,14 @@ describe('Topology', () => {
     // Only the single Degraded pod stays lit.
     expect(faded(container)).toBe(2)
   })
+
+  it('shows the resource count, switching to "M of N" when filtered', () => {
+    // No filter → total count.
+    const noFilter = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    expect(noFilter.container.querySelector('.topology-count')?.textContent).toBe('3 resources')
+    cleanup()
+    // Search "web" matches the Deployment + web-abc Pod (2 of 3).
+    const filtered = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
+    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
+  })
 })
