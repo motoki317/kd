@@ -184,6 +184,13 @@ export default function LogViewer(props: Props) {
             aria-label="Filter log lines"
             value={filter()}
             onInput={(e) => setFilter(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                // Two-stage Esc: clear first, then blur (matches sidebar/topology, cycle 268).
+                if (filter()) setFilter('')
+                else (e.currentTarget as HTMLInputElement).blur()
+              }
+            }}
           />
         </Show>
         <span class="logs-right">

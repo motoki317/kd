@@ -293,7 +293,12 @@ export default function DetailDrawer(props: Props) {
                 value={manifestQuery()}
                 onInput={(e) => setManifestQuery(e.currentTarget.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') setManifestQuery('')
+                  if (e.key === 'Escape') {
+                    // Two-stage Esc: clear first, then blur (matches the other find/search fields,
+                    // cycle 268). Keeps the global Esc handler from running until both are done.
+                    if (manifestQuery()) setManifestQuery('')
+                    else (e.currentTarget as HTMLInputElement).blur()
+                  }
                   else if (e.key === 'Enter') {
                     e.preventDefault()
                     stepMatch(e.shiftKey ? -1 : 1)
