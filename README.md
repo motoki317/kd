@@ -61,17 +61,25 @@ state at a glance and app developers can jump straight to pod status and logs.
   host/path → backend routes; a Role's granted resources/verbs; a RoleBinding's role and subjects
   (including Users/Groups that aren't graph nodes — each row tagged with its kind icon).
 - Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs,
-  a line filter, an optional timestamps toggle, and aggregated logs across all of a controller's pods
-  (including pods created mid-rollout). Manifest as YAML (default) or JSON, with `apiVersion`/`kind`
-  stamped on so a copy applies cleanly.
+  a line filter that also highlights matches inline, an optional timestamps toggle, and aggregated
+  logs across all of a controller's pods (including pods created mid-rollout). Scrolling up surfaces
+  a "↓ Latest N" backlog counter so you know what you're missing. Manifest as YAML (default) or JSON
+  with `apiVersion`/`kind` stamped on so a copy applies cleanly; a find-in-manifest field with
+  Enter/Shift+Enter steps through hits.
 - Events: the resource and its descendants' Kubernetes events (newest first, warnings highlighted),
   with a live count badge. Aggregated events show which descendant emitted them — click the source
-  pill to jump straight to the offending pod.
+  pill to jump straight to the offending pod. A "Warnings only" chip filters noisy normal events
+  when both types are present.
+- Label chips copy `key=value` on click, paste-ready for `kubectl … -l <selector>`. Images flagged
+  with a "floating tag" badge when they reference `:latest`/`:stable`/`:main`/no-tag — rolling
+  restarts can silently change what's running.
 
 **Keyboard & sharing**
 - `j`/`k` (or `↓`/`↑`) step through resources (troubled first, scoped to the active filter), `/`
-  focuses the namespace filter, `1`–`6` switch views (the 6th is "all"), `Esc` backs out, `?`
-  shows shortcuts.
+  focuses the namespace filter (`↑`/`↓` also walk it without leaving the input), `⌘K`/`Ctrl+K`
+  focuses the resource search (Enter jumps to the top match), `1`–`6` switch views (the 6th is
+  "all"), `f` or a double-click on the canvas fits to view, `Esc` backs out, `?` shows shortcuts.
+- Shift+click a kind chip to solo it (clear other kinds and keep only this one).
 - The topbar shows a "kd › <namespace>" breadcrumb and a live/connecting/offline connection pill.
 - Namespace, view, and selected resource live in the URL — links and reloads restore the same place;
   the selection follows you across views.
