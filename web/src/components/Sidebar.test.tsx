@@ -42,6 +42,15 @@ describe('Sidebar', () => {
     expect(getByText("Couldn't load namespaces.")).toBeTruthy()
   })
 
+  it('offers a retry button on failure when onRetry is wired (cycle 220)', () => {
+    const onRetry = vi.fn()
+    const { getByText } = render(() => (
+      <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={true} onRetry={onRetry} />
+    ))
+    fireEvent.click(getByText('retry'))
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
   it('distinguishes no namespaces visible from no filter matches', () => {
     const { getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
     expect(getByText('No namespaces visible.')).toBeTruthy()
