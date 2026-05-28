@@ -262,12 +262,28 @@ export default function ResourceSummary(props: Props) {
           <div class="label-chips">
             <For each={labels()}>
               {([k, v]) => (
-                <span class="label-chip" title={`${k}=${v}`}>
+                // Clicking copies "key=value" (or just "key" for valueless labels) — paste-ready
+                // for `kubectl … -l <chip>`. A brief .copied state confirms without a tooltip.
+                <button
+                  class="label-chip"
+                  title={`Click to copy ${k}${v ? `=${v}` : ''}`}
+                  onClick={async (e) => {
+                    const text = v ? `${k}=${v}` : k
+                    try {
+                      await navigator.clipboard.writeText(text)
+                      const el = e.currentTarget
+                      el.classList.add('copied')
+                      setTimeout(() => el.classList.remove('copied'), 900)
+                    } catch {
+                      /* clipboard unavailable */
+                    }
+                  }}
+                >
                   <span class="label-key">{k}</span>
                   <Show when={v}>
                     <span class="label-val">{v}</span>
                   </Show>
-                </span>
+                </button>
               )}
             </For>
           </div>
