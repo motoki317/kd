@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
-import { kindLabel, middleTruncate, relativeName } from '../names'
+import { cardName, kindLabel } from '../names'
 import { nodeMatches } from '../search'
 import type { EdgeType, KEdge, KNode } from '../types'
 
@@ -45,7 +45,7 @@ export default function Topology(props: Props) {
     }
     return m
   })
-  const label = (n: KNode) => middleTruncate(relativeName(n.name, ownerName().get(n.id)))
+  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id), n.restarts ?? 0)
 
   // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
   // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null

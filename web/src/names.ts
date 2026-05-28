@@ -32,3 +32,16 @@ export function middleTruncate(s: string, max = 22): string {
   const tail = Math.floor((max - 1) / 2)
   return s.slice(0, head) + '…' + s.slice(s.length - tail)
 }
+
+// CARD_NAME_MAX is the name-line character budget at NODE_WIDTH: tuned so a full-width name fills
+// the card up to its right padding.
+const CARD_NAME_MAX = 22
+
+// cardName is a topology card's display name: stripped of its owner prefix, then middle-truncated
+// to fit the card. When a restart badge (↻N) shares the name line (right-aligned), it reserves
+// that badge's width first, so a long name truncates short of the badge instead of overlapping it —
+// the wider the count, the more it gives up.
+export function cardName(name: string, ownerName: string | undefined, restarts = 0): string {
+  const reserved = restarts > 0 ? `↻${restarts}`.length + 1 : 0
+  return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX - reserved)
+}

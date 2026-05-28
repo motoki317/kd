@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kindLabel, middleTruncate, relativeName } from './names'
+import { cardName, kindLabel, middleTruncate, relativeName } from './names'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -35,5 +35,22 @@ describe('middleTruncate', () => {
     expect(out.startsWith('sample')).toBe(true)
     expect(out.endsWith('5c4')).toBe(true)
     expect(out).toContain('…')
+  })
+})
+
+describe('cardName', () => {
+  it('strips the owner prefix and leaves a fitting name intact', () => {
+    expect(cardName('api-7d9f-2xkp', 'api-7d9f')).toBe('2xkp')
+  })
+  it('reserves room on the name line for the restart badge, so the name truncates shorter', () => {
+    const long = 'kube-scheduler-docker-desktop'
+    const noBadge = cardName(long, undefined, 0)
+    const withBadge = cardName(long, undefined, 12)
+    // A restart badge (↻12) shares the name line, so the name must give up width to it.
+    expect(withBadge.length).toBeLessThan(noBadge.length)
+  })
+  it('reserves more room for a wider badge (more restart digits)', () => {
+    const long = 'kube-scheduler-docker-desktop'
+    expect(cardName(long, undefined, 5).length).toBeGreaterThan(cardName(long, undefined, 12345).length)
   })
 })
