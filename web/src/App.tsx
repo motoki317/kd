@@ -347,6 +347,12 @@ export default function App() {
             healthFilter={healthFilter()}
             kindFilter={kindFilter()}
             onKindFilter={toggleKind}
+            onClearFilters={() => {
+              // Same effect as Escape with no selection: reset every filter at once.
+              setSearch('')
+              setHealthFilter(null)
+              setKindFilter(new Set<string>())
+            }}
             connected={connected()}
             viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
             viewHint={VIEWS.find((v) => v.id === view())?.hint}

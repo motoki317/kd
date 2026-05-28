@@ -838,6 +838,24 @@ body {
 .topology-matches.none {
   color: var(--health-degraded);
 }
+/* Clear-all button: stays inline with the search row but reads as a quiet text link rather than
+   a CTA — primary action is the search, this is the "undo" affordance next to it. */
+.topology-clear {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.topology-clear:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
 .topology-fit {
   position: absolute;
   right: 14px;

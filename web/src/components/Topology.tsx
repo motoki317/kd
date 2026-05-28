@@ -23,6 +23,9 @@ interface Props {
   // viewHint is the "what this view shows" tagline, displayed in the empty state so the operator
   // knows what a view *would* show before the namespace fills out (cycle 204).
   viewHint?: string
+  // onClearFilters clears every active filter at once (search + health + kinds). Optional —
+  // when omitted, the chip row's individual clears stay the only way to reset.
+  onClearFilters?: () => void
   // viewId is the lower-case view key — Topology switches layout strategy on 'all' to use
   // the kind-grouped variant (FR-006). All other views fall back to the default
   // connectivity-based layout.
@@ -531,6 +534,14 @@ export default function Topology(props: Props) {
           <span class="topology-matches" classList={{ none: matches()!.size === 0 }}>
             {matches()!.size === 0 ? 'no matches' : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
           </span>
+        </Show>
+        {/* Clear-all: surfaces the same operation as Escape, but discoverable without knowing
+            the shortcut. Visible only when at least one filter is on, so the toolbar stays
+            quiet when there's nothing to clear (cycle 216). */}
+        <Show when={(matches() || props.healthFilter || activeKinds()) && props.onClearFilters}>
+          <button class="topology-clear" onClick={() => props.onClearFilters?.()} title="Clear all filters (Esc)">
+            clear
+          </button>
         </Show>
         {/* Kind filter chips (cycle 203): one chip per kind present in the current view. Click
             toggles the kind in/out of the active set; multi-select composes with search and the
