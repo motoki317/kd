@@ -3,14 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LogViewer from './LogViewer'
 
 // LogViewer opens an EventSource on mount; a no-op stub keeps it from touching the network. The
-// class tracks its instances so a test can fire onerror to assert how the viewer renders a stream drop.
+// class tracks its instances so a test can fire onerror to assert how the viewer renders a stream
+// drop, and supports message dispatch for tests that exercise filtering / highlight rendering.
 let eventSources: NoopEventSource[] = []
 class NoopEventSource {
   onerror: (() => void) | null = null
+  listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
   constructor() {
     eventSources.push(this)
   }
-  addEventListener() {}
+  addEventListener(name: string, fn: (e: MessageEvent) => void) {
+    ;(this.listeners[name] ||= []).push(fn)
+  }
+  emit(name: string, payload: unknown) {
+    const ev = new MessageEvent(name, { data: JSON.stringify(payload) })
+    for (const fn of this.listeners[name] ?? []) fn(ev)
+  }
   close() {}
 }
 beforeEach(() => {
@@ -75,5 +83,20 @@ describe('LogViewer', () => {
     ))
     eventSources[0].onerror?.()
     await findByText('stream interrupted')
+  })
+
+  it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
+    const { container, findByPlaceholderText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    eventSources[0].emit('log', { line: 'ERROR connect to db ConneCT again' })
+    // The filter input only appears once at least one line is in. findByPlaceholderText waits for it.
+    const filter = (await findByPlaceholderText('filter…')) as HTMLInputElement
+    filter.value = 'connect'
+    filter.dispatchEvent(new Event('input', { bubbles: true }))
+    // Both "connect" and "ConneCT" hit the case-insensitive query.
+    expect(container.querySelectorAll('.log-match').length).toBe(2)
+    const texts = [...container.querySelectorAll('.log-match')].map((e) => e.textContent)
+    expect(texts).toEqual(['connect', 'ConneCT'])
   })
 })
