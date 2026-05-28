@@ -118,7 +118,11 @@ export default function DetailDrawer(props: Props) {
           <nav class="drawer-tabs">
             <For each={tabs()}>
               {(t) => (
-                <button classList={{ active: tab() === t }} onClick={() => setTab(t)}>
+                <button
+                  classList={{ active: tab() === t }}
+                  aria-pressed={tab() === t}
+                  onClick={() => setTab(t)}
+                >
                   {TAB_LABELS[t]}
                   <Show when={t === 'events' && !events.error && (events()?.length ?? 0) > 0}>
                     <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
