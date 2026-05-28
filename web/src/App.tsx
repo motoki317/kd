@@ -213,6 +213,18 @@ export default function App() {
               <button
                 class="legend-item"
                 classList={{ active: healthFilter() === h }}
+                // Active pill borrows the health hue for its border + background tint, so the
+                // visual connection to "spotlighting THIS color" is explicit (vs a neutral grey
+                // active pill that loses the link to the health it represents).
+                style={
+                  healthFilter() === h
+                    ? {
+                        'border-color': healthColor(h),
+                        background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
+                        color: 'var(--text)',
+                      }
+                    : undefined
+                }
                 onClick={() => setHealthFilter((cur) => (cur === h ? null : h))}
                 title={`Spotlight ${h} resources`}
               >
