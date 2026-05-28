@@ -391,6 +391,16 @@ body {
   font-size: 11.5px;
   margin-left: 4px;
 }
+/* Edge legend rows: a small inline SVG glyph followed by the relationship type and an
+   operator-friendly explanation. The svg matches the topology's stroke vocabulary. */
+.help-edges li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.help-edges svg {
+  flex: 0 0 auto;
+}
 .help-panel kbd {
   display: inline-block;
   min-width: 18px;

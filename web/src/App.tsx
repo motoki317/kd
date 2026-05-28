@@ -497,7 +497,33 @@ export default function App() {
                 </li>
                 <li>Click a legend health Spotlight only those resources</li>
                 <li>Click a kind chip Toggle that kind in the filter (multi-select) · <kbd>Shift</kbd>+click solos</li>
-                <li><kbd>f</kbd> Fit the topology to view</li>
+                <li><kbd>f</kbd> · double-click canvas Fit the topology to view</li>
+              </ul>
+            </section>
+            <section class="help-section">
+              <h4>Edges</h4>
+              {/* Compact legend matching the topology rendering: solid = ownership backbone, dashed
+                  = non-ownership relationship, violet dashed = CR-defined reference (custom CR
+                  *Ref fields). Helps a new operator decode the canvas at a glance. */}
+              <ul class="help-edges">
+                <li>
+                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
+                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-color)" stroke-width="2" />
+                  </svg>
+                  Owns (ownerReference) — the controller→child backbone
+                </li>
+                <li>
+                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
+                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
+                  </svg>
+                  Non-ownership — selects / routes / mounts / scheduledOn / binds
+                </li>
+                <li>
+                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
+                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-refers)" stroke-width="1.4" stroke-dasharray="5 4" />
+                  </svg>
+                  Refers — CR-defined reference (Workflow→Template, Certificate→Issuer, …)
+                </li>
               </ul>
             </section>
           </div>
