@@ -101,6 +101,10 @@ export default function Topology(props: Props) {
     // scheduledOn edges are implied by containment, so the layout doesn't draw them — cuts the
     // visual noise of N identical lines to the same Node card (cycle 205).
     if (props.viewId === 'nodes') return layoutGraphByHost(props.nodes, props.edges)
+    // Volumes view: left-to-right so "Pod mounts ConfigMap/Secret/PVC" reads as a left→right
+    // dependency flow rather than a top-down ownership tree (cycle 206). Same renderer, just
+    // a different Dagre rankdir per connected component.
+    if (props.viewId === 'volumes') return layoutGraph(props.nodes, props.edges, 'LR')
     return layoutGraph(props.nodes, props.edges)
   })
   // In the All view we draw a faint kind-label band above each kind box so the operator can

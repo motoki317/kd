@@ -258,13 +258,15 @@ export function kindGroups(layout: Layout): { kind: string; x: number; y: number
 
 // layoutGraph arranges the relationship graph top-to-bottom within each connected component, then
 // packs the components into a viewport-shaped block. Edges with a missing endpoint are dropped
-// defensively (the server should not emit them).
-export function layoutGraph(nodes: KNode[], edges: KEdge[]): Layout {
+// defensively (the server should not emit them). `rankdir` switches the per-component direction
+// — 'TB' (default) reads top-down like the ownership tree; 'LR' reads left-to-right and is used
+// by the Volumes view so "Pod mounts ConfigMap" reads as an arrow pointing right.
+export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Layout {
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
   const groups = connectedComponents(nodes, laidEdges)
-  const components = groups.map((g) => layoutComponent(g.nodes, g.edges))
+  const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir))
 
   return packComponents(components)
 }
@@ -351,17 +353,23 @@ function findHubs(nodes: KNode[], edges: KEdge[]): { hubs: Hub[]; wrapped: Set<s
   return { hubs, wrapped }
 }
 
-// layoutComponent runs Dagre top-to-bottom over one component and returns its local geometry
-// (origin at 0,0) plus its bounding size. High-fanout hubs reserve a tall/wide Dagre box and place
-// their leaves in a grid, so a parent with many children becomes a block, not a one-rank smear.
-function layoutComponent(nodes: KNode[], edges: KEdge[]): Component {
-  const { hubs, wrapped } = findHubs(nodes, edges)
+// layoutComponent runs Dagre over one component and returns its local geometry (origin at 0,0)
+// plus its bounding size. rankdir picks the orientation: 'TB' (the default, ownership tree)
+// stacks parents above children; 'LR' lays them left-to-right and is used by Volumes view so
+// "Pod mounts ConfigMap" reads as an arrow that flows the same way as the eye. High-fanout hubs
+// (a Node hosting many pods, a ReplicaSet with many replicas) reserve a tall/wide Dagre box and
+// place their leaves in a grid — but only in 'TB' mode where the existing side='above'/'below'
+// math fits; 'LR' lets Dagre do its natural rank layout instead so the orientation stays clean.
+function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Component {
+  const { hubs, wrapped } = rankdir === 'TB' ? findHubs(nodes, edges) : { hubs: [], wrapped: new Set<string>() }
   const hubById = new Map(hubs.map((h) => [h.id, h]))
   const skeleton = nodes.filter((n) => !wrapped.has(n.id))
   const skeletonEdges = edges.filter((e) => !wrapped.has(e.from) && !wrapped.has(e.to))
 
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 52, marginx: 0, marginy: 0 })
+  // ranksep is the gap between ranks; in 'LR' Dagre uses it horizontally, so a slightly larger
+  // value gives the LR layout a noticeably column-like rhythm rather than a cramped grid.
+  g.setGraph({ rankdir, nodesep: 24, ranksep: rankdir === 'LR' ? 80 : 52, marginx: 0, marginy: 0 })
   g.setDefaultEdgeLabel(() => ({}))
   for (const n of skeleton) {
     const hub = hubById.get(n.id)
