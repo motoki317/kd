@@ -111,6 +111,38 @@ describe('Topology', () => {
     expect(onKindFilter).toHaveBeenCalledWith('Pod', false)
   })
 
+  it('Enter in the topology search selects the most-troubled match (cycle 259)', () => {
+    const onSelect = vi.fn()
+    // Render with a search query that hits two nodes; the Degraded one ('web-abc') should win
+    // the severity-first sort even though 'api-xyz' is alpha-first.
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onSelect={onSelect} onSearch={() => {}} />
+    ))
+    // Type into the search field, then Enter.
+    const input = container.querySelector('.topology-search input') as HTMLInputElement
+    expect(input).toBeTruthy()
+    // To get a query that matches both pods, we set 'b' (matches 'web-abc' on 'b') AND 'a' too — but
+    // setQuery is driven by props.onSearch in the public API. The test renders search="" via base
+    // and treats setQuery as a local signal; in production App.tsx round-trips through onSearch.
+    // So we directly fire input on the field — Topology's internal query() is props.search, which
+    // only updates when the parent re-renders. To test Enter behavior end-to-end we simulate the
+    // re-render via the props.search prop.
+    // Simpler: directly dispatch keyDown('Enter') with an empty search — that exercises the no-op
+    // branch (no matches() set). Then re-render with a search that matches and dispatch Enter.
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelect).not.toHaveBeenCalled()
+    cleanup()
+    // Search that matches the two Pods (both contain 'e' indirectly... pick a clearer one).
+    const onSelect2 = vi.fn()
+    const m = render(() => (
+      <Topology nodes={nodes} edges={edges} search="web" {...base} onSelect={onSelect2} onSearch={() => {}} />
+    ))
+    fireEvent.keyDown(m.container.querySelector('.topology-search input') as HTMLInputElement, { key: 'Enter' })
+    // 'web' matches 'web' (Deployment, Healthy) and 'web-abc' (Pod, Degraded). The Degraded Pod
+    // is the most attention-worthy, so it should win the severity-first sort.
+    expect(onSelect2).toHaveBeenCalledWith('2')
+  })
+
   it('Shift+click on a kind chip dispatches solo=true (cycle 255)', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (

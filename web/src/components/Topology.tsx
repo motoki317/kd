@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMou
 import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
+import { orderedForNav } from '../nav'
 import { cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
@@ -583,7 +584,20 @@ export default function Topology(props: Props) {
             aria-label="Search resources in current view"
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setQuery('')
+              else if (e.key === 'Enter') {
+                // Mirrors the sidebar filter (cycle 223): typing 'web-' + Enter jumps to the first
+                // matched card so the operator doesn't have to mouse over to click it. orderedForNav
+                // is the same severity-first sort j/k uses, so this Enter lands on the most
+                // attention-worthy hit (Degraded > Progressing > … > Healthy).
+                const m = matches()
+                if (m && m.size > 0) {
+                  const ordered = orderedForNav(props.nodes.filter((n) => m.has(n.id)))
+                  if (ordered[0]) props.onSelect(ordered[0].id)
+                }
+              }
+            }}
           />
           <Show when={query()}>
             <button class="topology-search-clear" onClick={() => setQuery('')} title="Clear (Esc)" aria-label="Clear search">
