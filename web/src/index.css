@@ -219,6 +219,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-weight: 600;
+}
+/* Offline variant (no .live / .connecting): match the degraded color vocabulary so a hung stream
+   reads as trouble at a glance — same red as a Degraded card border. */
+.conn:not(.live):not(.connecting) {
+  color: var(--health-degraded);
+  border-color: color-mix(in srgb, var(--health-degraded) 60%, var(--border-strong));
+}
+.conn:not(.live):not(.connecting)::before {
+  background: var(--health-degraded);
 }
 /* Pulsing leading dot (cycle 129): a slow heartbeat on the live pill makes the dashboard read as
    alive at a glance — the SSE stream's actual liveness mirrored in pixels. Connecting amber
