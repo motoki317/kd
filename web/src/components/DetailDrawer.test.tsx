@@ -161,4 +161,32 @@ describe('DetailDrawer', () => {
     chip.click()
     expect(navigated).toEqual(['d1'])
   })
+
+  it('host meta is a click-to-jump button when onNavigateRef is provided', () => {
+    const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
+    const refNavigated: string[] = []
+    const { container } = render(() => (
+      <DetailDrawer
+        node={pod}
+        owners={[]}
+        onNavigate={() => {}}
+        onNavigateRef={(ref) => {
+          refNavigated.push(ref)
+          return true
+        }}
+        onClose={() => {}}
+      />
+    ))
+    const host = container.querySelector('button.drawer-host') as HTMLButtonElement | null
+    expect(host).toBeTruthy()
+    host!.click()
+    expect(refNavigated).toEqual(['Node/worker-1'])
+  })
+
+  it('host meta is a static span when onNavigateRef is omitted (no nav available)', () => {
+    const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
+    const { container } = render(() => <DetailDrawer node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('button.drawer-host')).toBeNull()
+    expect(container.querySelector('.drawer-meta')?.textContent).toContain('on worker-1')
+  })
 })
