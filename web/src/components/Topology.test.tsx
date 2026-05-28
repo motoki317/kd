@@ -56,6 +56,27 @@ describe('Topology', () => {
     expect(onDeselect).toHaveBeenCalledOnce()
   })
 
+  it('lights the selected node\'s full connected component, fading the rest (cycle 157)', () => {
+    // Chain: Deployment → ReplicaSet → Pod (3 cards, 2 ownerReference edges). Plus an unrelated
+    // standalone Pod (id=4). Selecting the Pod in the chain should keep the whole chain lit
+    // (faded=0 for {1,2,3}) and fade only the standalone (faded=1 for {4}).
+    const chainNodes: KNode[] = [
+      { id: '1', kind: 'Deployment', name: 'd', health: 'Healthy' },
+      { id: '2', kind: 'ReplicaSet', name: 'rs', health: 'Healthy' },
+      { id: '3', kind: 'Pod', name: 'p', health: 'Healthy' },
+      { id: '4', kind: 'Pod', name: 'standalone', health: 'Healthy' },
+    ]
+    const chainEdges: KEdge[] = [
+      { from: '1', to: '2', type: 'ownerReference' },
+      { from: '2', to: '3', type: 'ownerReference' },
+    ]
+    const { container } = render(() => (
+      <Topology nodes={chainNodes} edges={chainEdges} search="" {...base} selectedId="3" />
+    ))
+    // Only the standalone Pod (id=4) should be faded; the chain (1,2,3) stays lit.
+    expect(faded(container)).toBe(1)
+  })
+
   it('does NOT call onDeselect when a card click lands on a node (cycle 161)', () => {
     const onDeselect = vi.fn()
     const { container } = render(() => (
