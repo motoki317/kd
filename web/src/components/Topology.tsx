@@ -373,6 +373,19 @@ export default function Topology(props: Props) {
           </g>
         </g>
       </svg>
+      {/* Bottom-left count overlay: at-a-glance namespace size, plus the search/health filter
+          subset when one is active ("4 of 23"). Hidden when the canvas is empty (the empty-state
+          message there already covers it). */}
+      <Show when={props.nodes.length > 0}>
+        <div class="topology-count">
+          <Show
+            when={matches() || props.healthFilter}
+            fallback={<>{props.nodes.length} resources</>}
+          >
+            {(matches()?.size ?? props.nodes.filter((n) => n.health === props.healthFilter).length)} of {props.nodes.length}
+          </Show>
+        </div>
+      </Show>
       <button class="topology-fit" onClick={resetView} title="Fit to view">
         Fit
       </button>
