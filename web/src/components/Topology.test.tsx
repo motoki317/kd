@@ -1,5 +1,5 @@
-import { cleanup, render } from '@solidjs/testing-library'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render } from '@solidjs/testing-library'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
 import type { KEdge, KNode } from '../types'
 
@@ -42,5 +42,29 @@ describe('Topology', () => {
     // Search "web" matches the Deployment + web-abc Pod (2 of 3).
     const filtered = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
     expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
+  })
+
+  it('calls onDeselect when a background click lands outside any card (cycle 161)', () => {
+    const onDeselect = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="1" onDeselect={onDeselect} />
+    ))
+    const svg = container.querySelector('.topology-svg')!
+    // Pointer down + up on the SVG itself (target lacks a .node ancestor) without dragging.
+    fireEvent.pointerDown(svg, { clientX: 10, clientY: 10, pointerId: 1 })
+    fireEvent.pointerUp(svg, { clientX: 10, clientY: 10, pointerId: 1 })
+    expect(onDeselect).toHaveBeenCalledOnce()
+  })
+
+  it('does NOT call onDeselect when a card click lands on a node (cycle 161)', () => {
+    const onDeselect = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="1" onDeselect={onDeselect} />
+    ))
+    // The node group <g class="node">: pointerup whose target is inside should NOT deselect.
+    const node = container.querySelector('g.node')!
+    fireEvent.pointerDown(node, { clientX: 10, clientY: 10, pointerId: 1 })
+    fireEvent.pointerUp(node, { clientX: 10, clientY: 10, pointerId: 1 })
+    expect(onDeselect).not.toHaveBeenCalled()
   })
 })
