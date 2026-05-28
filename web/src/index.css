@@ -1109,6 +1109,16 @@ button.drawer-host:hover {
   line-height: 1;
   cursor: pointer;
   color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.12s, color 0.12s;
+}
+.drawer-close:hover {
+  background: var(--surface-2);
+  color: var(--health-degraded);
 }
 .drawer-section {
   padding: 12px 16px;
