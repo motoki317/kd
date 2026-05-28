@@ -795,10 +795,15 @@ export default function Topology(props: Props) {
             fallback={
               <>
                 {props.nodes.length} resource{props.nodes.length === 1 ? '' : 's'}
-                {/* In the All view, append "· K kinds" so the operator can see the breadth
-                    of what's loaded at a glance — useful when CRDs bring dozens of new kinds. */}
+                {/* Per-view summary (cycle 231): All shows kind count, Nodes shows hosts +
+                    pods, Volumes shows pods + mounts, Network shows ingress/service/pod
+                    counts. Each summary surfaces the dimension the view actually exposes —
+                    "is this view dense?" without parsing the canvas. */}
                 <Show when={props.viewId === 'all' && groups().length > 1}>
                   {' '}· {groups().length} kinds
+                </Show>
+                <Show when={props.viewId === 'nodes' && hosts().length > 0}>
+                  {' '}· {hosts().length} host{hosts().length === 1 ? '' : 's'}
                 </Show>
               </>
             }
@@ -807,7 +812,7 @@ export default function Topology(props: Props) {
           </Show>
         </div>
       </Show>
-      <button class="topology-fit" onClick={resetView} title="Fit to view">
+      <button class="topology-fit" onClick={resetView} title="Fit to view (f)">
         {/* Tiny "fit corners" glyph: four L-corners around an implied frame so the button reads
             as "frame the canvas" even before the eye lands on the word. */}
         <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
