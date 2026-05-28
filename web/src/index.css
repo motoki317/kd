@@ -936,11 +936,13 @@ button.drawer-host:hover {
   text-overflow: ellipsis;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
 .owner-chip:hover {
   border-color: var(--accent);
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
 }
 .owner-arrow {
   font-size: 12px;
