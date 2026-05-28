@@ -326,7 +326,12 @@ export default function App() {
             )}
           </For>
         </div>
-        <span class="conn" classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}>
+        <span
+          class="conn"
+          classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}
+          role="status"
+          aria-live="polite"
+        >
           {connState() === 'live' ? 'live' : connState() === 'connecting' ? 'connecting…' : 'offline'}
         </span>
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)">
