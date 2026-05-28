@@ -815,6 +815,17 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Cycle 162: drawer slides in from the right on mount (animation; not transition because the
+     element appears/disappears via Show, so transition-on-mount doesn't fire). 240ms fade-in
+     pairs visually with the cycle-157 canvas zoom that runs in parallel. */
+  animation: drawer-in 0.24s ease-out;
+}
+@keyframes drawer-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer { animation: none; }
 }
 .drawer-header {
   display: flex;
