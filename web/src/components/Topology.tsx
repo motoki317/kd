@@ -203,10 +203,13 @@ export default function Topology(props: Props) {
     const nodes = new Set<string>([id])
     const edges = new Set<string>()
     const queue = [id]
+    // Walk the unrouted props.edges (the streamed view's full edge set), not layout().edges —
+    // layouts like Nodes view drop edges from rendering (containment carries them), but
+    // selecting a pod should still light its Node and siblings (cycle 226 fix).
     while (queue.length > 0) {
       const cur = queue.shift()!
-      for (const e of layout().edges) {
-        const k = edgeKey(e)
+      for (const e of props.edges) {
+        const k = `${e.from}|${e.to}|${e.type}`
         if (edges.has(k)) continue
         if (e.from === cur || e.to === cur) {
           edges.add(k)
