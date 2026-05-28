@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardName, kindLabel, middleTruncate, relativeName } from './names'
+import { cardName, cardStatus, kindLabel, middleTruncate, relativeName } from './names'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -52,5 +52,23 @@ describe('cardName', () => {
   it('reserves more room for a wider badge (more restart digits)', () => {
     const long = 'kube-scheduler-docker-desktop'
     expect(cardName(long, undefined, 5).length).toBeGreaterThan(cardName(long, undefined, 12345).length)
+  })
+})
+
+describe('cardStatus', () => {
+  it('leaves a status that fits beside its kind untouched', () => {
+    expect(cardStatus('Running', 'Pod')).toBe('Running')
+    expect(cardStatus('2/2', 'Deployment')).toBe('2/2')
+  })
+  it('end-truncates a long status so it cannot overlap the kind (keeps the meaningful head)', () => {
+    // A cordoned node: "NODE" + "Ready,SchedulingDisabled" used to collide.
+    const out = cardStatus('Ready,SchedulingDisabled', 'Node')
+    expect(out.length).toBeLessThan('Ready,SchedulingDisabled'.length)
+    expect(out.startsWith('Ready,')).toBe(true)
+    expect(out.endsWith('…')).toBe(true)
+  })
+  it('leaves less room for the status when the kind is wider', () => {
+    const status = 'rollout failed in progress now'
+    expect(cardStatus(status, 'StatefulSet').length).toBeLessThan(cardStatus(status, 'Pod').length)
   })
 })

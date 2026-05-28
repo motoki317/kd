@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
-import { cardName, kindLabel } from '../names'
+import { cardName, cardStatus, kindLabel } from '../names'
 import { nodeMatches } from '../search'
 import type { EdgeType, KEdge, KNode } from '../types'
 
@@ -279,7 +279,7 @@ export default function Topology(props: Props) {
                   </text>
                   <Show when={n.status}>
                     <text class="node-status" x={n.width - 12} y="22" text-anchor="end" fill={healthColor(n.health)}>
-                      {n.status}
+                      {cardStatus(n.status!, kindLabel(n.kind))}
                     </text>
                   </Show>
                   <Show when={(n.restarts ?? 0) > 0}>

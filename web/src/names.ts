@@ -45,3 +45,19 @@ export function cardName(name: string, ownerName: string | undefined, restarts =
   const reserved = restarts > 0 ? `↻${restarts}`.length + 1 : 0
   return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX - reserved)
 }
+
+// TOP_LINE_CHARS is the kind+status character budget for the card's top line at NODE_WIDTH, with
+// kind left- and status right-aligned. GAP keeps a visible space between them.
+const TOP_LINE_CHARS = 24
+const TOP_LINE_GAP = 2
+
+// cardStatus fits the right-aligned status onto the top line beside the left-aligned kind,
+// end-truncating it to the width the kind leaves. Without this an unbounded status — an Ingress
+// host, a cordoned Node's "Ready,SchedulingDisabled", an "Init:CrashLoopBackOff" — overflows the
+// card or renders on top of the kind. End-truncation keeps the meaningful head (the reason / host
+// prefix); the drawer shows the full status.
+export function cardStatus(status: string, kindLabel: string): string {
+  const budget = TOP_LINE_CHARS - kindLabel.length - TOP_LINE_GAP
+  if (status.length <= budget) return status
+  return status.slice(0, Math.max(1, budget - 1)) + '…'
+}
