@@ -18,6 +18,9 @@ interface Props {
   search: string
   onSearch: (q: string) => void
   onSelect: (id: string) => void
+  // Background click dismisses the open drawer (cycle 161). Optional — parent decides whether
+  // the click-out behavior is wired (Topology tests pass no-op handlers).
+  onDeselect?: () => void
 }
 
 // Edges other than ownership are drawn dashed so the parent-child backbone stays visually
@@ -73,6 +76,33 @@ function edgeTitle(e: KEdge, nodes: KNode[]): string {
 
 export default function Topology(props: Props) {
   const layout = createMemo(() => layoutGraph(props.nodes, props.edges))
+
+  // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
+  // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
+  // We snapshot the prior layout each time createEffect runs and diff against the new one.
+  const [exiting, setExiting] = createSignal<import('../layout').PositionedNode[]>([])
+  let prevPositioned: import('../layout').PositionedNode[] = []
+  const exitTimers = new Map<string, number>()
+  createEffect(() => {
+    const cur = layout().nodes
+    const curIds = new Set(cur.map((n) => n.id))
+    const removed = prevPositioned.filter((n) => !curIds.has(n.id) && !exitTimers.has(n.id))
+    if (removed.length > 0) {
+      setExiting((prev) => [...prev, ...removed])
+      for (const n of removed) {
+        const t = window.setTimeout(() => {
+          setExiting((prev) => prev.filter((p) => p.id !== n.id))
+          exitTimers.delete(n.id)
+        }, 320)
+        exitTimers.set(n.id, t)
+      }
+    }
+    prevPositioned = cur
+  })
+  onCleanup(() => {
+    for (const t of exitTimers.values()) clearTimeout(t)
+  })
+  const exitingIds = createMemo(() => new Set(exiting().map((n) => n.id)))
 
   // Map each node to its owner's name, so children render relative to their parent in the tree.
   const ownerName = createMemo(() => {
@@ -314,6 +344,7 @@ export default function Topology(props: Props) {
     lastY = e.clientY
   }
   function onPointerUp(e: PointerEvent) {
+    const wasDragging = dragging
     pointerDown = false
     dragging = false
     try {
@@ -321,6 +352,16 @@ export default function Topology(props: Props) {
     } catch {
       /* not captured */
     }
+    // Cycle 161: a click on the topology background (not on a card and not a pan) dismisses the
+    // open drawer. Walk up from the click target — if any ancestor has the .node class, it was a
+    // card click (its own onClick will run); otherwise treat as a background click.
+    if (wasDragging || !props.onDeselect || !props.selectedId) return
+    let el: Element | null = e.target as Element | null
+    while (el && el !== svg) {
+      if ((el as Element).classList?.contains('node')) return
+      el = el.parentElement
+    }
+    props.onDeselect()
   }
 
   function resetView() {
@@ -409,13 +450,16 @@ export default function Topology(props: Props) {
             </For>
           </g>
           <g class="nodes">
-            <For each={layout().nodes}>
+            {/* Render layout().nodes + exiting() so removed cards keep their last-known position
+                while fading out — operators see "what left" rather than a card vanishing. */}
+            <For each={[...layout().nodes, ...exiting()]}>
               {(n) => (
                 <g
                   class="node"
                   classList={{
                     selected: n.id === props.selectedId,
                     faded: nodeFaded(n),
+                    exiting: exitingIds().has(n.id),
                     [`h-${n.health.toLowerCase()}`]: true,
                   }}
                   /* CSS transform (not the SVG attribute) so browsers can transition position

@@ -290,6 +290,7 @@ export default function App() {
             search={search()}
             onSearch={setSearch}
             onSelect={setSelectedId}
+            onDeselect={() => setSelectedId(null)}
           />
           <DetailDrawer
             node={selectedNode()}

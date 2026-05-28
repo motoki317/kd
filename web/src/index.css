@@ -700,6 +700,13 @@ body {
 .node.faded {
   opacity: 0.2;
 }
+/* Cycle 160: a removed node renders briefly at its last position with this class so the layout
+   diff is visible as a fade-out instead of an instant vanish. pointer-events: none keeps it from
+   competing for clicks; the transition is on the .node opacity rule above. */
+.node.exiting {
+  opacity: 0;
+  pointer-events: none;
+}
 .edges path.faded {
   opacity: 0.08;
 }
