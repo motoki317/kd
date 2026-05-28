@@ -669,6 +669,10 @@ export default function Topology(props: Props) {
             ref={props.searchRef}
             placeholder="Search resources…  ( ⌘K )"
             aria-label="Search resources in current view"
+            // Surface the structured-form (cycle 295) on hover so an operator who pasted a
+            // Kind/name and got a single hit can intuit why — also discoverable for those who
+            // haven't read the help overlay.
+            title="Search name · kind · status · host · IP · image · labels. Type Kind/name (e.g. po/web-abc) for a structured lookup; Enter cycles matches."
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={(e) => {

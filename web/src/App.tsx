@@ -538,6 +538,10 @@ export default function App() {
                 </li>
                 <li>
                   <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
+                  <div class="help-hint">
+                    Searches name, kind, status, host, IP, image, and labels. Type
+                    {' '}<code>Kind/name</code>{' '} (e.g. <code>po/web-abc</code>) for a structured lookup.
+                  </div>
                 </li>
                 <li>
                   <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
