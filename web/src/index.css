@@ -581,10 +581,27 @@ body {
   border: 1px solid var(--border-strong);
   background: var(--surface);
   border-radius: 7px;
-  padding: 6px 12px;
+  padding: 5px 11px;
   cursor: pointer;
   font-size: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.topology-fit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.topology-fit svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .topology-count {
   position: absolute;

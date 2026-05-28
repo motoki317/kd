@@ -389,6 +389,11 @@ export default function Topology(props: Props) {
         </div>
       </Show>
       <button class="topology-fit" onClick={resetView} title="Fit to view">
+        {/* Tiny "fit corners" glyph: four L-corners around an implied frame so the button reads
+            as "frame the canvas" even before the eye lands on the word. */}
+        <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+          <path d="M 1 4 L 1 1 L 4 1 M 8 1 L 11 1 L 11 4 M 11 8 L 11 11 L 8 11 M 4 11 L 1 11 L 1 8" />
+        </svg>
         Fit
       </button>
     </div>
