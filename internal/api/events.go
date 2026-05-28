@@ -1,8 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
 	"slices"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,7 +75,7 @@ func eventsFor(objs []runtime.Object, uids map[string]bool, rootKind, rootName s
 	// Newest first; Warnings break ties ahead of Normal so problems sit at the top.
 	slices.SortFunc(out, func(a, b eventEntry) int {
 		if a.Last != b.Last {
-			return -cmpStr(a.Last, b.Last)
+			return -cmp.Compare(a.Last, b.Last)
 		}
 		return typeRank(b.Type) - typeRank(a.Type)
 	})
@@ -83,15 +85,15 @@ func eventsFor(objs []runtime.Object, uids map[string]bool, rootKind, rootName s
 // lastSeen prefers the modern EventTime/series time, falling back to the legacy LastTimestamp.
 func lastSeen(ev *corev1.Event) string {
 	if !ev.LastTimestamp.IsZero() {
-		return ev.LastTimestamp.UTC().Format("2006-01-02T15:04:05Z07:00")
+		return ev.LastTimestamp.UTC().Format(time.RFC3339)
 	}
 	if ev.Series != nil && !ev.Series.LastObservedTime.IsZero() {
-		return ev.Series.LastObservedTime.UTC().Format("2006-01-02T15:04:05Z07:00")
+		return ev.Series.LastObservedTime.UTC().Format(time.RFC3339)
 	}
 	if !ev.EventTime.IsZero() {
-		return ev.EventTime.UTC().Format("2006-01-02T15:04:05Z07:00")
+		return ev.EventTime.UTC().Format(time.RFC3339)
 	}
-	return ev.CreationTimestamp.UTC().Format("2006-01-02T15:04:05Z07:00")
+	return ev.CreationTimestamp.UTC().Format(time.RFC3339)
 }
 
 func typeRank(t string) int {
@@ -99,15 +101,4 @@ func typeRank(t string) int {
 		return 1
 	}
 	return 0
-}
-
-func cmpStr(a, b string) int {
-	switch {
-	case a < b:
-		return -1
-	case a > b:
-		return 1
-	default:
-		return 0
-	}
 }
