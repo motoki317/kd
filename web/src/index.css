@@ -791,6 +791,10 @@ body {
   border-color: var(--border-strong);
   color: var(--text);
 }
+.kind-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .kind-chip.active {
   /* Active chips borrow the same accent treatment as the legend pills: a tinted background plus
      coloured border, so the spotlighted kinds read at a glance against the inactive grey row. */
