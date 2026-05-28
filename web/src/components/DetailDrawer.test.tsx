@@ -64,6 +64,30 @@ describe('DetailDrawer', () => {
     expect(getByTitle('Copy name')).toBeTruthy()
   })
 
+  it('label chip click copies key=value; Shift+click copies value only (cycle 282)', async () => {
+    const writes: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (s: string) => { writes.push(s); return Promise.resolve() } },
+    })
+    const labeled: KNode = { ...configMap, labels: { app: 'shop', version: 'v1.2.3' } }
+    const { container } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    const chips = [...container.querySelectorAll('.label-chip')] as HTMLButtonElement[]
+    expect(chips.length).toBe(2)
+    // Plain click on the 'app' chip copies "app=shop".
+    chips[0].click()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(writes).toEqual(['app=shop'])
+    // Shift+click on the 'version' chip copies just "v1.2.3".
+    chips[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(writes).toEqual(['app=shop', 'v1.2.3'])
+  })
+
   it('share button copies window.location.href to the clipboard (cycle 275)', async () => {
     const writes: string[] = []
     Object.defineProperty(navigator, 'clipboard', {
