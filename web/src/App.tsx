@@ -252,6 +252,22 @@ export default function App() {
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)">
           ?
         </button>
+        {/* Health-distribution stripe (cycle 132): a 3px bar along the bottom edge of the topbar
+            with one segment per present health state, sized in proportion. Reads as a quick
+            answer to "what's the cluster doing right now?" — a sliver of red on a sea of green
+            telegraphs the same idea the legend pills do, but without needing to read numbers. */}
+        <Show when={shownHealth().length > 0}>
+          <div class="topbar-stripe" aria-hidden="true">
+            <For each={shownHealth()}>
+              {(h) => (
+                <span
+                  style={{ flex: counts()[h], 'background-color': healthColor(h) }}
+                  title={`${h}: ${counts()[h]}`}
+                />
+              )}
+            </For>
+          </div>
+        </Show>
       </header>
 
       <div class="body">

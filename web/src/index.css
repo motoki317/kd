@@ -74,6 +74,20 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   z-index: 5;
+  position: relative; /* anchor the cycle-132 health-distribution stripe */
+}
+.topbar-stripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px; /* sit on top of the topbar's bottom border so the colored stripe IS the divider */
+  height: 3px;
+  display: flex;
+  pointer-events: none;
+}
+.topbar-stripe > span {
+  height: 100%;
+  transition: flex 0.3s ease;
 }
 .brand {
   font-weight: 700;
