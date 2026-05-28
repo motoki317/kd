@@ -473,6 +473,11 @@ export default function Topology(props: Props) {
                       age, host (pods), and restart count without selecting it. */}
                   <title>{cardTitle(n, now())}</title>
                   <rect class="node-bg" width={n.width} height={n.height} rx="9" />
+                  {/* Cycle 163: a faint white-to-transparent strip across the top of the card
+                      gives the surface a subtle "glass tile" highlight (more pronounced on the
+                      tinted non-healthy cards). Drawn at 1.5px below the bg's top border so it
+                      tucks inside the rounded corners. */}
+                  <rect class="node-glaze" x="1.5" y="1.5" width={n.width - 3} height={Math.min(20, n.height / 3)} rx="7.5" />
                   {/* Icon-forward card (cycle 126): a 28×28 kind silhouette anchors the left column
                       and a small uppercase kind label sits under it; the right column lays name,
                       status and the restart/age badge on their own rows so nothing competes for

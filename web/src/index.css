@@ -768,6 +768,22 @@ body {
   stroke: var(--accent);
   stroke-width: 2.5;
 }
+/* Top-of-card glaze (cycle 163): a faint linear-fade rect that mimics a soft inset highlight on
+   the upper edge — gives cards a tactile "tile" feel. Strong-but-faint over the surface; transparent
+   on the bottom so it only reads at the top. SVG can't do linear-gradient via attribute, but we can
+   use the rounded rect with a gradient fill defined in <defs> globally. Falling back to an opacity
+   trick via fill: white at low alpha + only the top — by limiting height to ~⅓ of the card the
+   highlight naturally fades off at the bottom edge of its own rect. */
+.node-glaze {
+  fill: white;
+  opacity: 0.16;
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .node-glaze {
+    opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
+  }
+}
 /* Kind icon: monochrome outline that picks up the dim text color so it never competes with the
    health-tinted body (the body carries status; the icon carries type). The .large variant hosts a
    scale(2) transform, so its base stroke is halved to render at the same 1.5px visual thickness. */
