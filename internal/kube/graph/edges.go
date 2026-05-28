@@ -93,6 +93,13 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			b.serviceEdges(id, ns, o, nodes)
 		case *networkingv1.Ingress:
 			b.ingressEdges(id, ns, o)
+		case *corev1.PersistentVolumeClaim:
+			// A bound PVC carries its target PV's name in spec.volumeName, completing the
+			// Pod → PVC → PV chain in the Volumes view (cycle 235). Modeled as a `mounts`
+			// edge so the volumes view's existing filter picks it up without a new edge type.
+			if o.Spec.VolumeName != "" {
+				b.link(id, EdgeMounts, "PersistentVolume", "", o.Spec.VolumeName)
+			}
 		case *rbacv1.RoleBinding:
 			b.link(id, EdgeBinds, roleRefKind(o.RoleRef), roleRefNamespace(o.RoleRef, ns), o.RoleRef.Name)
 			b.subjectEdges(id, ns, o.Subjects)

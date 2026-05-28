@@ -92,6 +92,14 @@ metadata:
   name: web-data
   namespace: shop
   uid: pvc-uid
+spec:
+  volumeName: web-pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: web-pv
+  uid: pv-uid
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -139,6 +147,8 @@ func TestBuildInferredEdges(t *testing.T) {
 		{"pod mounts secret volume", EdgeMounts, "Pod", "web-1", "Secret", "web-secret"},
 		{"pod mounts secret via envFrom", EdgeMounts, "Pod", "web-1", "Secret", "web-env"},
 		{"pod mounts pvc", EdgeMounts, "Pod", "web-1", "PersistentVolumeClaim", "web-data"},
+		// PVC's volumeName completes the Pod → PVC → PV chain (cycle 235).
+		{"pvc binds to pv", EdgeMounts, "PersistentVolumeClaim", "web-data", "PersistentVolume", "web-pv"},
 		{"pod uses serviceaccount", EdgeUsesServiceAccount, "Pod", "web-1", "ServiceAccount", "web-sa"},
 		{"rolebinding binds role", EdgeBinds, "RoleBinding", "web-rb", "Role", "web-role"},
 		{"rolebinding binds subject", EdgeBinds, "RoleBinding", "web-rb", "ServiceAccount", "web-sa"},
