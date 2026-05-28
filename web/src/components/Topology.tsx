@@ -583,7 +583,7 @@ export default function Topology(props: Props) {
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
           />
           <Show when={query()}>
-            <button class="topology-search-clear" onClick={() => setQuery('')} title="Clear (Esc)">
+            <button class="topology-search-clear" onClick={() => setQuery('')} title="Clear (Esc)" aria-label="Clear search">
               ×
             </button>
           </Show>

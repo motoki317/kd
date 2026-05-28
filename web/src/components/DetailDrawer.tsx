@@ -122,7 +122,7 @@ export default function DetailDrawer(props: Props) {
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />
-            <button class="drawer-close" onClick={props.onClose} title="Close">
+            <button class="drawer-close" onClick={props.onClose} title="Close" aria-label="Close details">
               ×
             </button>
           </header>

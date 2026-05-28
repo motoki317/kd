@@ -362,7 +362,7 @@ export default function App() {
         >
           {connState() === 'live' ? 'live' : connState() === 'connecting' ? 'connecting…' : 'offline'}
         </span>
-        <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)">
+        <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
           ?
         </button>
         {/* Health-distribution stripe (cycle 132): a 3px bar along the bottom edge of the topbar

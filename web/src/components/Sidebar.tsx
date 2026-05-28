@@ -114,7 +114,7 @@ export default function Sidebar(props: Props) {
           }}
         />
         <Show when={filter()}>
-          <button class="topology-search-clear" onClick={() => setFilter('')} title="Clear (Esc)">
+          <button class="topology-search-clear" onClick={() => setFilter('')} title="Clear (Esc)" aria-label="Clear filter">
             ×
           </button>
         </Show>
