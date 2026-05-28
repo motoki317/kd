@@ -654,6 +654,15 @@ body {
 .topology-empty-text {
   font-size: 13px;
 }
+.topology-empty-hint {
+  font-size: 12px;
+  font-style: italic;
+  /* Pull-quote treatment so the hint reads as supporting context, not a redundant restatement
+     of the "nothing to show" message. */
+  color: color-mix(in srgb, var(--text-dim) 80%, transparent);
+  max-width: 320px;
+  text-align: center;
+}
 .topology-search {
   position: absolute;
   left: 14px;

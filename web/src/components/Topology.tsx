@@ -20,6 +20,9 @@ interface Props {
   onKindFilter?: (k: string) => void
   connected: boolean
   viewLabel: string
+  // viewHint is the "what this view shows" tagline, displayed in the empty state so the operator
+  // knows what a view *would* show before the namespace fills out (cycle 204).
+  viewHint?: string
   // viewId is the lower-case view key — Topology switches layout strategy on 'all' to use
   // the kind-grouped variant (FR-006). All other views fall back to the default
   // connectivity-based layout.
@@ -451,6 +454,12 @@ export default function Topology(props: Props) {
           <div class="topology-empty-text">
             {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
           </div>
+          {/* When the canvas is empty but the stream is live, surface the view's "what this view
+              shows" hint so the operator learns the view's purpose instead of bouncing between
+              views to deduce it. Hidden while connecting (the line above carries the message). */}
+          <Show when={props.connected && props.viewHint}>
+            <div class="topology-empty-hint">{props.viewHint}</div>
+          </Show>
         </div>
       </Show>
       <div class="topology-search">

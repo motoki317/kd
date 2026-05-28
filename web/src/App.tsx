@@ -15,13 +15,16 @@ import ContextSwitcher from './components/ContextSwitcher'
 // catch-all (FR-006): every node lays out in per-kind boxes, ownership edges still drawn —
 // the readable replacement for the previously-removed hairball, important once CRs (which
 // have no edges to the workload kinds) enter the picture.
-const VIEWS: { id: View; label: string }[] = [
-  { id: 'ownership', label: 'Ownership' },
-  { id: 'network', label: 'Network' },
-  { id: 'nodes', label: 'Nodes' },
-  { id: 'volumes', label: 'Volumes' },
-  { id: 'rbac', label: 'RBAC' },
-  { id: 'all', label: 'All' },
+// `hint` is shown both as a hover tooltip on the tab and as the empty-state subtitle when the
+// view has nothing to show, so the operator learns what the view *would* contain without having
+// to flip between views to deduce it (cycle 204).
+const VIEWS: { id: View; label: string; hint: string }[] = [
+  { id: 'ownership', label: 'Ownership', hint: 'Parent→child workload tree (ownerReferences)' },
+  { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic flow' },
+  { id: 'nodes', label: 'Nodes', hint: 'Pods grouped by the node they run on' },
+  { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount' },
+  { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and their Subjects' },
+  { id: 'all', label: 'All', hint: 'Every resource, grouped by kind' },
 ]
 
 export default function App() {
@@ -269,7 +272,7 @@ export default function App() {
         <div class="views">
           <For each={VIEWS}>
             {(v) => (
-              <button classList={{ active: v.id === view() }} onClick={() => setView(v.id)}>
+              <button classList={{ active: v.id === view() }} onClick={() => setView(v.id)} title={v.hint}>
                 {v.label}
               </button>
             )}
@@ -346,6 +349,7 @@ export default function App() {
             onKindFilter={toggleKind}
             connected={connected()}
             viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
+            viewHint={VIEWS.find((v) => v.id === view())?.hint}
             viewId={view()}
             search={search()}
             onSearch={setSearch}
