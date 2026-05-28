@@ -1151,7 +1151,7 @@ button.drawer-host:hover {
 .drawer-tabs button {
   border: 0;
   background: transparent;
-  padding: 10px;
+  padding: 10px 12px;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1159,9 +1159,14 @@ button.drawer-host:hover {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  transition: color 0.12s, border-bottom-color 0.12s;
+  font-weight: 600;
+}
+.drawer-tabs button:hover {
+  color: var(--text);
 }
 .drawer-tabs button.active {
-  color: var(--text);
+  color: var(--accent);
   border-bottom-color: var(--accent);
 }
 .tab-badge {
