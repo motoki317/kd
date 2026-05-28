@@ -458,6 +458,17 @@ body {
 .node-stripe {
   transform: translate(8px, 8px);
 }
+/* Kind icon: monochrome outline, picks up the kind text's dim color so it never competes with
+   the health stripe/border (which carry status). 1.5px stroke is the smallest that stays crisp
+   at 14px without anti-alias blur. */
+.node-icon {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-dim);
+}
 .node-kind {
   font-size: 11px;
   fill: var(--text-dim);

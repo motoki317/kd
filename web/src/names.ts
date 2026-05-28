@@ -66,8 +66,9 @@ export function cardName(name: string, ownerName: string | undefined, rightBadge
 }
 
 // TOP_LINE_CHARS is the kind+status character budget for the card's top line at NODE_WIDTH, with
-// kind left- and status right-aligned. GAP keeps a visible space between them.
-const TOP_LINE_CHARS = 24
+// kind left- and status right-aligned. GAP keeps a visible space between them. The icon at the
+// top-left consumes ~2.5 name-chars of horizontal room, so the budget shrinks accordingly.
+const TOP_LINE_CHARS = 21
 const TOP_LINE_GAP = 2
 
 // cardStatus fits the right-aligned status onto the top line beside the left-aligned kind,

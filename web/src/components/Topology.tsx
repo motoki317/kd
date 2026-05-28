@@ -4,6 +4,7 @@ import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { cardName, cardStatus, kindLabel } from '../names'
 import { nodeMatches } from '../search'
+import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import type { EdgeType, KEdge, KNode } from '../types'
 
@@ -289,7 +290,10 @@ export default function Topology(props: Props) {
                   {/* Stripe is inset 8px on every side (the CSS shifts it by 8,8), so its height
                       must subtract both the top and bottom inset or it overflows the card bottom. */}
                   <rect class="node-stripe" width="5" height={n.height - 16} rx="2.5" fill={healthColor(n.health)} />
-                  <text class="node-kind" x="16" y="22">
+                  {/* 14x14 kind icon at the top-left, just inside the health stripe; the kind
+                      text follows so the silhouette acts as a fast-recognition aid for the label. */}
+                  <g class="node-icon" transform="translate(16,10)">{kindIcon(n.kind)}</g>
+                  <text class="node-kind" x="32" y="22">
                     {kindLabel(n.kind)}
                   </text>
                   <text class="node-name" x="16" y="40">
