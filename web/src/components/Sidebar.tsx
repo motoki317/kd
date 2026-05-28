@@ -62,7 +62,20 @@ export default function Sidebar(props: Props) {
           placeholder="Filter…  ( / )"
           value={filter()}
           onInput={(e) => setFilter(e.currentTarget.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setFilter('')
+            else if (e.key === 'Enter') {
+              // Jump straight to the top-of-list match — operators expect filter+Enter to be
+              // an explicit "go" action, not a "remember the search" no-op (cycle 223). The
+              // first item is troubled-first sorted, so this lands on the most attention-worthy
+              // ns matching the filter.
+              const first = shown()[0]
+              if (first) {
+                props.onSelect(first.name)
+                ;(e.currentTarget as HTMLInputElement).blur()
+              }
+            }
+          }}
         />
         <Show when={filter()}>
           <button class="topology-search-clear" onClick={() => setFilter('')} title="Clear (Esc)">

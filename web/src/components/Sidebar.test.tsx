@@ -42,6 +42,17 @@ describe('Sidebar', () => {
     expect(getByText("Couldn't load namespaces.")).toBeTruthy()
   })
 
+  it('Enter on the filter input selects the top-of-list match (cycle 223)', () => {
+    const onSelect = vi.fn()
+    const { getByPlaceholderText } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={onSelect} loading={false} failed={false} />
+    ))
+    const input = getByPlaceholderText(/Filter/) as HTMLInputElement
+    fireEvent.input(input, { target: { value: 'bbb' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith('bbb')
+  })
+
   it('offers a retry button on failure when onRetry is wired (cycle 220)', () => {
     const onRetry = vi.fn()
     const { getByText } = render(() => (
