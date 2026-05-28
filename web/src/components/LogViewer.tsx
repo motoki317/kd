@@ -1,5 +1,6 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
+import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { filterLogLines } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
@@ -18,6 +19,10 @@ interface Props {
   restarts: number
   // single pod's status, to tell "container not started yet" from a real stream drop.
   status?: string
+  // True while the parent panel is on-screen. The viewer stays mounted across tab switches so the
+  // stream survives; flipping this back to true asks the viewer to snap to the tail (so coming
+  // back to Logs from Manifest lands on the newest line, not a stale scroll position).
+  visible?: boolean
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -41,9 +46,35 @@ export default function LogViewer(props: Props) {
 
   // A single pod that isn't Running can't produce logs yet, so an error there is "no logs" not a drop.
   const gentle = createMemo(() => !props.aggregated && !(props.status ?? '').startsWith('Running'))
-  const toBottom = () => pre?.scrollTo({ top: pre.scrollHeight })
+  // Direct scrollTop assignment instead of scrollTo({ ... }) — jsdom doesn't implement scrollTo
+  // on HTMLElement (the test env throws), and there's no behaviorial difference here.
+  const toBottom = () => {
+    if (pre) pre.scrollTop = pre.scrollHeight
+  }
+  // Programmatic scrolls (toBottom) fire onScroll, so guard against treating our own scroll as a
+  // user gesture that would unpin the tail. Cleared once the resulting scroll event has been
+  // observed (or the next frame, whichever comes first).
+  let autoScrolling = false
+  // Coalesce many incoming lines into one tail-snap per frame: rAF runs after Solid's DOM updates,
+  // so the scrollHeight we read reflects the final batch — no need for per-line microtasks that
+  // can race the renderer.
+  let scrollPending = false
+  function scheduleTail() {
+    if (!pinned() || scrollPending) return
+    scrollPending = true
+    requestAnimationFrame(() => {
+      scrollPending = false
+      if (!pinned() || !pre) return
+      autoScrolling = true
+      toBottom()
+      requestAnimationFrame(() => {
+        autoScrolling = false
+      })
+    })
+  }
   const onScroll = () => {
-    if (pre) setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
+    if (autoScrolling || !pre) return
+    setPinned(pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40)
   }
 
   // Reset container + previous toggle whenever the target pod changes.
@@ -79,12 +110,35 @@ export default function LogViewer(props: Props) {
       (entry) => {
         setError(false) // a line arriving means the stream recovered
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
-        if (pinned()) queueMicrotask(toBottom)
+        scheduleTail()
       },
       () => setError(true),
     )
     onCleanup(close)
   })
+
+  // Coming back to the Logs tab after viewing Manifest/Events should land on the newest line —
+  // even if the user had previously scrolled up, opening the tab is a "show me what's happening
+  // now" signal. Re-pin and snap on each visibility transition into true.
+  createEffect(
+    on(
+      () => props.visible !== false,
+      (visible) => {
+        if (visible) {
+          setPinned(true)
+          requestAnimationFrame(() => {
+            if (pre) {
+              autoScrolling = true
+              toBottom()
+              requestAnimationFrame(() => {
+                autoScrolling = false
+              })
+            }
+          })
+        }
+      },
+    ),
+  )
 
   return (
     <div class="logs">
@@ -139,7 +193,13 @@ export default function LogViewer(props: Props) {
               <Show when={l.time}>
                 <span class="log-time">{l.time}</span>
               </Show>
-              {l.line}
+              {/* Plain lines (the common case) skip the parser to keep allocations down — ANSI
+                  segmentation only kicks in for lines that actually contain a CSI escape. */}
+              <Show when={hasAnsi(l.line)} fallback={l.line}>
+                <For each={parseAnsi(l.line)}>
+                  {(seg) => <span style={ansiStyleToCss(seg.style)}>{seg.text}</span>}
+                </For>
+              </Show>
             </div>
           )}
         </For>
