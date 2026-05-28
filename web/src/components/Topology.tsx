@@ -263,7 +263,16 @@ export default function Topology(props: Props) {
     <div class="topology">
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
-          {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
+          {/* Friendly graphic so the "nothing here" state isn't just bare text — three faded
+              card-silhouettes hint at "this is where resources would render". */}
+          <svg class="topology-empty-illo" viewBox="0 0 120 60" width="120" height="60" aria-hidden="true">
+            <rect x="6" y="22" width="32" height="20" rx="4" />
+            <rect x="44" y="14" width="32" height="20" rx="4" />
+            <rect x="82" y="26" width="32" height="20" rx="4" />
+          </svg>
+          <div class="topology-empty-text">
+            {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
+          </div>
         </div>
       </Show>
       <div class="topology-search">

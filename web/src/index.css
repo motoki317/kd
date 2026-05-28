@@ -504,10 +504,23 @@ body {
 .topology-empty {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
   color: var(--text-dim);
   pointer-events: none;
+}
+.topology-empty-illo rect {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+.topology-empty-text {
+  font-size: 13px;
 }
 .topology-search {
   position: absolute;
