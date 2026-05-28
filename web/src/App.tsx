@@ -166,7 +166,9 @@ export default function App() {
     const list = namespaceList()
     const ns = namespace()
     if (!connected() || !ns || nodes().length === 0) return list
-    const live = rollupHealth(nodes())
+    // Exclude cluster-scoped resources (the shared Node, ClusterRoles): they ride along in every
+    // namespace's graph but aren't this namespace's health — mirrors the server's Summarize.
+    const live = rollupHealth(nodes().filter((n) => n.namespace))
     return list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
   })
 

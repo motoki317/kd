@@ -32,6 +32,12 @@ func Summarize(objs []runtime.Object) Summary {
 	g := Build(objs)
 	s := Summary{Health: HealthHealthy}
 	for _, n := range g.Nodes {
+		// Cluster-scoped resources (Nodes) ride along in every namespace's snapshot for placement
+		// edges; rolling their health into a per-namespace indicator would flag every namespace over
+		// one cluster-level event (a cordoned or NotReady Node). They surface in the Nodes view.
+		if n.Namespace == "" {
+			continue
+		}
 		if n.Health != HealthHealthy {
 			s.NonReady++
 		}

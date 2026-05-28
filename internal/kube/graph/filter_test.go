@@ -170,6 +170,39 @@ status:
 	}
 }
 
+// Every namespace's snapshot carries the cluster-scoped Nodes (for placement edges), so a single
+// unhealthy Node — cordoned (Suspended) or NotReady (Degraded) — must not roll into a per-namespace
+// indicator and make every namespace look troubled over one cluster-level event. Nodes surface in
+// the Nodes view, not the sidebar dot.
+func TestSummarizeIgnoresClusterScopedNodes(t *testing.T) {
+	objs := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok
+  namespace: shop
+  uid: ok-uid
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-1
+  uid: node-uid
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+`)
+	if got := Summarize(objs); got.Health != HealthHealthy || got.NonReady != 0 {
+		t.Errorf("Summarize with an unhealthy cluster-scoped Node = %+v, want Healthy/0", got)
+	}
+}
+
 func TestDescendantPodNames(t *testing.T) {
 	g := Build(decodeFixture(t, ownershipFixture)) // Deployment(dep-uid) -> RS(rs-uid) -> 2 pods
 	bothPods := []string{"web-abc-1", "web-abc-2"}
