@@ -43,4 +43,25 @@ describe('nodeMatches', () => {
     expect(nodeMatches(bare, 'settings')).toBe(true)
     expect(nodeMatches(bare, 'nginx')).toBe(false)
   })
+
+  it('matches by status — finding "CrashLoopBackOff" reveals every troubled pod at once', () => {
+    const crashing: KNode = { id: '3', kind: 'Pod', name: 'p', health: 'Degraded', status: 'CrashLoopBackOff' }
+    expect(nodeMatches(crashing, 'crashloop')).toBe(true)
+  })
+
+  it('matches by host so "node-1" finds every pod scheduled on it', () => {
+    const onNode: KNode = { id: '4', kind: 'Pod', name: 'p', health: 'Healthy', host: 'worker-3' }
+    expect(nodeMatches(onNode, 'worker-3')).toBe(true)
+  })
+
+  it('matches by cluster IP and external IP so an address pastes in to find its service', () => {
+    const svc: KNode = { id: '5', kind: 'Service', name: 's', health: 'Healthy', clusterIP: '10.96.0.7', externalIP: '203.0.113.7' }
+    expect(nodeMatches(svc, '10.96.0.7')).toBe(true)
+    expect(nodeMatches(svc, '203.0.113.7')).toBe(true)
+  })
+
+  it('matches the displayed kind label so searching "PVC" finds a PersistentVolumeClaim', () => {
+    const pvc: KNode = { id: '6', kind: 'PersistentVolumeClaim', name: 'data', health: 'Healthy' }
+    expect(nodeMatches(pvc, 'pvc')).toBe(true)
+  })
 })
