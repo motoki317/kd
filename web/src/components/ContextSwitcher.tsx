@@ -9,6 +9,19 @@ interface Props {
   onSelect: (ctx: string) => void
 }
 
+// shortContextName trims structured cluster identifiers down to the human-meaningful tail so the
+// switcher dropdown stays readable. EKS contexts kubeconfigs typically use a full ARN
+// ("arn:aws:eks:us-west-2:111122223333:cluster/prod-cluster"); the operator thinks of the
+// cluster by its trailing name. GKE/OpenShift use similarly long names — best effort to extract
+// the trailing identifier after the last "/" or ":" (whichever is further right). The full
+// original is preserved in the option's title (hover) so the ARN stays discoverable.
+export function shortContextName(full: string): string {
+  // The terminal slash component is the most useful for AWS/GCP-style ARNs and resource paths.
+  const slashIdx = full.lastIndexOf('/')
+  if (slashIdx >= 0 && slashIdx < full.length - 1) return full.slice(slashIdx + 1)
+  return full
+}
+
 // ContextSwitcher sits beside the brand in the topbar and lets the operator pick which kubeconfig
 // context the dashboard reads from. Hidden in in-cluster mode (info.enabled=false) and when there's
 // only one context to choose — the dashboard then looks identical to the pre-multi-context UX.
@@ -26,8 +39,14 @@ export default function ContextSwitcher(props: Props) {
           {(c) => (
             // Contexts with an error during cache build are disabled so a stale credential can't be
             // chosen — the raw client-go error is exposed in the tooltip for local-dev debugging.
-            <option value={c.name} disabled={c.status === 'error'} title={c.error || undefined}>
-              {c.name}
+            // The option's value is the full kubeconfig context name (URL truth); the visible label
+            // is the trimmed tail (cycle 210). Hover reveals the full identifier.
+            <option
+              value={c.name}
+              disabled={c.status === 'error'}
+              title={c.error || (c.name !== shortContextName(c.name) ? c.name : undefined)}
+            >
+              {shortContextName(c.name)}
               {c.name === props.info!.default ? ' (default)' : ''}
               {c.status === 'error' ? ' — unavailable' : ''}
             </option>
