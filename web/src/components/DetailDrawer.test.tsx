@@ -58,6 +58,24 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Events') // backward
   })
 
+  it('renders a back button only when canBack is true and routes its click to onBack (cycle 300)', async () => {
+    // Without canBack, no back button is rendered.
+    const { container, unmount } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    expect(container.querySelector('.drawer-back')).toBeFalsy()
+    unmount()
+    // With canBack=true and an onBack callback, the button is rendered and clicking calls onBack.
+    const onBack = vi.fn()
+    const { container: c2 } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} canBack={true} onBack={onBack} />
+    ))
+    const btn = c2.querySelector('.drawer-back') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    btn.click()
+    expect(onBack).toHaveBeenCalledOnce()
+  })
+
   it('[ / ] do nothing when no node is shown (cycle 292)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     // Should be empty — no drawer rendered.

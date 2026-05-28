@@ -42,6 +42,28 @@ export default function App() {
   const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
 
+  // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
+  // controller→pod→pod-event trail. Without history, going back means remembering what they had
+  // selected — error-prone after a few hops. A stack of prior selection IDs powers a "back"
+  // button and an Alt+Left shortcut. Cleared on namespace/view/ctx change so we don't restore an
+  // ID that no longer exists in the graph.
+  const [selectionHistory, setSelectionHistory] = createSignal<string[]>([])
+  // selectAndRemember: the path callers should use whenever a click should be reversible. Plain
+  // setSelectedId stays for cases that shouldn't push (deselection, URL restoration, j/k stepping).
+  const selectAndRemember = (next: string) => {
+    const prev = selectedId()
+    if (prev && prev !== next) setSelectionHistory((h) => [...h, prev])
+    setSelectedId(next)
+  }
+  const goBackSelection = () => {
+    const h = selectionHistory()
+    if (h.length === 0) return false
+    const prev = h[h.length - 1]
+    setSelectionHistory(h.slice(0, -1))
+    setSelectedId(prev)
+    return true
+  }
+
   // Resolve ?ctx= once the contexts list arrives: keep a known URL-supplied context, otherwise fall
   // back to the server-reported default (kubeconfig current-context, or the in-cluster sentinel).
   createEffect(() => {
@@ -191,6 +213,14 @@ export default function App() {
         setSidebarHidden((v) => !v)
         return
       }
+      // Alt+Left walks the navigation history back (cycle 300). Browser-back semantics inside the
+      // drawer — chase an owner chip or event-source pill, then step back without re-clicking.
+      // Alt+Left is the universal "back" gesture on Windows/Linux and isn't claimed by browser
+      // history on the SPA route.
+      if (e.altKey && e.key === 'ArrowLeft') {
+        if (goBackSelection()) e.preventDefault()
+        return
+      }
       if (e.key === '?' && !typing) {
         setShowHelp((s) => !s)
       } else if (e.key === '/' && !typing) {
@@ -262,6 +292,7 @@ export default function App() {
       setSearch('')
       setHealthFilter(null)
       setKindFilter(new Set<string>())
+      setSelectionHistory([]) // history points at IDs that no longer exist in the new graph
     }
     firstSubscribe = false
     setGraph(reconcile(emptyState()))
@@ -511,14 +542,19 @@ export default function App() {
             ctx={ctx() ?? ''}
             node={selectedNode()}
             owners={ownerNodes()}
-            onNavigate={setSelectedId}
+            // Owner-chip clicks should push history (cycle 300) so Alt+Left walks back to the
+            // descendant the operator came from. The cycle-300 helper pushes the prior selection
+            // only when changing to a different node — so re-selecting the same node is a no-op.
+            onNavigate={selectAndRemember}
             onNavigateRef={(ref) => {
               const [kind, ...rest] = ref.split('/')
               const name = rest.join('/')
               const match = Object.values(graph.nodes).find((n) => n.kind === kind && n.name === name)
-              if (match) setSelectedId(match.id)
+              if (match) selectAndRemember(match.id)
               return !!match
             }}
+            canBack={selectionHistory().length > 0}
+            onBack={goBackSelection}
             onClose={() => setSelectedId(null)}
           />
         </main>
@@ -566,6 +602,9 @@ export default function App() {
                 </li>
                 <li>
                   Click owner chip Walk up the ownership tree
+                </li>
+                <li>
+                  <kbd>Alt</kbd>+<kbd>←</kbd> Step back through the drawer's navigation history
                 </li>
                 <li>
                   <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)

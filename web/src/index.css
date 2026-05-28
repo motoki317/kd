@@ -1760,7 +1760,8 @@ button.drawer-host:hover {
 /* Share button: same circular footprint as drawer-close so the two read as a paired action set
    ("get out", "send"). Subtler default state until hover; flashes green for ~1s on a successful
    copy via the .copied class. */
-.drawer-share {
+.drawer-share,
+.drawer-back {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -1773,11 +1774,13 @@ button.drawer-host:hover {
   margin-right: 4px;
   transition: background-color 120ms, color 120ms;
 }
-.drawer-share:hover {
+.drawer-share:hover,
+.drawer-back:hover {
   background: var(--surface-2);
   color: var(--accent);
 }
-.drawer-share:focus-visible {
+.drawer-share:focus-visible,
+.drawer-back:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

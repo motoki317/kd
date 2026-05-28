@@ -19,6 +19,10 @@ interface Props {
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
   // isn't in the current graph (filtered out by view, or already gone).
   onNavigateRef?: (kindSlashName: string) => boolean
+  // Navigation history affordance (cycle 300): canBack=true when a prior selection exists; onBack
+  // pops one step. Optional so the drawer still works for callers that haven't wired history.
+  canBack?: boolean
+  onBack?: () => void
   onClose: () => void
 }
 
@@ -189,11 +193,25 @@ export default function DetailDrawer(props: Props) {
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />
-            {/* Header action cluster: share (copies the deep-link URL) and close. Grouped in a
-                flex row so space-between in the header doesn't push them apart. Share lets the
-                operator paste a link to this resource into a chat / PR instead of explaining
-                "the noisy pod in prod ns". URL already carries ?sel=Kind/name. */}
+            {/* Header action cluster: back (when history exists, cycle 300), share (copies the
+                deep-link URL) and close. Grouped in a flex row so space-between in the header
+                doesn't push them apart. Share lets the operator paste a link to this resource
+                into a chat / PR instead of explaining "the noisy pod in prod ns". URL already
+                carries ?sel=Kind/name. */}
             <div class="drawer-actions">
+              <Show when={props.canBack && props.onBack}>
+                <button
+                  class="drawer-back"
+                  type="button"
+                  title="Back to previous resource (Alt+←)"
+                  aria-label="Back to previous resource"
+                  onClick={() => props.onBack!()}
+                >
+                  <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+                    <path d="M 9 2 L 4 7 L 9 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </Show>
               <button
                 class="drawer-share"
                 title="Copy share link"
