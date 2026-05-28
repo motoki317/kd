@@ -585,7 +585,10 @@ export default function Topology(props: Props) {
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setQuery('')
+              if (e.key === 'Escape') {
+                if (query()) setQuery('')
+                else (e.currentTarget as HTMLInputElement).blur()
+              }
               else if (e.key === 'Enter') {
                 // Mirrors the sidebar filter (cycle 223): typing 'web-' + Enter jumps to the first
                 // matched card so the operator doesn't have to mouse over to click it. orderedForNav

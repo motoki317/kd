@@ -88,7 +88,10 @@ export default function Sidebar(props: Props) {
           value={filter()}
           onInput={(e) => setFilter(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') setFilter('')
+            if (e.key === 'Escape') {
+              if (filter()) setFilter('')
+              else (e.currentTarget as HTMLInputElement).blur()
+            }
             else if (e.key === 'Enter') {
               // Jump straight to the top-of-list match — operators expect filter+Enter to be
               // an explicit "go" action, not a "remember the search" no-op (cycle 223). The
