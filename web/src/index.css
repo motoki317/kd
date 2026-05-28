@@ -182,9 +182,12 @@ body {
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
+  transition: background-color 0.12s, color 0.12s, border-color 0.12s;
 }
 .legend-item:hover {
   background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
 }
 .legend-item.active {
   border-color: var(--border-strong);
@@ -270,10 +273,12 @@ body {
   cursor: pointer;
   font-weight: 700;
   line-height: 1;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .help-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .help-backdrop {
   position: fixed;
