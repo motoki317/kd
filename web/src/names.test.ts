@@ -53,6 +53,14 @@ describe('cardName', () => {
     const long = 'kube-scheduler-docker-desktop'
     expect(cardName(long, undefined, 5).length).toBeGreaterThan(cardName(long, undefined, 12345).length)
   })
+  it('accepts an arbitrary right-badge string (age, age+restarts) and reserves its width', () => {
+    const long = 'kube-scheduler-docker-desktop'
+    const noBadge = cardName(long, undefined, '')
+    const ageOnly = cardName(long, undefined, '2d')
+    const combined = cardName(long, undefined, '↻3 · 2d')
+    expect(ageOnly.length).toBeLessThan(noBadge.length)
+    expect(combined.length).toBeLessThan(ageOnly.length)
+  })
 })
 
 describe('cardStatus', () => {

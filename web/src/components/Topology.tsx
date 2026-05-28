@@ -1,9 +1,10 @@
-import { createMemo, createSignal, For, Show, createEffect, on } from 'solid-js'
+import { createMemo, createSignal, For, Show, createEffect, on, onCleanup } from 'solid-js'
 import { layoutGraph, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { cardName, cardStatus, kindLabel } from '../names'
 import { nodeMatches } from '../search'
+import { relativeAge } from '../time'
 import type { EdgeType, KEdge, KNode } from '../types'
 
 interface Props {
@@ -45,7 +46,24 @@ export default function Topology(props: Props) {
     }
     return m
   })
-  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id), n.restarts ?? 0)
+
+  // Re-evaluate age on a slow ticker so cards age in place without a reload. 30s matches the
+  // resolution of the smallest unit relativeAge can shift across ("5s"→"6s") cheaply enough.
+  const [now, setNow] = createSignal(new Date())
+  const tick = setInterval(() => setNow(new Date()), 30_000)
+  onCleanup(() => clearInterval(tick))
+  const ageOf = (n: KNode) => (n.createdAt ? relativeAge(n.createdAt, now()) : '')
+  // Right-side badge on the name line: combine restart count (when present) and age (when known).
+  // Operators read either as a "needs a look" signal — a high restart count or a freshly-restarted
+  // pod 30s old is just as interesting as a 90-day-old workload.
+  const rightBadge = (n: KNode) => {
+    const r = n.restarts ?? 0
+    const age = ageOf(n)
+    if (r > 0 && age) return `↻${r} · ${age}`
+    if (r > 0) return `↻${r}`
+    return age
+  }
+  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id), rightBadge(n))
 
   // When a node is selected, compute its neighbors and incident edges so the rest of the graph can
   // fade out — focusing attention on what actually relates to the selection (ArgoCD-style). Null
@@ -282,9 +300,9 @@ export default function Topology(props: Props) {
                       {cardStatus(n.status!, kindLabel(n.kind))}
                     </text>
                   </Show>
-                  <Show when={(n.restarts ?? 0) > 0}>
+                  <Show when={rightBadge(n)}>
                     <text class="node-restarts" x={n.width - 12} y="40" text-anchor="end">
-                      ↻{n.restarts}
+                      {rightBadge(n)}
                     </text>
                   </Show>
                 </g>

@@ -53,13 +53,15 @@ export function middleTruncate(s: string, max = 22): string {
 const CARD_NAME_MAX = 22
 
 // cardName is a topology card's display name: stripped of its owner prefix, then middle-truncated
-// to fit the card. When a restart badge (↻N) shares the name line (right-aligned), it reserves the
-// badge's width first so the name truncates short of it instead of rendering underneath. The reserve
-// is in name-characters: the ↻ glyph is ~2 of them wide, each digit ~1, plus ~2 for a visible gap.
-// Char-count is only an estimate for a proportional font, so lean generous — a slightly shorter name
-// beats an overlap.
-export function cardName(name: string, ownerName: string | undefined, restarts = 0): string {
-  const reserved = restarts > 0 ? String(restarts).length + 4 : 0
+// to fit the card. When a right-side badge (restart count and/or age, e.g. "↻3", "2d", "↻3 · 2d")
+// shares the name line, reserve its width first so the name truncates short of it instead of
+// rendering underneath. The reserve is in name-characters: the ↻ glyph is ~2 of them wide, each
+// regular char ~1, plus ~2 for a visible gap. Char-count is only an estimate for a proportional
+// font, so lean generous — a slightly shorter name beats an overlap.
+export function cardName(name: string, ownerName: string | undefined, rightBadge: string | number = ''): string {
+  // Back-compat: old call sites passed `restarts: number`. Convert to the badge string they used to imply.
+  const badge = typeof rightBadge === 'number' ? (rightBadge > 0 ? `↻${rightBadge}` : '') : rightBadge
+  const reserved = badge ? badge.length + (badge.match(/↻/g)?.length ?? 0) + 2 : 0
   return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX - reserved)
 }
 
