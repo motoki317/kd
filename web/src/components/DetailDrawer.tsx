@@ -123,10 +123,10 @@ export default function DetailDrawer(props: Props) {
     const target = marks[idx]
     if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
-  function gotoNextMatch() {
+  function stepMatch(dir: 1 | -1) {
     const total = manifestMatchCount()
     if (total === 0) return
-    const next = (manifestMatchIdx() + 1) % total
+    const next = (manifestMatchIdx() + dir + total) % total
     setManifestMatchIdx(next)
     queueMicrotask(() => scrollManifestMatch(next))
   }
@@ -288,7 +288,7 @@ export default function DetailDrawer(props: Props) {
                   the matches (scrolling each into view), Esc clears without leaving the drawer. */}
               <input
                 class="manifest-find"
-                placeholder="find in manifest…  (Enter for next)"
+                placeholder="find in manifest…  (Enter ↓ · Shift+Enter ↑)"
                 aria-label="Find in manifest"
                 value={manifestQuery()}
                 onInput={(e) => setManifestQuery(e.currentTarget.value)}
@@ -296,7 +296,7 @@ export default function DetailDrawer(props: Props) {
                   if (e.key === 'Escape') setManifestQuery('')
                   else if (e.key === 'Enter') {
                     e.preventDefault()
-                    gotoNextMatch()
+                    stepMatch(e.shiftKey ? -1 : 1)
                   }
                 }}
               />
