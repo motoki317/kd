@@ -580,6 +580,7 @@ export default function Topology(props: Props) {
           <input
             ref={props.searchRef}
             placeholder="Search resources…  ( ⌘K )"
+            aria-label="Search resources in current view"
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}

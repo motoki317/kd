@@ -161,6 +161,7 @@ export default function LogViewer(props: Props) {
           <input
             class="logs-filter"
             placeholder="filter…"
+            aria-label="Filter log lines"
             value={filter()}
             onInput={(e) => setFilter(e.currentTarget.value)}
           />
