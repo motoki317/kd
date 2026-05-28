@@ -2,13 +2,21 @@ import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LogViewer from './LogViewer'
 
-// LogViewer opens an EventSource on mount; a no-op stub keeps it from touching the network.
+// LogViewer opens an EventSource on mount; a no-op stub keeps it from touching the network. The
+// class tracks its instances so a test can fire onerror to assert how the viewer renders a stream drop.
+let eventSources: NoopEventSource[] = []
 class NoopEventSource {
   onerror: (() => void) | null = null
+  constructor() {
+    eventSources.push(this)
+  }
   addEventListener() {}
   close() {}
 }
-beforeEach(() => vi.stubGlobal('EventSource', NoopEventSource))
+beforeEach(() => {
+  eventSources = []
+  vi.stubGlobal('EventSource', NoopEventSource)
+})
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -48,5 +56,24 @@ describe('LogViewer', () => {
     cleanup()
     const noRestarts = render(() => <LogViewer {...base} aggregated={false} containers={['app']} restarts={0} />)
     expect(noRestarts.container.querySelector('.logs-prev')).toBeNull()
+  })
+
+  // A Pod that isn't Running yet can't produce logs, so a stream "error" there is a benign
+  // "not started" — say "no logs yet" calmly, not the alarming "stream interrupted" that a Running
+  // pod's actual stream drop warrants.
+  it('shows "no logs yet" when the stream errors on a non-Running pod', async () => {
+    const { findByText } = render(() => (
+      <LogViewer {...base} aggregated={false} containers={['app']} restarts={0} status="Pending" />
+    ))
+    eventSources[0].onerror?.()
+    await findByText('no logs yet')
+  })
+
+  it('shows "stream interrupted" when the stream errors on a Running pod', async () => {
+    const { findByText } = render(() => (
+      <LogViewer {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    eventSources[0].onerror?.()
+    await findByText('stream interrupted')
   })
 })
