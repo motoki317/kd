@@ -1882,6 +1882,12 @@ button.event-source:hover {
   color: inherit;
   border-radius: 2px;
 }
+.manifest-match.current {
+  background: color-mix(in srgb, var(--accent) 65%, transparent);
+  /* Subtle ring so the active mark reads as "you are here" even on a screen that doesn't take
+     a deep-saturation difference between 32% and 65% accent wash. */
+  outline: 1px solid var(--accent);
+}
 .manifest-format button {
   border: 1px solid var(--border);
   background: var(--surface);

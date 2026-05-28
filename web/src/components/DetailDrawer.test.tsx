@@ -261,12 +261,14 @@ describe('DetailDrawer', () => {
     // Wait until the manifest text actually loads — find runs against detail(), so an early
     // dispatch fires before the resource resolves and reports 0 matches.
     await findByText((_t, el) => el?.classList.contains('manifest') && (el?.textContent ?? '').includes('feature_flag'))
-    const find = (await findByPlaceholderText('find in manifest…')) as HTMLInputElement
+    const find = (await findByPlaceholderText(/find in manifest/)) as HTMLInputElement
     find.value = 'feature'
     find.dispatchEvent(new Event('input', { bubbles: true }))
     // Two case-insensitive hits in the body.
     expect(container.querySelectorAll('.manifest-match').length).toBe(2)
-    expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/2 match/)
+    // The count badge reads "<current>/<total>" once Enter cycling kicked in (cycle 263); fresh
+    // state is index 0, i.e. "1/2".
+    expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/1\/2/)
   })
 
   it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
