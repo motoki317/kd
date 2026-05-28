@@ -31,6 +31,19 @@ describe('kindIcon', () => {
       'PersistentVolume',
       'CustomResourceDefinition',
       'StorageClass',
+      // Common cluster-scope / policy kinds (cycle 212): show up in real namespaces or the
+      // [cluster] view, so a fallback square is a downgrade.
+      'APIService',
+      'CSINode',
+      'CSIDriver',
+      'MutatingWebhookConfiguration',
+      'ValidatingWebhookConfiguration',
+      'HorizontalPodAutoscaler',
+      'PodDisruptionBudget',
+      'NetworkPolicy',
+      'ResourceQuota',
+      'LimitRange',
+      'PriorityClass',
     ]
     for (const k of kinds) expect(hasKindIcon(k), `missing icon for ${k}`).toBe(true)
   })

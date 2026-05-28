@@ -226,6 +226,96 @@ const icons: Record<string, () => JSX.Element> = {
       <line x1="11.5" y1="2" x2="11.5" y2="12" />
     </>
   ),
+  // Plug shape — an APIService extends the API surface.
+  APIService: () => (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="5" rx="0.5" />
+      <line x1="5" y1="3.5" x2="5" y2="2" />
+      <line x1="9" y1="3.5" x2="9" y2="2" />
+      <line x1="7" y1="8.5" x2="7" y2="11.5" />
+    </>
+  ),
+  // Disk stack with a small driver glyph — CSINode reports CSI driver presence on a node.
+  CSINode: () => (
+    <>
+      <ellipse cx="7" cy="3.5" rx="4" ry="1.2" />
+      <line x1="3" y1="3.5" x2="3" y2="8.5" />
+      <line x1="11" y1="3.5" x2="11" y2="8.5" />
+      <path d="M 3 8.5 a 4 1.2 0 0 0 8 0" fill="none" />
+      <line x1="5.5" y1="11" x2="8.5" y2="11" />
+    </>
+  ),
+  // Disk + lock chip — CSIDriver is a cluster-wide storage driver registration.
+  CSIDriver: () => (
+    <>
+      <ellipse cx="6" cy="3.5" rx="3.5" ry="1.2" />
+      <line x1="2.5" y1="3.5" x2="2.5" y2="9.5" />
+      <line x1="9.5" y1="3.5" x2="9.5" y2="9.5" />
+      <path d="M 2.5 9.5 a 3.5 1.2 0 0 0 7 0" fill="none" />
+      <rect x="9" y="6" width="3.5" height="3" rx="0.5" />
+    </>
+  ),
+  // Filter funnel — a Mutating/ValidatingWebhookConfiguration intercepts API requests.
+  MutatingWebhookConfiguration: () => (
+    <>
+      <path d="M 2 3 L 12 3 L 9 7 L 9 11 L 5 11 L 5 7 z" />
+    </>
+  ),
+  ValidatingWebhookConfiguration: () => (
+    <>
+      <path d="M 2 3 L 12 3 L 9 7 L 9 11 L 5 11 L 5 7 z" />
+      <path d="M 5.5 5.5 L 7 7 L 9 4.5" stroke-width="1.5" />
+    </>
+  ),
+  // Up/down arrows in a small graph — HPA scales horizontally.
+  HorizontalPodAutoscaler: () => (
+    <>
+      <path d="M 3 11 L 3 4 L 6 4" />
+      <path d="M 5 6 L 7 4 L 9 6" />
+      <path d="M 5 9 L 7 11 L 9 9" />
+      <path d="M 11 4 L 11 11" />
+    </>
+  ),
+  // Shield — a PDB protects availability during disruptions.
+  PodDisruptionBudget: () => (
+    <>
+      <path d="M 7 2 L 11.5 4 L 11.5 8 C 11.5 10 7 12 7 12 C 7 12 2.5 10 2.5 8 L 2.5 4 z" />
+    </>
+  ),
+  // Wall with a hole — a NetworkPolicy controls ingress/egress between pods.
+  NetworkPolicy: () => (
+    <>
+      <rect x="2" y="2.5" width="10" height="9" rx="0.5" />
+      <circle cx="7" cy="7" r="1.5" />
+      <line x1="2" y1="7" x2="5.5" y2="7" />
+      <line x1="8.5" y1="7" x2="12" y2="7" />
+    </>
+  ),
+  // Bucket with a fill line — a ResourceQuota caps namespace usage.
+  ResourceQuota: () => (
+    <>
+      <path d="M 3 3 L 11 3 L 10 11.5 L 4 11.5 z" />
+      <line x1="3.5" y1="7.5" x2="10.5" y2="7.5" />
+    </>
+  ),
+  // Bracket pair — a LimitRange constrains per-container resources.
+  LimitRange: () => (
+    <>
+      <path d="M 4.5 3 L 2.5 3 L 2.5 11 L 4.5 11" />
+      <path d="M 9.5 3 L 11.5 3 L 11.5 11 L 9.5 11" />
+      <line x1="5.5" y1="7" x2="8.5" y2="7" />
+    </>
+  ),
+  // Ladder rungs — a PriorityClass orders scheduling priority.
+  PriorityClass: () => (
+    <>
+      <line x1="3.5" y1="3" x2="3.5" y2="12" />
+      <line x1="10.5" y1="3" x2="10.5" y2="12" />
+      <line x1="3.5" y1="5" x2="10.5" y2="5" />
+      <line x1="3.5" y1="7.5" x2="10.5" y2="7.5" />
+      <line x1="3.5" y1="10" x2="10.5" y2="10" />
+    </>
+  ),
 }
 
 // Fallback for kinds without a dedicated icon (CRDs, future additions): a generic squared outline so

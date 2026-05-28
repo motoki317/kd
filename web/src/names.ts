@@ -49,6 +49,20 @@ const KIND_SHORT_LABELS: Record<string, string> = {
   // Cluster-scope kinds introduced with the dynamic-informer store.
   CustomResourceDefinition: 'CRD',
   StorageClass: 'SC',
+  // Cluster-scope kinds that show up in the cluster pseudo-namespace (cycle 212): the API server
+  // surfaces a handful of these per cluster, so even small clusters benefit from short labels
+  // that don't overflow the under-icon space.
+  APIService: 'APISVC',
+  CSINode: 'CSI',
+  CSIDriver: 'CSIDRV',
+  MutatingWebhookConfiguration: 'MWHK',
+  ValidatingWebhookConfiguration: 'VWHK',
+  HorizontalPodAutoscaler: 'HPA',
+  PodDisruptionBudget: 'PDB',
+  NetworkPolicy: 'NETPOL',
+  ResourceQuota: 'QUOTA',
+  LimitRange: 'LIMR',
+  PriorityClass: 'PRIO',
 }
 
 export function kindShortLabel(kind: string): string {
@@ -66,6 +80,12 @@ const KIND_ALIASES: Record<string, string[]> = {
   CustomResourceDefinition: ['crd'],
   PersistentVolume: ['pv'],
   StorageClass: ['sc'],
+  HorizontalPodAutoscaler: ['hpa'],
+  PodDisruptionBudget: ['pdb'],
+  NetworkPolicy: ['netpol'],
+  ResourceQuota: ['quota'],
+  MutatingWebhookConfiguration: ['mwhk', 'mwc'],
+  ValidatingWebhookConfiguration: ['vwhk', 'vwc'],
 }
 
 // kindAliases returns extra search-only synonyms for a kind. The full kind and the kindLabel are
