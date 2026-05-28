@@ -32,6 +32,9 @@ interface Props {
   viewId?: import('../types').View
   search: string
   onSearch: (q: string) => void
+  // Lets the app focus the topology search from a global key (Cmd/Ctrl+K) — like Sidebar's
+  // filterRef but for the resource search instead of the namespace filter.
+  searchRef?: (el: HTMLInputElement) => void
   onSelect: (id: string) => void
   // Background click dismisses the open drawer (cycle 161). Optional — parent decides whether
   // the click-out behavior is wired (Topology tests pass no-op handlers).
@@ -561,7 +564,8 @@ export default function Topology(props: Props) {
             <line x1="8.6" y1="8.6" x2="12" y2="12" />
           </svg>
           <input
-            placeholder="Search resources…"
+            ref={props.searchRef}
+            placeholder="Search resources…  ( ⌘K )"
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}

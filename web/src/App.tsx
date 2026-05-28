@@ -130,14 +130,24 @@ export default function App() {
   const interval = setInterval(() => refetchNamespaces(), 15000)
   onCleanup(() => clearInterval(interval))
 
-  // Global keys: "/" jumps to the namespace filter, Escape backs out (blur a field, else close the
-  // drawer) — the muscle-memory shortcuts operators expect, with no on-screen chrome.
+  // Global keys: "/" jumps to the namespace filter, Cmd/Ctrl+K to the resource search, Escape
+  // backs out (blur a field, else close the drawer) — the muscle-memory shortcuts operators
+  // expect, with no on-screen chrome.
   let filterEl: HTMLInputElement | undefined
+  let searchEl: HTMLInputElement | undefined
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
       const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
       const num = Number(e.key)
+      // Cmd/Ctrl+K focuses the topology search (GitHub-style "find any resource"). Works even
+      // when typing in another field — the operator's intent is "switch to search".
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        searchEl?.focus()
+        searchEl?.select()
+        return
+      }
       if (e.key === '?' && !typing) {
         setShowHelp((s) => !s)
       } else if (e.key === '/' && !typing) {
@@ -385,6 +395,7 @@ export default function App() {
             viewId={view()}
             search={search()}
             onSearch={setSearch}
+            searchRef={(el) => (searchEl = el)}
             onSelect={setSelectedId}
             onDeselect={() => setSelectedId(null)}
           />
@@ -417,6 +428,9 @@ export default function App() {
               <ul>
                 <li>
                   <kbd>/</kbd> Filter namespaces
+                </li>
+                <li>
+                  <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view
                 </li>
                 <li>
                   <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
