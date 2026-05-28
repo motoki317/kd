@@ -1624,6 +1624,43 @@ button.drawer-host:hover {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* Action cluster at top-right of the drawer header — keeps share + close grouped so the parent
+   header's space-between rule doesn't push them apart. Flex with a small gap matches the chrome
+   rhythm in the rest of the topbar. */
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+/* Share button: same circular footprint as drawer-close so the two read as a paired action set
+   ("get out", "send"). Subtler default state until hover; flashes green for ~1s on a successful
+   copy via the .copied class. */
+.drawer-share {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-right: 4px;
+  transition: background-color 120ms, color 120ms;
+}
+.drawer-share:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.drawer-share:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.drawer-share.copied {
+  color: var(--health-healthy);
+  background: color-mix(in srgb, var(--health-healthy) 14%, transparent);
+}
 /* (.drawer-section + h3 styles removed: no markup ever used them — the drawer's sections are
    class-based with implicit spacing.) */
 

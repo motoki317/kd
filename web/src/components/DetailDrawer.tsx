@@ -167,9 +167,36 @@ export default function DetailDrawer(props: Props) {
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />
-            <button class="drawer-close" onClick={props.onClose} title="Close" aria-label="Close details">
-              ×
-            </button>
+            {/* Header action cluster: share (copies the deep-link URL) and close. Grouped in a
+                flex row so space-between in the header doesn't push them apart. Share lets the
+                operator paste a link to this resource into a chat / PR instead of explaining
+                "the noisy pod in prod ns". URL already carries ?sel=Kind/name. */}
+            <div class="drawer-actions">
+              <button
+                class="drawer-share"
+                title="Copy share link"
+                aria-label="Copy share link to this resource"
+                onClick={async (e) => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href)
+                    const el = e.currentTarget
+                    el.classList.add('copied')
+                    setTimeout(() => el.classList.remove('copied'), 1100)
+                  } catch {
+                    /* clipboard unavailable */
+                  }
+                }}
+              >
+                <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+                  {/* Two linked rings — universal "share" / "link" affordance. */}
+                  <path d="M 5 7 Q 5 4 8 4 H 10 Q 13 4 13 7 Q 13 10 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                  <path d="M 9 7 Q 9 10 6 10 H 4 Q 1 10 1 7 Q 1 4 4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
+              </button>
+              <button class="drawer-close" onClick={props.onClose} title="Close" aria-label="Close details">
+                ×
+              </button>
+            </div>
           </header>
 
           <nav class="drawer-tabs">
