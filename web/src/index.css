@@ -368,8 +368,12 @@ body {
   gap: 6px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
+  font-weight: 600;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
 }
 .ns-trouble {
   background: var(--health-degraded);
