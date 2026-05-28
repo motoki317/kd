@@ -1001,6 +1001,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Interactive kind groups: when onKindFilter is wired, the All-view group bg becomes hoverable
+   so the operator gets a "click here to solo this kind" affordance. Pointer-events on bg only
+   so the cards above keep their own click handlers. */
+.kind-group-interactive .kind-group-bg {
+  cursor: pointer;
+  transition: stroke 120ms, fill 120ms;
+}
+.kind-group-interactive:hover .kind-group-bg {
+  stroke: var(--accent);
+  fill: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
 /* Nodes & edges */
 .node {
   cursor: pointer;

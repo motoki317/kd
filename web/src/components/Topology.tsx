@@ -721,6 +721,14 @@ export default function Topology(props: Props) {
                       // active and this kind isn't in it — otherwise the bg rect + label stay
                       // opaque while cards inside fade, which reads as a stale leftover.
                       faded: !!activeKinds() && !activeKinds()!.has(g.kind),
+                      'kind-group-interactive': !!props.onKindFilter,
+                    }}
+                    // Cycle 276: clicking a kind group's bg/label solos that kind in the filter,
+                    // matching Shift+click on the kind chip. Faster than scanning the chip row when
+                    // the operator is already looking at the "All view" cluster they want to focus on.
+                    onClick={(e) => {
+                      if ((e.target as Element).closest?.('.node')) return // a card click takes priority
+                      props.onKindFilter?.(g.kind, true)
                     }}
                   >
                     {/* Subtle background rect behind the whole kind group (label + cards) gives the
