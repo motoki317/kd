@@ -28,6 +28,24 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.node.kind-pod').length).toBe(2)
   })
 
+  it('kind chips with any non-Healthy resource get a severity dot (cycle 289)', () => {
+    // nodes contains a Degraded Pod, so the Pod chip should carry .troubled + a .kind-chip-dot.
+    // The Deployment is Healthy, so the Deployment chip should not. onKindFilter has to be
+    // present for chips to render at all (the Show gate).
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} kindFilter={new Set<string>()} onKindFilter={() => {}} />
+    ))
+    const chips = [...container.querySelectorAll('.kind-chip')] as HTMLButtonElement[]
+    expect(chips.length).toBeGreaterThanOrEqual(2)
+    const labelOf = (c: HTMLButtonElement) => c.querySelector('.kind-chip-label')?.textContent ?? ''
+    const podChip = chips.find((c) => /pod/i.test(labelOf(c)))
+    const depChip = chips.find((c) => /dep/i.test(labelOf(c)))
+    expect(podChip?.classList.contains('troubled')).toBe(true)
+    expect(podChip?.querySelector('.kind-chip-dot')).toBeTruthy()
+    expect(depChip?.classList.contains('troubled')).toBe(false)
+    expect(depChip?.querySelector('.kind-chip-dot')).toBeFalsy()
+  })
+
   it('renders a kind-filter chip per present kind, ordered by count (cycle 203)', () => {
     // nodes has 2 Pods + 1 Deployment, so the chips should be [Pod (2), Deployment (1)].
     const onKindFilter = vi.fn()

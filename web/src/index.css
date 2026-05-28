@@ -918,6 +918,20 @@ body {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+/* Severity dot (cycle 289): small colored pip on chips whose kind carries any non-Healthy
+   resource. Sits between the label and the count so it reads as "this kind has trouble of THIS
+   color" — the inline color is set by JS to match the worst-health hue. */
+.kind-chip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: -2px;
+  flex: 0 0 auto;
+}
+.kind-chip.troubled {
+  border-color: color-mix(in srgb, var(--border-strong) 60%, transparent);
+}
 .kind-chip.active .kind-chip-count {
   color: var(--text);
 }

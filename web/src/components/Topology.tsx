@@ -1,13 +1,13 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type Point } from '../layout'
 import { edgeKey } from '../graphState'
-import { healthColor } from '../health'
+import { healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
 import { cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
-import type { EdgeType, KEdge, KNode } from '../types'
+import type { EdgeType, Health, KEdge, KNode } from '../types'
 
 interface Props {
   nodes: KNode[]
@@ -266,15 +266,30 @@ export default function Topology(props: Props) {
     const s = props.kindFilter
     return s && s.size > 0 ? s : null
   })
-  // Counts per kind in the current view, so the chip row can show "Pod 7" etc. and the chips
-  // are ordered by frequency (the most common kind, almost always Pod, sits first).
-  const kindCounts = createMemo(() => {
-    const c = new Map<string, number>()
-    for (const n of layout().nodes) c.set(n.kind, (c.get(n.kind) ?? 0) + 1)
-    return c
+  // Counts + worst-health per kind in the current view. Chips order by count (most-common first,
+  // typically Pod) — predictable so the row doesn't reshuffle when a single resource flips state.
+  // The per-kind worst health (cycle 289) drives a small severity dot on the chip so the operator
+  // spots WHICH kinds carry trouble without scanning the canvas; preserves the stable order while
+  // still surfacing the answer to "where do I look first".
+  const kindStats = createMemo(() => {
+    const stats = new Map<string, { count: number; worst: Health | null }>()
+    for (const n of layout().nodes) {
+      const s = stats.get(n.kind)
+      if (!s) {
+        stats.set(n.kind, { count: 1, worst: n.health !== 'Healthy' ? n.health : null })
+        continue
+      }
+      s.count++
+      if (n.health !== 'Healthy' && (s.worst === null || healthSeverity[n.health] > healthSeverity[s.worst])) {
+        s.worst = n.health
+      }
+    }
+    return stats
   })
   const kindChips = createMemo(() =>
-    [...kindCounts().entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => ({ kind: k, count: n })),
+    [...kindStats().entries()]
+      .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+      .map(([k, s]) => ({ kind: k, count: s.count, worst: s.worst })),
   )
   // Nodes that pass the kind filter — used both for fading and to short-circuit the related/search
   // intersection. Kinds compose with search and healthFilter (intersection: a node must match all).
@@ -679,15 +694,26 @@ export default function Topology(props: Props) {
               {(c) => (
                 <button
                   class="kind-chip"
-                  classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod' }}
+                  classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod', troubled: c.worst != null }}
                   onClick={(e) => props.onKindFilter?.(c.kind, e.shiftKey)}
-                  title={`Click to toggle ${c.kind} · Shift+click to solo`}
+                  title={
+                    c.worst
+                      ? `Click to toggle ${c.kind} · Shift+click to solo — at least one ${c.worst}`
+                      : `Click to toggle ${c.kind} · Shift+click to solo`
+                  }
                   aria-pressed={activeKinds()?.has(c.kind) ?? false}
                 >
                   <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
                     {kindIcon(c.kind)}
                   </svg>
                   <span class="kind-chip-label">{kindShortLabel(c.kind)}</span>
+                  {/* Tiny severity dot (cycle 289): kinds with any non-Healthy resource get a
+                      colored pip in their bottom-right. Preserves the count-based chip order so
+                      muscle memory survives, while still surfacing "which kinds carry trouble" at
+                      a glance — answer the operator's "where do I look?" without scanning cards. */}
+                  <Show when={c.worst}>
+                    <span class="kind-chip-dot" style={{ background: healthColor(c.worst!) }} aria-hidden="true" />
+                  </Show>
                   <span class="kind-chip-count">{c.count}</span>
                 </button>
               )}
