@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup } from 'solid-js'
-import { kindGroups, layoutGraph, layoutGraphByKind, type Point } from '../layout'
+import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor } from '../health'
 import { cardName, cardStatus, kindShortLabel } from '../names'
@@ -95,14 +95,19 @@ function edgeTitle(e: KEdge, nodes: KNode[]): string {
 }
 
 export default function Topology(props: Props) {
-  const layout = createMemo(() =>
-    props.viewId === 'all'
-      ? layoutGraphByKind(props.nodes, props.edges)
-      : layoutGraph(props.nodes, props.edges),
-  )
+  const layout = createMemo(() => {
+    if (props.viewId === 'all') return layoutGraphByKind(props.nodes, props.edges)
+    // Nodes view: each host becomes a labeled container with the Node card + its pods inside.
+    // scheduledOn edges are implied by containment, so the layout doesn't draw them — cuts the
+    // visual noise of N identical lines to the same Node card (cycle 205).
+    if (props.viewId === 'nodes') return layoutGraphByHost(props.nodes, props.edges)
+    return layoutGraph(props.nodes, props.edges)
+  })
   // In the All view we draw a faint kind-label band above each kind box so the operator can
   // scan "this section is all Pods, that's all Services" without inferring it from card kinds.
   const groups = createMemo(() => (props.viewId === 'all' ? kindGroups(layout()) : []))
+  // Nodes view: per-host group bounding boxes for the host-container bg rect + header label.
+  const hosts = createMemo(() => (props.viewId === 'nodes' ? hostGroups(layout()) : []))
 
   // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
@@ -533,6 +538,37 @@ export default function Topology(props: Props) {
           </marker>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
+          {/* Nodes view: each host's container rect + "host: <name>" header, drawn under the
+              cards so the cards sit on top. Mirrors the kind-groups treatment in All view —
+              backdrop + label + tiny server-rack icon — so the two grouped views share a visual
+              language. */}
+          <Show when={hosts().length > 0}>
+            <g class="host-groups">
+              <For each={hosts()}>
+                {(h) => (
+                  <g class="host-group">
+                    <rect
+                      class="host-group-bg"
+                      x={h.x - 10}
+                      y={h.y - 6}
+                      width={h.width + 20}
+                      height={h.height + 16}
+                      rx="8"
+                    />
+                    {/* Small server-rack glyph echoes the [cluster] icon in the sidebar — the
+                        operator recognizes it as "this is a host" without reading the label. */}
+                    <svg class="host-group-icon" x={h.x - 1} y={h.y + 1} viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+                      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2" />
+                      <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2" />
+                    </svg>
+                    <text class="host-group-label" x={h.x + 16} y={h.y + 14}>
+                      {h.label}
+                    </text>
+                  </g>
+                )}
+              </For>
+            </g>
+          </Show>
           {/* All view: a faint kind label sits above each kind group, so the eye can sweep
               "Pods here, Services there" without inferring it from card text. Underlay only —
               no interactivity; cards above remain selectable normally. */}
