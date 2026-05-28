@@ -35,6 +35,21 @@ function edgePath(points: Point[]): string {
   return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ')
 }
 
+// cardTitle builds the SVG <title> tooltip for a node — the small thing native browsers show on
+// hover after ~700ms. It mirrors the card's visible facts (kind, full name, status) plus the
+// detail the card runs out of room for at small zoom (age, host, restarts), so an operator can
+// inspect a node without selecting it.
+function cardTitle(n: KNode, now: Date): string {
+  const lines = [`${n.kind} ${n.name}`]
+  if (n.status) lines.push(n.status)
+  const meta: string[] = []
+  if (n.createdAt) meta.push(`${relativeAge(n.createdAt, now)} old`)
+  if (n.host) meta.push(`on ${n.host}`)
+  if ((n.restarts ?? 0) > 0) meta.push(`↻ ${n.restarts} restarts`)
+  if (meta.length > 0) lines.push(meta.join(' · '))
+  return lines.join('\n')
+}
+
 export default function Topology(props: Props) {
   const layout = createMemo(() => layoutGraph(props.nodes, props.edges))
 
@@ -285,7 +300,10 @@ export default function Topology(props: Props) {
                   transform={`translate(${n.x - n.width / 2},${n.y - n.height / 2})`}
                   onClick={() => props.onSelect(n.id)}
                 >
-                  <title>{`${n.kind} ${n.name}${n.status ? ` (${n.status})` : ''}`}</title>
+                  {/* Hover tooltip: a compact "everything on the card + a little more" view, so
+                      a tightly-truncated card in a zoomed-out graph still reveals the full name,
+                      age, host (pods), and restart count without selecting it. */}
+                  <title>{cardTitle(n, now())}</title>
                   <rect class="node-bg" width={n.width} height={n.height} rx="8" />
                   {/* Stripe is inset 8px on every side (the CSS shifts it by 8,8), so its height
                       must subtract both the top and bottom inset or it overflows the card bottom. */}
