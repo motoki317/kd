@@ -206,6 +206,10 @@ body {
 .views button.active:hover {
   background: color-mix(in srgb, var(--accent) 92%, white);
 }
+.views button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .legend {
   display: flex;
   gap: 12px;
@@ -234,6 +238,10 @@ body {
   border-color: var(--border-strong);
   background: var(--surface-2);
   color: var(--text);
+}
+.legend-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .legend-item.dim {
   opacity: 0.4;
@@ -495,6 +503,10 @@ body {
   font-size: 13px;
   position: relative;
   transition: background-color 0.1s, color 0.1s;
+}
+.ns-list button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 /* Active-row left accent (cycle 134): a 3px vertical bar at the left edge so the active namespace
    reads at a peripheral glance without needing to track the row tint. Tied to ::before so it
