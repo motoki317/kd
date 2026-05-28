@@ -72,3 +72,10 @@ The roadmap and per-cycle log live in `docs/plans/master-plan.md` and `docs/plan
 - **Selection-spotlight edges**: `related()` walks `props.edges`, NOT `layout().edges`. Some
   views (Nodes) drop edges from the layout output — selecting a pod still needs to light its
   Node via the unrouted edge set.
+- **PVC → PV edge** (cycle 235): emitted as `EdgeMounts` (not a new edge type) so the existing
+  volumes view picks it up automatically. The "Pod → PVC → PV" chain is complete.
+- **Composing filters**: `nodeFaded` checks selection first (selected node never fades), then
+  kind filter, then search ∩ health ∩ related-subtree. Keep that order if you add a new filter.
+- **Conventions for new layouts**: add a `layoutGraphBy<Whatever>` to `layout.ts`, dispatch in
+  `Topology.tsx`, and add a `<View>Groups()` memo if your layout has named containers (kind
+  groups, host groups). Test against fixture node sets in `layout.test.ts`.
