@@ -981,7 +981,7 @@ button.drawer-host:hover {
 .drawer-images {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   margin-top: 8px;
 }
 .drawer-image {
@@ -991,11 +991,13 @@ button.drawer-host:hover {
   min-width: 0;
 }
 .drawer-image code {
+  flex: 1;
   font-size: 12px;
   color: var(--text);
   background: var(--surface-2);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1016,8 +1018,9 @@ button.drawer-host:hover {
   font-size: 12px;
   color: var(--text);
   background: var(--surface-2);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 7px;
 }
 .addr-label {
   font-size: 9px;
