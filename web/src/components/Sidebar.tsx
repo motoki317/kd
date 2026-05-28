@@ -55,7 +55,17 @@ export default function Sidebar(props: Props) {
                     </Show>
                     <span class="ns-name">{ns.name}</span>
                     <Show when={(ns.nonReady ?? 0) > 0}>
-                      <span class="ns-count" title={`${ns.nonReady} not healthy`}>{ns.nonReady}</span>
+                      {/* Inline color matches the dot (and the topology health-stroke), so the
+                          count reads as "this many of THAT color need a look", not as a neutral
+                          stat. Healthy ns never carries a count, so falling back to text-dim is
+                          only for the (rare) Unknown case. */}
+                      <span
+                        class="ns-count"
+                        style={{ color: healthColor(ns.health) }}
+                        title={`${ns.nonReady} not healthy`}
+                      >
+                        {ns.nonReady}
+                      </span>
                     </Show>
                   </button>
                 </li>
