@@ -483,6 +483,22 @@ body {
   /* Drop-shadow on hover hints "lift" so cards announce themselves as clickable; transitions
      here so the lift fades in/out instead of jumping. */
   transition: opacity 0.12s, filter 0.15s;
+  /* Brief fade on first mount — eases the "connecting → graph" snap and also gentles in SSE-added
+     nodes (a new pod showing up mid-rollout). Runs once per element, doesn't compete with the
+     opacity transition above (which fires on class change, not creation). */
+  animation: node-enter 0.22s ease-out;
+}
+.edges path {
+  animation: node-enter 0.28s ease-out;
+}
+@keyframes node-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* prefers-reduced-motion: skip the entrance animation so the canvas appears immediately for users
+   who've asked the OS to minimize motion. */
+@media (prefers-reduced-motion: reduce) {
+  .node, .edges path { animation: none; }
 }
 .node:hover {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.10));
