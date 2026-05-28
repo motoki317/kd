@@ -754,6 +754,26 @@ body {
 }
 .topology-empty-text {
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Small ring spinner for the "connecting" empty state: borders the dim text color, with the top
+   border tinted accent so the rotation is visible. Hidden under prefers-reduced-motion since the
+   "Connecting…" copy already conveys the state. */
+.topology-empty-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text-dim) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: topology-empty-spin 0.9s linear infinite;
+}
+@keyframes topology-empty-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topology-empty-spinner { animation: none; border-color: var(--text-dim); }
 }
 /* Variant of .topology-empty used when a filter (not absence of data) emptied the canvas. The
    pointer-events override lets the clear button inside actually be clickable. */

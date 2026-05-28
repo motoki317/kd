@@ -560,7 +560,16 @@ export default function Topology(props: Props) {
             </g>
           </svg>
           <div class="topology-empty-text">
-            {props.connected ? `Nothing to show in the ${props.viewLabel} view.` : 'Connecting…'}
+            <Show when={props.connected} fallback={
+              <>
+                {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
+                    than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
+                <span class="topology-empty-spinner" aria-hidden="true" />
+                Connecting…
+              </>
+            }>
+              Nothing to show in the {props.viewLabel} view.
+            </Show>
           </div>
           {/* When the canvas is empty but the stream is live, surface the view's "what this view
               shows" hint so the operator learns the view's purpose instead of bouncing between
