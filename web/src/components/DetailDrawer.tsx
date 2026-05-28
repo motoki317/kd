@@ -31,8 +31,40 @@ const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'Dae
 // own them), Events (kubectl-describe's "why is this degraded"), and the Manifest. Logs default for
 // loggable kinds — the developer's first question; otherwise the manifest leads.
 export default function DetailDrawer(props: Props) {
-  const isPod = createMemo(() => props.node?.kind === 'Pod')
-  const loggable = createMemo(() => (props.node ? LOGGABLE.has(props.node.kind) : false))
+  // displayNode lingers for the exit-animation duration after props.node clears, so the slide-out
+  // has a body to show. A re-selection during the exit cancels the exit and adopts the new node.
+  const [displayNode, setDisplayNode] = createSignal<KNode | null>(props.node)
+  const [exiting, setExiting] = createSignal(false)
+  const EXIT_MS = 220
+  let exitTimer: ReturnType<typeof setTimeout> | undefined
+  createEffect(
+    on(
+      () => props.node,
+      (n) => {
+        if (exitTimer) {
+          clearTimeout(exitTimer)
+          exitTimer = undefined
+        }
+        if (n) {
+          setDisplayNode(n)
+          setExiting(false)
+        } else if (displayNode()) {
+          setExiting(true)
+          exitTimer = setTimeout(() => {
+            setDisplayNode(null)
+            setExiting(false)
+            exitTimer = undefined
+          }, EXIT_MS)
+        }
+      },
+    ),
+  )
+  onCleanup(() => {
+    if (exitTimer) clearTimeout(exitTimer)
+  })
+
+  const isPod = createMemo(() => displayNode()?.kind === 'Pod')
+  const loggable = createMemo(() => (displayNode() ? LOGGABLE.has(displayNode()!.kind) : false))
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
@@ -41,13 +73,13 @@ export default function DetailDrawer(props: Props) {
   // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
   createEffect(
     on(
-      () => props.node?.id,
+      () => displayNode()?.id,
       () => setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest')),
     ),
   )
 
   const key = () =>
-    props.node ? { ctx: props.ctx, ns: props.node.namespace ?? '', kind: props.node.kind, name: props.node.name } : null
+    displayNode() ? { ctx: props.ctx, ns: displayNode()!.namespace ?? '', kind: displayNode()!.kind, name: displayNode()!.name } : null
 
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
   // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events
@@ -68,9 +100,9 @@ export default function DetailDrawer(props: Props) {
   })
 
   return (
-    <Show when={props.node}>
+    <Show when={displayNode()}>
       {(node) => (
-        <aside class="drawer">
+        <aside class="drawer" classList={{ exiting: exiting() }}>
           <header class="drawer-header">
             <ResourceSummary
               node={node()}
@@ -111,6 +143,7 @@ export default function DetailDrawer(props: Props) {
                 containers={node().containers ?? []}
                 restarts={node().restarts ?? 0}
                 status={node().status}
+                visible={tab() === 'logs'}
               />
             </div>
           </Show>

@@ -17,7 +17,7 @@
 
   --topbar-h: 52px;
   --sidebar-w: 230px;
-  --drawer-w: 460px;
+  --drawer-w: 520px;
 
   color-scheme: light;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -867,24 +867,32 @@ body {
 /* Drawer */
 .drawer {
   width: var(--drawer-w);
-  max-width: 60vw;
+  max-width: 70vw;
   flex: 0 0 auto;
   border-left: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* Cycle 162: drawer slides in from the right on mount (animation; not transition because the
-     element appears/disappears via Show, so transition-on-mount doesn't fire). 240ms fade-in
-     pairs visually with the cycle-157 canvas zoom that runs in parallel. */
-  animation: drawer-in 0.24s ease-out;
+  /* Drawer slides in from the right on mount and out on close. The Show-driven exit keeps the
+     drawer alive for the exit-animation's duration (see DetailDrawer's displayNode/exiting). */
+  animation: drawer-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.drawer.exiting {
+  animation: drawer-out 0.22s cubic-bezier(0.55, 0, 0.7, 0.2) forwards;
+  pointer-events: none;
 }
 @keyframes drawer-in {
-  from { transform: translateX(24px); opacity: 0; }
+  from { transform: translateX(32px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+@keyframes drawer-out {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(32px); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .drawer { animation: none; }
+  .drawer,
+  .drawer.exiting { animation: none; }
 }
 .drawer-header {
   display: flex;
@@ -1001,7 +1009,7 @@ button.drawer-host:hover {
 .owner-chip {
   border: 1px solid var(--border);
   background: var(--surface-2);
-  border-radius: 999px;
+  border-radius: 14px;
   padding: 3px 10px;
   font-size: 11px;
   text-transform: uppercase;
@@ -1009,9 +1017,11 @@ button.drawer-host:hover {
   color: var(--text-dim);
   cursor: pointer;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wrap rather than ellipsise: an owner chip's name is often the resource you're about to click,
+     so seeing the full thing matters. The pill becomes a rounded box when it wraps to two lines. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1040,7 +1050,9 @@ button.drawer-host:hover {
 .container-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  column-gap: 7px;
   font-size: 12px;
   min-width: 0;
   padding: 4px 8px;
@@ -1064,10 +1076,10 @@ button.drawer-host:hover {
 .container-name {
   color: var(--text);
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 45%;
+  /* Allow wrapping for long container names rather than truncating; the row's flex-wrap absorbs it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex: 0 1 auto;
 }
 .container-init {
   color: var(--text-dim);
@@ -1078,9 +1090,12 @@ button.drawer-host:hover {
 }
 .container-state {
   color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Long messages like "Waiting: CrashLoopBackOff: Back-off restarting failed container …" wrap
+     so the reason is fully readable instead of ellipsised. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .container-restarts {
   margin-left: auto;
@@ -1101,15 +1116,17 @@ button.drawer-host:hover {
 }
 .drawer-image code {
   flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 3px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Long registry paths (registry.example.com/namespace/very-long-image-name:tag) wrap rather than
+     truncate — operators usually want to see the whole tag, not a cut-off ellipsis. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .drawer-ports {
   display: flex;
@@ -1169,9 +1186,9 @@ button.drawer-host:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 3px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Long ingress paths or RBAC verb lists wrap inside the chip instead of being clipped. */
+  white-space: normal;
+  overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1212,13 +1229,16 @@ button.drawer-host:hover {
   color: var(--text-dim);
   padding: 2px 6px;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 .label-val {
   color: var(--text);
   padding: 2px 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Long label values (full image tags, ARN-like strings) wrap rather than being clipped — see
+     the whole value at the cost of taller chips. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .drawer-close {
   border: 0;
