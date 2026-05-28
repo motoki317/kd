@@ -1326,14 +1326,23 @@ button.event-source:hover {
   color: var(--text-dim);
   font-size: 10px;
   letter-spacing: 0.04em;
-  padding: 2px 7px;
+  font-weight: 600;
+  padding: 2px 8px;
   border-radius: 5px;
   cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+.manifest-format button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 .manifest-format button.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+.manifest-format button.active:hover {
+  background: color-mix(in srgb, var(--accent) 90%, white);
 }
 .manifest-section .manifest {
   margin: 0 16px 16px;
