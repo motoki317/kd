@@ -148,10 +148,22 @@ body {
   cursor: pointer;
   color: var(--text-dim);
   font-size: 13px;
+  font-weight: 500;
+  transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
+}
+.views button:hover {
+  color: var(--text);
+  background: var(--surface);
 }
 .views button.active {
   background: var(--accent);
   color: #fff;
+  /* Soft lift on the active tab so it reads as "the one you picked" instead of just a flat fill —
+     pairs with hover so the tabs feel tactile. */
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.views button.active:hover {
+  background: color-mix(in srgb, var(--accent) 92%, white);
 }
 .legend {
   display: flex;
