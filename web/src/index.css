@@ -326,15 +326,21 @@ body {
 }
 .help-panel kbd {
   display: inline-block;
-  min-width: 16px;
+  min-width: 18px;
   text-align: center;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
   border-radius: 5px;
-  padding: 1px 6px;
+  padding: 1px 7px;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
   margin-right: 4px;
+  /* Faux key-cap depth: thicker bottom border + small inset shadow reads as a tactile key,
+     same convention as Mac help dialogs. */
+  box-shadow: 0 1px 0 var(--border-strong);
 }
 
 /* Body layout */
@@ -1152,17 +1158,8 @@ button.drawer-host:hover {
   background: var(--surface-2);
   color: var(--health-degraded);
 }
-.drawer-section {
-  padding: 12px 16px;
-  overflow: auto;
-}
-.drawer-section h3 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-  margin: 0 0 8px;
-}
+/* (.drawer-section + h3 styles removed: no markup ever used them — the drawer's sections are
+   class-based with implicit spacing.) */
 
 /* Pod drawers tab between Logs and Manifest; underline marks the active tab. */
 .drawer-tabs {
