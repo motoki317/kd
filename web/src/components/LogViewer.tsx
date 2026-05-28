@@ -205,7 +205,23 @@ export default function LogViewer(props: Props) {
             </span>
           </Show>
           <Show when={visibleLines().length > 0}>
-            <CopyButton text={() => visibleLines().map((l) => (l.time ? `${l.time} ${l.line}` : l.line)).join('\n')} title="Copy logs" />
+            {/* Aggregated views (Deployment / DaemonSet / Job …) mix lines from several pods;
+                copying without the source-pod prefix would lose attribution and turn a useful
+                paste into noise. Cycle 297: prepend "<pod> | " for aggregated streams. The on-
+                screen pod chip already carries the same info, so the copy matches what the user
+                sees. */}
+            <CopyButton
+              text={() =>
+                visibleLines()
+                  .map((l) => {
+                    const ts = l.time ? `${l.time} ` : ''
+                    const pod = props.aggregated ? `${l.pod} | ` : ''
+                    return `${pod}${ts}${l.line}`
+                  })
+                  .join('\n')
+              }
+              title="Copy logs"
+            />
           </Show>
         </span>
       </div>
