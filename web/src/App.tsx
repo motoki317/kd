@@ -297,6 +297,7 @@ export default function App() {
             {(h) => (
               <button
                 class="legend-item"
+                aria-pressed={healthFilter() === h}
                 classList={{ active: healthFilter() === h }}
                 // Active pill borrows the health hue for its border + background tint, so the
                 // visual connection to "spotlighting THIS color" is explicit (vs a neutral grey
