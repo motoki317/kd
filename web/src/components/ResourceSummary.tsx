@@ -264,15 +264,17 @@ export default function ResourceSummary(props: Props) {
             <For each={labels()}>
               {([k, v]) => (
                 // Clicking copies "key=value" (or just "key" for valueless labels) — paste-ready
-                // for `kubectl … -l <chip>`. A brief .copied state confirms without a tooltip.
+                // for `kubectl … -l <chip>`. Shift+click copies the value alone (handy when the
+                // operator wants just the image tag, the version, the role, etc.). A brief
+                // .copied state confirms without a tooltip.
                 <button
                   class="label-chip"
-                  title={`Click to copy ${k}${v ? `=${v}` : ''}`}
+                  title={`Click to copy ${k}${v ? `=${v}` : ''}${v ? ' · Shift+click for value only' : ''}`}
                   onClick={async (e) => {
                     // Capture el BEFORE await — DOM nulls currentTarget after the synchronous
                     // handler returns. Same pattern as the drawer share button (cycle 275/281).
                     const el = e.currentTarget as HTMLButtonElement
-                    const text = v ? `${k}=${v}` : k
+                    const text = e.shiftKey && v ? v : (v ? `${k}=${v}` : k)
                     try {
                       await navigator.clipboard.writeText(text)
                       el.classList.add('copied')
