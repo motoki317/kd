@@ -18,31 +18,40 @@ state at a glance and app developers can jump straight to pod status and logs.
 - 2D topology across five lenses — ownership, network, node-placement, volumes (mounted
   ConfigMaps/Secrets/PVCs), and RBAC — laid out per connected component and packed to the viewport
   (no horizontal smear in dense namespaces).
+- Every card carries a kind-specific silhouette (Pod=circle, Deployment=stacked layers, Service=hub-
+  spokes, Secret=key, PVC=cylinder, …) so types read by shape at a glance, and a relative-age tag
+  ("7d", "30s") that updates in place — a freshly-restarted pod next to a 90d release pops out.
 - Status by exception: healthy resources stay calm; Degraded/Progressing/Suspended get a colored
   border. Failures that bare counts hide are surfaced too — a Deployment past its rollout deadline, a
   Service whose selector matches no ready pods. Select a node to fade everything unrelated; click a
-  legend health to spotlight it.
-- Search resources by name, kind, label, or image; the sidebar sorts troubled namespaces first, each
-  with a health dot and a non-ready count (live for the namespace you're viewing).
+  legend health to spotlight it (the active pill borrows the health hue).
+- Search resources by name, kind, label, image, status, host, or IP — kubectl short names (svc, sts)
+  match too. The sidebar sorts troubled namespaces first, each with a health dot and a non-ready
+  count colored to match (live for the namespace you're viewing). Resource count + current filter
+  subset shown in the topology corner.
 
 **Drill into a resource**
-- Detail drawer with Logs / Events / Manifest tabs. Owner chips walk up the tree (Pod → ReplicaSet →
-  Deployment); age, restart count, host, node capacity, container images, labels, and per-container
-  status inline; one-click copy of the name.
+- Detail drawer with Logs / Events / Manifest tabs. The drawer header carries the same kind
+  silhouette as the card, so a click reads as "this card, expanded." Owner chips walk up the tree
+  (Pod → ReplicaSet → Deployment), each chip with its kind icon. Age, restart count, host (click to
+  jump to the Node), node capacity, container images, labels, and per-container status inline;
+  one-click copy of the name. Rich hover tooltips on cards reveal everything at zoomed-out scale.
 - Each kind surfaces its essential spec without opening the manifest: a Service's cluster IP,
   external address (LoadBalancer / externalIPs), ports, and endpoint readiness; an Ingress's
   host/path → backend routes; a Role's granted resources/verbs; a RoleBinding's role and subjects
-  (including the Users/Groups that aren't graph nodes).
+  (including Users/Groups that aren't graph nodes — each row tagged with its kind icon).
 - Logs: live tail with smart auto-scroll, a per-container picker, previous-(crashed)-container logs,
   a line filter, an optional timestamps toggle, and aggregated logs across all of a controller's pods
   (including pods created mid-rollout). Manifest as YAML (default) or JSON, with `apiVersion`/`kind`
   stamped on so a copy applies cleanly.
 - Events: the resource and its descendants' Kubernetes events (newest first, warnings highlighted),
-  with a live count badge.
+  with a live count badge. Aggregated events show which descendant emitted them — click the source
+  pill to jump straight to the offending pod.
 
 **Keyboard & sharing**
-- `j`/`k` step through resources (troubled first, scoped to the active filter), `/` filter,
-  `1`–`5` switch views, `Esc` backs out, `?` shows shortcuts.
+- `j`/`k` (or `↓`/`↑`) step through resources (troubled first, scoped to the active filter), `/`
+  focuses the namespace filter, `1`–`5` switch views, `Esc` backs out, `?` shows shortcuts.
+- The topbar shows a "kd › <namespace>" breadcrumb and a live/connecting/offline connection pill.
 - Namespace, view, and selected resource live in the URL — links and reloads restore the same place;
   the selection follows you across views.
 - Follows the OS light/dark preference.
