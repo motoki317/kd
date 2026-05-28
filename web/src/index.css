@@ -1327,22 +1327,24 @@ button.drawer-host:hover {
 .event-source {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 11px;
   color: var(--text-dim);
   background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   max-width: 14em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 0;
   cursor: pointer;
   font-family: inherit;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
 button.event-source:hover {
   color: var(--accent);
+  border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
 }
 .event-message {
