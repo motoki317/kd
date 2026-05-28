@@ -156,6 +156,17 @@ body {
   color: var(--health-healthy);
   border-color: var(--health-healthy);
 }
+/* "connecting…" is a transient state; a slow opacity pulse signals "working on it" instead of
+   the alarming bare "offline" look. Progressing amber so it reads neutral-positive (waiting). */
+.conn.connecting {
+  color: var(--health-progressing);
+  border-color: var(--health-progressing);
+  animation: conn-pulse 1.2s ease-in-out infinite;
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 .help-btn {
   width: 24px;
   height: 24px;

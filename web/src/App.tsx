@@ -35,7 +35,11 @@ export default function App() {
   // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
   // stable across reloads, so we key the link on the stable identity).
   let pendingSel = params.get('sel')
-  const [connected, setConnected] = createSignal(false)
+  // 'connecting' on initial subscribe, 'live' once a snapshot arrives, 'offline' on stream error.
+  // Distinguishing connecting from offline avoids the alarming "offline" pill flashing on every
+  // first load / namespace switch when nothing is wrong — the stream just hasn't yielded yet.
+  const [connState, setConnState] = createSignal<'connecting' | 'live' | 'offline'>('connecting')
+  const connected = () => connState() === 'live'
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
@@ -132,7 +136,7 @@ export default function App() {
     setSearch('') // a stale search/health filter would fade the whole new graph
     setHealthFilter(null)
     setGraph(reconcile(emptyState()))
-    setConnected(false)
+    setConnState('connecting')
     const close = streamGraph(ns, v, {
       snapshot: (g) => {
         // Decide the selection from the snapshot's own nodes BEFORE mutating the store, so this set
@@ -141,11 +145,11 @@ export default function App() {
         const sel = resolveSelectionOnSnapshot(g.nodes, keepSel, pendingSel)
         if (sel.consumedPending) pendingSel = null
         setGraph(reconcile(fromSnapshot(g)))
-        setConnected(true)
+        setConnState('live')
         setSelectedId(sel.id)
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
-      error: () => setConnected(false),
+      error: () => setConnState('offline'),
     })
     onCleanup(close)
   })
@@ -211,8 +215,8 @@ export default function App() {
             )}
           </For>
         </div>
-        <span class="conn" classList={{ live: connected() }}>
-          {connected() ? 'live' : 'offline'}
+        <span class="conn" classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}>
+          {connState() === 'live' ? 'live' : connState() === 'connecting' ? 'connecting…' : 'offline'}
         </span>
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)">
           ?
