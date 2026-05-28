@@ -105,6 +105,13 @@ export default function Topology(props: Props) {
     // dependency flow rather than a top-down ownership tree (cycle 206). Same renderer, just
     // a different Dagre rankdir per connected component.
     if (props.viewId === 'volumes') return layoutGraph(props.nodes, props.edges, 'LR')
+    // Network view (cycle 207): Ingress → Service → Pod is a traffic flow, naturally read
+    // left-to-right (external → routing → workload). LR rankdir keeps the visual metaphor
+    // aligned with how an operator already thinks about ingress traffic.
+    if (props.viewId === 'network') return layoutGraph(props.nodes, props.edges, 'LR')
+    // RBAC view (cycle 207): RoleBinding → Role is a "binds" arrow; subjects are listed inside
+    // the binding card. LR keeps "binding → role" reading the way the relationship does.
+    if (props.viewId === 'rbac') return layoutGraph(props.nodes, props.edges, 'LR')
     return layoutGraph(props.nodes, props.edges)
   })
   // In the All view we draw a faint kind-label band above each kind box so the operator can
