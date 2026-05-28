@@ -507,8 +507,10 @@ body {
 /* Nodes & edges */
 .node {
   cursor: pointer;
-  /* Drop-shadow on hover hints "lift" so cards announce themselves as clickable; transitions
+  /* Resting elevation: a tiny drop-shadow lifts every card slightly off the dotted canvas, so cards
+     read as physical "tiles" rather than flat fills (cycle 127). Hover deepens it; transitions
      here so the lift fades in/out instead of jumping. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
   transition: opacity 0.12s, filter 0.15s;
   /* Brief fade on first mount — eases the "connecting → graph" snap and also gentles in SSE-added
      nodes (a new pod showing up mid-rollout). Runs once per element, doesn't compete with the
@@ -528,13 +530,25 @@ body {
   .node, .edges path { animation: none; }
 }
 .node:hover {
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.10));
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
 }
-/* In dark mode, a black drop-shadow on a dark surface is invisible — use a faint white glow
-   instead so the lift still reads. */
+.node.selected {
+  /* Selection is a stronger lift than hover, so picking a card in a dense graph reads as a positive
+     "I'm focused" cue rather than just an outline change. */
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.14));
+}
+/* In dark mode, a black drop-shadow on a dark surface is invisible — drop it for the resting state
+   (the colored border carries the card edge already) and switch hover/selected to a faint white
+   glow so the lift still reads. */
 @media (prefers-color-scheme: dark) {
+  .node {
+    filter: none;
+  }
   .node:hover {
-    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.10));
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
+  }
+  .node.selected {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
   }
 }
 /* Selection focus: fade everything not connected to the selected node, and light up the edges
