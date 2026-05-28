@@ -1,9 +1,13 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Sidebar from './Sidebar'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 
 afterEach(cleanup)
+// jsdom doesn't implement scrollIntoView; Sidebar calls it when the selection changes (cycle 242).
+beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
 
 const namespaces: NamespaceInfo[] = [
   { name: 'aaa', health: 'Healthy' },
@@ -51,6 +55,29 @@ describe('Sidebar', () => {
     fireEvent.input(input, { target: { value: 'bbb' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onSelect).toHaveBeenCalledWith('bbb')
+  })
+
+  it('ArrowDown/ArrowUp on the filter input steps through the filtered ns without blurring', () => {
+    const onSelect = vi.fn()
+    // Three healthy ns with stable alpha order; troubled-first sort is a no-op here.
+    const list: NamespaceInfo[] = [
+      { name: 'a', health: 'Healthy' },
+      { name: 'b', health: 'Healthy' },
+      { name: 'c', health: 'Healthy' },
+    ]
+    const { getByPlaceholderText } = render(() => (
+      <Sidebar namespaces={list} selected="b" onSelect={onSelect} loading={false} failed={false} />
+    ))
+    const input = getByPlaceholderText(/Filter/) as HTMLInputElement
+    input.focus()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(onSelect).toHaveBeenLastCalledWith('c')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    // Up from selected 'b' wraps to 'a' if we're at index 1 -> 0; selected didn't follow into the
+    // controlled re-render (the mock onSelect only records the call), so cur stays at b's index.
+    expect(onSelect).toHaveBeenLastCalledWith('a')
+    // Focus must stay in the input so the filter remains typeable.
+    expect(document.activeElement).toBe(input)
   })
 
   it('offers a retry button on failure when onRetry is wired (cycle 220)', () => {

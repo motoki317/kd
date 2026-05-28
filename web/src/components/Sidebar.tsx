@@ -98,6 +98,18 @@ export default function Sidebar(props: Props) {
                 props.onSelect(first.name)
                 ;(e.currentTarget as HTMLInputElement).blur()
               }
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              // Step the selection through the filtered list without leaving the input — operators
+              // can preview each ns's health (dot/count change) while keeping the filter typed.
+              // Skips the cluster pseudo-entry (it's pinned, outside shown()) so the typed filter
+              // governs which subset gets stepped through.
+              const list = shown()
+              if (list.length === 0) return
+              e.preventDefault()
+              const dir = e.key === 'ArrowDown' ? 1 : -1
+              const cur = list.findIndex((n) => n.name === props.selected)
+              const next = cur < 0 ? (dir > 0 ? 0 : list.length - 1) : (cur + dir + list.length) % list.length
+              props.onSelect(list[next].name)
             }
           }}
         />
