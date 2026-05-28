@@ -261,8 +261,11 @@ export default function Topology(props: Props) {
 
   // Fade precedence: search query > legend health filter > kind filter > selection neighbors;
   // only a bare selection lights its edges accent. When a kind filter is active alongside another
-  // filter, both must accept the node — so kinds compose rather than overriding.
+  // filter, both must accept the node — so kinds compose rather than overriding. The selected
+  // node never fades, even if a filter would exclude it: the operator's focus stays visible
+  // instead of ghosting out behind the spotlight (cycle 224).
   const nodeFaded = (n: { id: string; health: string; kind: string }) => {
+    if (n.id === props.selectedId) return false
     if (!nodeKindOk(n.kind)) return true
     const m = matches()
     if (m) return !m.has(n.id)

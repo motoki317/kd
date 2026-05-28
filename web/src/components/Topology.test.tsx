@@ -80,6 +80,25 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
   })
 
+  it('selected node never fades, even when a filter excludes it (cycle 224)', () => {
+    // kindFilter={Deployment}, selected the Pod web-abc → the Pod stays lit so the operator's
+    // focus doesn't ghost out. Of the two unselected nodes, the other Pod fades and the
+    // Deployment stays lit (matches the filter).
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search=""
+        {...base}
+        selectedId="2"
+        onKindFilter={() => {}}
+        kindFilter={new Set(['Deployment'])}
+      />
+    ))
+    // Only the api-xyz Pod (not selected, not Deployment) should be faded.
+    expect(faded(container)).toBe(1)
+  })
+
   it('toggles the kind filter via the chip click handler', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
