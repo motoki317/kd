@@ -658,7 +658,16 @@ body {
 }
 .edges path.adjacent {
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 2.2;
+}
+/* Non-owner edges (selects, mounts, routes, …) sit at 65% opacity so the parent-child backbone
+   stays visually dominant; dashed already says "not ownership", opacity adds another quiet
+   subordination cue for cluttered services-heavy graphs. */
+.edges path:not(.owner) {
+  opacity: 0.65;
+}
+.edges path:not(.owner).faded {
+  opacity: 0.06;
 }
 /* Card background carries health: every state gets a colored border + matching pastel tint so the
    whole card body reads as the status indicator. Cycle 126 dropped the inset stripe in favor of

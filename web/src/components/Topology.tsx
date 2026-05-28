@@ -315,11 +315,11 @@ export default function Topology(props: Props) {
                       can hang off the same element without churning this tree. */}
                   <title>{edgeTitle(e, props.nodes)}</title>
                   <path
-                    classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e) }}
+                    classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e), owner: e.type === 'ownerReference' }}
                     d={edgePath(e.points)}
                     fill="none"
                     stroke="var(--edge-color)"
-                    stroke-width={1.5}
+                    stroke-width={e.type === 'ownerReference' ? 1.8 : 1.2}
                     stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
                     marker-end="url(#arrow)"
                   />
