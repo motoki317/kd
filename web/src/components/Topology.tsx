@@ -343,6 +343,7 @@ export default function Topology(props: Props) {
   // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
   // changes glide instead of jumping — easier for a human to track what just changed.
   let animFrame = 0
+  let selFitFrame = 0 // rAF handle for the deferred selection-fit (cycle 307)
   function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
     cancelAnimationFrame(animFrame)
     const s0 = scale(), tx0 = tx(), ty0 = ty()
@@ -357,7 +358,10 @@ export default function Topology(props: Props) {
     }
     animFrame = requestAnimationFrame(tick)
   }
-  onCleanup(() => cancelAnimationFrame(animFrame))
+  onCleanup(() => {
+    cancelAnimationFrame(animFrame)
+    cancelAnimationFrame(selFitFrame)
+  })
 
   // computeFitFor: scale + translate that frames the given bounds into the SVG viewport with the
   // given padding. Caps max scale so single-card selections don't zoom in to absurd sizes.
@@ -445,8 +449,18 @@ export default function Topology(props: Props) {
         if (inSet.length === 0) return
         const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
         const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
-        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
-        animateTo(target)
+        // Defer the fit one frame so the just-opened drawer has taken its flex width and the SVG
+        // has shrunk to the still-visible canvas before computeFitFor reads getBoundingClientRect.
+        // The drawer is a flex sibling created after Topology, so on the *first* selection this
+        // effect would otherwise measure the full pre-drawer width and frame the subtree off-center,
+        // half-hidden under the drawer — while every later selection (drawer already open) measured
+        // correctly. The rAF lets Solid finish committing the drawer DOM and the browser reflow the
+        // SVG, so the very first click frames against the visible canvas too (cycle 307).
+        cancelAnimationFrame(selFitFrame)
+        selFitFrame = requestAnimationFrame(() => {
+          const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
+          animateTo(target)
+        })
       },
       { defer: true },
     ),
