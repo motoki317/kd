@@ -94,8 +94,9 @@ describe('Topology', () => {
         kindFilter={new Set(['Pod'])}
       />
     ))
-    // 2 Pods of 3 total resources, computed from the intersected filter set.
-    expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
+    // 2 Pods of 3 total resources, computed from the intersected filter set. (Trailing sr-only noun
+    // for the live region, cycle 335/R8.)
+    expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources shown')
   })
 
   it('selected node never fades, even when a filter excludes it (cycle 224)', () => {
@@ -308,9 +309,18 @@ describe('Topology', () => {
     const noFilter = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     expect(noFilter.container.querySelector('.topology-count')?.textContent).toBe('3 resources')
     cleanup()
-    // Search "web" matches the Deployment + web-abc Pod (2 of 3).
+    // Search "web" matches the Deployment + web-abc Pod (2 of 3). textContent includes the sr-only
+    // suffix that gives the live announcement a noun (cycle 335/R8).
     const filtered = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
-    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3')
+    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources shown')
+  })
+
+  // The match count is a polite live region so screen readers hear it update as the filter narrows.
+  it('marks the resource count as an atomic polite live region (cycle 335/R8)', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const count = container.querySelector('.topology-count')!
+    expect(count.getAttribute('aria-live')).toBe('polite')
+    expect(count.getAttribute('aria-atomic')).toBe('true')
   })
 
   it('calls onDeselect when a background click lands outside any card (cycle 161)', () => {

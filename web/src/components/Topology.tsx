@@ -1108,7 +1108,7 @@ export default function Topology(props: Props) {
           the count reflects what's actually lit on the canvas. Hidden when the canvas is empty —
           the empty-state already covers the message. */}
       <Show when={props.nodes.length > 0}>
-        <div class="topology-count">
+        <div class="topology-count" aria-live="polite" aria-atomic="true">
           <Show
             when={matches() || props.healthFilter || activeKinds()}
             fallback={
@@ -1128,6 +1128,9 @@ export default function Topology(props: Props) {
             }
           >
             {layout().nodes.filter((n) => !nodeFaded(n)).length} of {props.nodes.length}
+            {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
+                gives the polite live announcement a noun as the filter narrows the canvas. */}
+            <span class="sr-only"> resources shown</span>
           </Show>
         </div>
       </Show>
