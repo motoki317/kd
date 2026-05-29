@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
-import { filterLogLines, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
+import { filterLogLines, formatLogTime, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -292,7 +292,8 @@ export default function LogViewer(props: Props) {
                 </span>
               </Show>
               <Show when={l.time}>
-                <span class="log-time">{l.time}</span>
+                {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
+                <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>
               </Show>
               {/* Plain lines (the common case) skip the ANSI parser to keep allocations down —
                   ANSI segmentation only kicks in for lines that actually contain a CSI escape.

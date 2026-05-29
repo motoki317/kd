@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines, parseLogLevel, splitByMatch } from './logs'
+import { filterLogLines, formatLogTime, parseLogLevel, splitByMatch } from './logs'
 import type { LogEntry } from './api'
 
 const lines: LogEntry[] = [
@@ -36,6 +36,18 @@ describe('filterLogLines', () => {
     ])
     // Case-sensitive "ERROR" matches only the upper-case level line.
     expect(filterLogLines(lines, 'ERROR', true).map((l) => l.line)).toEqual(['ERROR failed to connect to db'])
+  })
+})
+
+describe('formatLogTime', () => {
+  it('compacts an RFC3339Nano stamp to HH:MM:SS.mmm in the source UTC (no timezone shift)', () => {
+    expect(formatLogTime('2026-05-29T05:40:51.832381Z')).toBe('05:40:51.832')
+    expect(formatLogTime('2026-05-29T05:40:51.8Z')).toBe('05:40:51.8')
+    expect(formatLogTime('2026-05-29T05:40:51Z')).toBe('05:40:51')
+  })
+  it('returns the input unchanged when it is not an RFC3339 timestamp', () => {
+    expect(formatLogTime('not a time')).toBe('not a time')
+    expect(formatLogTime('')).toBe('')
   })
 })
 

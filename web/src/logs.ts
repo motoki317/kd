@@ -31,6 +31,17 @@ export function parseLogLevel(line: string): LogLevel | null {
   return null
 }
 
+// formatLogTime compacts a kubectl --timestamps RFC3339Nano stamp (2026-05-29T05:40:51.832381Z) to
+// HH:MM:SS.mmm for the timestamp column. It slices the time substring out directly rather than
+// parsing into a Date, so the value stays in the source's UTC (lining up with kubectl --timestamps)
+// and sub-millisecond noise is trimmed. The full stamp stays available in the line's title. Returns
+// the input unchanged when it isn't an RFC3339 timestamp (some logs carry their own time prefix).
+export function formatLogTime(raw: string): string {
+  const m = /T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?/.exec(raw)
+  if (!m) return raw
+  return m[2] ? `${m[1]}.${m[2].slice(0, 3)}` : m[1]
+}
+
 // filterLogLines keeps only the lines whose text contains the query — the in-viewer "grep" for
 // finding an error in a busy stream. Case-insensitive by default (the common triage need); pass
 // caseSensitive to match exactly. An empty/whitespace query keeps every line, so the filter is off
