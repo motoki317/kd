@@ -414,6 +414,28 @@ export default function Topology(props: Props) {
     return Math.max(1.4, Math.min(2.5, 1000 / Math.sqrt(Math.max(1, w * h))))
   }
 
+  // boundingBox + fitNodeSet (cycle 336/R9): the "spread every card's x±w/2, y±h/2 and take min/max"
+  // pattern was copy-pasted at four fit sites (selection-fit effect, resetView's selection / lit
+  // branches), and the full computeFitFor(...selectionMaxScale(...)) expression was byte-identical
+  // twice. Extracted so the coordinate math lives once — a future change (e.g. fit padding) is a
+  // one-line edit instead of four. maxScale is a constant for fit-all or selectionMaxScale for a
+  // selection (it needs the box dims, hence the function form).
+  function boundingBox(nodes: { x: number; y: number; width: number; height: number }[]) {
+    const xs = nodes.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
+    const ys = nodes.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minY = Math.min(...ys), maxY = Math.max(...ys)
+    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
+  }
+  function fitNodeSet(
+    nodes: { x: number; y: number; width: number; height: number }[],
+    maxScale: number | ((w: number, h: number) => number),
+  ) {
+    const bb = boundingBox(nodes)
+    const ms = typeof maxScale === 'function' ? maxScale(bb.width, bb.height) : maxScale
+    return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
+  }
+
   // Fit-all on namespace/view switch (big shape changes). Tracks a key so an SSE patch that
   // changes node positions slightly doesn't re-fit and yank the viewport away from where the user
   // panned. First mount is a snap (no animation); subsequent fits glide.
@@ -487,8 +509,6 @@ export default function Topology(props: Props) {
         if (!r) return
         const inSet = l.nodes.filter((n) => r.nodes.has(n.id))
         if (inSet.length === 0) return
-        const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
-        const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
         // Defer the fit one frame so the just-opened drawer has taken its flex width and the SVG
         // has shrunk to the still-visible canvas before computeFitFor reads getBoundingClientRect.
         // The drawer is a flex sibling created after Topology, so on the *first* selection this
@@ -498,8 +518,7 @@ export default function Topology(props: Props) {
         // SVG, so the very first click frames against the visible canvas too (cycle 307).
         cancelAnimationFrame(selFitFrame)
         selFitFrame = requestAnimationFrame(() => {
-          const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), selectionMaxScale(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)))
-          animateTo(target)
+          animateTo(fitNodeSet(inSet, selectionMaxScale))
         })
       },
       { defer: true },
@@ -632,10 +651,7 @@ export default function Topology(props: Props) {
       const r = related()
       const inSet = r ? l.nodes.filter((n) => r.nodes.has(n.id)) : []
       if (inSet.length > 0) {
-        const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
-        const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
-        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), selectionMaxScale(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)))
-        animateTo(target)
+        animateTo(fitNodeSet(inSet, selectionMaxScale))
         return
       }
     }
@@ -652,9 +668,7 @@ export default function Topology(props: Props) {
       animateTo(target)
       return
     }
-    const xs = lit.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
-    const ys = lit.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
-    const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.4)
+    const target = fitNodeSet(lit, 1.4)
     target.scale *= 0.92
     animateTo(target)
   }
