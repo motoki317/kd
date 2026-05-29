@@ -33,23 +33,24 @@
   color: var(--text);
 }
 
-/* Dark mode follows the OS — no toggle. Only the neutrals flip; health hues stay vivid (and node
-   tints adapt automatically since they color-mix with --surface). The log pane is dark in both. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1115;
-    --surface: #171a21;
-    --surface-2: #1d212a;
-    --border: #2a2f3a;
-    --border-strong: #3d4452;
-    --text: #e4e8ef;
-    --text-dim: #98a2b3;
-    --accent: #4d8bf0;
-    --edge-color: #3f4654;
-    --edge-refers: #7b6abf;
-    --pod-accent: #8593f5;
-    color-scheme: dark;
-  }
+/* Dark palette: only the neutrals flip; health hues stay vivid (and node tints adapt automatically
+   since they color-mix with --surface). The log pane is dark in both. Keyed off [data-theme='dark']
+   — never prefers-color-scheme directly — because theme.ts resolves the light/dark/system preference
+   to a concrete value and stamps it on <html data-theme>, so 'system' (OS-tracking) and the explicit
+   pins share this one rule. */
+:root[data-theme='dark'] {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-2: #1d212a;
+  --border: #2a2f3a;
+  --border-strong: #3d4452;
+  --text: #e4e8ef;
+  --text-dim: #98a2b3;
+  --accent: #4d8bf0;
+  --edge-color: #3f4654;
+  --edge-refers: #7b6abf;
+  --pod-accent: #8593f5;
+  color-scheme: dark;
 }
 
 * {
@@ -368,6 +369,36 @@ button.conn.conn-retry:focus-visible {
   outline-offset: 2px;
 }
 .help-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Theme toggle (cycle 301): shares the round bordered chrome of .help-btn so the two topbar
+   utility buttons read as a set. The icon strokes pick up the dim text color (filled accents like
+   the moon/auto disc use currentColor) so the glyph sits at the same visual weight as the ? mark. */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.theme-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.theme-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -1162,16 +1193,14 @@ button.conn.conn-retry:focus-visible {
 /* In dark mode, a black drop-shadow on a dark surface is invisible — drop it for the resting state
    (the colored border carries the card edge already) and switch hover/selected to a faint white
    glow so the lift still reads. */
-@media (prefers-color-scheme: dark) {
-  .node {
-    filter: none;
-  }
-  .node:hover {
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
-  }
-  .node.selected {
-    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
-  }
+[data-theme='dark'] .node {
+  filter: none;
+}
+[data-theme='dark'] .node:hover {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
+}
+[data-theme='dark'] .node.selected {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
 }
 /* Selection focus: fade everything not connected to the selected node, and light up the edges
    that are, so a resource's relationships pop out of a dense graph. */
@@ -1261,10 +1290,8 @@ button.conn.conn-retry:focus-visible {
   opacity: 0.16;
   pointer-events: none;
 }
-@media (prefers-color-scheme: dark) {
-  .node-glaze {
-    opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
-  }
+[data-theme='dark'] .node-glaze {
+  opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
 }
 /* Kind icon: monochrome outline that picks up the dim text color so it never competes with the
    health-tinted body (the body carries status; the icon carries type). The .large variant hosts a

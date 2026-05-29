@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, untrack } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
@@ -11,6 +11,7 @@ import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
+import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
 
 // Each view is a relationship lens the user explicitly asked for. 'All' is the kind-grouped
 // catch-all (FR-006): every node lays out in per-kind boxes, ownership edges still drawn —
@@ -121,6 +122,21 @@ export default function App() {
   // surprise them with the sidebar re-appearing. Default expanded.
   const [sidebarHidden, setSidebarHidden] = createSignal(localStorage.getItem('kd:sidebarHidden') === '1')
   createEffect(() => localStorage.setItem('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
+  // Theme preference (cycle 301): light / dark / system, cycled from a topbar toggle. The effect
+  // persists the choice and re-stamps <html data-theme>; index.tsx already applied it pre-render.
+  // When the choice is 'system', track OS scheme changes live so the canvas follows a mid-session
+  // OS flip — the explicit pins ignore the OS, so we tear the listener down when not on 'system'.
+  const [themePref, setThemePref] = createSignal<ThemePref>(loadThemePref())
+  createEffect(() => {
+    const pref = themePref()
+    saveThemePref(pref)
+    applyTheme(pref)
+    if (pref !== 'system' || typeof matchMedia !== 'function') return
+    const mq = matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system')
+    mq.addEventListener('change', onChange)
+    onCleanup(() => mq.removeEventListener('change', onChange))
+  })
   // Last value yanked via the 'y' shortcut (cycle 288). Surfaced as a brief toast so the operator
   // can see what hit their clipboard — otherwise a silent copy is indistinguishable from a missed
   // keystroke. The toast auto-clears after 1.5s.
@@ -483,6 +499,48 @@ export default function App() {
             offline · retry
           </button>
         </Show>
+        {/* Theme toggle (cycle 301): one button cycles system → light → dark. The glyph names the
+            CURRENT mode (auto/sun/moon) and the title spells out what a click switches to, so the
+            three-way control stays legible without a dropdown stealing topbar width. */}
+        <button
+          class="theme-btn"
+          type="button"
+          onClick={() => setThemePref((p) => nextThemePref(p))}
+          title={`Theme: ${themePref()} — click for ${nextThemePref(themePref())}`}
+          aria-label={`Theme: ${themePref()}. Click to switch to ${nextThemePref(themePref())}.`}
+        >
+          <Switch>
+            <Match when={themePref() === 'light'}>
+              {/* sun */}
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <circle cx="12" cy="12" r="4.2" />
+                <g stroke-linecap="round">
+                  <line x1="12" y1="2.5" x2="12" y2="5" />
+                  <line x1="12" y1="19" x2="12" y2="21.5" />
+                  <line x1="2.5" y1="12" x2="5" y2="12" />
+                  <line x1="19" y1="12" x2="21.5" y2="12" />
+                  <line x1="5.4" y1="5.4" x2="7.1" y2="7.1" />
+                  <line x1="16.9" y1="16.9" x2="18.6" y2="18.6" />
+                  <line x1="5.4" y1="18.6" x2="7.1" y2="16.9" />
+                  <line x1="16.9" y1="7.1" x2="18.6" y2="5.4" />
+                </g>
+              </svg>
+            </Match>
+            <Match when={themePref() === 'dark'}>
+              {/* moon */}
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z" />
+              </svg>
+            </Match>
+            <Match when={themePref() === 'system'}>
+              {/* auto: half-filled disc reading "follows the OS" */}
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" />
+              </svg>
+            </Match>
+          </Switch>
+        </button>
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
           ?
         </button>
