@@ -489,6 +489,22 @@ export default function Topology(props: Props) {
     ),
   )
 
+  // clampTranslate keeps at least a margin of the laid-out graph on-screen, so a pan can't fling the
+  // whole canvas into the void (where the only recovery was the Fit button). The graph spans screen
+  // x in [tx, tx + width*scale]; we require its far edge to stay ≥ margin inside the viewport on
+  // each side. A graph smaller than the viewport is unaffected (the bounds never invert). (cycle 316)
+  function clampTranslate(txv: number, tyv: number): { tx: number; ty: number } {
+    const l = layout()
+    if (!svg || l.width === 0) return { tx: txv, ty: tyv }
+    const rect = svg.getBoundingClientRect()
+    const margin = 60
+    const w = l.width * scale(), h = l.height * scale()
+    return {
+      tx: Math.min(Math.max(txv, margin - w), rect.width - margin),
+      ty: Math.min(Math.max(tyv, margin - h), rect.height - margin),
+    }
+  }
+
   // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see
   // github.com/arto-app/Arto renderer/src/base-viewer-controller.ts for the same exp() smoothing):
   //   1. Trackpad pinch — arrives as a wheel event with ctrlKey=true synthesized by macOS.
@@ -516,8 +532,10 @@ export default function Topology(props: Props) {
       setScale(s)
     } else {
       // Trackpad 2-finger scroll: pan in both axes. Both deltas are in pixel units already.
-      setTx(tx() - e.deltaX)
-      setTy(ty() - e.deltaY)
+      // Clamp live so a flick can't scroll the graph entirely off-canvas.
+      const c = clampTranslate(tx() - e.deltaX, ty() - e.deltaY)
+      setTx(c.tx)
+      setTy(c.ty)
     }
   }
 
@@ -555,10 +573,16 @@ export default function Topology(props: Props) {
     } catch {
       /* not captured */
     }
+    // After a drag, glide the canvas back into bounds if it was flung past the edge (cycle 316).
+    if (wasDragging) {
+      const c = clampTranslate(tx(), ty())
+      if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
+      return
+    }
     // Cycle 161: a click on the topology background (not on a card and not a pan) dismisses the
     // open drawer. Walk up from the click target — if any ancestor has the .node class, it was a
     // card click (its own onClick will run); otherwise treat as a background click.
-    if (wasDragging || !props.onDeselect || !props.selectedId) return
+    if (!props.onDeselect || !props.selectedId) return
     let el: Element | null = e.target as Element | null
     while (el && el !== svg) {
       if ((el as Element).classList?.contains('node')) return
