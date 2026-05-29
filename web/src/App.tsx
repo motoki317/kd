@@ -245,6 +245,17 @@ export default function App() {
         if (goBackSelection()) e.preventDefault()
         return
       }
+      // Alt+T jumps to the most-troubled namespace — "take me to the problem". No-op when the whole
+      // cluster is Healthy (nothing to jump to) so the key never yanks you to an arbitrary ns. Same
+      // pick as the first-load default selection (cycle 320).
+      if (e.altKey && (e.key === 't' || e.key === 'T') && !typing) {
+        const worst = mostTroubled(namespaceList())
+        if (worst && worst.health !== 'Healthy') {
+          e.preventDefault()
+          setNamespace(worst.name)
+        }
+        return
+      }
       if (e.key === '?' && !typing) {
         setShowHelp((s) => !s)
       } else if (e.key === '/' && !typing) {
@@ -649,6 +660,9 @@ export default function App() {
               <ul>
                 <li>
                   <kbd>/</kbd> Filter namespaces
+                </li>
+                <li>
+                  <kbd>Alt</kbd>+<kbd>T</kbd> Jump to the most-troubled namespace
                 </li>
                 <li>
                   <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
