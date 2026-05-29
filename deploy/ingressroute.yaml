@@ -1,6 +1,6 @@
 # Exposes kd behind the same traefik-forward-auth middleware as Grafana, so the proxy injects
 # X-Forwarded-User and kd never sees an unauthenticated request.
-# See docs/ADR/20260527-proxy-authentication.md and the auth-admin middleware in motoki317-manifest.
+# See docs/ADR/20260527-proxy-authentication.md and the auth-admin middleware in github.com/motoki317/manifest.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:

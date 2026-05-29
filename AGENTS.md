@@ -122,7 +122,7 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
 
 ## Reference facts (deployment environment)
 
-- **Proxy auth:** upstream `motoki317-manifest/.common/traefik-forward-auth` emits `X-Forwarded-User`
+- **Proxy auth:** upstream `github.com/motoki317/manifest/.common/traefik-forward-auth` emits `X-Forwarded-User`
   (the header kd trusts); Grafana consumes the same via `auth.proxy` in `monitor/values-grafana.yaml`.
 - **ArgoCD RBAC** (pattern kd's policy.csv mirrors): `argocd/values.yaml` → `policy.default:
   role:readonly`, plus `g, <uuid>, role:admin` group bindings.

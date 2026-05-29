@@ -6,7 +6,7 @@ status: "accepted"
 
 # Context
 
-The deployment environment (see `motoki317-manifest`) already authenticates every app at
+The deployment environment (see `github.com/motoki317/manifest`) already authenticates every app at
 the edge with `traefik-forward-auth` (OIDC). After the forward-auth middleware validates a
 session, it injects the authenticated identity as an HTTP header (`X-Forwarded-User`) into
 the upstream request — this is exactly how Grafana is wired (`grafana.ini`'s
@@ -56,6 +56,6 @@ header**.
 
 # Notes
 
-- Header default and proxy pattern verified against `motoki317-manifest`:
+- Header default and proxy pattern verified against `github.com/motoki317/manifest`:
   `.common/traefik-forward-auth/values.yaml` emits `X-Forwarded-User` from the OIDC `name`
   field; `monitor/values-grafana.yaml` consumes it via `auth.proxy`.

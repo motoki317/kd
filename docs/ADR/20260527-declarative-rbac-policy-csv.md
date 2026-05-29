@@ -102,7 +102,7 @@ p, role:admin,    *, *, *,     allow
 
 # Notes
 
-- ArgoCD reference checked in `motoki317-manifest/argocd/values.yaml`:
+- ArgoCD reference checked in `github.com/motoki317/manifest/argocd/values.yaml`:
   `policy.default: "role:readonly"` and `g, <uuid>, role:admin`.
 - The default `policy.csv` and `policy.default` ship as built-in defaults; an operator overlays
   their own policy.csv via a mounted file path.
