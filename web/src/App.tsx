@@ -721,6 +721,7 @@ export default function App() {
                 <li>Click a legend health Spotlight only those resources</li>
                 <li>Click a kind chip Toggle that kind in the filter (multi-select) · <kbd>Shift</kbd>+click solos</li>
                 <li><kbd>f</kbd> · double-click canvas Fit the topology to view</li>
+                <li><kbd>=</kbd> <kbd>-</kbd> Zoom in / out · <kbd>0</kbd> Reset zoom to 100%</li>
               </ul>
             </section>
             <section class="help-section">

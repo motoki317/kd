@@ -651,9 +651,27 @@ export default function Topology(props: Props) {
     animateTo(target)
   }
 
-  // Keyboard shortcut: 'f' fits the canvas. Mirrors the button (cycle 229). Plain key, no
-  // modifier — operators want fit-to-view as a single tap. Ignored when typing in an input,
-  // when a modifier is held, or when the topology hasn't laid out yet.
+  // Keyboard zoom (cycle 329/R3): scale by a factor while keeping the viewport-center world point
+  // fixed — same pivot math as the wheel handler, just anchored at the middle instead of the cursor.
+  // Gives keyboard/trackpad-less operators (and Vim-style users) fine zoom control to pair with 'f'.
+  // Applied instantly (not via animateTo) so successive presses accumulate: animateTo reads the
+  // mid-flight scale() signal, so a burst of presses would all target the same value and lose steps.
+  function zoomByAtCenter(factor: number) {
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const cx = rect.width / 2, cy = rect.height / 2
+    const s0 = scale()
+    const s = Math.min(Math.max(s0 * factor, 0.15), 3)
+    if (s === s0) return
+    cancelAnimationFrame(animFrame) // stop any in-flight fit/glide from fighting the keyboard zoom
+    setTx(cx - ((cx - tx()) / s0) * s)
+    setTy(cy - ((cy - ty()) / s0) * s)
+    setScale(s)
+  }
+
+  // Keyboard shortcuts: 'f' fits the canvas (cycle 229); '='/'+' zoom in, '-' zoom out, '0' resets to
+  // 1× (all centered). Plain keys, no modifier — Cmd/Ctrl variants are left to the browser's own zoom.
+  // Ignored when typing in an input or when a non-Shift modifier is held (Shift passes so '+' works).
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
@@ -662,6 +680,15 @@ export default function Topology(props: Props) {
       if (e.key === 'f') {
         e.preventDefault()
         resetView()
+      } else if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        zoomByAtCenter(1.2)
+      } else if (e.key === '-') {
+        e.preventDefault()
+        zoomByAtCenter(1 / 1.2)
+      } else if (e.key === '0') {
+        e.preventDefault()
+        zoomByAtCenter(1 / scale()) // land exactly on 1× without moving the center
       }
     }
     window.addEventListener('keydown', onKey)

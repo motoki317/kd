@@ -417,4 +417,23 @@ describe('Topology', () => {
     ))
     expect(faded(container)).toBe(1) // api-xyz is faded
   })
+
+  // Keyboard zoom (cycle 329/R3). The handler lives on window keydown; reads the viewport transform's
+  // scale factor off the root <g>. '0' resets to exactly 1× regardless of the prior scale.
+  it('zooms with = / - / 0 keys', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const groupScale = () => {
+      const t = container.querySelector('.topology svg > g')?.getAttribute('transform') || ''
+      return parseFloat(/scale\(([-\d.]+)\)/.exec(t)?.[1] ?? 'NaN')
+    }
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '0' })) // normalize to 1× first
+    expect(groupScale()).toBeCloseTo(1, 5)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '=' }))
+    expect(groupScale()).toBeCloseTo(1.2, 5)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }))
+    expect(groupScale()).toBeCloseTo(1, 5)
+    // A non-Shift modifier is left to the browser (Cmd+- is browser zoom), so it must not zoom.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '=', metaKey: true }))
+    expect(groupScale()).toBeCloseTo(1, 5)
+  })
 })
