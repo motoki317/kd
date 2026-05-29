@@ -107,6 +107,32 @@ export default function LogViewer(props: Props) {
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
+  // Jump-to-error (cycle 332/R6): error-level lines are the triage target, but finding the first one
+  // in a 2000-line buffer of INFO chatter means scrolling forever. errorIndices are the positions of
+  // error lines in the visible set; the button/Shift+E steps through them, wrapping. The badge
+  // classifier already runs per visible line for the inline badge, so this is reusing that signal.
+  const errorIndices = createMemo(() => {
+    const vl = visibleLines()
+    const out: number[] = []
+    for (let i = 0; i < vl.length; i++) if (parseLogLevel(vl[i].line) === 'error') out.push(i)
+    return out
+  })
+  const [errorCursor, setErrorCursor] = createSignal(-1)
+  function jumpToNextError() {
+    const errs = errorIndices()
+    if (errs.length === 0 || !pre) return
+    const next = (errorCursor() + 1) % errs.length
+    setErrorCursor(next)
+    const el = pre.querySelectorAll('.log-line')[errs[next]] as HTMLElement | undefined
+    if (!el) return
+    setPinned(false) // stop following the tail or the jump-up is yanked straight back to the bottom
+    el.scrollIntoView({ block: 'center' })
+    el.classList.remove('log-line-flash')
+    void el.offsetWidth // restart the flash if we land on the same line twice
+    el.classList.add('log-line-flash')
+    el.addEventListener('animationend', () => el.classList.remove('log-line-flash'), { once: true })
+  }
+
   // A single pod that isn't Running can't produce logs yet, so an error there is "no logs" not a drop.
   const gentle = createMemo(() => !props.aggregated && !(props.status ?? '').startsWith('Running'))
   // Direct scrollTop assignment instead of scrollTo({ ... }) — jsdom doesn't implement scrollTo
@@ -152,6 +178,7 @@ export default function LogViewer(props: Props) {
         setFilter('')
         setCaseSensitive(false)
         setHiddenPods(new Set<string>())
+        setErrorCursor(-1)
       },
     ),
   )
@@ -215,11 +242,22 @@ export default function LogViewer(props: Props) {
   // actually showing so it doesn't hijack find elsewhere (cycle 321).
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || (e.key !== 'f' && e.key !== 'F')) return
-      if (props.visible === false || !filterInput) return
-      e.preventDefault()
-      filterInput.focus()
-      filterInput.select()
+      if (props.visible === false) return
+      const typing = (e.target as HTMLElement | null)?.tagName === 'INPUT'
+      // Cmd/Ctrl+F focuses the line filter (cycle 321).
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+        if (!filterInput) return
+        e.preventDefault()
+        filterInput.focus()
+        filterInput.select()
+        return
+      }
+      // Shift+E steps to the next error line (cycle 332/R6); plain 'e' is left alone for typing.
+      if (e.shiftKey && (e.key === 'E' || e.key === 'e') && !e.metaKey && !e.ctrlKey && !e.altKey && !typing) {
+        if (errorIndices().length === 0) return
+        e.preventDefault()
+        jumpToNextError()
+      }
     }
     window.addEventListener('keydown', onKey)
     onCleanup(() => window.removeEventListener('keydown', onKey))
@@ -311,6 +349,18 @@ export default function LogViewer(props: Props) {
           </span>
         </Show>
         <span class="logs-right">
+          {/* Jump-to-error (cycle 332/R6): only present when the visible buffer holds error lines.
+              Clicking (or Shift+E) steps to the next one, wrapping — fast triage past INFO chatter. */}
+          <Show when={errorIndices().length > 0}>
+            <button
+              class="logs-errjump"
+              title={`Jump to next error of ${errorIndices().length} (Shift+E)`}
+              aria-label={`Jump to next error of ${errorIndices().length}`}
+              onClick={jumpToNextError}
+            >
+              ↧ {errorIndices().length} err
+            </button>
+          </Show>
           <Show when={filter()}>
             <span class="logs-count" classList={{ none: visibleLines().length === 0 }}>
               {visibleLines().length}/{lines().length}

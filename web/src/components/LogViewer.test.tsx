@@ -162,6 +162,34 @@ describe('LogViewer', () => {
     expect(container.querySelectorAll('.logs-pod-chip').length).toBe(0)
   })
 
+  // Jump-to-error (cycle 333/R6): the button appears only when the buffer holds error-level lines,
+  // and clicking it flashes the next error line (stepping through them).
+  it('offers a jump-to-error control only when error lines exist, and flashes the target', async () => {
+    Element.prototype.scrollIntoView = vi.fn() // jsdom has no layout; stub the scroll
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { line: 'I0521 1 main.go:1] starting up' })
+    await findByText(/starting up/)
+    expect(container.querySelector('.logs-errjump')).toBeNull() // no errors → no control
+    es.emit('log', { line: 'E0521 1 main.go:2] first boom' })
+    es.emit('log', { line: 'E0521 1 main.go:3] second crash' })
+    await findByText(/second crash/)
+    const btn = container.querySelector('.logs-errjump') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.textContent).toContain('2') // two error lines
+    const lineWith = (t: string) => [...container.querySelectorAll('.log-line')].find((l) => l.textContent?.includes(t))!
+    btn.click()
+    // First click lands on the first error and flashes that line. (In jsdom the class lingers since
+    // animationend never fires; in the browser it clears after the 1.2s animation — so assert the
+    // specific target carries the flash rather than counting flashed lines.)
+    expect(lineWith('first boom').classList.contains('log-line-flash')).toBe(true)
+    expect(lineWith('starting up').classList.contains('log-line-flash')).toBe(false)
+    btn.click() // steps to the second error
+    expect(lineWith('second crash').classList.contains('log-line-flash')).toBe(true)
+  })
+
   it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
     const { container, findByPlaceholderText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

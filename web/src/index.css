@@ -2426,6 +2426,46 @@ button.event-source:hover {
   border-radius: 50%;
   flex: none;
 }
+/* Jump-to-error button (cycle 332/R6): error-tinted so it reads as "there are errors here, click to
+   find them". Only rendered when the buffer holds error lines. */
+.logs-errjump {
+  border: 1px solid color-mix(in srgb, var(--health-degraded) 45%, var(--border));
+  background: color-mix(in srgb, var(--health-degraded) 14%, transparent);
+  color: var(--health-degraded);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.logs-errjump:hover {
+  background: color-mix(in srgb, var(--health-degraded) 24%, transparent);
+  border-color: var(--health-degraded);
+}
+.logs-errjump:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* One-shot highlight on the line we jumped to, so the eye lands on it among its neighbors. */
+@keyframes log-line-flash {
+  0% {
+    background: color-mix(in srgb, var(--health-degraded) 40%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.log-line.log-line-flash {
+  animation: log-line-flash 1.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .log-line.log-line-flash {
+    animation: none;
+  }
+}
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;

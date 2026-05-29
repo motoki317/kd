@@ -698,6 +698,9 @@ export default function App() {
                   <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)
                 </li>
                 <li>
+                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Filter the log lines · <kbd>Shift</kbd>+<kbd>E</kbd> Jump to the next error line
+                </li>
+                <li>
                   <strong>[cluster]</strong> Pinned sidebar entry — cluster-scoped resources (Nodes, PVs, CRDs, cluster CRs)
                 </li>
               </ul>
