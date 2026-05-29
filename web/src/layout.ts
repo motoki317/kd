@@ -1,10 +1,16 @@
 // Pure graph layout: turns nodes+edges into positioned geometry. No DOM, so it is
 // unit-testable. See docs/ADR/20260527-frontend-stack.md.
 //
-// A namespace is many small, disconnected ownership trees. Laying them all in one Dagre graph
-// puts every tree in a single horizontal row — a wide, unreadable smear once fit to screen. So
-// we lay out each connected component on its own, then bin-pack the components into a block whose
-// aspect ratio matches the viewport. That turns a 1xN row into a roughly NxN grid.
+// A namespace is many small, disconnected trees. We lay out each connected component on its own
+// (so one Dagre graph never smears every tree across a single rank), then stack the components in
+// a single vertical column — one tree per row, left-aligned, never two side by side. Each tree
+// flows left-to-right internally (LR rankdir), so the whole view reads like ArgoCD's resource
+// tree: every tree starts at the same left edge and the eye scans straight down the list.
+//
+// WHY a strict column and not a viewport-aspect bin-pack (the previous design): mixing horizontal
+// and vertical placement broke that single-axis scan — two trees would sometimes sit side by side,
+// so "which tree am I reading" stopped being answerable by y alone. The user asked for a strict
+// column across every view; we trade a taller canvas (more panning) for that uniform alignment.
 
 import dagre from '@dagrejs/dagre'
 import type { KEdge, KNode } from './types'
@@ -256,19 +262,35 @@ export function kindGroups(layout: Layout): { kind: string; x: number; y: number
     }))
 }
 
-// layoutGraph arranges the relationship graph top-to-bottom within each connected component, then
-// packs the components into a viewport-shaped block. Edges with a missing endpoint are dropped
-// defensively (the server should not emit them). `rankdir` switches the per-component direction
-// — 'TB' (default) reads top-down like the ownership tree; 'LR' reads left-to-right and is used
-// by the Volumes view so "Pod mounts ConfigMap" reads as an arrow pointing right.
+// layoutGraph lays out each connected component on its own, then stacks the components in a single
+// vertical column (see packComponents). Edges with a missing endpoint are dropped defensively (the
+// server should not emit them). `rankdir` switches the per-component direction — 'LR' (what every
+// relationship view passes) reads left-to-right so a parent's children fan out to its right, like
+// an ArgoCD tree; 'TB' (the default, kept for callers/tests) reads top-down.
 export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Layout {
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
   const groups = connectedComponents(nodes, laidEdges)
+  // Stable vertical order: each tree keeps its row across SSE patches. node.id is a random UID, so
+  // ordering by it would shuffle trees arbitrarily; the smallest kind/name in a component is stable
+  // (adding/removing a pod doesn't change it) and reads sensibly (workload roots sort near the top).
+  groups.sort((a, b) => componentKey(a.nodes).localeCompare(componentKey(b.nodes)))
   const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir))
 
   return packComponents(components)
+}
+
+// componentKey is a stable sort key for a component: the lexicographically smallest "kind/name"
+// among its nodes. Independent of node.id (a random UID) and of node array order, so the vertical
+// stacking order holds steady as the graph churns.
+function componentKey(nodes: KNode[]): string {
+  let min = `${nodes[0].kind}/${nodes[0].name}`
+  for (const n of nodes) {
+    const k = `${n.kind}/${n.name}`
+    if (k < min) min = k
+  }
+  return min
 }
 
 // connectedComponents groups nodes into weakly-connected components (edges treated as undirected)
@@ -489,46 +511,35 @@ function placeLeavesLR(hub: Hub, gridLeft: number, centerY: number, out: Positio
   })
 }
 
-// packComponents lays component boxes left-to-right into shelves, wrapping at a target row width
-// chosen so the whole block is about TARGET_ASPECT wide-to-tall. Tallest-first keeps shelves tidy.
-// gap overrides COMPONENT_GAP when the caller needs more spacing (e.g. kind-grouped All view).
+// packComponents stacks each component in a single vertical column — one per row, left-aligned,
+// never two side by side — so the view reads top-to-bottom as a list of trees (the ArgoCD shape the
+// user asked for). Components keep their incoming order; callers pre-sort into a stable sequence
+// (layoutGraph by componentKey; the grouped views alphabetically) so a tree holds its slot across
+// patches. gap overrides COMPONENT_GAP where group boxes need more breathing room.
 function packComponents(components: Component[], gap = COMPONENT_GAP): Layout {
   if (components.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
-  const sorted = [...components].sort((a, b) => b.height - a.height)
-  const totalArea = sorted.reduce((s, c) => s + (c.width + gap) * (c.height + gap), 0)
-  const maxWidth = Math.max(...sorted.map((c) => c.width))
-  const targetWidth = Math.max(maxWidth, Math.sqrt(totalArea * TARGET_ASPECT))
-
+  const margin = 28
   const allNodes: PositionedNode[] = []
   const allEdges: PositionedEdge[] = []
-  let cursorX = 0
-  let shelfY = 0
-  let shelfHeight = 0
-  let totalWidth = 0
+  let cursorY = margin
+  let maxRight = 0
 
-  for (const c of sorted) {
-    if (cursorX > 0 && cursorX + c.width > targetWidth) {
-      shelfY += shelfHeight + gap
-      cursorX = 0
-      shelfHeight = 0
-    }
-    const dx = cursorX
-    const dy = shelfY
+  for (const c of components) {
+    // Every component's left edge sits at `margin`, so all trees share one left gutter — the
+    // alignment that lets the eye scan straight down the roots.
+    const dx = margin
+    const dy = cursorY
     for (const n of c.nodes) allNodes.push({ ...n, x: n.x + dx, y: n.y + dy })
     for (const e of c.edges) allEdges.push({ ...e, points: e.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) })
-    cursorX += c.width + gap
-    shelfHeight = Math.max(shelfHeight, c.height)
-    totalWidth = Math.max(totalWidth, cursorX - gap)
+    maxRight = Math.max(maxRight, dx + c.width)
+    cursorY = dy + c.height + gap
   }
 
-  const margin = 28
-  const shifted = allNodes.map((n) => ({ ...n, x: n.x + margin, y: n.y + margin }))
-  const shiftedEdges = allEdges.map((e) => ({ ...e, points: e.points.map((p) => ({ x: p.x + margin, y: p.y + margin })) }))
   return {
-    nodes: shifted,
-    edges: shiftedEdges,
-    width: totalWidth + margin * 2,
-    height: shelfY + shelfHeight + margin * 2,
+    nodes: allNodes,
+    edges: allEdges,
+    width: maxRight + margin,
+    height: cursorY - gap + margin, // cursorY overshot by one trailing gap after the last row
   }
 }

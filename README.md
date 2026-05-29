@@ -16,11 +16,12 @@ state at a glance and app developers can jump straight to pod status and logs.
 
 **See the whole namespace at a glance**
 - 2D topology across six lenses — each lens uses the layout that fits its relationship:
-  Ownership reads top-down (the workload tree), Network / Volumes / RBAC read left-to-right
-  (traffic / dependency / binding flow), Nodes view groups pods inside labeled host containers
+  Ownership / Network / Volumes / RBAC read left-to-right (a parent's children fan out to its
+  right, like an ArgoCD resource tree), Nodes view groups pods inside labeled host containers
   (containment carries scheduledOn, no fan of edges), and the All view groups every resource by
-  kind. Each lens lays out per connected component and packs to the viewport (no horizontal
-  smear in dense namespaces).
+  kind. Every lens lays out per connected component and stacks the components in a single vertical
+  column — one tree per row, all left-aligned, never two side by side — so the eye scans straight
+  down the list.
 - Every kind the cluster exposes is watched via a dynamic informer factory, including custom
   resources defined by CRDs. Workflows, Certificates, ExternalSecrets, ArgoCD Applications,
   Crossplane composites — all render in the topology with their ownership chains down to Pods.

@@ -47,20 +47,59 @@ describe('layoutGraph', () => {
     expect(l.edges).toHaveLength(3)
   })
 
-  it('packs many disconnected trees into a block instead of one wide row', () => {
-    // 20 independent single-pod ownership trees, like a real namespace.
+  it('stacks disconnected trees in a single vertical column, never side by side', () => {
+    // 8 independent single-pod trees, like a real namespace. The contract: each tree gets its own
+    // row, every tree left-aligned to a shared gutter, never two trees on the same horizontal band.
     const many: KNode[] = []
     const manyEdges: KEdge[] = []
-    for (let i = 0; i < 20; i++) {
-      many.push({ id: `d${i}`, kind: 'Deployment', name: `app-${i}`, health: 'Healthy' })
-      many.push({ id: `p${i}`, kind: 'Pod', name: `app-${i}-0`, health: 'Healthy' })
+    for (let i = 0; i < 8; i++) {
+      const tag = String.fromCharCode(97 + i) // a, b, c, … so names sort distinctly
+      many.push({ id: `d${i}`, kind: 'Deployment', name: `app-${tag}`, health: 'Healthy' })
+      many.push({ id: `p${i}`, kind: 'Pod', name: `app-${tag}-0`, health: 'Healthy' })
       manyEdges.push({ from: `d${i}`, to: `p${i}`, type: 'ownerReference' })
     }
-    const l = layoutGraph(many, manyEdges)
-    expect(l.nodes).toHaveLength(40)
-    // A single row of 20 two-node trees would be > 3000px wide and ~150px tall (aspect > 20).
-    // Packing must keep the block close to the viewport aspect, not a thin band.
-    expect(l.width / l.height).toBeLessThan(4)
+    const l = layoutGraph(many, manyEdges, 'LR')
+    expect(l.nodes).toHaveLength(16)
+
+    const band = (i: number) => {
+      const ns = l.nodes.filter((n) => n.id === `d${i}` || n.id === `p${i}`)
+      return {
+        top: Math.min(...ns.map((n) => n.y - n.height / 2)),
+        bottom: Math.max(...ns.map((n) => n.y + n.height / 2)),
+        left: Math.min(...ns.map((n) => n.x - n.width / 2)),
+      }
+    }
+    const bands = Array.from({ length: 8 }, (_, i) => band(i)).sort((a, b) => a.top - b.top)
+    // No two trees overlap vertically → strictly one tree per row.
+    for (let i = 1; i < bands.length; i++) expect(bands[i].top).toBeGreaterThanOrEqual(bands[i - 1].bottom)
+    // Every tree starts at the same left edge (the shared gutter).
+    const lefts = bands.map((b) => b.left)
+    expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThan(1)
+    // The column is one tree wide (not eight), and tall — roughly one row per tree.
+    expect(l.width).toBeLessThan(NODE_WIDTH * 4)
+    expect(l.height).toBeGreaterThan(NODE_HEIGHT * 6)
+  })
+
+  it('keeps a tree in its row (stable order) as another tree gains a pod', () => {
+    // alpha sorts before bravo by componentKey ("Deployment/alpha" < "Deployment/bravo"), so alpha
+    // is the top row. When bravo grows a pod its tree gets taller, but alpha — placed first — must
+    // not move: ordering is by the stable key, not by component height or node UID.
+    const nodes0: KNode[] = [
+      { id: 'da', kind: 'Deployment', name: 'alpha', health: 'Healthy' },
+      { id: 'pa', kind: 'Pod', name: 'alpha-0', health: 'Healthy' },
+      { id: 'db', kind: 'Deployment', name: 'bravo', health: 'Healthy' },
+      { id: 'pb0', kind: 'Pod', name: 'bravo-0', health: 'Healthy' },
+    ]
+    const edges0: KEdge[] = [
+      { from: 'da', to: 'pa', type: 'ownerReference' },
+      { from: 'db', to: 'pb0', type: 'ownerReference' },
+    ]
+    const ay0 = layoutGraph(nodes0, edges0, 'LR').nodes.find((n) => n.id === 'da')!.y
+    const nodes1: KNode[] = [...nodes0, { id: 'pb1', kind: 'Pod', name: 'bravo-1', health: 'Healthy' }]
+    const edges1: KEdge[] = [...edges0, { from: 'db', to: 'pb1', type: 'ownerReference' }]
+    const l1 = layoutGraph(nodes1, edges1, 'LR')
+    expect(l1.nodes.find((n) => n.id === 'da')!.y).toBe(ay0) // alpha kept its row
+    expect(l1.nodes.find((n) => n.id === 'da')!.y).toBeLessThan(l1.nodes.find((n) => n.id === 'db')!.y)
   })
 
   it('grid-wraps a high-fanout hub instead of one wide rank', () => {

@@ -136,9 +136,16 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
 - **SSE `summary` event** (cycle 201): server emits a per-stream `summary` computed on the
   UNFILTERED graph; the client overrides the sidebar entry with that. Never roll up filtered
   nodes on the client — the bug fix is the whole reason `rollupHealth` was deleted.
-- **Per-view layout dispatch** (cycles 205–207): Ownership = TB; Network/Volumes/RBAC = LR;
-  Nodes = `layoutGraphByHost` (host-grouped containers, no scheduledOn edges drawn); All =
-  `layoutGraphByKind`. Adding a view = adding to `View` type + a layout case in `Topology.tsx`.
+- **Per-view layout dispatch**: Ownership/Network/Volumes/RBAC all = `layoutGraph` with `'LR'`
+  (parent→child fans left-to-right, ArgoCD-style — Ownership was briefly TB and then LR-bin-packed,
+  now LR like the rest per user request); Nodes = `layoutGraphByHost` (host-grouped containers, no
+  scheduledOn edges drawn); All = `layoutGraphByKind`. Adding a view = adding to `View` type + a
+  layout case in `Topology.tsx`.
+- **Single-column packing**: `packComponents` stacks every component in one vertical column — one
+  tree per row, left-aligned, never two side by side (the user's explicit "all views" arrangement).
+  This replaced an earlier viewport-aspect bin-pack; do **not** reintroduce horizontal placement to
+  "use the width." Vertical order is stable via `componentKey` (smallest kind/name, not the random
+  node UID), so a tree keeps its row as pods churn.
 - **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`)
   is treated everywhere as a real namespace by route shape, but expands to the cluster's
   cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.
