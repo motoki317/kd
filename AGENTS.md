@@ -44,6 +44,14 @@ go test ./...                # Go tests only
 
 - Conventional Commits, **English**. Commit per coherent slice. Git ops ONLY when explicitly
   asked, or when moving between phases.
+- **No machine-local or environment leakage.** Git-tracked files (code, comments, tests, docs)
+  and commit messages must read identically on any machine. Never commit machine-local paths
+  (`/Users/...`, `/home/...`, home dirs) or machine-global / private-environment state — real
+  kubectl context or cluster names, cloud ARNs, account IDs, internal hostnames, private product
+  names. Use generic placeholders instead: `<repo>/web` for paths, example identifiers for ARNs
+  (AWS's docs account `111122223333`, region `us-west-2`, a neutral cluster name like
+  `prod-cluster`). If you need a real value to reproduce something, keep it in gitignored scratch
+  (`docs/plans/`), not in a tracked file.
 - ADRs are dated `YYYYMMDD-title.md`; design rationale lives there, not in comments.
 - TDD for pure logic (`auth`, `rbac`, `graph`, layout, store mapping). Fixture-driven where
   possible (`graph_test.go` decodes YAML into runtime objects).
