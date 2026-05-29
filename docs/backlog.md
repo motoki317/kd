@@ -9,32 +9,64 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
-**Status (2026-05-29):** The UX surface (topology, selection/edges, sidebar health, drawer/nav, logs)
-is **mature** — a strict re-survey at cycle 339 yielded 16 candidates → 1 low-value (B-001). Blind UX
-re-surveys now hit diminishing returns; the next batch should come from real user feedback or a new
-feature area, not from re-surveying these five areas. Don't grind filler cycles — report maturity.
+**Status (2026-05-29):** UX surface mature (cycle 339: 16 candidates → 1 low-value). This session
+drained the backlog via the improvement-cycle: the **`Open` queue is empty**. The one Open item (B-001)
+shipped as a 3-button a11y sweep, and one Future item shipped as a correctness fix (CRD-removal ghost
+cleanup). Every remaining Future item was re-examined against the real code and **deferred with a
+verified rationale + a reopen trigger** (see below) — they are genuine design-pass / deployment-pressure
+work, not safe improvement-cycle slices. Two workflow-proposed "small wins" were refuted on inspection
+(a store summary cache — regressive because `notify()` has no namespace granularity; a discovery-diff
+CRD prune — unsafe because `Discover()` tolerates partial results). Next batch should come from real
+user feedback or a new feature area — don't grind filler cycles.
 
 ---
 
 ## Open
 
-_(empty — the actionable queue is drained. Remaining work is in Future / larger work below, each deferred with a verified rationale.)_
+_(empty — the actionable queue is drained. Remaining work is under **Future / larger work** below, each examined against the real code with a verified rationale + reopen trigger.)_
 
-## Future / larger work (not yet scheduled)
+## Future / larger work — deferred (examined, not actionable now)
 
-Longer-horizon items carried over from the original roadmap. Each needs its own design pass; none is a
-quick improvement-cycle item.
+Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
+none is a safe, clearly-felt improvement-cycle slice today. Each lists what it would take and the signal
+that should reopen it, so a future agent inherits the analysis instead of re-surveying from scratch.
 
-- **Live per-namespace health for background namespaces.** The open namespace already updates from the
-  SSE `summary` event (cycle 201). Background, non-selected namespaces still rely on the 15 s sidebar
-  poll; scaling to thousands of namespaces would need a push channel or server-cached summaries.
-- **SSE patch scaling.** Patches recompute+diff on a 300 ms window — fine today. A very large namespace
-  may want field-selector informers or sharding; memory scales with object count.
-- **EndpointSlice-based `selects` edges.** Currently a label-selector match; EndpointSlice would be
-  more accurate.
-- **Component tests** (Vitest + `@solidjs/testing-library`) for Topology / DetailDrawer interactions —
-  complements the pure-logic unit tests; would catch interaction regressions jsdom can partly cover.
-- **Last-Event-ID resume** on the SSE feed; exec/attach would use WebSocket (per the SSE ADR).
+- **Live per-namespace health for background namespaces** — *deferred (premature).* The open namespace
+  is already live via the SSE `summary` event (cycle 201); background namespaces refresh on the 15 s
+  sidebar poll, which re-summarizes every visible namespace (`api.go` `handleNamespaces` → a full
+  `graph.Build` per namespace). A naive "cache summaries on store change" does **not** help: `notify()`
+  (`store.go:185`) is a single coalesced signal with no namespace granularity, so recompute-all-on-change
+  is *worse* than the poll for the common single-client / churny case; a correct per-namespace-dirty
+  cache is a real design change with no user-felt benefit until thousands of namespaces × many clients.
+  *Reopen when:* kd actually runs against a many-thousand-namespace cluster, or the product wants
+  background namespaces to update live — then build a cluster-wide summary SSE stream (the per-ns dirty
+  cache is one piece of it).
+- **SSE patch scaling** — *deferred (premature).* Patches recompute+diff on a 300 ms window; fine today,
+  no observed pain. Field-selector informers / sharding would break the ride-along invariant the health
+  rollup depends on (cross-namespace ownerRef, Pod→Node, PVC→PV), so they need an ADR, not a cycle. The
+  real large-namespace bottleneck is **client-side Dagre layout**, not the server rebuild. *Reopen when:*
+  a profiler shows server rebuild (not layout) as the bottleneck on a real workload.
+- **EndpointSlice-based `selects` edges** — *deferred (real, high regression risk).* Service→Pod edges
+  use label-selector matching (`edges.go` `serviceEdges`); EndpointSlice is the more accurate source
+  (ready endpoints, named ports, selectorless / cross-namespace, non-pod backends). Adopting it needs
+  three decisions first: (1) eager-load EndpointSlice (today skipped for cardinality — 10–100× Services
+  on big clusters) vs lazy/hybrid; (2) Endpoints v1 legacy vs EndpointSlice-only; (3) whether to add a
+  `port` dimension to the graph model (a backward-incompatible edge-shape change). *Reopen when:*
+  operators on large clusters need accurate endpoint readiness — start with an ADR answering the three
+  questions plus a cardinality cap.
+- **Last-Event-ID resume on the SSE feed** — *deferred (low value).* The server emits no SSE `id:` today
+  and the reconnect path already re-snapshots, which is **idempotent by design** (`graphState.fromSnapshot`
+  + Solid `reconcile`) and cheap (~100 ms). Real resume needs a server-side patch ring buffer with TTL +
+  overflow→snapshot fallback — a streaming-v2 design pass — for a payoff the idempotent re-snapshot
+  already delivers. exec/attach would use WebSocket (per the SSE ADR). *Reopen when:* a streaming-v2
+  effort is on the table for other reasons (e.g. exec/attach).
+
+*Resolved this pass — "Component tests for Topology / DetailDrawer" (already done):* `Topology.test.tsx`,
+`DetailDrawer.test.tsx`, `LogViewer.test.tsx`, `Sidebar.test.tsx`, and `CopyButton.test.tsx` already ship
+~100 component tests via `@solidjs/testing-library` + `fireEvent` (227 web assertions total). The residual
+gap — cross-component selection→drawer-centering — is **not** a jsdom unit test: jsdom returns zeros for
+`getBoundingClientRect`, so a mocked test would validate the mock, not the coordinate math. It belongs to
+live Playwright verification per AGENTS.md, not the backlog.
 
 ## Rejected — do not re-propose
 
