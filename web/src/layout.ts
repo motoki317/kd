@@ -299,10 +299,14 @@ function connectedComponents(nodes: KNode[], edges: KEdge[]): { nodes: KNode[]; 
   return [...byRoot.values()]
 }
 
-// gridDims chooses a near-square column count for n leaves, leaning slightly wide.
-function gridDims(n: number): { cols: number; rows: number; w: number; h: number } {
-  const cols = Math.min(n, Math.ceil(Math.sqrt(n * TARGET_ASPECT)))
-  const rows = Math.ceil(n / cols)
+// gridDims chooses a near-square grid for n leaves. In 'TB' it leans wide (more columns than rows)
+// so the block grows downward rather than across; in 'LR' it leans tall (more rows than columns)
+// so a hub's children stack into a vertical column and the block grows rightward — the LR flow
+// direction. The grouped All/Nodes views call it without a rankdir and get the wide default.
+function gridDims(n: number, rankdir: 'TB' | 'LR' = 'TB'): { cols: number; rows: number; w: number; h: number } {
+  const major = Math.min(n, Math.ceil(Math.sqrt(n * TARGET_ASPECT)))
+  const cols = rankdir === 'LR' ? Math.ceil(n / major) : major
+  const rows = rankdir === 'LR' ? major : Math.ceil(n / major)
   return {
     cols,
     rows,
@@ -314,14 +318,17 @@ function gridDims(n: number): { cols: number; rows: number; w: number; h: number
 interface Hub {
   id: string
   leaves: KNode[]
-  side: 'above' | 'below' // which side of the hub card the grid sits on
+  // Whether the leaf grid sits AFTER the hub in the flow direction (below it in TB / to its right
+  // in LR). True for a parent whose children are leaves (edges point hub->leaf); false when the
+  // hub is the shared target the leaves point at (e.g. pods->Node), so the grid sits before it.
+  after: boolean
   grid: { cols: number; rows: number; w: number; h: number }
 }
 
 // findHubs detects nodes whose many degree-1 neighbors should be grid-wrapped. A leaf is wrapped
-// under the neighbor it connects to; the grid sits on the leaf side of the edge (a Node's pods
-// read below it; a ReplicaSet's pods read below it too, since edges point parent->child).
-function findHubs(nodes: KNode[], edges: KEdge[]): { hubs: Hub[]; wrapped: Set<string> } {
+// under (TB) / beside (LR) the neighbor it connects to; the grid sits on the leaf side of the edge
+// (a Node's pods read below/right of it; a ReplicaSet's pods do too, since edges point parent->child).
+function findHubs(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const degree = new Map<string, number>()
   for (const e of edges) {
@@ -347,7 +354,7 @@ function findHubs(nodes: KNode[], edges: KEdge[]): { hubs: Hub[]; wrapped: Set<s
   for (const [id, { leaves, hubIsTarget }] of leavesOf) {
     if (leaves.length < FANOUT_MIN) continue
     leaves.sort((a, b) => a.name.localeCompare(b.name))
-    hubs.push({ id, leaves, side: hubIsTarget > leaves.length / 2 ? 'above' : 'below', grid: gridDims(leaves.length) })
+    hubs.push({ id, leaves, after: hubIsTarget <= leaves.length / 2, grid: gridDims(leaves.length, rankdir) })
     for (const l of leaves) wrapped.add(l.id)
   }
   return { hubs, wrapped }
@@ -361,7 +368,7 @@ function findHubs(nodes: KNode[], edges: KEdge[]): { hubs: Hub[]; wrapped: Set<s
 // place their leaves in a grid — but only in 'TB' mode where the existing side='above'/'below'
 // math fits; 'LR' lets Dagre do its natural rank layout instead so the orientation stays clean.
 function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Component {
-  const { hubs, wrapped } = rankdir === 'TB' ? findHubs(nodes, edges) : { hubs: [], wrapped: new Set<string>() }
+  const { hubs, wrapped } = findHubs(nodes, edges, rankdir)
   const hubById = new Map(hubs.map((h) => [h.id, h]))
   const skeleton = nodes.filter((n) => !wrapped.has(n.id))
   const skeletonEdges = edges.filter((e) => !wrapped.has(e.from) && !wrapped.has(e.to))
@@ -374,7 +381,13 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
   for (const n of skeleton) {
     const hub = hubById.get(n.id)
     if (hub) {
-      g.setNode(n.id, { width: Math.max(NODE_WIDTH, hub.grid.w), height: NODE_HEIGHT + HUB_GAP + hub.grid.h })
+      // Reserve a box big enough for the hub card PLUS its leaf grid, oriented along the flow:
+      // taller in TB (grid stacks below), wider in LR (grid sits to the side).
+      if (rankdir === 'LR') {
+        g.setNode(n.id, { width: NODE_WIDTH + HUB_GAP + hub.grid.w, height: Math.max(NODE_HEIGHT, hub.grid.h) })
+      } else {
+        g.setNode(n.id, { width: Math.max(NODE_WIDTH, hub.grid.w), height: NODE_HEIGHT + HUB_GAP + hub.grid.h })
+      }
     } else {
       g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
     }
@@ -391,10 +404,22 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
       positioned.push({ ...n, x: p.x, y: p.y, width: NODE_WIDTH, height: NODE_HEIGHT })
       continue
     }
+    if (rankdir === 'LR') {
+      // Hub card pinned to one edge of its reserved box; its leaf grid fills the rest, centered
+      // vertically on the card. after=true → card on the left, grid to its right (children flow →).
+      const boxW = NODE_WIDTH + HUB_GAP + hub.grid.w
+      const leftEdge = p.x - boxW / 2
+      const cardX = hub.after ? leftEdge + NODE_WIDTH / 2 : p.x + boxW / 2 - NODE_WIDTH / 2
+      const gridLeft = hub.after ? leftEdge + NODE_WIDTH + HUB_GAP : leftEdge
+      positioned.push({ ...n, x: cardX, y: p.y, width: NODE_WIDTH, height: NODE_HEIGHT })
+      cardCenter.set(n.id, { x: cardX, y: p.y })
+      placeLeavesLR(hub, gridLeft, p.y, positioned)
+      continue
+    }
     const boxH = NODE_HEIGHT + HUB_GAP + hub.grid.h
     const top = p.y - boxH / 2
-    const cardY = hub.side === 'below' ? top + NODE_HEIGHT / 2 : p.y + boxH / 2 - NODE_HEIGHT / 2
-    const gridTop = hub.side === 'below' ? top + NODE_HEIGHT + HUB_GAP : top
+    const cardY = hub.after ? top + NODE_HEIGHT / 2 : p.y + boxH / 2 - NODE_HEIGHT / 2
+    const gridTop = hub.after ? top + NODE_HEIGHT + HUB_GAP : top
     positioned.push({ ...n, x: p.x, y: cardY, width: NODE_WIDTH, height: NODE_HEIGHT })
     cardCenter.set(n.id, { x: p.x, y: cardY })
     placeLeaves(hub, p.x, gridTop, positioned)
@@ -430,8 +455,8 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
   return { nodes: positioned, edges: positionedEdges, width, height }
 }
 
-// placeLeaves lays a hub's leaf-neighbors in a centered grid starting at gridTop, appending them
-// to out.
+// placeLeaves (TB) lays a hub's leaf-neighbors row-major in a grid starting at gridTop, each row
+// centered horizontally on the hub's centerX, appending them to out.
 function placeLeaves(hub: Hub, centerX: number, gridTop: number, out: PositionedNode[]): void {
   const { cols } = hub.grid
   const rowWidth = (c: number) => c * NODE_WIDTH + (c - 1) * LEAF_GAP_X
@@ -442,6 +467,24 @@ function placeLeaves(hub: Hub, centerX: number, gridTop: number, out: Positioned
     const left = centerX - rowWidth(inRow) / 2
     const x = left + col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
     const y = gridTop + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
+    out.push({ ...leaf, x, y, width: NODE_WIDTH, height: NODE_HEIGHT })
+  })
+}
+
+// placeLeavesLR is the LR analog: leaves fill column-major (top-to-bottom, then the next column to
+// the right) starting at gridLeft, each column centered vertically on the hub's centerY. This makes
+// a hub's children read as a vertical stack that wraps into more columns rightward — the same shape
+// the eye expects from a left-to-right tree — instead of one tall single-file column.
+function placeLeavesLR(hub: Hub, gridLeft: number, centerY: number, out: PositionedNode[]): void {
+  const { rows } = hub.grid
+  const colHeight = (r: number) => r * NODE_HEIGHT + (r - 1) * LEAF_GAP_Y
+  hub.leaves.forEach((leaf, i) => {
+    const col = Math.floor(i / rows)
+    const row = i % rows
+    const inCol = Math.min(rows, hub.leaves.length - col * rows)
+    const top = centerY - colHeight(inCol) / 2
+    const x = gridLeft + col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
+    const y = top + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
     out.push({ ...leaf, x, y, width: NODE_WIDTH, height: NODE_HEIGHT })
   })
 }

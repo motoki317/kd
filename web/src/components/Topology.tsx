@@ -121,7 +121,13 @@ export default function Topology(props: Props) {
     // RBAC view (cycle 207): RoleBinding → Role is a "binds" arrow; subjects are listed inside
     // the binding card. LR keeps "binding → role" reading the way the relationship does.
     if (props.viewId === 'rbac') return layoutGraph(props.nodes, props.edges, 'LR')
-    return layoutGraph(props.nodes, props.edges)
+    // Ownership view (cycle 310): left-to-right like the other relationship views. A card is far
+    // wider than it is tall, so a parent's children read better stacked in a vertical column to the
+    // right (LR) than strung across a horizontal rank (TB), which wasted width and forced more
+    // zoom-out. High-fanout hubs (ReplicaSet→pods, Node→pods) still grid-wrap — the wrap is now
+    // orientation-aware (see layout.ts placeLeavesLR), so a 30-replica Deployment stays compact
+    // instead of becoming a 30-tall single-file column.
+    return layoutGraph(props.nodes, props.edges, 'LR')
   })
   // In the All view we draw a faint kind-label band above each kind box so the operator can
   // scan "this section is all Pods, that's all Services" without inferring it from card kinds.

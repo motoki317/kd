@@ -87,6 +87,37 @@ describe('layoutGraph', () => {
     expect(y('dep')).toBeLessThan(y('rs'))
     expect(y('rs')).toBeLessThan(y('p1'))
   })
+
+  it('lays parents left of their children in LR (Ownership view orientation, cycle 310)', () => {
+    const l = layoutGraph(nodes, edges, 'LR')
+    const x = (id: string) => l.nodes.find((n) => n.id === id)!.x
+    expect(x('dep')).toBeLessThan(x('rs'))
+    expect(x('rs')).toBeLessThan(x('p1'))
+    expect(x('rs')).toBeLessThan(x('p2'))
+  })
+
+  it('grid-wraps a high-fanout hub in LR into columns, not one tall single-file stack (cycle 310)', () => {
+    // A ReplicaSet owning 24 pods. In LR a naive layout stacks all 24 in one vertical rank
+    // (~24*NODE_HEIGHT ≈ 1900px tall); the orientation-aware wrap must break them into columns
+    // that grow rightward instead, keeping the block from becoming an unreadable tall ribbon.
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }
+    const pods: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 24; i++) {
+      pods.push({ id: `p${i}`, kind: 'Pod', name: `web-x-${i}`, health: 'Healthy' })
+      e.push({ from: 'rs', to: `p${i}`, type: 'ownerReference' })
+    }
+    const l = layoutGraph([rs, ...pods], e, 'LR')
+    expect(l.nodes).toHaveLength(25)
+    // Single-file would be ~24 rows tall; wrapping keeps it well under that.
+    expect(l.height).toBeLessThan(NODE_HEIGHT * 12)
+    // The pods sit to the RIGHT of their ReplicaSet (children flow rightward in LR).
+    const rsx = l.nodes.find((n) => n.id === 'rs')!.x
+    expect(pods.every((pod) => l.nodes.find((n) => n.id === pod.id)!.x > rsx)).toBe(true)
+    // No two cards share a center (no overlap).
+    const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
+    expect(seen.size).toBe(l.nodes.length)
+  })
 })
 
 describe('layoutGraphByKind', () => {
