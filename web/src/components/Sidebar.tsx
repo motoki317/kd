@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
-import { healthColor } from '../health'
+import { healthColor, healthSeverity } from '../health'
 import { compareNamespaces } from '../ns'
 
 interface Props {
@@ -34,7 +34,14 @@ export default function Sidebar(props: Props) {
       .slice()
       .sort(compareNamespaces)
   })
-  const troubled = createMemo(() => props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE && n.health !== 'Healthy').length)
+  // The red "needs attention" badge counts only namespaces that are actively not-OK — Degraded
+  // (broken) or Progressing (mid-rollout). Unknown (a CR/resource kd can't classify) and Suspended
+  // (intentionally off) are excluded: counting them turned a cluster full of harmless custom
+  // resources into a permanent red alarm (cycle 313, follows up the cycle-308 gray-dot fix). The
+  // troubled-first SORT below still floats every non-Healthy ns up — only the alarm count narrows.
+  const troubled = createMemo(
+    () => props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE && healthSeverity[n.health] >= healthSeverity.Progressing).length,
+  )
   // Index of the first healthy entry in the sorted list, so a divider can mark the transition
   // between "needs attention" and "fine"; -1 means no boundary (all troubled or all healthy).
   const dividerAt = createMemo(() => {

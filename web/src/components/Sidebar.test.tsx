@@ -49,6 +49,23 @@ describe('Sidebar', () => {
     expect(dots[dots.length - 1].style.background).toBe('var(--health-healthy)')
   })
 
+  it('counts only Degraded/Progressing in the "needs attention" badge, not Unknown/Suspended (cycle 313)', () => {
+    const mix: NamespaceInfo[] = [
+      { name: 'broken', health: 'Degraded', nonReady: 2 },
+      { name: 'rolling', health: 'Progressing', nonReady: 1 },
+      { name: 'crd-only', health: 'Unknown', nonReady: 4 }, // custom resources kd can't classify
+      { name: 'paused', health: 'Suspended', nonReady: 1 }, // intentionally off
+      { name: 'fine', health: 'Healthy' },
+    ]
+    const { container } = render(() => (
+      <Sidebar namespaces={mix} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // Only the Degraded + Progressing namespaces raise the alarm; Unknown/Suspended don't.
+    expect(container.querySelector('.ns-trouble')?.textContent).toBe('2')
+    // All four non-Healthy namespaces still sort above the divider (grouping is unchanged).
+    expect(container.querySelectorAll('.ns-divider').length).toBe(1)
+  })
+
   it('filters the list by name', async () => {
     const { container, getByPlaceholderText } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
