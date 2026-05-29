@@ -397,6 +397,15 @@ export default function Topology(props: Props) {
     return { scale: s, tx: rect.width / 2 - cx * s, ty: rect.height / 2 - cy * s }
   }
 
+  // selectionMaxScale lets a small selection zoom in close while a big subtree stays moderate. The
+  // fixed 1.6 cap (cycle 319 superseded) under-zoomed a lone card — fitting one 220×60 card could
+  // legitimately go to ~4x but capped at 1.6 it stayed small and lost in whitespace. The 1000/√area
+  // curve yields ~2.5 for a single card and tapers to the 1.4 floor as the framed area grows (big
+  // subtrees are viewport-limited below the cap anyway, so the floor never shrinks them).
+  function selectionMaxScale(w: number, h: number): number {
+    return Math.max(1.4, Math.min(2.5, 1000 / Math.sqrt(Math.max(1, w * h))))
+  }
+
   // Fit-all on namespace/view switch (big shape changes). Tracks a key so an SSE patch that
   // changes node positions slightly doesn't re-fit and yank the viewport away from where the user
   // panned. First mount is a snap (no animation); subsequent fits glide.
@@ -481,7 +490,7 @@ export default function Topology(props: Props) {
         // SVG, so the very first click frames against the visible canvas too (cycle 307).
         cancelAnimationFrame(selFitFrame)
         selFitFrame = requestAnimationFrame(() => {
-          const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
+          const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), selectionMaxScale(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)))
           animateTo(target)
         })
       },
@@ -617,7 +626,7 @@ export default function Topology(props: Props) {
       if (inSet.length > 0) {
         const xs = inSet.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
         const ys = inSet.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
-        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 1.6)
+        const target = computeFitFor(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), selectionMaxScale(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)))
         animateTo(target)
         return
       }
