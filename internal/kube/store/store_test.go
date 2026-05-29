@@ -14,6 +14,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/motoki317/kd/internal/kube/discovery"
 )
@@ -66,6 +67,20 @@ func node(name string) *unstructured.Unstructured {
 
 func deployment(namespace, name string) *unstructured.Unstructured {
 	return uns("apps/v1", "Deployment", namespace, name, "dep-"+name, nil)
+}
+
+// crd builds a minimal unstructured CustomResourceDefinition carrying the spec.group and
+// spec.names.plural that removeResourcesForCRD reads to find the GVR(s) to evict.
+func crd(group, plural string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apiextensions.k8s.io/v1",
+		"kind":       "CustomResourceDefinition",
+		"metadata":   map[string]any{"name": plural + "." + group},
+		"spec": map[string]any{
+			"group": group,
+			"names": map[string]any{"plural": plural},
+		},
+	}}
 }
 
 // startTestStore wires up a Cache against a fake dynamic client + a static discoverer that
@@ -266,6 +281,54 @@ func TestStoreKindShortNames(t *testing.T) {
 		if _, ok := got["Secret"]; ok {
 			t.Fatalf("iter %d: Secret should be omitted (no API short name), got %q", i, got["Secret"])
 		}
+	}
+}
+
+func TestStoreRemovesResourcesOnCRDDelete(t *testing.T) {
+	c := startTestStore(t)
+	hasResource := func(gvr schema.GroupVersionResource) bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		_, ok := c.resources[gvr]
+		return ok
+	}
+	// Simulate two CRD-backed resources the store discovered and is caching. Their indexers
+	// would keep serving last-known objects after the CRD is gone (the failing re-List never
+	// clears them), which is the ghost-node bug removeResourcesForCRD addresses.
+	widgets := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	gadgets := schema.GroupVersionResource{Group: "example.com", Version: "v2", Resource: "gadgets"}
+	c.mu.Lock()
+	c.resources[widgets] = Resource{GVR: widgets, Kind: "Widget", Namespaced: true}
+	c.resources[gadgets] = Resource{GVR: gadgets, Kind: "Gadget", Namespaced: true}
+	c.failedAt[widgets] = time.Now()
+	c.mu.Unlock()
+
+	// An unrelated CRD delete must not evict a live resource.
+	c.removeResourcesForCRD(crd("other.com", "things"))
+	if !hasResource(widgets) || !hasResource(gadgets) {
+		t.Fatalf("unrelated CRD delete evicted a live resource")
+	}
+
+	// Deleting the widgets CRD removes only widgets (matched by group+plural, version ignored)
+	// and clears its watch-error throttle; gadgets is untouched.
+	c.removeResourcesForCRD(crd("example.com", "widgets"))
+	if hasResource(widgets) {
+		t.Errorf("widgets GVR still present after its CRD was deleted")
+	}
+	if !hasResource(gadgets) {
+		t.Errorf("deleting the widgets CRD also evicted gadgets")
+	}
+	c.mu.Lock()
+	_, stillThrottled := c.failedAt[widgets]
+	c.mu.Unlock()
+	if stillThrottled {
+		t.Errorf("stale failedAt entry left for removed GVR")
+	}
+
+	// A tombstone (delivered when the watch missed the live delete) must be unwrapped, not ignored.
+	c.removeResourcesForCRD(cache.DeletedFinalStateUnknown{Key: "gadgets.example.com", Obj: crd("example.com", "gadgets")})
+	if hasResource(gadgets) {
+		t.Errorf("gadgets GVR still present after a tombstoned CRD delete")
 	}
 }
 

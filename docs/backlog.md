@@ -32,8 +32,6 @@ quick improvement-cycle item.
   may want field-selector informers or sharding; memory scales with object count.
 - **EndpointSlice-based `selects` edges.** Currently a label-selector match; EndpointSlice would be
   more accurate.
-- **Per-CRD informer stop on CRD removal.** The dynamic factory lacks per-informer stop in v1, so a
-  removed CRD leaves a silently-throttled dead watch.
 - **Component tests** (Vitest + `@solidjs/testing-library`) for Topology / DetailDrawer interactions —
   complements the pure-logic unit tests; would catch interaction regressions jsdom can partly cover.
 - **Last-Event-ID resume** on the SSE feed; exec/attach would use WebSocket (per the SSE ADR).
@@ -76,3 +74,11 @@ drawer Tab focus trap, log no-wrap toggle.
 **three** HTML buttons lacked a `:focus-visible` ring, not one (`.sidebar-retry`, `.event-source`,
 `.owner-chip`). All three now get a `2px var(--accent)` outline (chip-style buttons use `1px` offset to
 match `.kind-chip`/`.label-chip`). Live-verified the owner-chip ring under keyboard modality.
+
+**CRD-removal ghost cleanup (was "Per-CRD informer stop"):** deleting a CRD left its custom resources
+as ghost nodes in the topology + health rollups until restart — the reflector's failing re-List never
+clears the indexer, and `reconcile()` only ever *added* GVRs. Now the CRD informer's `DeleteFunc`
+evicts the matching GVR (by group+plural) from `c.resources` so snapshots skip it. Acts on the explicit
+delete event, **not** a discovery diff, because `Discover()` tolerates partial results (a flapping
+aggregated API would otherwise masquerade as a removed resource). The informer goroutine still leaks
+(client-go has no per-informer stop) — bounded at one per removed CRD, documented in code.

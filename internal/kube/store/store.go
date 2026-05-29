@@ -281,15 +281,21 @@ func (c *Cache) recordWatchErr(gvr schema.GroupVersionResource, err error) {
 	slog.Warn("store: watch error", "gvr", gvr.String(), "err", err)
 }
 
-// startCRDWatcher attaches an event handler to the CRD informer (if registered) and
-// rediscovers on add/delete. The reconcile reads ServerPreferredResources fresh and
-// registers any GVR not already in the cache. Removed CRDs are NOT explicitly stopped —
-// the dynamic factory has no per-informer stop; their watches will fail and be throttled
-// silently via recordWatchErr.
+// startCRDWatcher attaches an event handler to the CRD informer (if registered). An install
+// triggers a fresh discovery that registers the new GVR; a removal drops the GVR from the
+// cached resource set (see removeResourcesForCRD) so snapshots stop surfacing its objects.
 //
 // A burst of CRD installs (Helm chart with 30 CRDs) triggers many add events back-to-back.
 // Each is dispatched to triggerReconcile which coalesces via reconcileRunning/Pending so the
 // expensive discovery round-trip runs at most once per burst, off the informer goroutine.
+//
+// Deletes are handled directly rather than by rediscovering: the delete event names the gone
+// CRD precisely, whereas diffing a fresh discovery would be unsafe — Discover returns partial
+// results without error when an aggregated API is transiently down, so a flap could masquerade
+// as a removed resource and evict healthy GVRs. The removed CRD's underlying informer goroutine
+// is NOT stopped (the dynamic factory exposes no per-informer stop); it keeps retrying a watch
+// that 404s, throttled via recordWatchErr until process exit. That leak is bounded — one per
+// removed CRD — and acceptable; the user-visible ghost nodes are what removeResourcesForCRD fixes.
 func (c *Cache) startCRDWatcher(ctx context.Context) {
 	c.mu.Lock()
 	r, ok := c.resources[crdsGVR]
@@ -299,8 +305,40 @@ func (c *Cache) startCRDWatcher(ctx context.Context) {
 	}
 	_, _ = r.Informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(any) { c.triggerReconcile(ctx) },
-		DeleteFunc: func(any) { c.triggerReconcile(ctx) },
+		DeleteFunc: func(obj any) { c.removeResourcesForCRD(obj) },
 	})
+}
+
+// removeResourcesForCRD drops the cached informer entry for a just-deleted CustomResourceDefinition
+// so snapshots stop surfacing its custom resources as ghost nodes. When a CRD is deleted its API
+// endpoint disappears, but the reflector's now-failing re-List never clears the indexer, so the
+// last-known CRs would otherwise linger in the topology and namespace health rollups until kd
+// restarts. Snapshots iterate c.resources, so deleting the entry is enough to make the ghosts vanish.
+//
+// Matching is by group + plural (the resource name); the cached preferred version may differ from
+// any single CRD spec version, so version is not compared. Tombstones (DeletedFinalStateUnknown,
+// delivered when the watch missed the live delete) are unwrapped first.
+func (c *Cache) removeResourcesForCRD(obj any) {
+	if tomb, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tomb.Obj
+	}
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return
+	}
+	group, _, _ := unstructured.NestedString(u.Object, "spec", "group")
+	plural, _, _ := unstructured.NestedString(u.Object, "spec", "names", "plural")
+	if plural == "" {
+		return // not a CRD shape we recognize; nothing to remove
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for gvr := range c.resources {
+		if gvr.Group == group && gvr.Resource == plural {
+			delete(c.resources, gvr)
+			delete(c.failedAt, gvr) // drop the watch-error throttle so a re-install starts clean
+		}
+	}
 }
 
 // triggerReconcile starts a reconcile goroutine if none is running; otherwise it marks one
