@@ -2347,6 +2347,41 @@ button.event-source:hover {
   white-space: pre-wrap;
   word-break: break-all;
 }
+/* Per-line severity badge (cycle 322): a compact, fixed-width colored chip so an operator can scan
+   a busy stream for ERR/WRN at a glance. Only rendered for lines whose level was detected. */
+.log-level {
+  display: inline-block;
+  min-width: 3ch;
+  margin-right: 8px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.03em;
+  user-select: none;
+  vertical-align: baseline;
+  /* The log line uses word-break: break-all, which would otherwise stack the 3 badge letters
+     vertically; keep the short label on one line. */
+  white-space: nowrap;
+  word-break: keep-all;
+}
+.log-level-error {
+  color: #ff9b95;
+  background: color-mix(in srgb, var(--health-degraded) 30%, transparent);
+}
+.log-level-warn {
+  color: #f6c768;
+  background: color-mix(in srgb, var(--health-suspended) 26%, transparent);
+}
+.log-level-info {
+  color: #8fb6f0;
+  background: color-mix(in srgb, var(--health-progressing) 24%, transparent);
+}
+.log-level-debug {
+  color: #97a2b0;
+  background: rgba(255, 255, 255, 0.08);
+}
 /* Source-pod label for aggregated workload logs: a fixed-width column so the log text aligns. */
 .log-pod {
   display: inline-block;

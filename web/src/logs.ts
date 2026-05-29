@@ -1,5 +1,36 @@
 import type { LogEntry } from './api'
 
+// LogLevel is the normalized severity kd recognizes in a log line; fatal/panic fold into error and
+// trace into debug so the badge palette stays small.
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug'
+
+function classifyLevel(word: string): LogLevel {
+  const w = word.toLowerCase()
+  if (w === 'error' || w === 'err' || w === 'fatal' || w === 'panic') return 'error'
+  if (w === 'warn' || w === 'warning') return 'warn'
+  if (w === 'debug' || w === 'trace') return 'debug'
+  return 'info'
+}
+
+// parseLogLevel best-effort extracts a severity from the head of a log line so the viewer can show a
+// colored badge for error-first scanning. Deliberately CONSERVATIVE to avoid badging prose: it only
+// recognizes (1) klog/glog "E0521 …" prefixes, (2) an explicit structured field (level=warn,
+// "level":"error", severity=info), or (3) an UPPERCASE level token near the start ("<ts> ERROR …",
+// "[WARN]") — a lowercase "error" buried in a message is ignored. Returns null when unsure.
+export function parseLogLevel(line: string): LogLevel | null {
+  const head = line.slice(0, 64)
+  const klog = /^[EWIF]\d{4}\s/.exec(head)
+  if (klog) {
+    const c = head[0]
+    return c === 'E' || c === 'F' ? 'error' : c === 'W' ? 'warn' : 'info'
+  }
+  const kv = /\b(?:lvl|level|severity)"?\s*[:=]\s*"?(error|err|fatal|panic|warn|warning|info|debug|trace)\b/i.exec(head)
+  if (kv) return classifyLevel(kv[1])
+  const tok = /(?:^|[\s[(])(ERROR|ERR|FATAL|PANIC|WARN|WARNING|INFO|DEBUG|TRACE)(?:[\s\])]|:)/.exec(head)
+  if (tok) return classifyLevel(tok[1])
+  return null
+}
+
 // filterLogLines keeps only the lines whose text contains the query — the in-viewer "grep" for
 // finding an error in a busy stream. Case-insensitive by default (the common triage need); pass
 // caseSensitive to match exactly. An empty/whitespace query keeps every line, so the filter is off

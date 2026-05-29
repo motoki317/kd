@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines, splitByMatch } from './logs'
+import { filterLogLines, parseLogLevel, splitByMatch } from './logs'
 import type { LogEntry } from './api'
 
 const lines: LogEntry[] = [
@@ -36,6 +36,34 @@ describe('filterLogLines', () => {
     ])
     // Case-sensitive "ERROR" matches only the upper-case level line.
     expect(filterLogLines(lines, 'ERROR', true).map((l) => l.line)).toEqual(['ERROR failed to connect to db'])
+  })
+})
+
+describe('parseLogLevel', () => {
+  it('detects klog/glog single-letter prefixes', () => {
+    expect(parseLogLevel('E0521 12:00:00.123456   1 main.go:42] boom')).toBe('error')
+    expect(parseLogLevel('W0521 12:00:00.123456   1 main.go:42] careful')).toBe('warn')
+    expect(parseLogLevel('I0521 12:00:00.123456   1 main.go:42] hello')).toBe('info')
+    expect(parseLogLevel('F0521 12:00:00.123456   1 main.go:42] fatal')).toBe('error')
+  })
+  it('detects structured level fields (logfmt / json), case-insensitively', () => {
+    expect(parseLogLevel('ts=2026-05-21 level=warn msg="disk low"')).toBe('warn')
+    expect(parseLogLevel('{"level":"error","msg":"oops"}')).toBe('error')
+    expect(parseLogLevel('severity=DEBUG trace data')).toBe('debug')
+  })
+  it('detects an uppercase level token after a timestamp or in brackets', () => {
+    expect(parseLogLevel('2026-05-21T12:00:00Z ERROR failed to connect')).toBe('error')
+    expect(parseLogLevel('[WARN] retrying')).toBe('warn')
+    expect(parseLogLevel('12:00:00 INFO started')).toBe('info')
+  })
+  it('does NOT badge a lowercase level word buried in prose', () => {
+    expect(parseLogLevel('handled request, no error occurred')).toBeNull()
+    expect(parseLogLevel('starting server on :8080')).toBeNull()
+  })
+  it('folds fatal/panic into error and trace into debug', () => {
+    expect(parseLogLevel('FATAL boom')).toBe('error')
+    expect(parseLogLevel('level=panic msg=x')).toBe('error')
+    expect(parseLogLevel('TRACE entering fn')).toBe('debug')
   })
 })
 

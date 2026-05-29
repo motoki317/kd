@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
-import { filterLogLines, splitByMatch } from '../logs'
+import { filterLogLines, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -262,6 +262,11 @@ export default function LogViewer(props: Props) {
         <For each={visibleLines()}>
           {(l) => (
             <div class="log-line">
+              {/* Colored severity badge (cycle 322) for error-first scanning. Only shown when a
+                  level is confidently detected; plain lines stay badge-free. */}
+              <Show when={parseLogLevel(l.line)}>
+                {(lvl) => <span class={`log-level log-level-${lvl()}`}>{LEVEL_LABEL[lvl()]}</span>}
+              </Show>
               <Show when={props.aggregated}>
                 <span class="log-pod" style={{ color: podColor(l.pod) }} title={l.pod}>
                   {middleTruncate(l.pod, 20)}
@@ -318,6 +323,9 @@ export default function LogViewer(props: Props) {
     </div>
   )
 }
+
+// Compact, fixed-width labels for the per-line severity badge so the colored column stays aligned.
+const LEVEL_LABEL: Record<LogLevel, string> = { error: 'ERR', warn: 'WRN', info: 'INF', debug: 'DBG' }
 
 // podColor maps a pod name to a stable hue so interleaved lines from different pods are easy to
 // tell apart at a glance (the same pod is always the same color).
