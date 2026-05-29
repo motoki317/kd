@@ -171,7 +171,7 @@ export default function Sidebar(props: Props) {
                       <span
                         class="ns-count"
                         style={{ color: healthColor(c().health) }}
-                        title={`${c().nonReady} not healthy`}
+                        title={`${c().nonReady} non-ready · ${c().health}`}
                       >
                         {(c().nonReady ?? 0) > 99 ? '99+' : c().nonReady}
                       </span>
@@ -202,7 +202,7 @@ export default function Sidebar(props: Props) {
                       <span
                         class="ns-count"
                         style={{ color: healthColor(ns.health) }}
-                        title={`${ns.nonReady} not healthy`}
+                        title={`${ns.nonReady} non-ready · ${ns.health}`}
                       >
                         {(ns.nonReady ?? 0) > 99 ? '99+' : ns.nonReady}
                       </span>

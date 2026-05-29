@@ -66,6 +66,15 @@ describe('Sidebar', () => {
     expect(container.querySelectorAll('.ns-divider').length).toBe(1)
   })
 
+  it('names the health state in the ns-count tooltip (cycle 317)', () => {
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // The fixture's troubled ns sort first: zzz-broken (Degraded, 3), mmm (Progressing, 1).
+    const titles = [...container.querySelectorAll('.ns-count')].map((e) => e.getAttribute('title'))
+    expect(titles).toEqual(['3 non-ready · Degraded', '1 non-ready · Progressing'])
+  })
+
   it('filters the list by name', async () => {
     const { container, getByPlaceholderText } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
