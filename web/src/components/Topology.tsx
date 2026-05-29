@@ -367,6 +367,11 @@ export default function Topology(props: Props) {
   let startY = 0
   let lastX = 0
   let lastY = 0
+  // Pointer velocity (px/ms), EMA-smoothed across recent moves, for the flick-to-coast momentum on
+  // drag release (cycle 339/R10).
+  let vx = 0
+  let vy = 0
+  let lastMoveT = 0
 
   // Smoothly animate viewport (tx/ty/scale) to a target over ~360ms with easeOutCubic.
   // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
@@ -582,6 +587,9 @@ export default function Topology(props: Props) {
     dragging = false
     startX = lastX = e.clientX
     startY = lastY = e.clientY
+    vx = vy = 0
+    lastMoveT = performance.now()
+    cancelAnimationFrame(animFrame) // grabbing the canvas stops any in-flight coast
   }
   function onPointerMove(e: PointerEvent) {
     if (!pointerDown) return
@@ -596,9 +604,41 @@ export default function Topology(props: Props) {
     if (dragging) {
       setTx(tx() + (e.clientX - lastX))
       setTy(ty() + (e.clientY - lastY))
+      // EMA-smooth the instantaneous velocity so one jittery sample doesn't dominate the flick.
+      const now = performance.now()
+      const dt = Math.max(1, now - lastMoveT)
+      vx = 0.6 * vx + 0.4 * ((e.clientX - lastX) / dt)
+      vy = 0.6 * vy + 0.4 * ((e.clientY - lastY) / dt)
+      lastMoveT = now
     }
     lastX = e.clientX
     lastY = e.clientY
+  }
+  // Coast the canvas after a flick, decaying velocity until it's negligible (cycle 339/R10). Gives the
+  // pan a physical "throw it and let it settle" feel instead of stopping dead. clampTranslate still
+  // arrests each axis at the layout edge, so momentum can't fling the graph out of view.
+  function startMomentum() {
+    // Cap the launch speed so an extreme flick can't fling the canvas across the screen — coasting
+    // should feel like a throw, not a loss of control.
+    vx = Math.max(-2.5, Math.min(2.5, vx))
+    vy = Math.max(-2.5, Math.min(2.5, vy))
+    let lastT = performance.now()
+    const tick = (now: number) => {
+      const dt = Math.min(40, now - lastT)
+      lastT = now
+      const decay = Math.exp(-dt * 0.008) // ~halve the speed every ~85ms → settles in well under a second
+      vx *= decay
+      vy *= decay
+      const nx = tx() + vx * dt
+      const ny = ty() + vy * dt
+      const c = clampTranslate(nx, ny)
+      setTx(c.tx)
+      setTy(c.ty)
+      if (c.tx !== nx) vx = 0 // hit the horizontal edge — stop that axis
+      if (c.ty !== ny) vy = 0
+      if (Math.hypot(vx, vy) > 0.015) animFrame = requestAnimationFrame(tick)
+    }
+    animFrame = requestAnimationFrame(tick)
   }
   function onPointerUp(e: PointerEvent) {
     const wasDragging = dragging
@@ -609,8 +649,14 @@ export default function Topology(props: Props) {
     } catch {
       /* not captured */
     }
-    // After a drag, glide the canvas back into bounds if it was flung past the edge (cycle 316).
+    // After a drag: a fast release coasts (momentum, cycle 339/R10); a slow one just glides back into
+    // bounds if it ended past the edge (cycle 316). 0.4 px/ms ≈ 400 px/s — above a deliberate flick,
+    // below an ordinary reposition, so a careful drag still stops exactly where released.
     if (wasDragging) {
+      if (Math.hypot(vx, vy) > 0.4) {
+        startMomentum()
+        return
+      }
       const c = clampTranslate(tx(), ty())
       if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
       return
