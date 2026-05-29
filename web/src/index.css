@@ -1287,6 +1287,19 @@ button.conn.conn-retry:focus-visible {
   stroke: var(--accent);
   stroke-width: 2.5;
 }
+/* Edge-hover endpoint halo (cycle 330/R4): an accent ring + glow distinct from the resting health
+   tint, so hovering an edge makes "these two cards" pop even when they're far apart. Transient, so it
+   sits below .selected in the cascade and a selected endpoint keeps its selection look. */
+.node.target .node-bg {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 50%, transparent));
+}
+/* The wide transparent companion path is the hover target; the visible line stays thin. pointer-events
+   on the stroke band only — the fill is none, so this never blocks clicks inside the (empty) loop. */
+.edge-hit {
+  pointer-events: stroke;
+}
 /* Top-of-card glaze (cycle 163): a faint linear-fade rect that mimics a soft inset highlight on
    the upper edge — gives cards a tactile "tile" feel. Strong-but-faint over the surface; transparent
    on the bottom so it only reads at the top. SVG can't do linear-gradient via attribute, but we can

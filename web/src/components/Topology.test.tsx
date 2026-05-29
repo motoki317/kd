@@ -418,6 +418,20 @@ describe('Topology', () => {
     expect(faded(container)).toBe(1) // api-xyz is faded
   })
 
+  // Edge-hover endpoint halo (cycle 330/R4): hovering an edge marks both its endpoint cards .target.
+  it('halos both endpoint cards while an edge is hovered', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const edgeG = container.querySelector('.edges > g') as SVGGElement
+    expect(edgeG).toBeTruthy()
+    expect(container.querySelectorAll('.node.target').length).toBe(0)
+    fireEvent.pointerEnter(edgeG)
+    // The lone edge connects nodes '1' and '2', so exactly those two cards light up.
+    const lit = [...container.querySelectorAll('.node.target')]
+    expect(lit.length).toBe(2)
+    fireEvent.pointerLeave(edgeG)
+    expect(container.querySelectorAll('.node.target').length).toBe(0)
+  })
+
   // Keyboard zoom (cycle 329/R3). The handler lives on window keydown; reads the viewport transform's
   // scale factor off the root <g>. '0' resets to exactly 1× regardless of the prior scale.
   it('zooms with = / - / 0 keys', () => {

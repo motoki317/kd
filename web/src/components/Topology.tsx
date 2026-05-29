@@ -352,6 +352,14 @@ export default function Topology(props: Props) {
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
   const [ty, setTy] = createSignal(0)
+  // Endpoints of the edge currently under the pointer (cycle 330/R4): in a dense graph an edge's two
+  // cards can be far apart or buried, so hovering the edge halos both ends to answer "what does this
+  // connect?" without selecting. Null when no edge is hovered.
+  const [hoverEnds, setHoverEnds] = createSignal<{ from: string; to: string } | null>(null)
+  const edgeEndpoint = (id: string) => {
+    const h = hoverEnds()
+    return !!h && (h.from === id || h.to === id)
+  }
   let svg: SVGSVGElement | undefined
   let pointerDown = false
   let dragging = false
@@ -984,11 +992,16 @@ export default function Topology(props: Props) {
           <g class="edges">
             <For each={layout().edges}>
               {(e) => (
-                <g>
-                  {/* <title> on the path makes hover reveal the relationship type. Wrap in <g>
-                      so a future hover affordance (highlight on hover, click-to-select endpoints)
-                      can hang off the same element without churning this tree. */}
+                <g
+                  // Hovering anywhere on the edge halos both endpoint cards (cycle 330/R4). The hit
+                  // target is the wide transparent companion path below, since the visible 1-2px line
+                  // is nearly impossible to hover in a dense graph.
+                  onPointerEnter={() => setHoverEnds({ from: e.from, to: e.to })}
+                  onPointerLeave={() => setHoverEnds(null)}
+                >
+                  {/* <title> on the path makes hover reveal the relationship type. */}
                   <title>{edgeTitle(e, props.nodes)}</title>
+                  <path class="edge-hit" d={edgePath(e.points)} fill="none" stroke="transparent" stroke-width="10" />
                   <path
                     classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e), owner: e.type === 'ownerReference' }}
                     d={edgePath(e.points)}
@@ -1012,6 +1025,8 @@ export default function Topology(props: Props) {
                   classList={{
                     selected: n.id === props.selectedId,
                     faded: nodeFaded(n),
+                    // Endpoint of the hovered edge (cycle 330/R4): a transient accent halo.
+                    target: edgeEndpoint(n.id),
                     exiting: exitingIds().has(n.id),
                     [`h-${n.health.toLowerCase()}`]: true,
                     // Pod kind gets a CSS hook for the accent treatment (cycle 202): pods are the
