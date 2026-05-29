@@ -161,6 +161,9 @@ export default function App() {
   // polled list — keeping the sidebar from briefly flipping a degraded ns to healthy on click
   // just because the current view (e.g. ownership) doesn't include the unhealthy resource.
   const [liveSummary, setLiveSummary] = createSignal<NamespaceSummary | null>(null)
+  // Bumped on a programmatic jump to a namespace (first-load auto-pick, Alt+T) so the sidebar can
+  // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
+  const [nsFlash, setNsFlash] = createSignal(0)
 
   // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
   // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
@@ -168,7 +171,10 @@ export default function App() {
   createEffect(() => {
     const list = namespaceList()
     if (list.length === 0) return
-    if (!list.some((n) => n.name === namespace())) setNamespace(mostTroubled(list)!.name)
+    if (!list.some((n) => n.name === namespace())) {
+      setNamespace(mostTroubled(list)!.name)
+      setNsFlash((t) => t + 1)
+    }
   })
 
   // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
@@ -253,6 +259,7 @@ export default function App() {
         if (worst && worst.health !== 'Healthy') {
           e.preventDefault()
           setNamespace(worst.name)
+          setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
         }
         return
       }
@@ -590,6 +597,7 @@ export default function App() {
           failed={!!namespaces.error}
           filterRef={(el) => (filterEl = el)}
           onRetry={() => refetchNamespaces()}
+          flash={nsFlash()}
         />
         <main class="main">
           <Topology

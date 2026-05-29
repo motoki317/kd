@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSignal } from 'solid-js'
 import Sidebar from './Sidebar'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 
@@ -207,5 +208,20 @@ describe('Sidebar', () => {
       <Sidebar namespaces={allTroubled} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
     expect(troubled.container.querySelectorAll('.ns-divider').length).toBe(0)
+  })
+
+  // A programmatic jump (Alt+T / first-load) bumps the flash tick; the selected row pulses so the
+  // landing is visible even when 'nearest' scrolling didn't move anything (cycle 332/R5).
+  it('flashes the selected row when the flash tick changes', async () => {
+    const [flash, setFlash] = createSignal(0)
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected="zzz-broken" onSelect={noop} loading={false} failed={false} flash={flash()} />
+    ))
+    const active = () => container.querySelector('.ns-list button.active')
+    expect(active()?.textContent).toContain('zzz-broken') // sanity: the right row is active
+    expect(active()?.classList.contains('ns-flash')).toBe(false)
+    setFlash(1)
+    await Promise.resolve() // flush the queueMicrotask the flash effect schedules
+    expect(active()?.classList.contains('ns-flash')).toBe(true)
   })
 })

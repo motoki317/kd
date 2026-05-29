@@ -14,6 +14,10 @@ interface Props {
   // Lets the failure state offer a retry button — optional so a caller that hides the
   // namespaces list outright (or has no refresh handler) still works.
   onRetry?: () => void
+  // Monotonic tick bumped by the app on a programmatic "jump to namespace" (Alt+T, first-load
+  // auto-select). Each change flashes the now-selected row so the eye finds where the jump landed —
+  // a plain selection (a click the operator made themselves) doesn't pulse, since they know where it is.
+  flash?: number
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
@@ -63,6 +67,28 @@ export default function Sidebar(props: Props) {
         const el = listRef.querySelector('.active') as HTMLElement | null
         el?.scrollIntoView({ block: 'nearest' })
       },
+    ),
+  )
+  // Flash the selected row on a programmatic jump (cycle 330/R5). 'nearest' scrolling above stays
+  // silent when the row is already visible, so without this an Alt+T jump can land with no visible
+  // change. Deferred to a microtask so the .active class for the new selection has been committed
+  // before we look it up; remove/reflow/add restarts the CSS animation when the same row re-flashes.
+  createEffect(
+    on(
+      () => props.flash,
+      () => {
+        if (!listRef) return
+        queueMicrotask(() => {
+          const el = listRef?.querySelector('.active') as HTMLElement | null
+          if (!el) return
+          el.scrollIntoView({ block: 'nearest' })
+          el.classList.remove('ns-flash')
+          void el.offsetWidth
+          el.classList.add('ns-flash')
+          el.addEventListener('animationend', () => el.classList.remove('ns-flash'), { once: true })
+        })
+      },
+      { defer: true },
     ),
   )
 
