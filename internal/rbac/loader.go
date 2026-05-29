@@ -27,27 +27,30 @@ type fileReloader struct {
 	defaultRole string
 	enforcer    *Enforcer
 	lastSum     [sha256.Size]byte
-	loaded      bool
+	seen        bool // whether lastSum holds the content of a prior attempt (valid or malformed)
 }
 
-// reloadIfChanged reloads the policy iff the file content differs from the last load. It
-// reports whether a reload happened. A parse error leaves the current policy in place.
+// reloadIfChanged reloads the policy iff the file content differs from the last content seen. It
+// reports whether a successful reload happened. lastSum advances on every attempt — including a
+// failed parse — so an unchanged malformed file is parsed (and its error surfaced) exactly once
+// rather than on every poll; only a genuine content change re-triggers a parse. A parse error
+// leaves the current policy in place.
 func (fr *fileReloader) reloadIfChanged() (bool, error) {
 	data, err := os.ReadFile(fr.path)
 	if err != nil {
 		return false, fmt.Errorf("rbac: read policy file: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	if fr.loaded && sum == fr.lastSum {
+	if fr.seen && sum == fr.lastSum {
 		return false, nil
 	}
+	fr.seen = true
+	fr.lastSum = sum
 	policy, err := Parse(string(data), fr.defaultRole)
 	if err != nil {
 		return false, fmt.Errorf("rbac: parse policy file: %w", err)
 	}
 	fr.enforcer.Replace(policy)
-	fr.lastSum = sum
-	fr.loaded = true
 	return true, nil
 }
 

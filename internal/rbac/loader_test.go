@@ -82,3 +82,50 @@ func TestReloadIfChanged(t *testing.T) {
 		t.Error("expected bob allowed after policy replaced")
 	}
 }
+
+func TestReloadSkipsUnchangedMalformedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "policy.csv")
+	if err := os.WriteFile(path, []byte("p, alice, default, pods, get, allow\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := mustEnforcer(t, "", "")
+	fr := &fileReloader{path: path, defaultRole: "", enforcer: e}
+
+	if changed, err := fr.reloadIfChanged(); err != nil || !changed {
+		t.Fatalf("first reload: changed=%v err=%v", changed, err)
+	}
+
+	// Corrupt the file. The first poll after the change parses it, fails, and reports the error
+	// once; the last-good policy stays active (Replace is not called on error).
+	if err := os.WriteFile(path, []byte("not a valid policy line\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := fr.reloadIfChanged()
+	if err == nil {
+		t.Fatal("expected a parse error on the malformed file")
+	}
+	if changed {
+		t.Error("a malformed file must not report a successful reload")
+	}
+	if !e.Enforce("alice", nil, "default", "pods", "get") {
+		t.Error("the last-good policy should remain active after a parse error")
+	}
+
+	// The fixed bug: a later poll of the SAME malformed content must be treated as unchanged, not
+	// re-parsed and re-errored every interval (which previously spammed the logs every poll).
+	if changed, err := fr.reloadIfChanged(); changed || err != nil {
+		t.Errorf("unchanged malformed file should be skipped, got changed=%v err=%v", changed, err)
+	}
+
+	// Fixing the file (new valid content) must re-trigger a successful reload.
+	if err := os.WriteFile(path, []byte("p, bob, default, pods, get, allow\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err = fr.reloadIfChanged()
+	if err != nil || !changed {
+		t.Fatalf("reload after fix: changed=%v err=%v", changed, err)
+	}
+	if !e.Enforce("bob", nil, "default", "pods", "get") {
+		t.Error("expected bob allowed after the fixed policy loaded")
+	}
+}
