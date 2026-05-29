@@ -825,6 +825,10 @@ button.conn.conn-retry:focus-visible {
   color: var(--text);
   background: var(--surface-2);
 }
+.sidebar-retry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Main + topology */
 .main {
@@ -1587,6 +1591,10 @@ button.drawer-host:hover {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
 }
+.owner-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .owner-arrow {
   font-size: 12px;
   line-height: 1;
@@ -2150,6 +2158,10 @@ button.event-source:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+button.event-source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .event-message {
   font-size: 12px;

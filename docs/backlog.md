@@ -18,9 +18,7 @@ feature area, not from re-surveying these five areas. Don't grind filler cycles 
 
 ## Open
 
-| id | area | value/effort | status | evidence | proposal |
-|---|---|---|---|---|---|
-| B-001 | sidebar / a11y | low / 3 lines | `real` (low-value) | `web/src/index.css` `.sidebar-retry` (~L810–827) | Add a `:focus-visible` ring — it's the lone interactive button without one (28 others have it; WCAG 2.4.7). Only reachable in the rare "couldn't load namespaces" error state. Fold into a future a11y sweep, not a standalone cycle: `.sidebar-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }` |
+_(empty — the actionable queue is drained. Remaining work is in Future / larger work below, each deferred with a verified rationale.)_
 
 ## Future / larger work (not yet scheduled)
 
@@ -73,3 +71,8 @@ why" is the **git log** (`git log --oneline`). Headlines: per-level & per-pod lo
 zoom (`=`/`-`/`0`), edge-hover endpoint halo, troubled-namespace jump pulse, jump-to-error (`Shift+E`),
 help-overlay shortcut docs, aria-live match count, `boundingBox`/`fitNodeSet` refactor, pan momentum,
 drawer Tab focus trap, log no-wrap toggle.
+
+**A11y focus-ring sweep (supersedes B-001):** a full `cursor:pointer` audit found B-001 undercounted —
+**three** HTML buttons lacked a `:focus-visible` ring, not one (`.sidebar-retry`, `.event-source`,
+`.owner-chip`). All three now get a `2px var(--accent)` outline (chip-style buttons use `1px` offset to
+match `.kind-chip`/`.label-chip`). Live-verified the owner-chip ring under keyboard modality.
