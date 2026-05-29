@@ -258,7 +258,7 @@ export default function LogViewer(props: Props) {
           </Show>
         </span>
       </div>
-      <pre ref={pre} class="logs-body" onScroll={onScroll}>
+      <pre ref={pre} class="logs-body" onScroll={onScroll} tabindex="0">
         <For each={visibleLines()}>
           {(l) => (
             <div

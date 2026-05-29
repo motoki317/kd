@@ -52,6 +52,14 @@ describe('LogViewer', () => {
     expect(container.querySelector('.logs-ts')?.textContent).toContain('timestamps')
   })
 
+  // The scroll region is a tab stop so keyboard users can focus and arrow-scroll it (Firefox doesn't
+  // auto-focus scrollable regions like Chrome), and so the expanded-drawer focus trap (cycle 326)
+  // counts it as a boundary instead of letting Tab fall through to the canvas behind.
+  it('makes the log scroll region keyboard-focusable', () => {
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
+    expect(container.querySelector('pre.logs-body')?.getAttribute('tabindex')).toBe('0')
+  })
+
   it('hides the line filter until there are log lines', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     // No lines stream from the stub, so the filter input should not be shown.

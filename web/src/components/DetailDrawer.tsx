@@ -205,10 +205,41 @@ export default function DetailDrawer(props: Props) {
     onCleanup(() => clearInterval(t))
   })
 
+  // Focus trap (cycle 326): expanded mode covers the topology, but the canvas controls (search, kind
+  // chips, Fit) stay in the DOM and tabbable — Shift+Tab from the drawer's first control would land
+  // on a button hidden behind the panel. While expanded, wrap Tab at the drawer's focusable
+  // boundaries so keyboard focus can't escape to the obscured canvas. offsetParent filtering drops
+  // controls in inactive (display:none) tab panels; the handler no-ops in compact mode.
+  let asideEl: HTMLElement | undefined
+  const onDrawerKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab' || !expanded() || !asideEl) return
+    const focusable = [
+      ...asideEl.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter((el) => el.offsetParent !== null)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <Show when={displayNode()}>
       {(node) => (
-        <aside class="drawer" classList={{ exiting: exiting(), expanded: expanded() }}>
+        <aside
+          ref={asideEl}
+          class="drawer"
+          classList={{ exiting: exiting(), expanded: expanded() }}
+          onKeyDown={onDrawerKeyDown}
+        >
           <header class="drawer-header">
             <ResourceSummary
               node={node()}
@@ -456,7 +487,7 @@ export default function DetailDrawer(props: Props) {
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               {/* detail() throws if the fetch errored, so check detail.error before reading it. */}
               <Show when={!detail.error && detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
-                <pre class="manifest" ref={manifestPre}>
+                <pre class="manifest" ref={manifestPre} tabindex="0">
                   <Show when={manifestQuery()} fallback={detail()}>
                     {(() => {
                       // Per-segment render: each match gets a sequential index so the "current"
