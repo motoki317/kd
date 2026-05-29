@@ -27,6 +27,16 @@ describe('filterLogLines', () => {
   it('returns nothing when no line matches', () => {
     expect(filterLogLines(lines, 'timeout')).toEqual([])
   })
+
+  it('matches case-sensitively when asked (cycle 321)', () => {
+    // Case-insensitive "ERROR" matches both the upper-case level and the prose "error".
+    expect(filterLogLines(lines, 'ERROR', false).map((l) => l.line)).toEqual([
+      'ERROR failed to connect to db',
+      'error: retrying connection',
+    ])
+    // Case-sensitive "ERROR" matches only the upper-case level line.
+    expect(filterLogLines(lines, 'ERROR', true).map((l) => l.line)).toEqual(['ERROR failed to connect to db'])
+  })
 })
 
 describe('splitByMatch', () => {
@@ -45,6 +55,13 @@ describe('splitByMatch', () => {
 
   it('handles a query that does not appear in the line', () => {
     expect(splitByMatch('hello world', 'xyz')).toEqual([{ text: 'hello world', match: false }])
+  })
+
+  it('highlights case-sensitively when asked, skipping differently-cased text (cycle 321)', () => {
+    expect(splitByMatch('connect to DB and ConneCT again', 'connect', true)).toEqual([
+      { text: 'connect', match: true },
+      { text: ' to DB and ConneCT again', match: false },
+    ])
   })
 
   it('preserves consecutive matches without empty segments between them', () => {

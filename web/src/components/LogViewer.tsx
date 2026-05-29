@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
+import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { filterLogLines, splitByMatch } from '../logs'
@@ -42,10 +42,14 @@ export default function LogViewer(props: Props) {
   const [previous, setPrevious] = createSignal(false)
   // Client-side line filter ("grep"): hide lines not containing this substring.
   const [filter, setFilter] = createSignal('')
+  // Case-sensitive matching for the filter (off by default — most triage is case-insensitive, but
+  // an exact match disambiguates e.g. "ERROR" the level from "error" in prose). (cycle 321)
+  const [caseSensitive, setCaseSensitive] = createSignal(false)
   // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
   const [timestamps, setTimestamps] = createSignal(false)
-  const visibleLines = createMemo(() => filterLogLines(lines(), filter()))
+  const visibleLines = createMemo(() => filterLogLines(lines(), filter(), caseSensitive()))
   let pre: HTMLPreElement | undefined
+  let filterInput: HTMLInputElement | undefined
 
   // A single pod that isn't Running can't produce logs yet, so an error there is "no logs" not a drop.
   const gentle = createMemo(() => !props.aggregated && !(props.status ?? '').startsWith('Running'))
@@ -90,6 +94,7 @@ export default function LogViewer(props: Props) {
         setContainer(props.containers[0] ?? '')
         setPrevious(false)
         setFilter('')
+        setCaseSensitive(false)
       },
     ),
   )
@@ -148,6 +153,21 @@ export default function LogViewer(props: Props) {
     ),
   )
 
+  // Cmd/Ctrl+F focuses the in-viewer filter (the log "find"), overriding the browser's page find —
+  // which is useless against a virtualized/streaming buffer anyway. Scoped to when the Logs tab is
+  // actually showing so it doesn't hijack find elsewhere (cycle 321).
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || (e.key !== 'f' && e.key !== 'F')) return
+      if (props.visible === false || !filterInput) return
+      e.preventDefault()
+      filterInput.focus()
+      filterInput.select()
+    }
+    window.addEventListener('keydown', onKey)
+    onCleanup(() => window.removeEventListener('keydown', onKey))
+  })
+
   return (
     <div class="logs">
       <div class="logs-header">
@@ -179,8 +199,9 @@ export default function LogViewer(props: Props) {
         </button>
         <Show when={lines().length > 0 || filter()}>
           <input
+            ref={filterInput}
             class="logs-filter"
-            placeholder="filter…"
+            placeholder="filter…  ( ⌘F )"
             aria-label="Filter log lines"
             value={filter()}
             onInput={(e) => setFilter(e.currentTarget.value)}
@@ -192,6 +213,16 @@ export default function LogViewer(props: Props) {
               }
             }}
           />
+          {/* Case-sensitivity toggle for the filter, styled like the previous/timestamps chips. */}
+          <button
+            class="logs-case"
+            classList={{ active: caseSensitive() }}
+            aria-pressed={caseSensitive()}
+            onClick={() => setCaseSensitive((c) => !c)}
+            title="Match case"
+          >
+            Aa
+          </button>
         </Show>
         <span class="logs-right">
           <Show when={filter()}>
@@ -247,7 +278,7 @@ export default function LogViewer(props: Props) {
               <Show
                 when={hasAnsi(l.line)}
                 fallback={
-                  <For each={splitByMatch(l.line, filter())}>
+                  <For each={splitByMatch(l.line, filter(), caseSensitive())}>
                     {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
                   </For>
                 }
@@ -255,7 +286,7 @@ export default function LogViewer(props: Props) {
                 <For each={parseAnsi(l.line)}>
                   {(seg) => (
                     <span style={ansiStyleToCss(seg.style)}>
-                      <For each={splitByMatch(seg.text, filter())}>
+                      <For each={splitByMatch(seg.text, filter(), caseSensitive())}>
                         {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
                       </For>
                     </span>

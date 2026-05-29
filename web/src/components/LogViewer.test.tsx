@@ -115,7 +115,7 @@ describe('LogViewer', () => {
     ))
     eventSources[0].emit('log', { line: 'ERROR connect to db ConneCT again' })
     // The filter input only appears once at least one line is in. findByPlaceholderText waits for it.
-    const filter = (await findByPlaceholderText('filter…')) as HTMLInputElement
+    const filter = (await findByPlaceholderText(/filter…/)) as HTMLInputElement
     filter.value = 'connect'
     filter.dispatchEvent(new Event('input', { bubbles: true }))
     // Both "connect" and "ConneCT" hit the case-insensitive query.

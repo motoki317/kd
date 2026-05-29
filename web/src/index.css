@@ -2268,7 +2268,8 @@ button.event-source:hover {
   cursor: pointer;
 }
 .logs-prev,
-.logs-ts {
+.logs-ts,
+.logs-case {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
@@ -2281,23 +2282,27 @@ button.event-source:hover {
   transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
 .logs-prev:hover,
-.logs-ts:hover {
+.logs-ts:hover,
+.logs-case:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }
 .logs-prev.active,
-.logs-ts.active {
+.logs-ts.active,
+.logs-case.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 .logs-prev:focus-visible,
-.logs-ts:focus-visible {
+.logs-ts:focus-visible,
+.logs-case:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .logs-prev.active:hover,
-.logs-ts.active:hover {
+.logs-ts.active:hover,
+.logs-case.active:hover {
   color: #fff;
   background: color-mix(in srgb, var(--accent) 90%, white);
   border-color: color-mix(in srgb, var(--accent) 90%, white);
