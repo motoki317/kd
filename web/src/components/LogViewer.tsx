@@ -71,7 +71,39 @@ export default function LogViewer(props: Props) {
       localStorage.setItem('kd:logsHideLevels', [...next].join(','))
       return next
     })
-  const visibleLines = createMemo(() => filterLogLines(lines(), filter(), caseSensitive(), hiddenLevels()))
+  // Per-pod filtering for aggregated workload streams (cycle 328/R2): an aggregated Deployment/
+  // DaemonSet/Job view interleaves lines from every descendant pod, so isolating one misbehaving
+  // replica meant typing its pod-hash into the filter. hiddenPods is the set to suppress. NOT
+  // persisted — pod names are specific to the current rollout and churn on restart, so it resets when
+  // the resource changes (see the on(props.name) effect).
+  const [hiddenPods, setHiddenPods] = createSignal<Set<string>>(new Set<string>())
+  // Pods seen in the current buffer, sorted for a stable chip order. Only computed for aggregated
+  // streams; a single pod has nothing to toggle.
+  const presentPods = createMemo(() => {
+    if (!props.aggregated) return [] as string[]
+    const seen = new Set<string>()
+    for (const l of lines()) if (l.pod) seen.add(l.pod)
+    return [...seen].sort()
+  })
+  const togglePod = (pod: string) =>
+    setHiddenPods((prev) => {
+      const next = new Set(prev)
+      next.has(pod) ? next.delete(pod) : next.add(pod)
+      return next
+    })
+  // Shift-click solos a pod (show only it); shift-clicking the already-soloed pod clears the filter.
+  // Mirrors the topology kind-chip solo so the gesture is consistent across the app.
+  const soloPod = (pod: string) =>
+    setHiddenPods((prev) => {
+      const others = presentPods().filter((p) => p !== pod)
+      const alreadySolo = prev.size === others.length && others.every((p) => prev.has(p))
+      return alreadySolo ? new Set<string>() : new Set(others)
+    })
+  const visibleLines = createMemo(() => {
+    const hp = hiddenPods()
+    const base = hp.size ? lines().filter((l) => !hp.has(l.pod)) : lines()
+    return filterLogLines(base, filter(), caseSensitive(), hiddenLevels())
+  })
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
@@ -119,6 +151,7 @@ export default function LogViewer(props: Props) {
         setPrevious(false)
         setFilter('')
         setCaseSensitive(false)
+        setHiddenPods(new Set<string>())
       },
     ),
   )
@@ -311,6 +344,27 @@ export default function LogViewer(props: Props) {
           </Show>
         </span>
       </div>
+      {/* Per-pod toggles for aggregated streams (cycle 328/R2): one chip per pod present, colored with
+          the same hue as that pod's inline label so the connection is obvious. Click hides/shows a pod;
+          shift-click solos it. Only shown when more than one pod is interleaved. */}
+      <Show when={presentPods().length > 1}>
+        <div class="logs-pods" role="group" aria-label="Filter by pod">
+          <For each={presentPods()}>
+            {(pod) => (
+              <button
+                class="logs-pod-chip"
+                classList={{ off: hiddenPods().has(pod) }}
+                aria-pressed={!hiddenPods().has(pod)}
+                title={`${pod}\n${hiddenPods().has(pod) ? 'click to show' : 'click to hide'} · shift-click to show only this pod`}
+                onClick={(e) => (e.shiftKey ? soloPod(pod) : togglePod(pod))}
+              >
+                <span class="logs-pod-dot" style={{ background: podColor(pod) }} />
+                {middleTruncate(pod, 22)}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
       <pre ref={pre} class="logs-body" classList={{ 'no-wrap': !wrap() }} onScroll={onScroll} tabindex="0">
         <For each={visibleLines()}>
           {(l) => (

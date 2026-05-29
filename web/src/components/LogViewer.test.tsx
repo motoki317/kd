@@ -132,6 +132,36 @@ describe('LogViewer', () => {
     expect(container.querySelector('.logs-jump-count')?.textContent).toBe('3')
   })
 
+  // Aggregated workload streams interleave several pods; per-pod chips let an operator isolate one
+  // replica without typing its pod-hash into the filter (cycle 329). Single-pod views have no chips.
+  it('offers per-pod toggles for an aggregated stream and hides a pod when clicked', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" namespace="shop" kind="Deployment" name="web" aggregated={true} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { pod: 'web-aaa', line: 'from aaa' })
+    es.emit('log', { pod: 'web-bbb', line: 'from bbb' })
+    await findByText('from aaa')
+    await findByText('from bbb')
+    const chips = [...container.querySelectorAll('.logs-pod-chip')] as HTMLButtonElement[]
+    expect(chips.length).toBe(2)
+    const aaa = chips.find((c) => c.textContent?.includes('web-aaa'))!
+    aaa.click()
+    const body = container.querySelector('pre.logs-body')!
+    expect(body.textContent).not.toContain('from aaa')
+    expect(body.textContent).toContain('from bbb')
+    expect(aaa.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('shows no per-pod chips for a single-pod (non-aggregated) stream', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    eventSources[0].emit('log', { pod: 'web-1', line: 'solo line' })
+    await findByText('solo line')
+    expect(container.querySelectorAll('.logs-pod-chip').length).toBe(0)
+  })
+
   it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
     const { container, findByPlaceholderText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

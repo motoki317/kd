@@ -2351,6 +2351,49 @@ button.event-source:hover {
 .logs-count.none {
   color: var(--health-degraded);
 }
+/* Per-pod filter chips for aggregated streams (cycle 328/R2): a wrapping row between the toolbar and
+   the log body. Each chip carries the pod's signature hue dot so it ties to the inline pod labels. */
+.logs-pods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logs-pod-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 1px 7px 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.logs-pod-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.logs-pod-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Hidden pod: drain it so the lit chips clearly read as "what's showing". The hue dot dims too. */
+.logs-pod-chip.off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.logs-pod-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;
