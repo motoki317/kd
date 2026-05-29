@@ -360,6 +360,28 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.node').length).toBe(3)
   })
 
+  it('search match count + Enter-cycle respect the active kind filter (cycle 314)', () => {
+    // Search "web" matches the Deployment "web" and the Pod "web-abc" (2). With a Pod-only kind
+    // filter active, only the Pod should count as a match — the faded Deployment must be excluded.
+    const onSelect = vi.fn()
+    const { container } = render(() => (
+      <Topology
+        nodes={nodes}
+        edges={edges}
+        search="web"
+        {...base}
+        onSelect={onSelect}
+        kindFilter={new Set(['Pod'])}
+        onKindFilter={() => {}}
+      />
+    ))
+    expect(container.querySelector('.topology-matches')?.textContent).toMatch(/1 match/)
+    // Enter cycles only the lit match — selects the Pod, never the filtered-out Deployment.
+    const input = container.querySelector('.topology-search input') as HTMLInputElement
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith('2') // the web-abc Pod
+  })
+
   it('All view: search still fades non-matching nodes when viewId=all', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="web" viewId="all" {...base} viewLabel="All" />

@@ -244,9 +244,15 @@ export default function Topology(props: Props) {
   const matches = createMemo(() => {
     const q = query().trim()
     if (!q) return null
+    // Intersect with the active kind filter so the "X of N" count and Enter-cycle (which both read
+    // matches()) only ever count cards that are actually LIT — not ones faded out by the kind chips
+    // (cycle 314). Read props.kindFilter directly rather than the activeKinds() memo: this memo is
+    // created eagerly above that one, so referencing it would hit the TDZ.
+    const kf = props.kindFilter
+    const kindOk = (kind: string) => !kf || kf.size === 0 || kf.has(kind)
     const m = new Set<string>()
     for (const n of layout().nodes) {
-      if (nodeMatches(n, q)) m.add(n.id)
+      if (kindOk(n.kind) && nodeMatches(n, q)) m.add(n.id)
     }
     return m
   })
