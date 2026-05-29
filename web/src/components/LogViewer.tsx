@@ -220,7 +220,9 @@ export default function LogViewer(props: Props) {
                   })
                   .join('\n')
               }
-              title="Copy logs"
+              // Copy acts on the filtered view, so say so when a filter is active — otherwise the
+              // static "Copy logs" hides that you're copying a subset, not the whole buffer (cycle 318).
+              title={filter() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
           </Show>
         </span>
