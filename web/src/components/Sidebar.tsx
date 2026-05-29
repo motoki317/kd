@@ -116,7 +116,7 @@ export default function Sidebar(props: Props) {
         <input
           ref={props.filterRef}
           class="sidebar-filter"
-          placeholder="Filter…  ( / )"
+          placeholder="Filter…  ( / · ↑↓ )"
           aria-label="Filter namespaces"
           value={filter()}
           onInput={(e) => setFilter(e.currentTarget.value)}

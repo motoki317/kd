@@ -667,7 +667,7 @@ export default function App() {
               <h4>Navigation</h4>
               <ul>
                 <li>
-                  <kbd>/</kbd> Filter namespaces
+                  <kbd>/</kbd> Filter namespaces · <kbd>↑</kbd> <kbd>↓</kbd> step through them (<kbd>Enter</kbd> opens the top match)
                 </li>
                 <li>
                   <kbd>Alt</kbd>+<kbd>T</kbd> Jump to the most-troubled namespace
