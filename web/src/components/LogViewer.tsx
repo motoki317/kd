@@ -261,7 +261,26 @@ export default function LogViewer(props: Props) {
       <pre ref={pre} class="logs-body" onScroll={onScroll}>
         <For each={visibleLines()}>
           {(l) => (
-            <div class="log-line">
+            <div
+              class="log-line"
+              // Alt/Option-click copies just this line (with its pod/timestamp prefix, matching the
+              // bulk copy) — the fastest way to share one error line into a chat or ticket. Alt
+              // rather than Shift so it doesn't fight Shift+click range text-selection (cycle 323).
+              title="Alt-click to copy this line"
+              onClick={(e) => {
+                if (!e.altKey) return
+                const el = e.currentTarget as HTMLElement
+                const ts = l.time ? `${l.time} ` : ''
+                const pod = props.aggregated ? `${l.pod} | ` : ''
+                navigator.clipboard
+                  ?.writeText(`${pod}${ts}${l.line}`)
+                  .then(() => {
+                    el.classList.add('copied')
+                    setTimeout(() => el.classList.remove('copied'), 700)
+                  })
+                  .catch(() => {})
+              }}
+            >
               {/* Colored severity badge (cycle 322) for error-first scanning. Only shown when a
                   level is confidently detected; plain lines stay badge-free. */}
               <Show when={parseLogLevel(l.line)}>

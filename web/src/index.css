@@ -2346,6 +2346,16 @@ button.event-source:hover {
 .log-line {
   white-space: pre-wrap;
   word-break: break-all;
+  border-radius: 3px;
+  transition: background-color 0.12s;
+}
+/* Faint hover wash hints the line is interactive (Alt-click to copy); a brighter flash confirms
+   the copy landed (cycle 323). */
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.log-line.copied {
+  background: color-mix(in srgb, var(--health-healthy) 30%, transparent);
 }
 /* Per-line severity badge (cycle 322): a compact, fixed-width colored chip so an operator can scan
    a busy stream for ERR/WRN at a glance. Only rendered for lines whose level was detected. */
