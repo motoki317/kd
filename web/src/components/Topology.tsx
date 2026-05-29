@@ -326,7 +326,16 @@ export default function Topology(props: Props) {
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
-  const edgeAdjacent = (e: KEdge) => !matches() && !props.healthFilter && !activeKinds() && (related()?.edges.has(edgeKey(e)) ?? false)
+  // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
+  // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
+  // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
+  // "what connects straight to the thing I clicked", so a Pod selection highlights only its own
+  // owner→pod link rather than lighting up the Deployment→RS→all-siblings backbone too.
+  const edgeAdjacent = (e: KEdge) => {
+    if (matches() || props.healthFilter || activeKinds()) return false
+    const id = props.selectedId
+    return !!id && (e.from === id || e.to === id)
+  }
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)

@@ -317,6 +317,29 @@ describe('Topology', () => {
     expect(faded(container)).toBe(1)
   })
 
+  it('accents only edges directly touching the selected node, not the whole component (cycle 309)', () => {
+    // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod should accent only the
+    // RS→Pod edge (2→3) that touches it — NOT the Deployment→RS edge (1→2) further up the tree.
+    const chainNodes: KNode[] = [
+      { id: '1', kind: 'Deployment', name: 'd', health: 'Healthy' },
+      { id: '2', kind: 'ReplicaSet', name: 'rs', health: 'Healthy' },
+      { id: '3', kind: 'Pod', name: 'p', health: 'Healthy' },
+    ]
+    const chainEdges: KEdge[] = [
+      { from: '1', to: '2', type: 'ownerReference' },
+      { from: '2', to: '3', type: 'ownerReference' },
+    ]
+    const { container } = render(() => (
+      <Topology nodes={chainNodes} edges={chainEdges} search="" {...base} selectedId="3" />
+    ))
+    const adjacent = [...container.querySelectorAll('.edges path.adjacent')]
+    expect(adjacent.length).toBe(1)
+    // The one accented edge is RS→Pod (touches the selection), confirmed via its <title>.
+    expect(adjacent[0].parentElement?.querySelector('title')?.textContent).toContain('owns Pod p')
+    // The rest of the subtree stays lit as context — no edge in the component is faded.
+    expect(container.querySelectorAll('.edges path.faded').length).toBe(0)
+  })
+
   it('does NOT call onDeselect when a card click lands on a node (cycle 161)', () => {
     const onDeselect = vi.fn()
     const { container } = render(() => (
