@@ -669,7 +669,11 @@ export default function Topology(props: Props) {
   })
 
   return (
-    <div class="topology">
+    // Below ~0.45 zoom the fixed-size card text renders at a few unreadable pixels, so it's just
+    // noise over the overview. labels-hidden fades the text out, leaving a clean map of health-tinted,
+    // icon-only cards; hover/click still reveal the detail. The icon + card color carry kind + health
+    // at any zoom (cycle 325).
+    <div class="topology" classList={{ 'labels-hidden': scale() < 0.45 }}>
       {/* Filtered-everything-out overlay (cycle 219): when a filter is active and nothing
           is lit, surface that clearly + a one-click clear button so the operator doesn't have
           to guess why the canvas looks dim. Sits above the canvas like the empty state. */}

@@ -1347,6 +1347,20 @@ button.conn.conn-retry:focus-visible {
   fill: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+/* Card text fades out when zoomed far out (cycle 325): at that scale it's a few unreadable pixels,
+   so the overview reads cleaner as icon + health-color only. The icon stays. */
+.node-kind,
+.node-name,
+.node-status,
+.node-restarts {
+  transition: opacity 0.15s;
+}
+.labels-hidden .node-kind,
+.labels-hidden .node-name,
+.labels-hidden .node-status,
+.labels-hidden .node-restarts {
+  opacity: 0;
+}
 
 /* Drawer */
 .drawer {
