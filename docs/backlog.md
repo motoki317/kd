@@ -16,8 +16,16 @@ cleanup). Every remaining Future item was re-examined against the real code and 
 verified rationale + a reopen trigger** (see below) — they are genuine design-pass / deployment-pressure
 work, not safe improvement-cycle slices. Two workflow-proposed "small wins" were refuted on inspection
 (a store summary cache — regressive because `notify()` has no namespace granularity; a discovery-diff
-CRD prune — unsafe because `Discover()` tolerates partial results). Next batch should come from real
-user feedback or a new feature area — don't grind filler cycles.
+CRD prune — unsafe because `Discover()` tolerates partial results).
+
+A follow-up survey then covered the **server-side** surface (store/informer lifecycle, registry, rbac/auth,
+api/sse, kubeconfig/bootstrap) — never systematically surveyed before. 31 agents, mostly refuted
+(already-handled / wrong / low-value) = the same maturity signal. It shipped three real items (malformed
+`policy.csv` re-parse/log-spam fix; an auth groups-gating regression test; deterministic store-test
+teardown) and rejected the rest — notably "shut the caches down on SIGTERM," which one agent rated HIGH
+but is in fact low-value (Go reaps background goroutines on process exit; the process-lifetime cache design
+is intentional and documented). Both the UX and server surfaces are now surveyed and mature; the next batch
+should come from real user feedback or a new feature area — don't grind filler cycles.
 
 ---
 
@@ -92,6 +100,12 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | `aria-current='page'` on active namespace button | low-value |
 | Node CPU/mem allocation in the per-namespace graph | dead end — needs metrics-server + annotation scraping; not worth the coupling |
 | LogViewer duplicate-tail dedup on SSE reconnect | dead end — lossy for aggregated streams (drops legitimate repeated lines) |
+| Shut registry/informer caches down on SIGTERM (call `Cache.Shutdown()` / thread the signal ctx) | low-value — Go reaps background goroutines on process exit, so there is **no** slow-shutdown/forced-kill (one agent's HIGH verdict was wrong); the process-lifetime cache is intentional + documented (`registry.go:240-241`). `Shutdown()` is now exercised by the store test helper instead. |
+| Panic-recovery wrapper around SSE graph build / `superviseLogStreams` goroutines | wrong — HTTP handlers are already wrapped by `server.recoverer`; graph ops have no panic paths; a recover() would mask real bugs |
+| Log/handle `json.Marshal` failure in `writeSSE` | low-value — Patch/Summary/Graph are all primitive-typed; marshal cannot fail. Real failures are network writes, already handled |
+| `VisibleNamespaces` should gate on `*`/any-resource instead of hardcoded `pods` | already-handled — pods-as-namespace-visibility-gate is the documented RBAC design (ADR 20260527); operators grant blanket access in target namespaces |
+| Validate `-addr` / invalid env durations in `config.Load` (fail earlier) | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later; no operator pain |
+| Sort in-cluster `List()` context order; `defer debounce.Stop()` in sse.go | low-value — in-cluster has a single context (switcher hidden); the debounce timer is GC'd and is not a race |
 
 ## Done
 
@@ -114,3 +128,11 @@ evicts the matching GVR (by group+plural) from `c.resources` so snapshots skip i
 delete event, **not** a discovery diff, because `Discover()` tolerates partial results (a flapping
 aggregated API would otherwise masquerade as a removed resource). The informer goroutine still leaks
 (client-go has no per-informer stop) — bounded at one per removed CRD, documented in code.
+
+**Server-side survey (2026-05-29)** shipped three items found by surveying the never-before-surveyed
+server surface: (1) **rbac** — a malformed `policy.csv` was re-parsed and re-logged every poll (10 s)
+forever because `lastSum` only advanced on success; now it advances on every attempt so the error
+surfaces once and only a content change re-parses. (2) **auth** — a regression test pinning that a
+spoofed `X-Forwarded-Groups` from an untrusted peer is rejected (the gate runs before any header read).
+(3) **store** — the test helper now tears the cache down via `Shutdown()` for deterministic goroutine
+teardown. See git log for the commits.
