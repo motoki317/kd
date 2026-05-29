@@ -104,6 +104,15 @@ func TestIdentify(t *testing.T) {
 			wantErr:    ErrUntrustedProxy,
 		},
 		{
+			// Privilege-escalation guard: the trust gate must reject BEFORE any header is read, so
+			// a spoofed groups header from an untrusted peer can never grant a group-bound role.
+			name:       "trusted proxy: spoofed groups header from outside range is rejected",
+			cfg:        Config{UserHeader: "X-Forwarded-User", GroupsHeader: "X-Forwarded-Groups", TrustedProxies: []netip.Prefix{prefix("10.0.0.0/8")}},
+			remoteAddr: "192.168.1.5:1234",
+			headers:    map[string]string{"X-Forwarded-User": "alice", "X-Forwarded-Groups": "admins"},
+			wantErr:    ErrUntrustedProxy,
+		},
+		{
 			name:       "dev user bypasses trusted-proxy check",
 			cfg:        Config{UserHeader: "X-Forwarded-User", DevUser: "dev", TrustedProxies: []netip.Prefix{prefix("10.0.0.0/8")}},
 			remoteAddr: "192.168.1.5:1234",
