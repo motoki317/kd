@@ -945,14 +945,15 @@ export default function Topology(props: Props) {
                       status and the restart/age badge on their own rows so nothing competes for
                       width. Health is carried by the .node-bg border + tint (see CSS), so a colored
                       stripe is redundant and was removed to reclaim left padding for the icon. */}
-                  {/* Vertically-centered icon (cycle 305): the 28px glyph box sits at y16–44 so a
-                      full-box glyph inks ~y20–40 — centered on the card's y30 (earlier cycles centered
-                      the icon+label *unit*, which left the glyph itself riding ~8px high). The kind
-                      label is a caption tucked just beneath the icon, not a co-equal stacked element. */}
-                  <g class="node-icon node-icon-large" transform="translate(10,16) scale(2)">
+                  {/* Optically-centered icon (cycle 306): a full-box glyph inks ~y14–34, i.e. ~2px
+                      above the card's geometric center (y30). Geometric centering (cycle 305) measured
+                      dead-on but *looked* bottom-heavy because the kind label hangs below with empty
+                      space above — an icon with a caption beneath has to ride slightly high to read as
+                      centered. The label tucks ~3px under the glyph. */}
+                  <g class="node-icon node-icon-large" transform="translate(10,12) scale(2)">
                     {kindIcon(n.kind)}
                   </g>
-                  <text class="node-kind" x="24" y="53" text-anchor="middle">
+                  <text class="node-kind" x="24" y="49" text-anchor="middle">
                     {cardKindLabel(n.kind)}
                   </text>
                   <text class="node-name" x="46" y="32">
