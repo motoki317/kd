@@ -95,6 +95,10 @@ func startTestStore(t *testing.T, objs ...runtime.Object) *Cache {
 	if err := c.Start(ctx); err != nil {
 		t.Fatalf("start store: %v", err)
 	}
+	// Deterministically tear the informers down at test end (factory.Shutdown waits for the
+	// goroutines) instead of leaving them to the context cancel; keeps goroutines from piling up
+	// across the package's tests. Runs before cancel (LIFO) and is idempotent, so both are safe.
+	t.Cleanup(func() { c.Shutdown() })
 	return c
 }
 
