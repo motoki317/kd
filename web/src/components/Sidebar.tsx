@@ -17,8 +17,8 @@ interface Props {
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
-// quick filter box. A namespace with a non-healthy resource shows a colored dot, so an operator
-// spots trouble across the cluster without opening each one.
+// quick filter box. Each namespace carries a health dot — green when healthy, red/amber/gray for
+// trouble — so an operator reads the cluster's state as a column of color without opening each one.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
   // The cluster pseudo-namespace is split out from the rest: it's pinned above the namespace
@@ -150,9 +150,7 @@ export default function Sidebar(props: Props) {
                     classList={{ active: c().name === props.selected }}
                     onClick={() => props.onSelect(c().name)}
                   >
-                    <Show when={c().health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
-                      <span class="ns-dot" style={{ background: healthColor(c().health) }} title={c().health} />
-                    </Show>
+                    <span class="ns-dot" style={{ background: healthColor(c().health) }} title={c().health} />
                     {/* Tiny cluster/server glyph echoes the Node icon and signals "cluster scope"
                         without requiring the user to read the bracketed text first. */}
                     <svg class="ns-cluster-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
@@ -186,9 +184,7 @@ export default function Sidebar(props: Props) {
                   </Show>
                 <li>
                   <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
-                    <Show when={ns.health !== 'Healthy'} fallback={<span class="ns-dot ns-dot-ok" />}>
-                      <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
-                    </Show>
+                    <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
                     <span class="ns-name">{ns.name}</span>
                     <Show when={(ns.nonReady ?? 0) > 0}>
                       {/* Inline color matches the dot (and the topology health-stroke), so the

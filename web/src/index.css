@@ -757,16 +757,15 @@ button.conn.conn-retry:focus-visible {
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
-/* Health dot: colored for trouble, a faint hollow placeholder when healthy so names stay aligned. */
+/* Health dot, filled per state: green = healthy, red = degraded, gray = unknown, etc. (cycle 308).
+   Was a hollow gray ring when healthy — which read as "everything is gray / off" rather than
+   "everything is fine". A filled green dot makes a healthy cluster scan as a wall of green with
+   colored exceptions, the dashboard idiom operators expect. */
 .ns-dot {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-}
-.ns-dot-ok {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .ns-list button:hover {
   background: var(--surface-2);

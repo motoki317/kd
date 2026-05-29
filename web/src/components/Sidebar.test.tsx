@@ -32,6 +32,23 @@ describe('Sidebar', () => {
     expect(counts).toEqual(['3', '1'])
   })
 
+  it('renders a filled health dot for every namespace — healthy reads green, not a hollow gray ring (cycle 308)', () => {
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    const dots = [...container.querySelectorAll('.ns-dot')] as HTMLElement[]
+    // One dot per namespace, each with a non-transparent background bound to its health color.
+    expect(dots.length).toBe(namespaces.length)
+    for (const d of dots) {
+      expect(d.style.background).not.toBe('')
+      expect(d.style.background).not.toBe('transparent')
+    }
+    // No leftover hollow-placeholder class — healthy is a real (green) dot now.
+    expect(container.querySelector('.ns-dot-ok')).toBeNull()
+    // The healthy dots resolve to the healthy color var (sorted last; the first two are troubled).
+    expect(dots[dots.length - 1].style.background).toBe('var(--health-healthy)')
+  })
+
   it('filters the list by name', async () => {
     const { container, getByPlaceholderText } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
