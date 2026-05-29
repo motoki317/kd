@@ -57,7 +57,21 @@ export default function LogViewer(props: Props) {
       localStorage.setItem('kd:logsWrap', w ? '0' : '1')
       return !w
     })
-  const visibleLines = createMemo(() => filterLogLines(lines(), filter(), caseSensitive()))
+  // Per-level filtering (cycle 328): the set of levels to HIDE. The badge classifier (parseLogLevel)
+  // already labels each line; this reuses it as a filter so an operator can drop INFO/DEBUG noise and
+  // scan errors without crafting a regex. Persisted like wrap — a content-agnostic triage habit that
+  // should outlive a single pod selection — and kept visible as dimmed chips so the state never hides.
+  const [hiddenLevels, setHiddenLevels] = createSignal<Set<LogLevel>>(
+    new Set((localStorage.getItem('kd:logsHideLevels') || '').split(',').filter(Boolean) as LogLevel[]),
+  )
+  const toggleLevel = (lvl: LogLevel) =>
+    setHiddenLevels((prev) => {
+      const next = new Set(prev)
+      next.has(lvl) ? next.delete(lvl) : next.add(lvl)
+      localStorage.setItem('kd:logsHideLevels', [...next].join(','))
+      return next
+    })
+  const visibleLines = createMemo(() => filterLogLines(lines(), filter(), caseSensitive(), hiddenLevels()))
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
@@ -243,6 +257,26 @@ export default function LogViewer(props: Props) {
             Aa
           </button>
         </Show>
+        {/* Per-level filter chips (cycle 328): one per recognized severity, colored to match the inline
+            badges. A lit chip shows that level; clicking dims it and hides those lines. Lines with no
+            detected level always stay (see filterLogLines), so this trims labeled noise, not context. */}
+        <Show when={lines().length > 0}>
+          <span class="logs-levels" role="group" aria-label="Filter by level">
+            <For each={LEVEL_ORDER}>
+              {(lvl) => (
+                <button
+                  class={`logs-level log-level-${lvl}`}
+                  classList={{ off: hiddenLevels().has(lvl) }}
+                  aria-pressed={!hiddenLevels().has(lvl)}
+                  onClick={() => toggleLevel(lvl)}
+                  title={hiddenLevels().has(lvl) ? `Show ${lvl} lines` : `Hide ${lvl} lines`}
+                >
+                  {LEVEL_LABEL[lvl]}
+                </button>
+              )}
+            </For>
+          </span>
+        </Show>
         <span class="logs-right">
           <Show when={filter()}>
             <span class="logs-count" classList={{ none: visibleLines().length === 0 }}>
@@ -365,6 +399,8 @@ export default function LogViewer(props: Props) {
 
 // Compact, fixed-width labels for the per-line severity badge so the colored column stays aligned.
 const LEVEL_LABEL: Record<LogLevel, string> = { error: 'ERR', warn: 'WRN', info: 'INF', debug: 'DBG' }
+// Severity order (most→least urgent) for the per-level filter chips, so the chip row reads ERR→DBG.
+const LEVEL_ORDER: LogLevel[] = ['error', 'warn', 'info', 'debug']
 
 // podColor maps a pod name to a stable hue so interleaved lines from different pods are easy to
 // tell apart at a glance (the same pod is always the same color).

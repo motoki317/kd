@@ -45,13 +45,28 @@ export function formatLogTime(raw: string): string {
 // filterLogLines keeps only the lines whose text contains the query — the in-viewer "grep" for
 // finding an error in a busy stream. Case-insensitive by default (the common triage need); pass
 // caseSensitive to match exactly. An empty/whitespace query keeps every line, so the filter is off
-// until the user types.
-export function filterLogLines(lines: LogEntry[], query: string, caseSensitive = false): LogEntry[] {
+// until the user types. hiddenLevels (cycle 328) additionally drops lines whose DETECTED level is
+// toggled off — combined with the substring filter via AND. Lines with no confident level (stack-trace
+// bodies, continuation lines, plain stdout) are always kept so hiding INFO/DEBUG noise doesn't swallow
+// the context around an error.
+export function filterLogLines(
+  lines: LogEntry[],
+  query: string,
+  caseSensitive = false,
+  hiddenLevels?: Set<LogLevel>,
+): LogEntry[] {
   const raw = query.trim()
-  if (!raw) return lines
-  if (caseSensitive) return lines.filter((l) => l.line.includes(raw))
-  const q = raw.toLowerCase()
-  return lines.filter((l) => l.line.toLowerCase().includes(q))
+  const hideLevels = !!hiddenLevels && hiddenLevels.size > 0
+  if (!raw && !hideLevels) return lines
+  const q = caseSensitive ? raw : raw.toLowerCase()
+  return lines.filter((l) => {
+    if (hideLevels) {
+      const lvl = parseLogLevel(l.line)
+      if (lvl && hiddenLevels!.has(lvl)) return false
+    }
+    if (!raw) return true
+    return caseSensitive ? l.line.includes(raw) : l.line.toLowerCase().includes(q)
+  })
 }
 
 // splitByMatch chops a line into alternating "outside" / "match" segments for the query, so the

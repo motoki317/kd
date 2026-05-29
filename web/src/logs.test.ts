@@ -28,6 +28,41 @@ describe('filterLogLines', () => {
     expect(filterLogLines(lines, 'timeout')).toEqual([])
   })
 
+  it('hides lines whose detected level is toggled off, keeping unleveled lines (cycle 328)', () => {
+    const lvlLines: LogEntry[] = [
+      { pod: 'a', line: 'E0521 12:00:00.0 1 main.go:1] boom' }, // error
+      { pod: 'a', line: 'W0521 12:00:00.0 1 main.go:2] careful' }, // warn
+      { pod: 'a', line: 'I0521 12:00:00.0 1 main.go:3] hello' }, // info
+      { pod: 'a', line: 'just some output with no level' }, // unleveled → always kept
+    ]
+    // Hiding info drops only the info line; the unleveled line survives.
+    expect(filterLogLines(lvlLines, '', false, new Set(['info'])).map((l) => l.line)).toEqual([
+      'E0521 12:00:00.0 1 main.go:1] boom',
+      'W0521 12:00:00.0 1 main.go:2] careful',
+      'just some output with no level',
+    ])
+    // "Errors + warnings only" = hide info and debug.
+    expect(filterLogLines(lvlLines, '', false, new Set(['info', 'debug'])).map((l) => l.line)).toEqual([
+      'E0521 12:00:00.0 1 main.go:1] boom',
+      'W0521 12:00:00.0 1 main.go:2] careful',
+      'just some output with no level',
+    ])
+    // An empty hidden set is a no-op (every line kept).
+    expect(filterLogLines(lvlLines, '', false, new Set())).toHaveLength(4)
+  })
+
+  it('AND-combines the level filter with the substring query (cycle 328)', () => {
+    const lvlLines: LogEntry[] = [
+      { pod: 'a', line: 'E0521 1 db connection refused' },
+      { pod: 'a', line: 'I0521 1 db pool warmed' },
+      { pod: 'a', line: 'E0521 1 cache miss' },
+    ]
+    // query "db" + hide info → only the error line mentioning db.
+    expect(filterLogLines(lvlLines, 'db', false, new Set(['info'])).map((l) => l.line)).toEqual([
+      'E0521 1 db connection refused',
+    ])
+  })
+
   it('matches case-sensitively when asked (cycle 321)', () => {
     // Case-insensitive "ERROR" matches both the upper-case level and the prose "error".
     expect(filterLogLines(lines, 'ERROR', false).map((l) => l.line)).toEqual([
