@@ -2261,7 +2261,12 @@ button.event-source:hover {
 .logs-header {
   display: flex;
   align-items: center;
+  /* Wrap so a narrow (compact) drawer never pushes the Copy button off the right edge — the toolbar
+     carries a lot now (stream toggles + filter + per-level segmented control). row-gap keeps wrapped
+     rows legible (cycle 337, fixes the cycle-328 overflow). */
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 8px;
   padding: 10px 16px;
   font-size: 12px;
   text-transform: uppercase;
@@ -2552,33 +2557,43 @@ button.event-source:hover {
    as "these are the levels showing". color/background are inherited from the shared .log-level-<lvl>
    rules above; this only adds the button chrome. A dimmed (.off) chip means that level is hidden —
    the two-class .logs-level.off out-specifies .log-level-<lvl>, so it overrides without !important. */
+/* Segmented control (cycle 337): the four levels share one bordered pill with hairline dividers
+   instead of four separate gapped chips — noticeably narrower, so the toolbar stops overflowing, and
+   it reads as one "show these levels" control rather than four loose buttons. */
 .logs-levels {
   display: inline-flex;
-  gap: 3px;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }
 .logs-level {
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   font-family: inherit;
   cursor: pointer;
   user-select: none;
-  transition: opacity 0.12s, border-color 0.12s;
+  transition: opacity 0.12s, filter 0.12s;
+}
+.logs-level:last-child {
+  border-right: 0;
 }
 .logs-level:hover {
-  border-color: rgba(255, 255, 255, 0.3);
+  filter: brightness(1.15);
 }
 .logs-level:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -2px; /* inside the clipped pill so the ring isn't cropped */
 }
 .logs-level.off {
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
-  opacity: 0.55;
+  opacity: 0.5;
 }
 /* Source-pod label for aggregated workload logs: a fixed-width column so the log text aligns. */
 .log-pod {
