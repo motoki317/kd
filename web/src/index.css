@@ -1366,6 +1366,18 @@ button.conn.conn-retry:focus-visible {
   animation: drawer-out 0.22s cubic-bezier(0.55, 0, 0.7, 0.2) forwards;
   pointer-events: none;
 }
+/* Expanded mode (cycle 311): lift the drawer out of the flex row and fill the whole canvas area
+   (.main is position: relative), covering the topology so logs/manifests get the full width. The
+   topbar + namespace sidebar stay visible for navigation. The drop shadow seats it above the canvas
+   it now hides. */
+.drawer.expanded {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  z-index: 20;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
+}
 @keyframes drawer-in {
   from { transform: translateX(32px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -1796,7 +1808,8 @@ button.drawer-host:hover {
    ("get out", "send"). Subtler default state until hover; flashes green for ~1s on a successful
    copy via the .copied class. */
 .drawer-share,
-.drawer-back {
+.drawer-back,
+.drawer-expand {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -1810,14 +1823,21 @@ button.drawer-host:hover {
   transition: background-color 120ms, color 120ms;
 }
 .drawer-share:hover,
-.drawer-back:hover {
+.drawer-back:hover,
+.drawer-expand:hover {
   background: var(--surface-2);
   color: var(--accent);
 }
 .drawer-share:focus-visible,
-.drawer-back:focus-visible {
+.drawer-back:focus-visible,
+.drawer-expand:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+/* Pressed (expanded) state reads as "active mode" via the accent tint, like the legend pills. */
+.drawer-expand[aria-pressed='true'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .drawer-share.copied {
   color: var(--health-healthy);

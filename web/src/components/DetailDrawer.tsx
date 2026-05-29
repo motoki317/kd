@@ -40,6 +40,11 @@ export default function DetailDrawer(props: Props) {
   // has a body to show. A re-selection during the exit cancels the exit and adopts the new node.
   const [displayNode, setDisplayNode] = createSignal<KNode | null>(props.node)
   const [exiting, setExiting] = createSignal(false)
+  // Expanded mode (cycle 311): the drawer grows to fill the whole canvas area so logs/manifests get
+  // the full width an operator needs to actually read them. Sticky across owner-chip navigation (you
+  // stay in "big" mode while walking the tree) but resets when the drawer closes, so a fresh
+  // selection opens in the compact side panel again.
+  const [expanded, setExpanded] = createSignal(false)
   const EXIT_MS = 220
   let exitTimer: ReturnType<typeof setTimeout> | undefined
   createEffect(
@@ -58,6 +63,7 @@ export default function DetailDrawer(props: Props) {
           exitTimer = setTimeout(() => {
             setDisplayNode(null)
             setExiting(false)
+            setExpanded(false)
             exitTimer = undefined
           }, EXIT_MS)
         }
@@ -185,7 +191,7 @@ export default function DetailDrawer(props: Props) {
   return (
     <Show when={displayNode()}>
       {(node) => (
-        <aside class="drawer" classList={{ exiting: exiting() }}>
+        <aside class="drawer" classList={{ exiting: exiting(), expanded: expanded() }}>
           <header class="drawer-header">
             <ResourceSummary
               node={node()}
@@ -212,6 +218,42 @@ export default function DetailDrawer(props: Props) {
                   </svg>
                 </button>
               </Show>
+              {/* Expand/restore: grow the drawer to fill the canvas for comfortable log/manifest
+                  reading, then shrink it back to the side panel. The 4-corner glyph points outward
+                  to "maximize" and inward to "restore" — a familiar window-control idiom. */}
+              <button
+                class="drawer-expand"
+                type="button"
+                title={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
+                aria-label={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
+                aria-pressed={expanded()}
+                onClick={() => setExpanded((v) => !v)}
+              >
+                <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+                  <Show
+                    when={expanded()}
+                    fallback={
+                      <path
+                        d="M2 5 L2 2 L5 2 M9 2 L12 2 L12 5 M12 9 L12 12 L9 12 M5 12 L2 12 L2 9"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    }
+                  >
+                    <path
+                      d="M5 2 L5 5 L2 5 M9 2 L9 5 L12 5 M12 9 L9 9 L9 12 M2 9 L5 9 L5 12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </Show>
+                </svg>
+              </button>
               <button
                 class="drawer-share"
                 title="Copy share link"

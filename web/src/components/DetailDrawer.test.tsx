@@ -76,6 +76,25 @@ describe('DetailDrawer', () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
+  it('toggles an expanded (canvas-filling) mode via the expand button (cycle 311)', () => {
+    const { container } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    const drawer = container.querySelector('.drawer') as HTMLElement
+    const btn = container.querySelector('.drawer-expand') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    // Starts compact.
+    expect(drawer.classList.contains('expanded')).toBe(false)
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    // Click expands.
+    btn.click()
+    expect(drawer.classList.contains('expanded')).toBe(true)
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+    // Click again restores.
+    btn.click()
+    expect(drawer.classList.contains('expanded')).toBe(false)
+  })
+
   it('[ / ] do nothing when no node is shown (cycle 292)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     // Should be empty — no drawer rendered.
