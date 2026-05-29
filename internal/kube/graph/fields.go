@@ -64,7 +64,7 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 }
 
 func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
-	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init}
+	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image}
 }
 
 // containerStateString renders a container's current state as "Running", "Waiting: <reason>", or

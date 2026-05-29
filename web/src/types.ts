@@ -50,6 +50,7 @@ export interface ContainerStatus {
   restarts?: number
   state: string // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
   init?: boolean
+  image?: string // the actually-running image, paired with the container in the drawer
 }
 
 export interface KEdge {

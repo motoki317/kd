@@ -1599,10 +1599,56 @@ button.drawer-host:hover {
 .drawer-containers {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 12px;
   margin-top: 8px;
 }
-.container-row {
+/* A container group — "Init containers" / "Containers" — with a count, so the operator reads how
+   many of each kind exist before scanning the cards (cycle 338). */
+.container-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.container-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+.container-group-count {
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+/* One card per container pairs its runtime status (head row) with its image (indented below), so the
+   two facts an operator wants — "is it OK?" and "what's it running?" — sit together instead of in two
+   separate lists (cycle 338). Health tint mirrors the topology card so trouble reads at a glance. */
+.container-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  border-left: 2px solid transparent;
+  background: var(--surface);
+  min-width: 0;
+}
+.container-card.h-degraded {
+  background: color-mix(in srgb, var(--health-degraded) 7%, var(--surface));
+  border-left-color: var(--health-degraded);
+}
+.container-card.h-progressing {
+  background: color-mix(in srgb, var(--health-progressing) 7%, var(--surface));
+  border-left-color: var(--health-progressing);
+}
+.container-card-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1610,52 +1656,52 @@ button.drawer-host:hover {
   column-gap: 7px;
   font-size: 12px;
   min-width: 0;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border-left: 2px solid transparent;
 }
-/* Health tint per container row (cycle 137): mirrors the topology card body — a crash-looping
-   container reads as "row of trouble" instead of "dot of trouble next to other dots". Healthy /
-   Unknown stay neutral so the eye lands on real issues. */
-.container-row.h-degraded {
-  background: color-mix(in srgb, var(--health-degraded) 6%, transparent);
-  border-left-color: var(--health-degraded);
-}
-.container-row.h-progressing {
-  background: color-mix(in srgb, var(--health-progressing) 6%, transparent);
-  border-left-color: var(--health-progressing);
-}
-.container-row .dot {
+.container-card-head .dot {
   flex: none;
 }
 .container-name {
   color: var(--text);
   font-weight: 600;
-  /* Allow wrapping for long container names rather than truncating; the row's flex-wrap absorbs it. */
+  /* Allow wrapping for long container names rather than truncating; the head's flex-wrap absorbs it. */
   white-space: normal;
   overflow-wrap: anywhere;
   flex: 0 1 auto;
 }
-.container-init {
-  color: var(--text-dim);
-  font-weight: 400;
-  text-transform: uppercase;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-}
 .container-state {
-  color: var(--text-dim);
-  /* Long messages like "Waiting: CrashLoopBackOff: Back-off restarting failed container …" wrap
-     so the reason is fully readable instead of ellipsised. */
+  /* color is set inline to the container's health hue, so the state word itself carries the status.
+     Long messages ("Waiting: CrashLoopBackOff: Back-off restarting …") wrap rather than ellipsise. */
   white-space: normal;
   overflow-wrap: anywhere;
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 11px;
 }
 .container-restarts {
   margin-left: auto;
   color: var(--health-degraded);
   flex: none;
+}
+/* The container's running image, indented under the name (past the status dot) so the card reads as
+   "this container → runs this image". Same chip look as the workload image list for consistency. */
+.container-image {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 16px;
+}
+.container-image code {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .drawer-images {
   display: flex;

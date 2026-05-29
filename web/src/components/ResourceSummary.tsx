@@ -41,6 +41,17 @@ export function isFloatingImageTag(img: string): boolean {
   return tag === 'latest' || tag === 'stable' || tag === 'main' || tag === 'master' || tag === 'edge'
 }
 
+// containerGroups splits a pod's container statuses into the two groups operators reason about
+// separately: init containers (run once, in order, before the app starts) and the long-running app
+// containers. Each carries a header label; order within a group is the server's (execution order).
+// Returned even when empty so the caller can render the section headers conditionally.
+function containerGroups(statuses: ContainerStatus[]): { label: string; items: ContainerStatus[] }[] {
+  return [
+    { label: 'Init containers', items: statuses.filter((c) => c.init) },
+    { label: 'Containers', items: statuses.filter((c) => !c.init) },
+  ]
+}
+
 interface Props {
   node: KNode
   owners: KNode[]
@@ -192,58 +203,86 @@ export default function ResourceSummary(props: Props) {
           </For>
         </div>
       </Show>
-      {/* The image(s) are usually the first thing checked ("what version is live?"), so
-          surface them prominently with per-image copy for pasting into kubectl/registry. A
-          floating tag (":latest" or none) gets a small warning chip — these images cannot be
-          pinned to a known revision, so a rolling restart can silently change what's running. */}
-      <Show when={(props.node.images?.length ?? 0) > 0}>
-        <div class="drawer-images">
-          <For each={props.node.images}>
-            {(img) => (
-              <div class="drawer-image" title={img}>
-                <code>{img}</code>
-                <Show when={isFloatingImageTag(img)}>
-                  <span
-                    class="image-floating-tag"
-                    title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
-                  >
-                    floating tag
-                  </span>
-                </Show>
-                <CopyButton text={() => img} title="Copy image" />
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
-      {/* Per-container state so a multi-container pod reveals which container is unready or
-          crash-looping, not just an aggregate restart count. Init containers come first (mirrors
-          execution order); within each group the server's order is preserved. */}
-      <Show when={(props.node.containerStatuses?.length ?? 0) > 0}>
+      {/* Containers (cycle 338): a Pod's per-container runtime state and its image belong together —
+          "which container is broken and what's it running?" — so each container is one card pairing
+          status (dot + state + restarts) with its image, grouped into Init vs app containers with
+          counts so "how many of each, what images, are they OK" reads at a glance. A floating tag
+          (":latest"/none) flags an image a rolling restart could silently change. Workloads expose no
+          per-container runtime, so they fall back to the distinct image list. */}
+      <Show
+        when={(props.node.containerStatuses?.length ?? 0) > 0}
+        fallback={
+          <Show when={(props.node.images?.length ?? 0) > 0}>
+            <div class="drawer-images">
+              <For each={props.node.images}>
+                {(img) => (
+                  <div class="drawer-image" title={img}>
+                    <code>{img}</code>
+                    <Show when={isFloatingImageTag(img)}>
+                      <span
+                        class="image-floating-tag"
+                        title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
+                      >
+                        floating tag
+                      </span>
+                    </Show>
+                    <CopyButton text={() => img} title="Copy image" />
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+        }
+      >
         <div class="drawer-containers">
-          <For each={[...(props.node.containerStatuses ?? [])].sort((a, b) => Number(!!b.init) - Number(!!a.init))}>
-            {(cs) => (
-              <div
-                class="container-row"
-                classList={{
-                  'not-ready': !cs.ready && !cs.init,
-                  [`h-${containerHealth(cs).toLowerCase()}`]: true,
-                }}
-              >
-                <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
-                <span class="container-name">
-                  {cs.name}
-                  <Show when={cs.init}>
-                    <span class="container-init"> init</span>
-                  </Show>
-                </span>
-                <span class="container-state">{cs.state}</span>
-                <Show when={(cs.restarts ?? 0) > 0}>
-                  <span class="container-restarts" title={`${cs.restarts} restarts`}>
-                    ↻ {cs.restarts}
-                  </span>
-                </Show>
-              </div>
+          <For each={containerGroups(props.node.containerStatuses ?? [])}>
+            {(group) => (
+              <Show when={group.items.length > 0}>
+                <div class="container-group">
+                  <div class="container-group-head">
+                    {group.label}
+                    <span class="container-group-count">{group.items.length}</span>
+                  </div>
+                  <For each={group.items}>
+                    {(cs) => (
+                      <div
+                        class="container-card"
+                        classList={{
+                          'not-ready': !cs.ready && !cs.init,
+                          [`h-${containerHealth(cs).toLowerCase()}`]: true,
+                        }}
+                      >
+                        <div class="container-card-head">
+                          <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
+                          <span class="container-name">{cs.name}</span>
+                          <span class="container-state" style={{ color: healthColor(containerHealth(cs)) }}>
+                            {cs.state}
+                          </span>
+                          <Show when={(cs.restarts ?? 0) > 0}>
+                            <span class="container-restarts" title={`${cs.restarts} restarts`}>
+                              ↻ {cs.restarts}
+                            </span>
+                          </Show>
+                        </div>
+                        <Show when={cs.image}>
+                          <div class="container-image" title={cs.image}>
+                            <code>{cs.image}</code>
+                            <Show when={isFloatingImageTag(cs.image!)}>
+                              <span
+                                class="image-floating-tag"
+                                title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
+                              >
+                                floating tag
+                              </span>
+                            </Show>
+                            <CopyButton text={() => cs.image!} title="Copy image" />
+                          </div>
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
             )}
           </For>
         </div>

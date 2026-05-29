@@ -213,8 +213,8 @@ describe('DetailDrawer', () => {
       ],
     }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
-    const names = [...container.querySelectorAll('.container-row .container-name')].map((e) => e.textContent)
-    const states = [...container.querySelectorAll('.container-row .container-state')].map((e) => e.textContent)
+    const names = [...container.querySelectorAll('.container-card .container-name')].map((e) => e.textContent)
+    const states = [...container.querySelectorAll('.container-card .container-state')].map((e) => e.textContent)
     expect(names).toEqual(['app', 'sidecar'])
     expect(states).toEqual(['Running', 'Waiting: CrashLoopBackOff'])
     expect(container.querySelector('.container-restarts')?.textContent).toContain('4')
@@ -233,15 +233,39 @@ describe('DetailDrawer', () => {
       ],
     }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
-    const names = [...container.querySelectorAll('.container-row .container-name')].map((e) => e.textContent?.trim().replace(/\s+init$/, ''))
+    // Init containers render in their own group (first), main containers in the second group.
+    const names = [...container.querySelectorAll('.container-card .container-name')].map((e) => e.textContent)
     expect(names).toEqual(['wait-for-db', 'migrate', 'app', 'sidecar'])
+    const groups = [...container.querySelectorAll('.container-group-head')].map((e) => e.textContent)
+    expect(groups[0]).toContain('Init containers')
+    expect(groups[1]).toContain('Containers')
   })
 
-  it('renders each container image', () => {
+  it('renders each workload image (no per-container runtime to pair with)', () => {
     const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const imgs = [...container.querySelectorAll('.drawer-image code')].map((e) => e.textContent)
     expect(imgs).toEqual(['nginx:1.25', 'envoy:1.29'])
+  })
+
+  // For a Pod the image belongs WITH its container (cycle 338): each card pairs name + state + image,
+  // and the separate workload image list is not shown (that would be the "shown separately" the
+  // redesign removed).
+  it('pairs each pod container with its own image and drops the separate image list', () => {
+    const pod: KNode = {
+      ...configMap,
+      kind: 'Pod',
+      images: ['app:1.2', 'envoy:1.29'], // would-be flat list; should be superseded by per-container
+      containerStatuses: [
+        { name: 'app', ready: true, state: 'Running', image: 'app:1.2' },
+        { name: 'proxy', ready: true, state: 'Running', image: 'envoy:1.29' },
+      ],
+    }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('.drawer-images')).toBeNull() // no separate flat list for pods
+    const cards = [...container.querySelectorAll('.container-card')]
+    expect(cards.map((c) => c.querySelector('.container-name')?.textContent)).toEqual(['app', 'proxy'])
+    expect(cards.map((c) => c.querySelector('.container-image code')?.textContent)).toEqual(['app:1.2', 'envoy:1.29'])
   })
 
   it('omits the labels section when there are none', () => {

@@ -85,8 +85,9 @@ type ContainerStatus struct {
 	Name     string `json:"name"`
 	Ready    bool   `json:"ready"`
 	Restarts int32  `json:"restarts,omitempty"`
-	State    string `json:"state"`          // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
-	Init     bool   `json:"init,omitempty"` // an init container (runs to completion before the app ones)
+	State    string `json:"state"`           // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
+	Init     bool   `json:"init,omitempty"`  // an init container (runs to completion before the app ones)
+	Image    string `json:"image,omitempty"` // the actually-running image, so the drawer pairs each container with its image
 }
 
 // Edge is a typed relationship from one node to another.
