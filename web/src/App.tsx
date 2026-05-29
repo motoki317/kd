@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { CLUSTER_SCOPE, fetchContexts, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
+import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
+import { setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
 import { HEALTH_ORDER, healthColor } from './health'
@@ -81,6 +82,13 @@ export default function App() {
   // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
   // read the list through this guard, which yields [] on error/while loading.
   const namespaceList = createMemo(() => (namespaces.error ? [] : namespaces() ?? []))
+  // Kind → API short-name map (cycle 302): fetched once per context so cards label kinds with the
+  // cluster's own abbreviations (cm, pdb, CRD-defined shorts) instead of a hardcoded guess. Keyed
+  // on ctx because CRDs — hence short names — differ per cluster. Feeds names.ts via a setter
+  // rather than props so every kindShortLabel() call site picks it up without threading the map
+  // through the whole topology tree; an error leaves the hardcoded fallback in place.
+  const [kindShortNames] = createResource(ctx, (c) => fetchKinds(c))
+  createEffect(() => setServerShortNames(kindShortNames.error ? {} : kindShortNames() ?? {}))
   // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
   // stable across reloads, so we key the link on the stable identity).
   let pendingSel = params.get('sel')

@@ -1,3 +1,5 @@
+import { createSignal } from 'solid-js'
+
 // Display-name helpers for topology cards. A namespace's ownership tree repeats the parent name
 // in every child (Deployment "api" -> ReplicaSet "api-7d9f" -> Pod "api-7d9f-2xkp"), so the
 // distinguishing part is buried and gets truncated away. We render children relative to their
@@ -24,48 +26,38 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind
 }
 
-// Under-icon kind label: must fit beneath the 28×28 icon (≈40 px wide budget at 10 px uppercase
-// font + 0.06em letter-spacing), so anything longer than ~5 chars uses the kubectl short name.
-// Distinct from kindLabel because the drawer header can still afford the full word.
+// Server-discovered kind → API short name ("cm", "pdb", …), populated once per context from
+// /kinds (see App.tsx). A Solid signal so a late-arriving fetch re-renders the cards that already
+// drew with the fallback. This is the authoritative source — it tracks the cluster (CRD shorts
+// included) — so kindShortLabel prefers it over the hardcoded table below.
+const [serverShortNames, setServerShortNames] = createSignal<Record<string, string>>({})
+export { setServerShortNames }
+
+// Fallback under-icon labels for when the server map hasn't loaded yet (or the kind has no API
+// short name). The icon column is ≈40 px wide (10 px uppercase + 0.06em tracking, ~5–6 chars),
+// so verbose kinds need an abbreviation. Kinds the API *does* abbreviate (cm, deploy, svc, …) are
+// intentionally absent here — the server map covers them; listing them would just risk drifting
+// from the cluster's truth. What remains is kinds the apiserver gives no short name but whose full
+// kind still overflows the icon column.
 const KIND_SHORT_LABELS: Record<string, string> = {
-  Deployment: 'DEPL',
-  ReplicaSet: 'RS',
-  StatefulSet: 'STS',
-  DaemonSet: 'DS',
-  CronJob: 'CRON',
-  Service: 'SVC',
-  Ingress: 'ING',
-  ConfigMap: 'CMAP',
   Secret: 'SECRT',
-  PersistentVolumeClaim: 'PVC',
-  PersistentVolume: 'PV',
-  Namespace: 'NS',
-  ServiceAccount: 'SA',
   Group: 'GRP',
   ClusterRole: 'CROLE',
   RoleBinding: 'RB',
   ClusterRoleBinding: 'CRB',
-  Endpoints: 'EP',
-  // Cluster-scope kinds introduced with the dynamic-informer store.
-  CustomResourceDefinition: 'CRD',
-  StorageClass: 'SC',
-  // Cluster-scope kinds that show up in the cluster pseudo-namespace (cycle 212): the API server
-  // surfaces a handful of these per cluster, so even small clusters benefit from short labels
-  // that don't overflow the under-icon space.
   APIService: 'APISVC',
   CSINode: 'CSI',
   CSIDriver: 'CSIDRV',
   MutatingWebhookConfiguration: 'MWHK',
   ValidatingWebhookConfiguration: 'VWHK',
-  HorizontalPodAutoscaler: 'HPA',
-  PodDisruptionBudget: 'PDB',
-  NetworkPolicy: 'NETPOL',
-  ResourceQuota: 'QUOTA',
-  LimitRange: 'LIMR',
-  PriorityClass: 'PRIO',
 }
 
+// kindShortLabel returns the upper-cased API short name when the cluster declares one, else a
+// hardcoded fallback, else the upper-cased kind. Reactive: reading serverShortNames() ties callers
+// (the topology cards / kind chips) to the /kinds fetch so labels sharpen once it resolves.
 export function kindShortLabel(kind: string): string {
+  const api = serverShortNames()[kind]
+  if (api) return api.toUpperCase()
   return KIND_SHORT_LABELS[kind] ?? kind.toUpperCase()
 }
 

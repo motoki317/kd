@@ -121,6 +121,7 @@ type Resource struct {
 	GVR        schema.GroupVersionResource
 	Kind       string
 	Namespaced bool
+	ShortNames []string // API-declared abbreviations (kubectl SHORTNAMES), surfaced to the client
 	Informer   cache.SharedIndexInformer
 }
 
@@ -234,7 +235,7 @@ func (c *Cache) registerLocked(r discovery.Resource) {
 	_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
 		c.recordWatchErr(gvr, err)
 	})
-	c.resources[r.GVR] = Resource{GVR: r.GVR, Kind: r.Kind, Namespaced: r.Namespaced, Informer: inf}
+	c.resources[r.GVR] = Resource{GVR: r.GVR, Kind: r.Kind, Namespaced: r.Namespaced, ShortNames: r.ShortNames, Informer: inf}
 }
 
 // waitForSync blocks up to a soft deadline waiting for every started informer to sync. A
@@ -373,6 +374,29 @@ func (c *Cache) GroupForKind(kind string) (string, bool) {
 	}
 	sort.Strings(groups)
 	return groups[0], true
+}
+
+// KindShortNames maps each registered kind to its preferred API short name (the first entry of
+// the SHORTNAMES the apiserver declares, e.g. ConfigMap→"cm", PodDisruptionBudget→"pdb"), so the
+// client can label cards with the same abbreviations kubectl uses — CRD-defined shorts included.
+// Kinds the API gives no short name are omitted. On a Kind collision (two GVRs share a Kind) the
+// lexicographically smallest group wins, matching GroupForKind's determinism.
+func (c *Cache) KindShortNames() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	winningGroup := map[string]string{} // kind -> group that currently owns the entry
+	out := map[string]string{}
+	for _, r := range c.resources {
+		if len(r.ShortNames) == 0 || r.ShortNames[0] == "" {
+			continue
+		}
+		if g, ok := winningGroup[r.Kind]; ok && g <= r.GVR.Group {
+			continue
+		}
+		winningGroup[r.Kind] = r.GVR.Group
+		out[r.Kind] = r.ShortNames[0]
+	}
+	return out
 }
 
 // ListNamespaces returns all cached namespace names, sorted. Returns nil if the

@@ -46,6 +46,15 @@ export async function fetchNamespaces(ctx: string): Promise<NamespaceInfo[]> {
   return body.namespaces
 }
 
+// fetchKinds returns the cluster's kind → API short-name map (kubectl's SHORTNAMES, e.g.
+// ConfigMap→"cm"), so cards label kinds with the cluster's own abbreviations — CRD shorts
+// included — rather than a hardcoded guess. Keyed on context since CRDs differ per cluster.
+export async function fetchKinds(ctx: string): Promise<Record<string, string>> {
+  const res = await fetch(`${ctxBase(ctx)}/kinds`)
+  if (!res.ok) throw new Error(`kinds: ${res.status}`)
+  return ((await res.json()) as { shortNames?: Record<string, string> }).shortNames ?? {}
+}
+
 // CLUSTER_SCOPE is the sentinel namespace name kd uses in URLs for cluster-scoped resources.
 // The client treats it as a pinned synthetic entry in the sidebar (FR-004); the server maps
 // it to its cluster-scope snapshot. Underscores aren't valid in DNS-1123 namespace names, so

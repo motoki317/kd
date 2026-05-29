@@ -243,6 +243,32 @@ func TestStoreGroupForKindDeterministic(t *testing.T) {
 	}
 }
 
+// TestStoreKindShortNames checks the client-facing kind→short-name map: kinds with API short
+// names appear (first short wins), kinds without are omitted, and a Kind collision resolves to
+// the lexicographically smallest group like GroupForKind. Populated directly for the same reason
+// as the determinism test — the property is independent of informer wiring.
+func TestStoreKindShortNames(t *testing.T) {
+	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), discovery.Static(nil), Options{})
+	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] =
+		Resource{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", ShortNames: []string{"cm"}}
+	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}] =
+		Resource{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, Kind: "Secret"} // no short name
+	// Collision: a foreign group also claims "ConfigMap" with a different short name. The core
+	// group ("") sorts first and must win deterministically.
+	c.resources[schema.GroupVersionResource{Group: "evil.example.com", Version: "v1", Resource: "configmaps"}] =
+		Resource{GVR: schema.GroupVersionResource{Group: "evil.example.com", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", ShortNames: []string{"evilcm"}}
+
+	for i := 0; i < 50; i++ {
+		got := c.KindShortNames()
+		if got["ConfigMap"] != "cm" {
+			t.Fatalf("iter %d: ConfigMap short = %q, want %q", i, got["ConfigMap"], "cm")
+		}
+		if _, ok := got["Secret"]; ok {
+			t.Fatalf("iter %d: Secret should be omitted (no API short name), got %q", i, got["Secret"])
+		}
+	}
+}
+
 // kindCounts tallies kinds across a snapshot, so assertions stay terse.
 func kindCounts(objs []runtime.Object) map[string]int {
 	out := map[string]int{}

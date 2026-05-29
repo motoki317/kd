@@ -35,6 +35,8 @@ type Store interface {
 	// so the API can authorize a kind-named URL against group-keyed policy.csv rules.
 	// Returns ("", false) when no registered resource has that kind.
 	GroupForKind(kind string) (string, bool)
+	// KindShortNames maps each registered kind to its API short name, for client-side labels.
+	KindShortNames() map[string]string
 }
 
 // Contexts is the registry surface the API depends on. *registry.Registry satisfies it;
@@ -80,6 +82,7 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/contexts", a.handleContexts)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces", a.handleNamespaces)
+	mux.HandleFunc("GET /api/v1/contexts/{ctx}/kinds", a.handleKinds)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/graph", a.handleGraph)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/graph/stream", a.handleGraphStream)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/resources/{kind}/{name}", a.handleResource)
@@ -206,6 +209,21 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(s.Health), NonReady: s.NonReady})
 	}
 	writeJSON(w, resp)
+}
+
+type kindsResponse struct {
+	// ShortNames maps kind → API short name (e.g. "ConfigMap":"cm"). Cluster-wide discovery
+	// metadata, not resource data, so it needs no per-namespace authorization beyond a resolvable
+	// context — like /contexts itself.
+	ShortNames map[string]string `json:"shortNames"`
+}
+
+func (a *API) handleKinds(w http.ResponseWriter, r *http.Request) {
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, kindsResponse{ShortNames: store.KindShortNames()})
 }
 
 func (a *API) handleGraph(w http.ResponseWriter, r *http.Request) {

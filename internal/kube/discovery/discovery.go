@@ -22,6 +22,11 @@ type Resource struct {
 	GVR        schema.GroupVersionResource
 	Kind       string // display kind, e.g. "Pod", "Workflow"
 	Namespaced bool
+	// ShortNames are the API's own abbreviations for this kind (kubectl's SHORTNAMES column),
+	// e.g. ["cm"] for ConfigMap, ["pdb"] for PodDisruptionBudget. The client labels cards with
+	// these so abbreviations track the cluster's source of truth — including CRD-defined ones —
+	// instead of a hardcoded table. Empty for kinds the API gives no short name.
+	ShortNames []string
 }
 
 // Discoverer enumerates resources the connected cluster exposes. The interface lets tests
@@ -75,6 +80,7 @@ func (c clientDiscoverer) Discover(ctx context.Context) ([]Resource, error) {
 				GVR:        schema.GroupVersionResource{Group: g, Version: v, Resource: r.Name},
 				Kind:       r.Kind,
 				Namespaced: r.Namespaced,
+				ShortNames: r.ShortNames,
 			})
 		}
 	}

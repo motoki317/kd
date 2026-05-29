@@ -2,7 +2,7 @@ package discovery
 
 import (
 	"context"
-	"slices"
+	"reflect"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +27,7 @@ func TestFromClientFiltersAndSorts(t *testing.T) {
 		{
 			GroupVersion: "v1",
 			APIResources: []metav1.APIResource{
-				{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+				{Name: "pods", Kind: "Pod", Namespaced: true, ShortNames: []string{"po"}, Verbs: metav1.Verbs{"get", "list", "watch"}},
 				{Name: "pods/log", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get"}},
 				{Name: "nodes", Kind: "Node", Namespaced: false, Verbs: metav1.Verbs{"get", "list", "watch"}},
 				{Name: "componentstatuses", Kind: "ComponentStatus", Namespaced: false, Verbs: metav1.Verbs{"get", "list"}},
@@ -48,10 +48,10 @@ func TestFromClientFiltersAndSorts(t *testing.T) {
 
 	want := []Resource{
 		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}, Kind: "Node", Namespaced: false},
-		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true, ShortNames: []string{"po"}},
 		{GVR: schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "workflows"}, Kind: "Workflow", Namespaced: true},
 	}
-	if !slices.Equal(got, want) {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Discover() filtered/sorted result mismatch\n got: %#v\nwant: %#v", got, want)
 	}
 }
@@ -65,7 +65,7 @@ func TestStatic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	if !slices.Equal(got, res) {
+	if !reflect.DeepEqual(got, res) {
 		t.Errorf("Static().Discover() = %v, want %v", got, res)
 	}
 }
@@ -79,7 +79,7 @@ func TestCachedDelegates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	if !slices.Equal(got, res) {
+	if !reflect.DeepEqual(got, res) {
 		t.Errorf("Discover() = %v, want %v", got, res)
 	}
 }

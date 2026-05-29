@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { cardName, cardStatus, kindLabel, middleTruncate, relativeName } from './names'
+import { afterEach, describe, expect, it } from 'vitest'
+import { cardName, cardStatus, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -22,6 +22,29 @@ describe('kindLabel', () => {
   it('leaves kinds that already fit unchanged', () => {
     expect(kindLabel('Deployment')).toBe('Deployment')
     expect(kindLabel('Pod')).toBe('Pod')
+  })
+})
+
+describe('kindShortLabel', () => {
+  afterEach(() => setServerShortNames({}))
+
+  it('falls back to the hardcoded table / upper-cased kind before the server map loads', () => {
+    expect(kindShortLabel('Secret')).toBe('SECRT')
+    expect(kindShortLabel('Pod')).toBe('POD')
+  })
+
+  it("prefers the cluster's API short name, upper-cased", () => {
+    // The user's examples: kubectl abbreviates these, the old hardcoded guesses didn't.
+    setServerShortNames({ ConfigMap: 'cm', PodDisruptionBudget: 'pdb', Deployment: 'deploy' })
+    expect(kindShortLabel('ConfigMap')).toBe('CM')
+    expect(kindShortLabel('PodDisruptionBudget')).toBe('PDB')
+    expect(kindShortLabel('Deployment')).toBe('DEPLOY')
+  })
+
+  it('keeps the fallback for kinds the API gives no short name (e.g. a CRD-less Secret)', () => {
+    setServerShortNames({ ConfigMap: 'cm' })
+    expect(kindShortLabel('Secret')).toBe('SECRT')
+    expect(kindShortLabel('Workflow')).toBe('WORKFLOW')
   })
 })
 

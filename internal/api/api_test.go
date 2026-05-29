@@ -44,7 +44,7 @@ var fixtureResources = []discovery.Resource{
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}, Kind: "Node", Namespaced: false},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, Kind: "Service", Namespaced: true},
-	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true, ShortNames: []string{"cm"}},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, Kind: "Secret", Namespaced: true},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}, Kind: "Event", Namespaced: true},
 	{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, Kind: "Deployment", Namespaced: true},
@@ -403,6 +403,28 @@ func TestContextsHandlerInClusterMode(t *testing.T) {
 	}
 	if len(out.Contexts) != 1 || out.Contexts[0].Name != registry.InClusterContext || out.Contexts[0].Status != "ready" {
 		t.Errorf("contexts = %+v, want one ready %q entry", out.Contexts, registry.InClusterContext)
+	}
+}
+
+// TestKindsHandler covers the /kinds discovery endpoint the client uses to label cards with the
+// cluster's own abbreviations: kinds the API gives a short name appear, kinds without are absent.
+func TestKindsHandler(t *testing.T) {
+	srv := newServer(t, "", fixtureObjs...)
+	resp, body := get(t, srv, ctxPath+"/kinds", "alice")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var out struct {
+		ShortNames map[string]string `json:"shortNames"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	if out.ShortNames["ConfigMap"] != "cm" {
+		t.Errorf("ConfigMap short = %q, want %q", out.ShortNames["ConfigMap"], "cm")
+	}
+	if _, ok := out.ShortNames["Secret"]; ok {
+		t.Errorf("Secret should be absent (no API short name), got %q", out.ShortNames["Secret"])
 	}
 }
 
