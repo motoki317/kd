@@ -3,7 +3,7 @@ import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKi
 import { edgeKey } from '../graphState'
 import { healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
-import { cardName, cardStatus, kindShortLabel } from '../names'
+import { cardKindLabel, cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
@@ -945,14 +945,16 @@ export default function Topology(props: Props) {
                       status and the restart/age badge on their own rows so nothing competes for
                       width. Health is carried by the .node-bg border + tint (see CSS), so a colored
                       stripe is redundant and was removed to reclaim left padding for the icon. */}
-                  {/* Tightened icon+kind unit (cycle 158): icon at y=5, kind label at y=43 sits
-                      directly under the icon's bottom (y=33) with a 3px gap — was a 30px chasm.
-                      Card height dropped 72→60 to drop the dead space below the kind label too. */}
-                  <g class="node-icon node-icon-large" transform="translate(10,5) scale(2)">
+                  {/* Vertically-centered icon+kind unit (cycle 303): most glyphs ink ~y13–33 after
+                      this transform and the label inks ~y36–48, so the icon+caption block centers on
+                      the card's y30 with ~13px margins top and bottom and a tight ~3px gap between
+                      them. Previously the icon hugged the top (y5) while the label sat low, leaving a
+                      lopsided gap that read as the icon "floating" above an orphaned caption. */}
+                  <g class="node-icon node-icon-large" transform="translate(10,9) scale(2)">
                     {kindIcon(n.kind)}
                   </g>
-                  <text class="node-kind" x="24" y="43" text-anchor="middle">
-                    {kindShortLabel(n.kind)}
+                  <text class="node-kind" x="24" y="46" text-anchor="middle">
+                    {cardKindLabel(n.kind)}
                   </text>
                   <text class="node-name" x="46" y="32">
                     {label(n)}

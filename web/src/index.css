@@ -984,6 +984,15 @@ button.conn.conn-retry:focus-visible {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+/* Cap an unabbreviated kind (a CRD with no API short name) so a long label ellipsis-truncates
+   rather than stretching the chip row off-screen. Chips can afford more width than a card's icon
+   column, so the cap is generous; the full kind is in the chip's title tooltip. */
+.kind-chip-label {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Severity dot (cycle 289): small colored pip on chips whose kind carries any non-Healthy
    resource. Sits between the label and the count so it reads as "this kind has trouble of THIS
    color" — the inline color is set by JS to match the worst-health hue. */

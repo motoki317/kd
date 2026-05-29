@@ -61,6 +61,18 @@ export function kindShortLabel(kind: string): string {
   return KIND_SHORT_LABELS[kind] ?? kind.toUpperCase()
 }
 
+// cardKindLabel is the under-icon label for a topology card, capped to the ~44 px icon column so a
+// kind with no abbreviation (a CRD whose full kind upper-cases long, e.g. "CLUSTERISSUER") ellipsis-
+// truncates instead of spilling across the card into the name. SVG <text> ignores CSS text-overflow,
+// so the clip is done here; end-truncation keeps the head, which carries the most identity. The full
+// kind still shows in the hover tooltip and the drawer. ~7 chars fit, so the API/fallback shorts
+// (≤6: NETPOL, DEPLOY, APISVC, …) pass through untouched.
+const CARD_KIND_MAX = 7
+export function cardKindLabel(kind: string): string {
+  const s = kindShortLabel(kind)
+  return s.length <= CARD_KIND_MAX ? s : s.slice(0, CARD_KIND_MAX - 1) + '…'
+}
+
 // Extra search aliases for kinds whose kubectl short name isn't a substring of the full kind, so
 // muscle-memory queries like "svc" / "sts" find Services / StatefulSets. Only listed where needed
 // (e.g. "deploy" already matches "Deployment" by substring; "ing" matches "Ingress"). 2-char shorts

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardName, cardStatus, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
+import { cardKindLabel, cardName, cardStatus, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -45,6 +45,27 @@ describe('kindShortLabel', () => {
     setServerShortNames({ ConfigMap: 'cm' })
     expect(kindShortLabel('Secret')).toBe('SECRT')
     expect(kindShortLabel('Workflow')).toBe('WORKFLOW')
+  })
+})
+
+describe('cardKindLabel', () => {
+  afterEach(() => setServerShortNames({}))
+
+  it('passes short labels through untouched', () => {
+    expect(cardKindLabel('Pod')).toBe('POD')
+    expect(cardKindLabel('Service')).toBe('SERVICE') // 'SERVICE' is exactly 7 chars → fits, untouched
+  })
+
+  it('keeps the 6-char API/fallback shorts intact', () => {
+    setServerShortNames({ NetworkPolicy: 'netpol', Deployment: 'deploy' })
+    expect(cardKindLabel('NetworkPolicy')).toBe('NETPOL')
+    expect(cardKindLabel('Deployment')).toBe('DEPLOY')
+  })
+
+  it('ellipsis-truncates an unabbreviated long kind so it fits the icon column', () => {
+    // A CRD with no API short name upper-cases to its full kind; cap at 7 chars incl. the ellipsis.
+    expect(cardKindLabel('ClusterIssuer')).toBe('CLUSTE…')
+    expect(cardKindLabel('Workflow')).toBe('WORKFL…')
   })
 })
 
