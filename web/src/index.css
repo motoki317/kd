@@ -2283,7 +2283,8 @@ button.event-source:hover {
 }
 .logs-prev,
 .logs-ts,
-.logs-case {
+.logs-case,
+.logs-wrap {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
@@ -2297,26 +2298,30 @@ button.event-source:hover {
 }
 .logs-prev:hover,
 .logs-ts:hover,
-.logs-case:hover {
+.logs-case:hover,
+.logs-wrap:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }
 .logs-prev.active,
 .logs-ts.active,
-.logs-case.active {
+.logs-case.active,
+.logs-wrap.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 .logs-prev:focus-visible,
 .logs-ts:focus-visible,
-.logs-case:focus-visible {
+.logs-case:focus-visible,
+.logs-wrap:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .logs-prev.active:hover,
 .logs-ts.active:hover,
-.logs-case.active:hover {
+.logs-case.active:hover,
+.logs-wrap.active:hover {
   color: #fff;
   background: color-mix(in srgb, var(--accent) 90%, white);
   border-color: color-mix(in srgb, var(--accent) 90%, white);
@@ -2362,6 +2367,15 @@ button.event-source:hover {
   word-break: break-all;
   border-radius: 3px;
   transition: background-color 0.12s;
+}
+/* No-wrap mode (cycle 327): each entry stays on one line and the body scrolls horizontally. width
+   max-content lets the line box (and its hover wash) extend to the full content width; min-width 100%
+   keeps short lines full-width so the hover target isn't a stub. The body already has overflow:auto. */
+.logs-body.no-wrap .log-line {
+  white-space: pre;
+  word-break: normal;
+  width: max-content;
+  min-width: 100%;
 }
 /* Faint hover wash hints the line is interactive (Alt-click to copy); a brighter flash confirms
    the copy landed (cycle 323). */

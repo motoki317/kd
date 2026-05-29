@@ -47,6 +47,16 @@ export default function LogViewer(props: Props) {
   const [caseSensitive, setCaseSensitive] = createSignal(false)
   // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
   const [timestamps, setTimestamps] = createSignal(false)
+  // Soft-wrap long lines (default) vs. single-line-per-entry with horizontal scroll. Operators reading
+  // structured/columnar logs (or stack traces) often want no-wrap so column alignment survives and one
+  // 4 KB line can't push everything else off-screen. Persisted (a display habit, unlike the per-pod
+  // filter) so it sticks across selections and reloads, matching the sidebar-collapsed preference.
+  const [wrap, setWrap] = createSignal(localStorage.getItem('kd:logsWrap') !== '0')
+  const toggleWrap = () =>
+    setWrap((w) => {
+      localStorage.setItem('kd:logsWrap', w ? '0' : '1')
+      return !w
+    })
   const visibleLines = createMemo(() => filterLogLines(lines(), filter(), caseSensitive()))
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
@@ -197,6 +207,15 @@ export default function LogViewer(props: Props) {
         >
           timestamps
         </button>
+        <button
+          class="logs-wrap"
+          classList={{ active: !wrap() }}
+          aria-pressed={!wrap()}
+          onClick={toggleWrap}
+          title={wrap() ? 'Stop wrapping long lines (scroll horizontally)' : 'Wrap long lines'}
+        >
+          wrap
+        </button>
         <Show when={lines().length > 0 || filter()}>
           <input
             ref={filterInput}
@@ -258,7 +277,7 @@ export default function LogViewer(props: Props) {
           </Show>
         </span>
       </div>
-      <pre ref={pre} class="logs-body" onScroll={onScroll} tabindex="0">
+      <pre ref={pre} class="logs-body" classList={{ 'no-wrap': !wrap() }} onScroll={onScroll} tabindex="0">
         <For each={visibleLines()}>
           {(l) => (
             <div

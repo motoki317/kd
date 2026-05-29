@@ -60,6 +60,21 @@ describe('LogViewer', () => {
     expect(container.querySelector('pre.logs-body')?.getAttribute('tabindex')).toBe('0')
   })
 
+  // Wrap defaults on (today's behavior); toggling off switches the body to no-wrap horizontal scroll
+  // and persists the choice so it survives pod switches and reloads (cycle 327).
+  it('toggles line wrapping and persists the preference', () => {
+    localStorage.removeItem('kd:logsWrap')
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
+    const body = container.querySelector('pre.logs-body')!
+    const toggle = container.querySelector('.logs-wrap') as HTMLButtonElement
+    expect(toggle).toBeTruthy()
+    expect(body.classList.contains('no-wrap')).toBe(false) // wraps by default
+    toggle.click()
+    expect(body.classList.contains('no-wrap')).toBe(true)
+    expect(localStorage.getItem('kd:logsWrap')).toBe('0')
+    localStorage.removeItem('kd:logsWrap')
+  })
+
   it('hides the line filter until there are log lines', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     // No lines stream from the stub, so the filter input should not be shown.
