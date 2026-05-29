@@ -47,15 +47,21 @@ export default function DetailDrawer(props: Props) {
   const [expanded, setExpanded] = createSignal(false)
   const EXIT_MS = 220
   let exitTimer: ReturnType<typeof setTimeout> | undefined
+  // Set when the drawer opens from a closed state (not when navigating between resources while
+  // open), so the tab-default effect below can reset to the kind's default tab on a fresh open —
+  // a loggable resource lands on Logs (the most-accessed view) even if the last session ended on
+  // Manifest — while still preserving the tab as the operator walks owner chips (cycle 312).
+  let openedFresh = false
   createEffect(
     on(
       () => props.node,
-      (n) => {
+      (n, prev) => {
         if (exitTimer) {
           clearTimeout(exitTimer)
           exitTimer = undefined
         }
         if (n) {
+          if (!prev) openedFresh = true // was closed → this is a fresh open, not a navigation
           setDisplayNode(n)
           setExiting(false)
         } else if (displayNode()) {
@@ -112,8 +118,19 @@ export default function DetailDrawer(props: Props) {
   createEffect(
     on(
       () => displayNode()?.id,
-      () => {
-        setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest'))
+      (id) => {
+        // Nothing shown — don't default the tab, or the effect (which also runs on creation while
+        // the drawer is empty) would latch a loggable resource onto Manifest before it even opens.
+        if (!id) return
+        // Fresh open → the kind's default (Logs for loggable, else Manifest). Navigating between
+        // resources keeps the current tab when the new resource supports it, falling back to the
+        // default only when it doesn't (e.g. Logs → a ConfigMap that has no Logs tab).
+        if (openedFresh) {
+          setTab(loggable() ? 'logs' : 'manifest')
+          openedFresh = false
+        } else {
+          setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest'))
+        }
         if (eventsPanelEl) eventsPanelEl.scrollTop = 0
         const mp = manifestSectionEl?.querySelector('.manifest') as HTMLElement | null
         if (mp) mp.scrollTop = 0

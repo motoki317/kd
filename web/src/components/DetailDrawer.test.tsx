@@ -76,6 +76,40 @@ describe('DetailDrawer', () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
+  it('opens a loggable resource on the Logs tab on a fresh open (was latching to Manifest, cycle 312)', async () => {
+    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', namespace: 'shop', health: 'Healthy', containers: ['web'] }
+    const [node, setNode] = createSignal<KNode | null>(null)
+    const { container } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    // The drawer mounts empty; the tab-default effect must not latch onto Manifest.
+    expect(container.querySelector('.drawer-tabs')).toBeFalsy()
+    // Open the Pod from a closed state → Logs, not Manifest.
+    setNode(pod)
+    await Promise.resolve()
+    expect(container.querySelector('.drawer-tabs button.active')?.textContent?.trim()).toBe('Logs')
+  })
+
+  it('preserves the active tab when navigating between resources while open (cycle 312)', async () => {
+    const podA: KNode = { id: 'a', kind: 'Pod', name: 'a', namespace: 'shop', health: 'Healthy', containers: ['c'] }
+    const podB: KNode = { id: 'b', kind: 'Pod', name: 'b', namespace: 'shop', health: 'Healthy', containers: ['c'] }
+    const [node, setNode] = createSignal<KNode | null>(podA)
+    const { container } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+    // Fresh open of a Pod defaults to Logs.
+    expect(active()).toBe('Logs')
+    // Operator switches to Manifest, then clicks an owner chip to a different resource.
+    const manifestTab = [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim() === 'Manifest') as HTMLButtonElement
+    manifestTab.click()
+    expect(active()).toBe('Manifest')
+    setNode(podB)
+    await Promise.resolve()
+    // Navigation (drawer stayed open) keeps the operator's chosen tab.
+    expect(active()).toBe('Manifest')
+  })
+
   it('toggles an expanded (canvas-filling) mode via the expand button (cycle 311)', () => {
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
