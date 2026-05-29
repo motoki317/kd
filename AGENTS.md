@@ -51,10 +51,75 @@ go test ./...                # Go tests only
 - The client is Solid, not React. `createMemo` / `createEffect` (no `useEffect`). Stores via
   `createStore` + `reconcile` for SSE patches.
 
-## Working state
+## Verifying UI changes live
 
-The roadmap and per-cycle log live in `docs/plans/master-plan.md` and `docs/plans/ux-cycles.md`
-(both gitignored). Update them as cycles land — they're the durable state across compactions.
+Tests alone miss real UI bugs (coalesced key events, toolbar overflow, focus escapes). For any
+visible/interactive change, drive the **actual** UI:
+
+```bash
+just build                                 # MUST rebuild — the server embeds the client (embed_web)
+pkill -f 'kd -dev-user'; ./kd -dev-user dev -addr :8099 &   # poll /healthz before driving it
+```
+- Playwright via `playwright-core` (scripts in `/tmp/pw`), `chromium.launch({ channel: 'chrome' })`,
+  `goto(url, { waitUntil: 'domcontentloaded' })`, then `waitForTimeout(4500)` for the SSE graph to settle.
+- Dispatch real events and **measure what you changed**: a class applied, the `<g transform>` scale,
+  an element's rect vs the drawer bounds, a line count. Re-test from a narrower viewport for
+  layout/overflow (the compact drawer caps at ~520px).
+- `cd` shifts the persistent shell cwd — run node/playwright from `/tmp/pw`, git/build from repo root.
+
+## Client UI gotchas (Solid / SVG / jsdom)
+
+- **Eager `createMemo`**: it runs on creation, so referencing a memo/`const` declared *later* throws
+  (TDZ). Read the underlying `props.x` directly, or declare in dependency order.
+- **Signals commit synchronously**: a discrete handler (keypress) that `set`s then reads sees the new
+  value at once — so apply repeated keyboard actions *instantly*, not via an animation that eases from
+  the lagging signal, or rapid presses coalesce into one step.
+- `on(dep, fn, { defer: true })` skips the initial run; wrap DOM reads in `queueMicrotask` when you
+  need a just-set reactive class committed first. `ref={varName}` assigns the element to `varName`.
+- **SVG**: `<text>` ignores CSS `text-overflow` (truncate in JS); markers default to
+  `markerUnits="strokeWidth"` so arrowheads scale with a zoomed stroke; a `stroke="transparent"` wide
+  path still receives pointer events — use it as a fat invisible hit target over a thin line.
+- **CSS**: a two-class selector out-specifies a one-class one (no `!important`); gate animations behind
+  `@media (prefers-reduced-motion: reduce)`; persist display prefs in `localStorage` under `kd:*` keys.
+- **jsdom test limits**: `offsetParent` is always null (focus traps / visibility filters can't be
+  exercised — assert the DOM contract instead), `scrollIntoView` and `Element.animate` are missing
+  (stub them), `getBoundingClientRect` returns zeros, and `animationend` never fires (assert the class
+  was *added*, not auto-removed). For these, unit-test the contract and verify the behavior live.
+
+## UI design principles (user-stated)
+
+- Group **related** info into one visual block so it reads at a glance — apply the four design
+  principles (proximity, alignment, repetition, contrast). E.g. each pod container is one card pairing
+  status + image, grouped Init/app with counts — not two disjoint lists.
+- **Avoid icon-only UI** — users won't reliably know what bare icons mean. Use icons *with* text, a
+  text label, or a segmented control; if a control row overflows, compact it or relocate it.
+
+## Where durable state lives (docs layout)
+
+Long-lived context must be **git-tracked** so it survives across agents and is visible to humans —
+never parked in gitignored scratch:
+
+- **`docs/backlog.md`** (git-tracked) — the persistent improvement backlog: open items, future/larger
+  work, and a "rejected — do not re-propose" list. The single home for improvement tasks.
+- **`docs/ADR/`** (git-tracked) — dated decision records; design rationale lives here, not in comments.
+- **git log** — the authoritative per-change "what + why" (Conventional Commits, one per slice).
+- **`docs/plans/`** (gitignored) — **volatile, single-session scratch only.** An agent may use it for
+  working notes during one session; it is NOT durable and must not hold the backlog or long-term tasks.
+
+For self-directed improvement work ("improve the UX", "find things to improve", work the backlog), use
+the **`improvement-cycle`** skill (`.claude/skills/improvement-cycle/`): discover (code + web) →
+adversarially verify each candidate against the real code → implement one → verify live → test →
+commit → log. The **`backlog-management`** skill defines the backlog format + lifecycle. Stop
+generating when a strict re-survey yields ≈0 high-value items (the UX surface hit that at cycle 339).
+
+## Reference facts (deployment environment)
+
+- **Proxy auth:** upstream `motoki317-manifest/.common/traefik-forward-auth` emits `X-Forwarded-User`
+  (the header kd trusts); Grafana consumes the same via `auth.proxy` in `monitor/values-grafana.yaml`.
+- **ArgoCD RBAC** (pattern kd's policy.csv mirrors): `argocd/values.yaml` → `policy.default:
+  role:readonly`, plus `g, <uuid>, role:admin` group bindings.
+- **Toolchain:** go 1.26.2, node v24.14.1 (no pnpm/bun — use npm or corepack), kubectl v1.36, dev kube
+  context `docker-desktop`.
 
 ## Common surprises
 
