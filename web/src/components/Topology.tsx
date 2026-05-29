@@ -365,6 +365,7 @@ export default function Topology(props: Props) {
   // changes glide instead of jumping — easier for a human to track what just changed.
   let animFrame = 0
   let selFitFrame = 0 // rAF handle for the deferred selection-fit (cycle 307)
+  let cardClickTimer: ReturnType<typeof setTimeout> | undefined // deferred deselect, cancelled by dblclick (cycle 315)
   function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
     cancelAnimationFrame(animFrame)
     const s0 = scale(), tx0 = tx(), ty0 = ty()
@@ -382,6 +383,7 @@ export default function Topology(props: Props) {
   onCleanup(() => {
     cancelAnimationFrame(animFrame)
     cancelAnimationFrame(selFitFrame)
+    clearTimeout(cardClickTimer)
   })
 
   // computeFitFor: scale + translate that frames the given bounds into the SVG viewport with the
@@ -957,12 +959,24 @@ export default function Topology(props: Props) {
                      changes — when SSE patches shift the Dagre layout, cards glide to their new
                      spots instead of teleporting. See .node { transition: transform … } in CSS. */
                   style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
-                  /* Cycle 298: clicking the already-selected card deselects (mirrors how the
-                     legend pills and kind chips toggle their own state on a repeat click). With
-                     no deselect callback the click still selects — the toggle is purely additive. */
+                  /* Cycle 298: clicking the already-selected card deselects (mirrors how the legend
+                     pills and kind chips toggle on a repeat click). Cycle 315: the toggle-OFF is
+                     deferred a beat so a double-click can cancel it — otherwise double-clicking a
+                     card (a natural "focus this" gesture) ran select(click1)→deselect(click2) and
+                     left nothing selected. Selecting stays immediate; only deselect waits. */
                   onClick={() => {
-                    if (n.id === props.selectedId && props.onDeselect) props.onDeselect()
-                    else props.onSelect(n.id)
+                    if (n.id === props.selectedId && props.onDeselect) {
+                      clearTimeout(cardClickTimer)
+                      cardClickTimer = setTimeout(() => props.onDeselect?.(), 220)
+                    } else {
+                      props.onSelect(n.id)
+                    }
+                  }}
+                  onDblClick={() => {
+                    // Cancel the pending deselect from this double-click's second click, and make
+                    // sure the card ends up selected + framed (selection-fit runs on select).
+                    clearTimeout(cardClickTimer)
+                    props.onSelect(n.id)
                   }}
                 >
                   {/* Hover tooltip: a compact "everything on the card + a little more" view, so

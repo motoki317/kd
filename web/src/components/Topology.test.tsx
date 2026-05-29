@@ -180,18 +180,47 @@ describe('Topology', () => {
     expect(onSelect2).toHaveBeenCalledWith('2')
   })
 
-  it('clicking the already-selected card calls onDeselect (cycle 298 toggle)', () => {
-    const onSelect = vi.fn()
-    const onDeselect = vi.fn()
-    const { container } = render(() => (
-      <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="2" onSelect={onSelect} onDeselect={onDeselect} />
-    ))
-    // Node id=2 is selected. Click it again — should deselect, not re-select.
-    const card = container.querySelector('g.node.selected') as SVGGElement
-    expect(card).toBeTruthy()
-    fireEvent.click(card)
-    expect(onDeselect).toHaveBeenCalled()
-    expect(onSelect).not.toHaveBeenCalled()
+  it('clicking the already-selected card calls onDeselect (cycle 298 toggle; deferred since 315)', () => {
+    vi.useFakeTimers()
+    try {
+      const onSelect = vi.fn()
+      const onDeselect = vi.fn()
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="2" onSelect={onSelect} onDeselect={onDeselect} />
+      ))
+      // Node id=2 is selected. Click it again — should deselect, not re-select. The deselect is
+      // deferred ~220ms (cycle 315) so a double-click can cancel it, so advance timers to see it.
+      const card = container.querySelector('g.node.selected') as SVGGElement
+      expect(card).toBeTruthy()
+      fireEvent.click(card)
+      expect(onDeselect).not.toHaveBeenCalled() // still pending
+      vi.advanceTimersByTime(250)
+      expect(onDeselect).toHaveBeenCalled()
+      expect(onSelect).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('double-clicking a card cancels the deferred deselect and keeps it selected (cycle 315)', () => {
+    vi.useFakeTimers()
+    try {
+      const onSelect = vi.fn()
+      const onDeselect = vi.fn()
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="2" onSelect={onSelect} onDeselect={onDeselect} />
+      ))
+      const card = container.querySelector('g.node.selected') as SVGGElement
+      // A double-click = a click (which would schedule deselect) followed by the dblclick event.
+      fireEvent.click(card)
+      fireEvent.dblClick(card)
+      vi.advanceTimersByTime(250)
+      // The pending deselect was cancelled; the card is (re)selected instead.
+      expect(onDeselect).not.toHaveBeenCalled()
+      expect(onSelect).toHaveBeenCalledWith('2')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clicking an All-view kind group bg solos that kind (cycle 276)', () => {
