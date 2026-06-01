@@ -302,10 +302,10 @@ export default function ResourceSummary(props: Props) {
           </For>
         </div>
       </Show>
-      {/* Collapsible so a Helm-managed resource's label noise can be tucked away, but open
-          by default since labels are usually what the operator came to check. */}
+      {/* Collapsed by default: most resources carry a long label set (Helm/kustomize noise) that
+          pushes the rest of the summary below the fold — the operator expands it when needed. */}
       <Show when={labels().length > 0}>
-        <details class="drawer-labels" open>
+        <details class="drawer-labels">
           <summary>Labels · {labels().length}</summary>
           <div class="label-chips">
             <For each={labels()}>
