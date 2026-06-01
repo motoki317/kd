@@ -146,6 +146,15 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   This replaced an earlier viewport-aspect bin-pack; do **not** reintroduce horizontal placement to
   "use the width." Vertical order is stable via `componentKey` (smallest kind/name, not the random
   node UID), so a tree keeps its row as pods churn.
+- **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster shows its newest 8 by
+  `createdAt` and folds the older remainder behind a synthetic "+N older" pill — a `PositionedNode`
+  with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta` (`layout.ts`). The cluster unit is
+  the kind box (All view), a host's pods (Nodes view), or a hub's degree-1 same-kind siblings
+  (connectivity views, where the hidden leaves' hub edges aggregate into one bundled hub→pill edge).
+  Expansion is an ephemeral per-cluster signal in `Topology.tsx` keyed `kind:`/`host:`/`sib:`. Pills
+  are excluded from search/nav and folded back into `kindStats` so chip totals stay true. It only
+  collapses when it hides ≥2. This is a CLIENT-side, reveal-able fold of *live* resources — distinct
+  from the server-side permanent drop of dead ReplicaSets/Pods in `graph/build.go` (`isHistorical`).
 - **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`)
   is treated everywhere as a real namespace by route shape, but expands to the cluster's
   cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.

@@ -76,6 +76,23 @@ gap — cross-component selection→drawer-centering — is **not** a jsdom unit
 `getBoundingClientRect`, so a mocked test would validate the mock, not the coordinate math. It belongs to
 live Playwright verification per AGENTS.md, not the backlog.
 
+### Same-kind collapse — deferred follow-ups (shipped 2026-06-01)
+
+The "+N older" same-kind collapse shipped across all views (commits `189c839` grid views, `d444086`
+connectivity). Two scoped pieces were deliberately left out — each is real but low-value/high-risk today:
+
+- **Keyboard-operable collapse pills** — *deferred (a11y nicety).* The "+N older" pill is mouse-clickable
+  but not in the `nav.ts` Tab/Enter cycle (`orderedForNav` walks `props.nodes`, which has no synthetic
+  pills), so a keyboard-only user can't expand a fold. Low traffic (the data is still reachable by
+  searching, which auto-badges hidden matches). *Reopen when:* a keyboard-nav a11y pass is on the table —
+  then make pills focusable and Enter-toggle them, reusing `toggleCluster`.
+- **Collapse non-leaf same-kind siblings** — *deferred (effectively absent in the model).* Connectivity
+  collapse only folds a hub's **degree-1** same-kind leaves (pods, configmaps, PVCs). Same-kind siblings
+  that *own subtrees* and number >8 under one parent don't occur in kd's graph (controllers fan out to
+  leaves), so the case is academic; pulling a subtree out of the Dagre skeleton + synthesizing
+  multi-neighbor bundle edges is real risk for no real benefit. *Reopen when:* a concrete graph shape
+  shows >8 non-leaf same-kind siblings under one parent.
+
 ## Rejected — do not re-propose
 
 These were generated and **refuted against the real code**; re-proposing them wastes a cycle. (The
