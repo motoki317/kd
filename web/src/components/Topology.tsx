@@ -33,6 +33,10 @@ interface Props {
   // the kind-grouped variant (FR-006). All other views fall back to the default
   // connectivity-based layout.
   viewId?: import('../types').View
+  // scope identifies the current cluster+namespace, so the auto-fit re-frames only on a real
+  // context/namespace switch — not when an SSE patch or a collapse expand/refold changes the node
+  // set within the same scope (which must preserve the operator's current pan/zoom).
+  scope?: string
   search: string
   onSearch: (q: string) => void
   // Lets the app focus the topology search from a global key (Cmd/Ctrl+K) — like Sidebar's
@@ -312,11 +316,12 @@ export default function Topology(props: Props) {
       }
     }
     for (const n of layout().nodes) {
-      // A pill is synthetic — fold the nodes it hides back into the count so the kind chip reflects
-      // the true total (visible + collapsed), not just what's drawn. Keeps the count view-scoped
-      // (layout().nodes) while collapse stays invisible to the tally.
+      // A pill is synthetic. While COLLAPSED, fold the nodes it hides back into the count so the
+      // kind chip reflects the true total (visible + collapsed), not just what's drawn. While
+      // EXPANDED, those nodes are present as real cards and counted below — folding them back too
+      // would double-count — so the expanded pill contributes nothing.
       if (n.collapse) {
-        for (const h of n.collapse.hidden) add(h)
+        if (!n.collapse.expanded) for (const h of n.collapse.hidden) add(h)
         continue
       }
       add(n)
@@ -479,17 +484,28 @@ export default function Topology(props: Props) {
     return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
   }
 
-  // Fit-all on namespace/view switch (big shape changes). Tracks a key so an SSE patch that
-  // changes node positions slightly doesn't re-fit and yank the viewport away from where the user
-  // panned. First mount is a snap (no animation); subsequent fits glide.
-  let lastFitKey = ''
+  // Fit-all only on a real scope switch (context/namespace/view), keyed on scope + viewId — NOT on
+  // node count. The previous node-count key re-fit on every shape change, which yanked the viewport
+  // back to fit-all whenever the operator expanded a collapse cluster or an SSE patch added/removed
+  // a pod; both must preserve the current pan/zoom. `pendingFit` defers the fit until the new
+  // scope's layout actually has geometry (the first SSE frame can arrive after the scope flips,
+  // while width is still 0). First mount is a snap (no animation); later scope switches glide.
+  let fitScope = ' init'
+  let pendingFit = true
   let firstFit = true
   createEffect(() => {
     const l = layout()
-    const key = `${l.width}x${l.height}x${l.nodes.length}`
-    if (!svg || l.width === 0 || key === lastFitKey) return
-    lastFitKey = key
-    if (props.selectedId) return // selection-fit takes precedence; don't double-animate
+    const scope = `${props.scope ?? ''}|${props.viewId ?? ''}`
+    if (scope !== fitScope) {
+      fitScope = scope
+      pendingFit = true
+    }
+    if (!svg || l.width === 0 || !pendingFit) return
+    if (props.selectedId) {
+      pendingFit = false // selection-fit owns this scope's first frame; don't also fit-all
+      return
+    }
+    pendingFit = false
     const target = computeFitFor(0, 0, l.width, l.height, 1.4)
     target.scale *= 0.92
     if (firstFit) {

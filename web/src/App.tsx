@@ -617,6 +617,7 @@ export default function App() {
             viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
             viewHint={VIEWS.find((v) => v.id === view())?.hint}
             viewId={view()}
+            scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
             search={search()}
             onSearch={setSearch}
             searchRef={(el) => (searchEl = el)}
