@@ -1289,6 +1289,35 @@ button.conn.conn-retry:focus-visible {
 .collapse-pill.faded {
   opacity: 0.2;
 }
+/* Expanded ("− show fewer") pill: a filled accent-tinted chip rather than a dashed ghost, so the
+   re-collapse toggle reads as an active control distinct from the "+N older" reveal affordance. */
+.collapse-pill.expanded .collapse-pill-bg {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+  stroke-dasharray: none;
+  stroke-width: 1.2;
+}
+.collapse-pill.expanded .collapse-pill-label {
+  fill: var(--accent);
+}
+
+/* Connectivity-view grouping frame (ownership/network/volumes/rbac): a dashed rounded border around
+   a fold's visible siblings + its pill, the only "these belong together" cue those views have (no
+   kind/host container). Underlay, non-interactive — the pill inside owns the click. */
+.conn-frame {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  opacity: 0.85;
+  pointer-events: none;
+}
+/* Expanded fold: a brighter accent frame makes the unfolded block obvious at a glance. */
+.conn-frame.expanded {
+  stroke: var(--accent);
+  stroke-dasharray: 5 4;
+  opacity: 0.9;
+}
 /* Cycle 160: a removed node renders briefly at its last position with this class so the layout
    diff is visible as a fade-out instead of an instant vanish. pointer-events: none keeps it from
    competing for clicks; the transition is on the .node opacity rule above. */

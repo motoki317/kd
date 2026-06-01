@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLLAPSE_VISIBLE, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, connGroups, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -102,9 +102,9 @@ describe('layoutGraph', () => {
     expect(l1.nodes.find((n) => n.id === 'da')!.y).toBeLessThan(l1.nodes.find((n) => n.id === 'db')!.y)
   })
 
-  it('collapses a high-fanout hub to the newest 8 + a "+N older" pill, kept compact', () => {
+  it('collapses a high-fanout hub to the newest COLLAPSE_VISIBLE + a "+N older" pill, kept compact', () => {
     // One Node with 20 pods scheduled on it (nodes view): scheduledOn edges point pod -> node. The
-    // crowd folds to 8 visible pods + one pill (the older 12), grid-wrapped under the hub.
+    // crowd folds to the newest COLLAPSE_VISIBLE pods + one pill (the older remainder), grid-wrapped.
     const hub: KNode = { id: 'node', kind: 'Node', name: 'n1', health: 'Healthy' }
     const pods: KNode[] = []
     const e: KEdge[] = []
@@ -113,9 +113,9 @@ describe('layoutGraph', () => {
       e.push({ from: `p${i}`, to: 'node', type: 'scheduledOn' })
     }
     const l = layoutGraph([hub, ...pods], e)
-    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // hub + 8 visible + 1 pill
+    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // hub + visible + 1 pill
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden).toHaveLength(12)
+    expect(pill.collapse!.hidden).toHaveLength(20 - COLLAPSE_VISIBLE)
     // A single bundled edge runs hub -> pill in place of the folded pods' scheduledOn edges.
     expect(l.edges.some((x) => x.from === 'node' && x.to === pill.id && x.type === 'scheduledOn')).toBe(true)
     // Wrapping keeps it compact, and no two cards share a center.
@@ -140,8 +140,8 @@ describe('layoutGraph', () => {
   })
 
   it('collapses a high-fanout hub in LR, placing the visible cards + pill to the right (cycle 310)', () => {
-    // A ReplicaSet owning 24 pods. The fold leaves 8 visible pods + a pill; those still wrap into
-    // columns that grow rightward (LR), and the pill sits to the right of the ReplicaSet like a child.
+    // A ReplicaSet owning 24 pods. The fold leaves the newest COLLAPSE_VISIBLE pods + a pill; those
+    // still wrap into columns that grow rightward (LR), and the pill sits to the right like a child.
     const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }
     const pods: KNode[] = []
     const e: KEdge[] = []
@@ -150,9 +150,9 @@ describe('layoutGraph', () => {
       e.push({ from: 'rs', to: `p${i}`, type: 'ownerReference' })
     }
     const l = layoutGraph([rs, ...pods], e, 'LR')
-    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // rs + 8 visible + 1 pill
+    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // rs + visible + 1 pill
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden).toHaveLength(16)
+    expect(pill.collapse!.hidden).toHaveLength(24 - COLLAPSE_VISIBLE)
     expect(l.edges.some((x) => x.from === 'rs' && x.to === pill.id && x.type === 'ownerReference')).toBe(true)
     // Wrapping keeps it compact; the visible children + pill all sit to the RIGHT of the ReplicaSet.
     expect(l.height).toBeLessThan(NODE_HEIGHT * 12)
@@ -278,34 +278,38 @@ describe('same-kind collapse (+N older)', () => {
       createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
     }))
 
-  it('folds everything past the newest 8 behind one pill, hiding the OLDEST', () => {
+  it('folds everything past the newest COLLAPSE_VISIBLE behind one pill, hiding the OLDEST', () => {
     const l = layoutGraphByKind(pods(12), [])
     const realPods = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse)
-    expect(realPods).toHaveLength(COLLAPSE_VISIBLE) // 8 newest stay
+    expect(realPods).toHaveLength(COLLAPSE_VISIBLE) // newest COLLAPSE_VISIBLE stay
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3']) // 4 oldest
+    // 12 pods, newest 3 shown → oldest 9 hidden (p0..p8).
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'])
     expect(pill.collapse!.groupKind).toBe('Pod')
+    expect(pill.collapse!.expanded).toBe(false)
     const visibleIds = new Set(realPods.map((n) => n.id))
     expect(visibleIds.has('p0')).toBe(false) // oldest is hidden
     expect(visibleIds.has('p11')).toBe(true) // newest is shown
   })
 
-  it('expanding via its key shows all nodes and drops the pill', () => {
+  it('expanding via its key shows all nodes and keeps the pill as a "show fewer" toggle', () => {
     const l = layoutGraphByKind(pods(12), [], new Set(['kind:Pod']))
-    expect(l.nodes.some((n) => n.collapse)).toBe(false)
-    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12)
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12) // every card now shown
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.expanded).toBe(true) // pill persists to drive the re-collapse
+    expect(pill.collapse!.hidden).toHaveLength(9) // still reports what it would refold
   })
 
-  it('does not collapse when it would hide fewer than 2 (9 pods → show all 9)', () => {
-    const l = layoutGraphByKind(pods(9), [])
+  it('does not collapse when it would hide fewer than 2 (4 pods → show all 4)', () => {
+    const l = layoutGraphByKind(pods(4), [])
     expect(l.nodes.some((n) => n.collapse)).toBe(false)
-    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(9)
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(4)
   })
 
   it('chooses the oldest by creation time regardless of input order', () => {
     const l = layoutGraphByKind([...pods(12)].reverse(), [])
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3'])
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'])
   })
 
   it('keeps the pill inside its kind box, with no phantom __collapse__ group', () => {
@@ -318,16 +322,72 @@ describe('same-kind collapse (+N older)', () => {
     expect(pill.x + pill.width / 2).toBeLessThanOrEqual(g.x + g.width + 0.001)
   })
 
-  it('connectivity: expanding a sibling-set shows all leaves and drops the pill + bundle edge', () => {
+  it('connectivity: expanding a sibling-set shows all leaves, keeps a show-fewer pill, drops the bundle edge', () => {
     const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web', health: 'Healthy' }
     const leaves = pods(12)
     const e: KEdge[] = leaves.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const }))
     const collapsed = layoutGraph([rs, ...leaves], e, 'LR')
-    expect(collapsed.nodes.some((n) => n.collapse)).toBe(true)
+    expect(collapsed.nodes.some((n) => n.collapse && !n.collapse.expanded)).toBe(true)
     const expanded = layoutGraph([rs, ...leaves], e, 'LR', new Set(['sib:rs:Pod']))
-    expect(expanded.nodes.some((n) => n.collapse)).toBe(false)
-    expect(expanded.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12)
+    expect(expanded.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12) // every leaf now drawn
+    expect(expanded.nodes.some((n) => n.collapse?.expanded)).toBe(true) // show-fewer pill persists
+    // No bundled hub→pill edge while expanded — each leaf has its own hub edge instead.
     expect(expanded.edges.some((x) => x.to.startsWith('__collapse__'))).toBe(false)
+  })
+
+  it('connectivity: frames a folded kind block per kind, growing on expand', () => {
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web', health: 'Healthy' }
+    const leaves = pods(12)
+    const e: KEdge[] = leaves.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const }))
+    const frames = connGroups(layoutGraph([rs, ...leaves], e, 'LR'))
+    expect(frames.map((f) => f.key)).toEqual(['sib:rs:Pod']) // one per-kind frame
+    expect(frames[0].expanded).toBe(false)
+    // The frame grows once the kind is unfolded (all its cards now drawn inside it).
+    const expanded = connGroups(layoutGraph([rs, ...leaves], e, 'LR', new Set(['sib:rs:Pod'])))
+    expect(expanded[0].expanded).toBe(true)
+    expect(expanded[0].height).toBeGreaterThan(frames[0].height) // taller column when unfolded
+  })
+
+  it('connectivity: a multi-kind hub groups + folds each kind independently', () => {
+    // A CRD-style owner with many Services AND many Secrets: each kind gets its own frame, its own
+    // pill, and folds on its own — no mixed-kind grouping.
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'main', health: 'Healthy' }
+    const svcs = pods(6).map((p) => ({ ...p, id: `svc-${p.id}`, kind: 'Service', name: `svc-${p.name}` }))
+    const secrets = pods(9).map((p) => ({ ...p, id: `sec-${p.id}`, kind: 'Secret', name: `sec-${p.name}` }))
+    const e: KEdge[] = [...svcs, ...secrets].map((n) => ({ from: 'es', to: n.id, type: 'ownerReference' as const }))
+    const l = layoutGraph([owner, ...svcs, ...secrets], e, 'LR')
+    // Two pills (one per kind), folding the older Services (6→3) and Secrets (9→6) separately.
+    const pillHidden = l.nodes.filter((n) => n.collapse).map((n) => n.collapse!.hidden.length).sort((a, b) => a - b)
+    expect(pillHidden).toEqual([3, 6])
+    // Two distinct per-kind frames.
+    const frames = connGroups(l).sort((a, b) => a.key.localeCompare(b.key))
+    expect(frames.map((f) => f.key)).toEqual(['sib:es:Secret', 'sib:es:Service'])
+    const [secF, svcF] = frames
+    // Both kinds are direct children → SAME depth (same left x), stacked vertically (disjoint in y).
+    expect(Math.abs(secF.x - svcF.x)).toBeLessThan(1)
+    const disjointY = secF.y + secF.height <= svcF.y || svcF.y + svcF.height <= secF.y
+    expect(disjointY).toBe(true)
+  })
+
+  it('connectivity: all of a hub’s direct children share one depth (x), whatever their kind', () => {
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'main', health: 'Healthy' }
+    const svcs = pods(6).map((p) => ({ ...p, id: `svc-${p.id}`, kind: 'Service', name: `svc-${p.name}` }))
+    const secrets = pods(9).map((p) => ({ ...p, id: `sec-${p.id}`, kind: 'Secret', name: `sec-${p.name}` }))
+    const cms = pods(2).map((p) => ({ ...p, id: `cm-${p.id}`, kind: 'ConfigMap', name: `cm-${p.name}` }))
+    const kids = [...svcs, ...secrets, ...cms]
+    const e: KEdge[] = kids.map((n) => ({ from: 'es', to: n.id, type: 'ownerReference' as const }))
+    const l = layoutGraph([owner, ...kids], e, 'LR')
+    // Every real child card (not the owner, not a pill) sits at the same x column to the owner's right.
+    const childXs = l.nodes.filter((n) => n.id !== 'es' && !n.collapse).map((n) => Math.round(n.x))
+    expect(new Set(childXs).size).toBe(1) // one depth level for all kinds
+    expect(childXs[0]).toBeGreaterThan(l.nodes.find((n) => n.id === 'es')!.x)
+  })
+
+  it('connectivity: a hub with no fold gets no frame', () => {
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web', health: 'Healthy' }
+    const leaves = pods(4) // below the collapse threshold → nothing folds
+    const e: KEdge[] = leaves.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const }))
+    expect(connGroups(layoutGraph([rs, ...leaves], e, 'LR'))).toHaveLength(0)
   })
 
   it('connectivity: two parents fold their own siblings independently', () => {
@@ -341,7 +401,7 @@ describe('same-kind collapse (+N older)', () => {
     ]
     const l = layoutGraph([rsA, ...podsA, rsB, ...podsB], e, 'LR')
     const pills = l.nodes.filter((n) => n.collapse)
-    expect(pills.map((p) => p.collapse!.hidden.length).sort((a, b) => a - b)).toEqual([4, 7]) // 12→4, 15→7
+    expect(pills.map((p) => p.collapse!.hidden.length).sort((a, b) => a - b)).toEqual([9, 12]) // 12→9, 15→12
   })
 
   it('collapses a host’s pods but never the Node card', () => {
@@ -350,7 +410,7 @@ describe('same-kind collapse (+N older)', () => {
     const l = layoutGraphByHost([nodeCard, ...hostPods], [])
     expect(l.nodes.find((n) => n.id === 'node')).toBeTruthy() // Node card always shown
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden).toHaveLength(4)
+    expect(pill.collapse!.hidden).toHaveLength(9)
     expect(pill.collapse!.groupKind).toBe('Pod')
     // The pill rides in the host container (attributed via its host field).
     const hg = hostGroups(l).find((g) => g.host === 'node-a')!

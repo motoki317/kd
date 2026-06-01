@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { COLLAPSE_KIND, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type CollapseMeta, type Point } from '../layout'
+import { COLLAPSE_KIND, connGroups, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -151,6 +151,12 @@ export default function Topology(props: Props) {
   const groups = createMemo(() => (props.viewId === 'all' ? kindGroups(layout()) : []))
   // Nodes view: per-host group bounding boxes for the host-container bg rect + header label.
   const hosts = createMemo(() => (props.viewId === 'nodes' ? hostGroups(layout()) : []))
+  // Connectivity views (ownership/network/volumes/rbac) have no kind/host container, so a fold's
+  // siblings + pill get a dedicated grouping frame. All/Nodes already box by kind/host — drawing a
+  // second frame there would double-border, so connGroups is empty for those.
+  const connFrames = createMemo(() =>
+    props.viewId && props.viewId !== 'all' && props.viewId !== 'nodes' ? connGroups(layout()) : [],
+  )
   // Pod count per host, used in the host-group header chip — derived once to keep the SVG
   // markup clean (the alternative is an inline expression that has to re-derive the orphan
   // bucket condition every render). The orphan host bucket counts pods that have either no
@@ -1103,6 +1109,27 @@ export default function Topology(props: Props) {
               </For>
             </g>
           </Show>
+          {/* Connectivity views: a grouping frame around each collapse cluster (visible siblings +
+              pill), so a fold reads as one unit the pill folds/unfolds. Drawn under the cards as a
+              dashed underlay; expanded frames get a solid-ish accent so "this block is unfolded"
+              is obvious at a glance. Empty for All/Nodes (their kind/host boxes already group). */}
+          <Show when={connFrames().length > 0}>
+            <g class="conn-frames">
+              <For each={connFrames()}>
+                {(f) => (
+                  <rect
+                    class="conn-frame"
+                    classList={{ expanded: f.expanded }}
+                    x={f.x}
+                    y={f.y}
+                    width={f.width}
+                    height={f.height}
+                    rx="11"
+                  />
+                )}
+              </For>
+            </g>
+          </Show>
           <g class="edges">
             <For each={layout().edges}>
               {(e) => (
@@ -1217,33 +1244,49 @@ export default function Topology(props: Props) {
                 </g>
                   }
                 >
-                  {/* "+N older" collapse pill: a ghost card standing in for the folded older
-                      same-kind resources. Click expands just this cluster; a "● N match" badge
-                      appears when the fold is hiding a search/health/selection result (D7). */}
+                  {/* Two-way collapse pill: a ghost card that folds/unfolds the extra same-kind
+                      resources. Collapsed it reads "+ show N more" and expands the cluster; expanded
+                      it reads "− show N fewer" and refolds it (one affordance, both directions —
+                      "older" is deliberately not surfaced). A "● N match" badge appears only while
+                      collapsed, when the fold hides a search/health/selection result (D7) — expanded,
+                      those cards are already shown. */}
                   {(meta) => (
                     <g
                       class="collapse-pill"
-                      classList={{ faded: !!activeKinds() && !activeKinds()!.has(meta().groupKind) }}
+                      classList={{
+                        faded: !!activeKinds() && !activeKinds()!.has(meta().groupKind),
+                        expanded: meta().expanded,
+                      }}
                       style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
                       onClick={() => toggleCluster(meta().key)}
                     >
                       <title>
-                        Show {meta().hidden.length} older {meta().groupKind}
-                        {meta().hidden.length === 1 ? '' : 's'}
+                        {meta().expanded
+                          ? `Show ${meta().hidden.length} fewer ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
+                          : `Show ${meta().hidden.length} more ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`}
                       </title>
                       <rect class="collapse-pill-bg" width={n.width} height={n.height} rx="9" />
-                      <text
-                        class="collapse-pill-label"
-                        x={n.width / 2}
-                        y={collapseMatchCount(meta()) > 0 ? 24 : 35}
-                        text-anchor="middle"
+                      <Show
+                        when={!meta().expanded}
+                        fallback={
+                          <text class="collapse-pill-label" x={n.width / 2} y="35" text-anchor="middle">
+                            − show {meta().hidden.length} fewer
+                          </text>
+                        }
                       >
-                        + {meta().hidden.length} older
-                      </text>
-                      <Show when={collapseMatchCount(meta()) > 0}>
-                        <text class="collapse-pill-match" x={n.width / 2} y="46" text-anchor="middle">
-                          ● {collapseMatchCount(meta())} match
+                        <text
+                          class="collapse-pill-label"
+                          x={n.width / 2}
+                          y={collapseMatchCount(meta()) > 0 ? 24 : 35}
+                          text-anchor="middle"
+                        >
+                          + show {meta().hidden.length} more
                         </text>
+                        <Show when={collapseMatchCount(meta()) > 0}>
+                          <text class="collapse-pill-match" x={n.width / 2} y="46" text-anchor="middle">
+                            ● {collapseMatchCount(meta())} match
+                          </text>
+                        </Show>
                       </Show>
                     </g>
                   )}

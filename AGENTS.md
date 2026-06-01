@@ -146,15 +146,40 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   This replaced an earlier viewport-aspect bin-pack; do **not** reintroduce horizontal placement to
   "use the width." Vertical order is stable via `componentKey` (smallest kind/name, not the random
   node UID), so a tree keeps its row as pods churn.
-- **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster shows its newest 8 by
-  `createdAt` and folds the older remainder behind a synthetic "+N older" pill — a `PositionedNode`
-  with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta` (`layout.ts`). The cluster unit is
-  the kind box (All view), a host's pods (Nodes view), or a hub's degree-1 same-kind siblings
-  (connectivity views, where the hidden leaves' hub edges aggregate into one bundled hub→pill edge).
-  Expansion is an ephemeral per-cluster signal in `Topology.tsx` keyed `kind:`/`host:`/`sib:`. Pills
-  are excluded from search/nav and folded back into `kindStats` so chip totals stay true. It only
-  collapses when it hides ≥2. This is a CLIENT-side, reveal-able fold of *live* resources — distinct
-  from the server-side permanent drop of dead ReplicaSets/Pods in `graph/build.go` (`isHistorical`).
+- **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster shows its newest
+  `COLLAPSE_VISIBLE` (=3) by `createdAt` and folds the older remainder behind a synthetic "+N older"
+  pill — a `PositionedNode` with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta`
+  (`layout.ts`). The cluster unit is the kind box (All view), a host's pods (Nodes view), or a hub's
+  degree-1 same-kind siblings (connectivity views, where the hidden leaves' hub edges aggregate into
+  one bundled hub→pill edge). Expansion is an ephemeral per-cluster signal in `Topology.tsx` keyed
+  `kind:`/`host:`/`sib:`. The pill is a **two-way toggle**: collapsed it reads "+ show N more"
+  (expands); expanded it stays as "− show N fewer" (refolds) with the bundled edge suppressed — the
+  fold is by age but the label deliberately never surfaces "older". Driven by
+  `CollapseMeta.expanded`, which `splitByAge` populates by keeping the would-fold set even when
+  expanded. Pills are excluded from search/nav and folded back into `kindStats` **only while
+  collapsed** (expanded, the cards are real and counted directly — folding back too would
+  double-count). It only collapses when it hides ≥2. This is a CLIENT-side, reveal-able fold of
+  *live* resources — distinct from the server-side permanent drop of dead ReplicaSets/Pods in
+  `graph/build.go` (`isHistorical`).
+- **Per-kind hub leaf blocks + frames (`collapseHubLeaves` → `connGroups`)**: a hub's degree-1 leaves
+  are grouped **per kind** into separate column blocks (Services together, Secrets together, …), each a
+  vertical column laid out by `blockDims` (fills down to `LEAF_COL_MAX` before wrapping) so the kind's
+  "+ show N more" pill sits at the *bottom* of its column, vertically aligned under its cards. All blocks of
+  one hub sit at a **single depth** (one x in LR / one y in TB — `hubArea` + `placeBlocksLR`/
+  `placeBlocksTB` stack them along the cross axis, NOT the depth axis), because they are all direct
+  children: depth must not vary by kind, or kinds look like different tree levels. Each kind folds
+  independently (its own `sib:<hub>:<kind>` pill + bundled edge). Multi-card blocks carry a per-kind
+  `collapseGroup` (= the same `sib:` key) so `connGroups` draws one tight dashed grouping frame per
+  kind — tight because each kind is a contiguous block, never interleaved (an earlier hub-level frame
+  was abandoned once blocks made per-kind bboxes clean). Single-card kinds stay unframed. The frame
+  (`.conn-frame`, a `--text-dim` dashed border) turns accent (`.conn-frame.expanded`) when its kind is
+  expanded. All/Nodes already box by kind/host, so `connGroups` is empty there (avoids a double border).
+- **Scope-keyed auto-fit**: the fit-all effect in `Topology.tsx` keys on `scope` (ctx+namespace) +
+  `viewId`, NOT node count. A node-count key re-fit on every shape change, yanking the viewport back
+  to fit-all whenever the operator expanded a collapse cluster or an SSE patch added/removed a pod —
+  both must preserve the current pan/zoom. `pendingFit` defers the fit until the new scope's layout
+  has geometry (the first SSE frame can land after the scope flips, while width is still 0). A real
+  context/namespace/view switch still re-fits; churn and expand/refold do not.
 - **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`)
   is treated everywhere as a real namespace by route shape, but expands to the cluster's
   cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.
