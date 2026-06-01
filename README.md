@@ -98,14 +98,17 @@ Prerequisites: Go 1.26+, Node 24+, a reachable Kubernetes context (`kubectl` wor
 
 ```bash
 just                 # list recipes
-just dev             # run Go API (:8080) + Vite dev server (:5173) together
+just dev             # run Go API (:9123) + Vite dev server (:5173) together
 just test            # Go + client tests
 just check           # vet + lint + typecheck
 just build           # build client, embed, build the kd binary
 ```
 
 In dev, the Vite server proxies `/api` to the Go server and injects a `dev` identity, so no
-forward-auth proxy is needed locally.
+forward-auth proxy is needed locally. Running the binary directly is just as smooth: when kd is
+**not** in-cluster and no proxy auth is configured, it auto-enables dev mode (fixed `dev` identity,
+read-only) — `./kd` against your kubeconfig "just works". Setting `--dev-user`, `--trusted-proxies`,
+or `--user-header` opts back into explicit auth.
 
 When kd loads a local kubeconfig (instead of in-cluster config), the topbar gains a context
 switcher listing every context in the merged kubeconfig — switching reloads the dashboard

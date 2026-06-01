@@ -24,7 +24,7 @@ spec:
         - name: kd
           image: ghcr.io/motoki317/kd:latest
           args:
-            - --addr=:8080
+            - --addr=:9123
             - --policy=/etc/kd/policy.csv
             # Trusts X-Forwarded-User from the forward-auth proxy (default). Restrict who may
             # assert it with --trusted-proxies=<CIDR> once the proxy source range is known.
@@ -36,7 +36,7 @@ spec:
                   key: policy.default
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 9123
           readinessProbe:
             httpGet:
               path: /healthz

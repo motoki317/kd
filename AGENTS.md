@@ -31,7 +31,7 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 ```bash
 just build       # vite build → embed → go build
 just test        # go test + npm test
-just dev         # Go API :8080 + Vite :5173 (proxied)
+just dev         # Go API :9123 + Vite :5173 (proxied)
 cd web && npx vitest run    # web tests only (cwd matters: must be web/)
 go test ./...                # Go tests only
 ```

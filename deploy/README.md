@@ -13,7 +13,7 @@ kubectl apply -k deploy/
 | `Namespace kd` | Holds the deployment. |
 | `ServiceAccount kd` + `ClusterRole kd-readonly` | The one identity kd runs as — wildcard read (`*` `*` `get/list/watch`) so the dynamic-informer factory can discover every API resource the cluster exposes, including CRDs installed at runtime; plus `pods/log`. kd does its own authorization on top (see the access-model ADR). |
 | `ConfigMap kd-policy` | The declarative `policy.csv` and `policy.default`. Hot-reloaded; edit and re-apply, no restart. |
-| `Deployment` + `Service kd` | The kd server (`:8080` → Service `:80`), read-only root FS, non-root. |
+| `Deployment` + `Service kd` | The kd server (`:9123` → Service `:80`), read-only root FS, non-root. |
 | `IngressRoute kd` | Traefik route behind the `auth-admin` forward-auth middleware, which injects `X-Forwarded-User`. |
 
 ## Before applying
