@@ -356,6 +356,28 @@ describe('Topology', () => {
     expect(faded(container)).toBe(1)
   })
 
+  it('collapse pill: a bare selection shows no "N match" badge (empty search)', () => {
+    // Regression: selecting a resource lights its whole related subtree (related()). A fold inside
+    // that subtree must NOT report its hidden siblings as search "matches" while the search box is
+    // empty — the badge is for explicit search/health queries, not navigation. A CRD owner with 6
+    // Services folds the crowded Service block; selecting the owner pulls every Service into related().
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'main', health: 'Healthy' }
+    const svcs: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `svc-${i}`, kind: 'Service', name: `svc-${i}`, health: 'Healthy' as const }))
+    const owns: KEdge[] = svcs.map((s) => ({ from: 'es', to: s.id, type: 'ownerReference' as const }))
+
+    const empty = render(() => (
+      <Topology nodes={[owner, ...svcs]} edges={owns} search="" {...base} selectedId="es" />
+    )).container
+    expect(empty.querySelector('.collapse-pill')).toBeTruthy() // the fold actually happened
+    expect(empty.querySelectorAll('.collapse-pill-match').length).toBe(0) // ...but no phantom badge
+
+    // An explicit search hitting the hidden Services brings the badge back.
+    const searched = render(() => (
+      <Topology nodes={[owner, ...svcs]} edges={owns} search="svc" {...base} selectedId="es" />
+    )).container
+    expect(searched.querySelectorAll('.collapse-pill-match').length).toBeGreaterThan(0)
+  })
+
   it('accents only edges directly touching the selected node, not the whole component (cycle 309)', () => {
     // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod should accent only the
     // RS→Pod edge (2→3) that touches it — NOT the Deployment→RS edge (1→2) further up the tree.

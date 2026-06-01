@@ -360,16 +360,19 @@ export default function Topology(props: Props) {
     const r = related()
     return r ? !r.nodes.has(n.id) : false
   }
-  // A collapsed pill counts how many of its hidden nodes the operator is currently "looking for", so
-  // the badge ("● N match") signals a fold is hiding a result without revealing it (FR-006/D7). The
-  // predicate mirrors nodeFaded's precedence: active search > health filter > selection-related.
+  // A collapsed pill counts how many of its hidden nodes the operator is currently searching/filtering
+  // for, so the badge ("● N match") signals a fold is hiding a result without revealing it (FR-006/D7).
+  // Only an EXPLICIT query counts — a live search or the health legend filter. Selection is navigation,
+  // not a query: selecting a resource lights its whole related subtree (related()), and a fold inside
+  // that subtree would otherwise report every hidden sibling as a "match" even with an empty search box
+  // — which reads as a phantom search hit. So the badge stays away unless the operator actually typed a
+  // search or picked a health filter.
   const collapseMatchCount = (meta: CollapseMeta): number => {
     const q = query().trim()
-    const r = related()
     const hit = (n: KNode): boolean => {
       if (q) return nodeKindOk(n.kind) && nodeMatches(n, q)
       if (props.healthFilter) return n.health === props.healthFilter
-      return r ? r.nodes.has(n.id) : false
+      return false
     }
     return meta.hidden.reduce((c, n) => c + (hit(n) ? 1 : 0), 0)
   }
@@ -1255,7 +1258,7 @@ export default function Topology(props: Props) {
                       resources. Collapsed it reads "+ show N more" and expands the cluster; expanded
                       it reads "− show N fewer" and refolds it (one affordance, both directions —
                       "older" is deliberately not surfaced). A "● N match" badge appears only while
-                      collapsed, when the fold hides a search/health/selection result (D7) — expanded,
+                      collapsed, when the fold hides a search or health-filter result (D7) — expanded,
                       those cards are already shown. */}
                   {(meta) => (
                     <g
