@@ -116,8 +116,9 @@ describe('layoutGraph', () => {
     expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // hub + visible + 1 pill
     const pill = l.nodes.find((n) => n.collapse)!
     expect(pill.collapse!.hidden).toHaveLength(20 - COLLAPSE_VISIBLE)
-    // A single bundled edge runs hub -> pill in place of the folded pods' scheduledOn edges.
-    expect(l.edges.some((x) => x.from === 'node' && x.to === pill.id && x.type === 'scheduledOn')).toBe(true)
+    // A single bundled edge stands in for the folded pods' scheduledOn edges, drawn in their real
+    // direction (pod→node): the pods are the sources, so it runs pill → node, not node → pill.
+    expect(l.edges.some((x) => x.from === pill.id && x.to === 'node' && x.type === 'scheduledOn')).toBe(true)
     // Wrapping keeps it compact, and no two cards share a center.
     expect(l.width).toBeLessThan(NODE_WIDTH * 8)
     const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
@@ -160,6 +161,27 @@ describe('layoutGraph', () => {
     expect(l.nodes.filter((n) => n.id !== 'rs').every((n) => n.x > rsx)).toBe(true)
     const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
     expect(seen.size).toBe(l.nodes.length)
+  })
+
+  it('keeps a hub’s degree-1 parent to its left so ownerReference flows left→right', () => {
+    // Deployment → ReplicaSet → 12 pods. The RS is a hub (many pod children), but its lone Deployment
+    // parent must NOT be wrapped onto the children's (right) side — it stays left so dep→rs→pod all
+    // point rightward. This is the bug where the RS rendered leftmost with its Deployment beside it.
+    const dep: KNode = { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }
+    const pods = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, kind: 'Pod', name: `web-x-${i}`, health: 'Healthy' as const }))
+    const e: KEdge[] = [
+      { from: 'dep', to: 'rs', type: 'ownerReference' },
+      ...pods.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const })),
+    ]
+    const l = layoutGraph([dep, rs, ...pods], e, 'LR')
+    const x = (id: string) => l.nodes.find((n) => n.id === id)!.x
+    expect(l.nodes.find((n) => n.id === 'dep')).toBeTruthy() // a real card, never folded into a pill
+    expect(x('dep')).toBeLessThan(x('rs')) // parent left of the hub
+    expect(l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse).every((p) => p.x > x('rs'))).toBe(true)
+    // The dep→rs ownerReference arrow runs left→right (its drawn start is left of its end).
+    const depEdge = l.edges.find((ed) => ed.from === 'dep' && ed.to === 'rs')!
+    expect(depEdge.points[0].x).toBeLessThan(depEdge.points[depEdge.points.length - 1].x)
   })
 })
 

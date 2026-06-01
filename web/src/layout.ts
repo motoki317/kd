@@ -565,8 +565,9 @@ function collapseHubLeaves(
 }
 
 // findHubs detects nodes whose many degree-1 neighbors should be grid-wrapped. A leaf is wrapped
-// under (TB) / beside (LR) the neighbor it connects to; the grid sits on the leaf side of the edge
-// (a Node's pods read below/right of it; a ReplicaSet's pods do too, since edges point parent->child).
+// beside (LR) / under (TB) its hub; only the DOMINANT-direction neighbors are wrapped (children if a
+// hub mostly fans out, parents if it mostly fans in). The minority side stays in the Dagre skeleton
+// so its edge keeps the graph's natural left-to-right flow — see the per-hub note below.
 function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const degree = new Map<string, number>()
@@ -574,23 +575,34 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
     degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
   }
-  // For each potential hub, collect its leaf neighbors and whether the hub is the edge target.
-  const leavesOf = new Map<string, { leaves: KNode[]; hubIsTarget: number }>()
+  // For each potential hub, split its degree-1 neighbors by edge direction: children (hub is the
+  // edge source, hub->leaf) vs parents (hub is the target, leaf->hub). Keeping the two apart is what
+  // lets us wrap only one side.
+  const childrenOf = new Map<string, KNode[]>()
+  const parentsOf = new Map<string, KNode[]>()
   for (const e of edges) {
     const leafId = degree.get(e.from) === 1 ? e.from : degree.get(e.to) === 1 ? e.to : null
     if (!leafId) continue
     const hubId = leafId === e.from ? e.to : e.from
     const leaf = byId.get(leafId)
     if (!leaf) continue
-    const entry = leavesOf.get(hubId) ?? { leaves: [], hubIsTarget: 0 }
-    entry.leaves.push(leaf)
-    if (hubId === e.to) entry.hubIsTarget++
-    leavesOf.set(hubId, entry)
+    const side = hubId === e.from ? childrenOf : parentsOf
+    const list = side.get(hubId) ?? []
+    list.push(leaf)
+    side.set(hubId, list)
   }
 
   const hubs: Hub[] = []
   const wrapped = new Set<string>()
-  for (const [id, { leaves, hubIsTarget }] of leavesOf) {
+  for (const id of new Set([...childrenOf.keys(), ...parentsOf.keys()])) {
+    const children = childrenOf.get(id) ?? []
+    const parents = parentsOf.get(id) ?? []
+    // Wrap only the dominant-direction neighbors. The minority side — e.g. a ReplicaSet's single
+    // Deployment parent among many pod children — stays in the Dagre skeleton, so Dagre keeps the
+    // parent to the hub's LEFT (LR) and its ownerReference arrow flows left→right. Wrapping it as a
+    // leaf had dragged it onto the children's side (the hub's right), reversing that arrow.
+    const useChildren = children.length >= parents.length
+    const leaves = useChildren ? children : parents
     if (leaves.length < FANOUT_MIN) continue
     leaves.sort((a, b) => a.name.localeCompare(b.name))
     // Group this hub's leaves per kind and fold each crowded kind into its own "+N older" pill
@@ -600,7 +612,7 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     hubs.push({
       id,
       blocks: collapsed.blocks,
-      after: hubIsTarget <= leaves.length / 2,
+      after: useChildren,
       pills: collapsed.pills,
     })
     // Every ORIGINAL leaf is owned by the hub (excluded from the Dagre skeleton); hidden ones simply
@@ -682,27 +694,42 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
   const positionedEdges: PositionedEdge[] = []
   for (const e of edges) {
     if (wrapped.has(e.from) || wrapped.has(e.to)) {
-      // Hub<->leaf: straight line from the hub card to the leaf card.
-      const hubId = hubById.has(e.from) ? e.from : e.to
-      const leafId = hubId === e.from ? e.to : e.from
-      const hub = positioned.find((n) => n.id === hubId)
-      const leaf = positioned.find((n) => n.id === leafId)
-      if (hub && leaf) positionedEdges.push({ ...e, points: [{ x: hub.x, y: hub.y }, { x: leaf.x, y: leaf.y }] })
+      // Hub<->leaf: straight line drawn in EDGE ORDER (from→to), so the arrowhead lands on the true
+      // target and the relationship keeps its direction — a child fold points hub→leaf, a parent
+      // fold points leaf→hub. (Drawing hub→leaf unconditionally reversed parent-side folds.)
+      const a = positioned.find((n) => n.id === e.from)
+      const b = positioned.find((n) => n.id === e.to)
+      if (a && b) positionedEdges.push({ ...e, points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }] })
       continue
     }
     const ge = g.edge(e.from, e.to)
-    if (ge) positionedEdges.push({ ...e, points: ge.points })
+    if (ge) {
+      // Re-aim a hub endpoint at its card: Dagre routed the edge to the hub's wide reserved box
+      // (card + leaf grid), but the card is pinned to one edge of that box — without this, an edge
+      // into a hub (e.g. Deployment→ReplicaSet) would point at the empty middle of the leaf grid.
+      const pts: Point[] = ge.points.map((p: Point) => ({ x: p.x, y: p.y }))
+      const fc = cardCenter.get(e.from)
+      const tc = cardCenter.get(e.to)
+      if (fc) pts[0] = fc
+      if (tc) pts[pts.length - 1] = tc
+      positionedEdges.push({ ...e, points: pts })
+    }
   }
 
-  // Bundled hub→pill edges (D6): one straight line from each hub card to its "+N older" pill, in
-  // place of the many edges to the leaves the pill folds away. Keyed by the relationship the hidden
-  // siblings shared with the hub, so a pod fold reads "owns →" and a mount fold reads "mounts →".
+  // Bundled hub↔pill edges (D6): one straight line standing in for the many edges to the leaves the
+  // pill folds away, typed by the relationship the siblings shared with the hub. Drawn in the real
+  // direction so the arrow flows the same way as the unfolded edges would: children fold → hub→pill,
+  // parents fold → pill→hub.
   for (const hub of hubs) {
     const center = cardCenter.get(hub.id)
     if (!center) continue
     for (const pill of hub.pills) {
       const pp = positioned.find((n) => n.id === pill.id)
-      if (pp) positionedEdges.push({ from: hub.id, to: pill.id, type: pill.type, points: [{ x: center.x, y: center.y }, { x: pp.x, y: pp.y }] })
+      if (!pp) continue
+      const ends = hub.after
+        ? { from: hub.id, to: pill.id, points: [{ x: center.x, y: center.y }, { x: pp.x, y: pp.y }] }
+        : { from: pill.id, to: hub.id, points: [{ x: pp.x, y: pp.y }, { x: center.x, y: center.y }] }
+      positionedEdges.push({ ...ends, type: pill.type })
     }
   }
 
