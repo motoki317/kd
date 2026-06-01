@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type Point } from '../layout'
+import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -104,12 +104,23 @@ function edgeTitle(e: KEdge, nodes: KNode[]): string {
 }
 
 export default function Topology(props: Props) {
+  // Per-cluster expansion state for the "+N older" collapse (ephemeral: a Set of expanded keys,
+  // empty = everything collapsed, resets on reload). Keyed by the layout's stable collapse key
+  // ("kind:Pod", "host:<node>", …) so toggling one cluster never disturbs another.
+  const [expandedClusters, setExpandedClusters] = createSignal<ReadonlySet<string>>(new Set())
+  const toggleCluster = (key: string) =>
+    setExpandedClusters((s) => {
+      const next = new Set(s)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+
   const layout = createMemo(() => {
-    if (props.viewId === 'all') return layoutGraphByKind(props.nodes, props.edges)
+    if (props.viewId === 'all') return layoutGraphByKind(props.nodes, props.edges, expandedClusters())
     // Nodes view: each host becomes a labeled container with the Node card + its pods inside.
     // scheduledOn edges are implied by containment, so the layout doesn't draw them — cuts the
     // visual noise of N identical lines to the same Node card (cycle 205).
-    if (props.viewId === 'nodes') return layoutGraphByHost(props.nodes, props.edges)
+    if (props.viewId === 'nodes') return layoutGraphByHost(props.nodes, props.edges, expandedClusters())
     // Volumes view: left-to-right so "Pod mounts ConfigMap/Secret/PVC" reads as a left→right
     // dependency flow rather than a top-down ownership tree (cycle 206). Same renderer, just
     // a different Dagre rankdir per connected component.
@@ -158,7 +169,8 @@ export default function Topology(props: Props) {
   createEffect(() => {
     const cur = layout().nodes
     const curIds = new Set(cur.map((n) => n.id))
-    const removed = prevPositioned.filter((n) => !curIds.has(n.id) && !exitTimers.has(n.id))
+    // Collapse pills are synthetic — never play an exit animation when one folds away on expand.
+    const removed = prevPositioned.filter((n) => !curIds.has(n.id) && !exitTimers.has(n.id) && !n.collapse)
     if (removed.length > 0) {
       setExiting((prev) => [...prev, ...removed])
       for (const n of removed) {
@@ -252,6 +264,7 @@ export default function Topology(props: Props) {
     const kindOk = (kind: string) => !kf || kf.size === 0 || kf.has(kind)
     const m = new Set<string>()
     for (const n of layout().nodes) {
+      if (n.collapse) continue // synthetic pill, not a searchable resource
       if (kindOk(n.kind) && nodeMatches(n, q)) m.add(n.id)
     }
     return m
@@ -285,16 +298,26 @@ export default function Topology(props: Props) {
   // still surfacing the answer to "where do I look first".
   const kindStats = createMemo(() => {
     const stats = new Map<string, { count: number; worst: Health | null }>()
-    for (const n of layout().nodes) {
+    const add = (n: { kind: string; health: Health }) => {
       const s = stats.get(n.kind)
       if (!s) {
         stats.set(n.kind, { count: 1, worst: n.health !== 'Healthy' ? n.health : null })
-        continue
+        return
       }
       s.count++
       if (n.health !== 'Healthy' && (s.worst === null || healthSeverity[n.health] > healthSeverity[s.worst])) {
         s.worst = n.health
       }
+    }
+    for (const n of layout().nodes) {
+      // A pill is synthetic — fold the nodes it hides back into the count so the kind chip reflects
+      // the true total (visible + collapsed), not just what's drawn. Keeps the count view-scoped
+      // (layout().nodes) while collapse stays invisible to the tally.
+      if (n.collapse) {
+        for (const h of n.collapse.hidden) add(h)
+        continue
+      }
+      add(n)
     }
     return stats
   })
@@ -323,6 +346,19 @@ export default function Topology(props: Props) {
     if (props.healthFilter) return n.health !== props.healthFilter
     const r = related()
     return r ? !r.nodes.has(n.id) : false
+  }
+  // A collapsed pill counts how many of its hidden nodes the operator is currently "looking for", so
+  // the badge ("● N match") signals a fold is hiding a result without revealing it (FR-006/D7). The
+  // predicate mirrors nodeFaded's precedence: active search > health filter > selection-related.
+  const collapseMatchCount = (meta: CollapseMeta): number => {
+    const q = query().trim()
+    const r = related()
+    const hit = (n: KNode): boolean => {
+      if (q) return nodeKindOk(n.kind) && nodeMatches(n, q)
+      if (props.healthFilter) return n.health === props.healthFilter
+      return r ? r.nodes.has(n.id) : false
+    }
+    return meta.hidden.reduce((c, n) => c + (hit(n) ? 1 : 0), 0)
   }
   const edgeFaded = (e: KEdge) => {
     const m = matches()
@@ -1080,6 +1116,9 @@ export default function Topology(props: Props) {
                 while fading out — operators see "what left" rather than a card vanishing. */}
             <For each={[...layout().nodes, ...exiting()]}>
               {(n) => (
+                <Show
+                  when={n.collapse}
+                  fallback={
                 <g
                   class="node"
                   classList={{
@@ -1158,6 +1197,39 @@ export default function Topology(props: Props) {
                     </text>
                   </Show>
                 </g>
+                  }
+                >
+                  {/* "+N older" collapse pill: a ghost card standing in for the folded older
+                      same-kind resources. Click expands just this cluster; a "● N match" badge
+                      appears when the fold is hiding a search/health/selection result (D7). */}
+                  {(meta) => (
+                    <g
+                      class="collapse-pill"
+                      classList={{ faded: !!activeKinds() && !activeKinds()!.has(meta().groupKind) }}
+                      style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
+                      onClick={() => toggleCluster(meta().key)}
+                    >
+                      <title>
+                        Show {meta().hidden.length} older {meta().groupKind}
+                        {meta().hidden.length === 1 ? '' : 's'}
+                      </title>
+                      <rect class="collapse-pill-bg" width={n.width} height={n.height} rx="9" />
+                      <text
+                        class="collapse-pill-label"
+                        x={n.width / 2}
+                        y={collapseMatchCount(meta()) > 0 ? 24 : 35}
+                        text-anchor="middle"
+                      >
+                        + {meta().hidden.length} older
+                      </text>
+                      <Show when={collapseMatchCount(meta()) > 0}>
+                        <text class="collapse-pill-match" x={n.width / 2} y="46" text-anchor="middle">
+                          ● {collapseMatchCount(meta())} match
+                        </text>
+                      </Show>
+                    </g>
+                  )}
+                </Show>
               )}
             </For>
           </g>

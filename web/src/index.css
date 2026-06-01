@@ -1255,6 +1255,40 @@ button.conn.conn-retry:focus-visible {
 .node.faded {
   opacity: 0.2;
 }
+/* "+N older" collapse pill: a ghost card that stands in for the folded older same-kind resources.
+   A dashed, muted outline reads as "more behind here, click to reveal" — distinct from a real card
+   (solid fill + health tint) so it never looks like a resource. Shares the .node transform glide. */
+.collapse-pill {
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.collapse-pill-bg {
+  fill: var(--surface-2, transparent);
+  stroke: var(--border-strong);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+}
+.collapse-pill:hover .collapse-pill-bg {
+  stroke: var(--accent);
+}
+.collapse-pill-label {
+  fill: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.collapse-pill:hover .collapse-pill-label {
+  fill: var(--accent);
+}
+/* The "● N match" badge borrows the accent so a hidden search/health hit reads as actionable. */
+.collapse-pill-match {
+  fill: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.collapse-pill.faded {
+  opacity: 0.2;
+}
 /* Cycle 160: a removed node renders briefly at its last position with this class so the layout
    diff is visible as a fade-out instead of an instant vanish. pointer-events: none keeps it from
    competing for clicks; the transition is on the .node opacity rule above. */

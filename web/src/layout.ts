@@ -34,12 +34,32 @@ export interface Point {
   y: number
 }
 
+// COLLAPSE_KIND marks a synthetic "+N older" pill — a PositionedNode that stands in for the older
+// same-kind resources hidden behind a collapse, not a real cluster object. Topology renders these
+// specially and excludes them from kind stats / search / nav.
+export const COLLAPSE_KIND = '__collapse__'
+// A same-kind cluster larger than COLLAPSE_VISIBLE shows its newest COLLAPSE_VISIBLE by creation
+// time and hides the older remainder — but only when that hides at least COLLAPSE_MIN_HIDDEN, so a
+// lone "+1 older" pill never replaces a card it could have just shown.
+export const COLLAPSE_VISIBLE = 8
+const COLLAPSE_MIN_HIDDEN = 2
+
+// CollapseMeta rides on the synthetic pill so Topology can expand it (key), attribute its box to the
+// real kind (groupKind), and count how many hidden nodes match the active filter (hidden).
+export interface CollapseMeta {
+  key: string // stable expansion key, prefixed by container type: "kind:Pod" / "host:<node>"
+  groupKind: string // the real kind being collapsed, for kindGroups attribution + the pill label
+  hidden: KNode[] // the older nodes folded away, kept for match-counting in the badge
+}
+
 export interface PositionedNode extends KNode {
   // x, y are the node center (Dagre's convention), in graph coordinates.
   x: number
   y: number
   width: number
   height: number
+  // Present iff this is a synthetic "+N older" pill rather than a real resource card.
+  collapse?: CollapseMeta
 }
 
 export interface PositionedEdge extends KEdge {
@@ -64,12 +84,57 @@ interface Component {
 // rendered by the Topology (a 12px icon at top, then a text row). 30px gives comfortable padding.
 export const KIND_HEADER_HEIGHT = 30
 
+// splitByAge partitions a same-kind cluster into the cards to show and the older ones to fold away.
+// The newest COLLAPSE_VISIBLE (by createdAt; a missing timestamp sorts oldest) stay; the rest hide
+// behind a "+N older" pill — but only when expanded is false AND it folds at least COLLAPSE_MIN_HIDDEN
+// (FR-007). The visible list keeps the caller's incoming order (name / health-severity) so grid
+// placement and snapshot stability are unchanged — only the *hidden set* is chosen by age.
+function splitByAge(nodes: KNode[], expanded: boolean): { visible: KNode[]; hidden: KNode[] } {
+  if (expanded || nodes.length < COLLAPSE_VISIBLE + COLLAPSE_MIN_HIDDEN) {
+    return { visible: nodes, hidden: [] }
+  }
+  const age = (n: KNode) => (n.createdAt ? Date.parse(n.createdAt) : 0)
+  const newestFirst = [...nodes].sort((a, b) => age(b) - age(a) || a.name.localeCompare(b.name))
+  const hiddenIds = new Set(newestFirst.slice(COLLAPSE_VISIBLE).map((n) => n.id))
+  return {
+    visible: nodes.filter((n) => !hiddenIds.has(n.id)),
+    hidden: nodes.filter((n) => hiddenIds.has(n.id)),
+  }
+}
+
+// pillCell builds the synthetic KNode for a "+N older" affordance, tagged with its CollapseMeta so
+// the placement loop can lift it onto the resulting PositionedNode. `host` is set for host-group
+// pills so hostGroups() attributes the pill to the right container.
+function pillCell(meta: CollapseMeta, host?: string): KNode & { _collapse: CollapseMeta } {
+  return {
+    id: `${COLLAPSE_KIND}:${meta.key}`,
+    kind: COLLAPSE_KIND,
+    name: `+${meta.hidden.length} older`,
+    health: 'Healthy',
+    ...(host ? { host } : {}),
+    _collapse: meta,
+  }
+}
+
+// place lays a list of cells row-major into a grid and lifts any pill's _collapse tag onto the
+// PositionedNode. Shared by the two grouped layouts so their grid math stays identical.
+function placeGridCells(cells: Array<KNode & { _collapse?: CollapseMeta }>, grid: { cols: number }): PositionedNode[] {
+  return cells.map((cell, i) => {
+    const row = Math.floor(i / grid.cols)
+    const col = i % grid.cols
+    const x = col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
+    const y = KIND_HEADER_HEIGHT + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
+    const { _collapse, ...rest } = cell
+    return { ...rest, x, y, width: NODE_WIDTH, height: NODE_HEIGHT, ...(_collapse ? { collapse: _collapse } : {}) }
+  })
+}
+
 // layoutGraphByKind is the "All" view variant: instead of connectivity-based components, nodes
 // are grouped by Kind (every Pod in one box, every Service in another, …) and laid out in a
 // per-kind grid, then shelf-packed into the viewport. Cross-kind edges (ownership backbone,
 // CR references) draw as straight lines across the kind boxes so the topology backbone stays
 // visible even in the broadest view. This is the v1 antidote to the previous "All" hairball.
-export function layoutGraphByKind(nodes: KNode[], edges: KEdge[]): Layout {
+export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string> = new Set()): Layout {
   if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
   // Group nodes by kind, names sorted alphabetically inside each group for stable layout
@@ -83,18 +148,17 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[]): Layout {
   for (const list of byKind.values()) list.sort((a, b) => a.name.localeCompare(b.name))
 
   const components: Component[] = []
-  for (const [, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const grid = gridDims(list.length)
-    const positioned: PositionedNode[] = []
-    list.forEach((leaf, i) => {
-      const row = Math.floor(i / grid.cols)
-      const col = i % grid.cols
-      // Left-align rows (rather than centering) so the kind box's left edge is the natural
-      // column gutter — the kind header reads anchored to that edge in Topology.
-      const x = col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
-      const y = KIND_HEADER_HEIGHT + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
-      positioned.push({ ...leaf, x, y, width: NODE_WIDTH, height: NODE_HEIGHT })
-    })
+  for (const [kind, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    // Fold the older cards in a crowded kind box behind a "+N older" pill (one extra grid cell).
+    const key = `kind:${kind}`
+    const { visible, hidden } = splitByAge(list, expanded.has(key))
+    const cells: Array<KNode & { _collapse?: CollapseMeta }> = [...visible]
+    if (hidden.length) cells.push(pillCell({ key, groupKind: kind, hidden }))
+
+    const grid = gridDims(cells.length)
+    // Left-align rows (rather than centering) so the kind box's left edge is the natural column
+    // gutter — the kind header reads anchored to that edge in Topology.
+    const positioned = placeGridCells(cells, grid)
     components.push({
       nodes: positioned,
       edges: [], // cross-kind edges resolved after packing
@@ -127,7 +191,7 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[]): Layout {
 // "this pod runs here" relationship more clearly than a fan of identical edges to the Node card
 // at the top would. Pods whose host doesn't appear among the Node cards (cluster-scope read may
 // have surfaced pods without their Node) bucket into a synthetic "Unscheduled / Unknown" group.
-export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[]): Layout {
+export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: ReadonlySet<string> = new Set()): Layout {
   if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
   // Index Node cards by name so a pod's host string resolves directly to its Node card.
@@ -165,17 +229,15 @@ export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[]): Layout {
     // pods (drained, freshly added), the host group still shows so the operator sees "this Node
     // is here". The orphan group has no Node card; it uses the header for "Unscheduled".
     const nodeCard = nodeByName.get(host) ?? null
-    const cells = nodeCard ? [nodeCard, ...pods] : pods
+    // Fold a crowded host's older pods behind a "+N older" pill — never the Node card, which is the
+    // host anchor, not a same-kind cluster member. The pill carries `host` so hostGroups attributes it.
+    const key = `host:${host}`
+    const { visible, hidden } = splitByAge(pods, expanded.has(key))
+    const cells: Array<KNode & { _collapse?: CollapseMeta }> = nodeCard ? [nodeCard, ...visible] : [...visible]
+    if (hidden.length) cells.push(pillCell({ key, groupKind: 'Pod', hidden }, host))
     if (cells.length === 0) continue
     const grid = gridDims(cells.length)
-    const positioned: PositionedNode[] = []
-    cells.forEach((n, i) => {
-      const row = Math.floor(i / grid.cols)
-      const col = i % grid.cols
-      const x = col * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2
-      const y = KIND_HEADER_HEIGHT + row * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2
-      positioned.push({ ...n, x, y, width: NODE_WIDTH, height: NODE_HEIGHT })
-    })
+    const positioned = placeGridCells(cells, grid)
     components.push({
       nodes: positioned,
       edges: [], // containment carries the relationship; no edges drawn inside a host group
@@ -237,13 +299,16 @@ export function hostGroups(layout: Layout): { host: string; label: string; x: nu
 export function kindGroups(layout: Layout): { kind: string; x: number; y: number; width: number; height: number }[] {
   const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>()
   for (const n of layout.nodes) {
+    // A "+N older" pill belongs to the kind box it folds, not a phantom "__collapse__" group, so
+    // the box grows to include the pill instead of the pill drifting into its own group.
+    const kind = n.collapse ? n.collapse.groupKind : n.kind
     const left = n.x - n.width / 2
     const right = n.x + n.width / 2
     const top = n.y - n.height / 2
     const bottom = n.y + n.height / 2
-    const cur = groups.get(n.kind)
+    const cur = groups.get(kind)
     if (!cur) {
-      groups.set(n.kind, { minX: left, minY: top, maxX: right, maxY: bottom })
+      groups.set(kind, { minX: left, minY: top, maxX: right, maxY: bottom })
     } else {
       cur.minX = Math.min(cur.minX, left)
       cur.minY = Math.min(cur.minY, top)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -260,5 +260,70 @@ describe('layoutGraphByHost (Nodes view, cycle 205)', () => {
 
   it('handles an empty graph', () => {
     expect(layoutGraphByHost([], [])).toEqual({ nodes: [], edges: [], width: 0, height: 0 })
+  })
+})
+
+describe('same-kind collapse (+N older)', () => {
+  // n pods with strictly increasing creation times: pod-00 oldest … pod-(n-1) newest.
+  const pods = (n: number): KNode[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `p${i}`,
+      kind: 'Pod',
+      name: `pod-${String(i).padStart(2, '0')}`,
+      health: 'Healthy' as const,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+    }))
+
+  it('folds everything past the newest 8 behind one pill, hiding the OLDEST', () => {
+    const l = layoutGraphByKind(pods(12), [])
+    const realPods = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse)
+    expect(realPods).toHaveLength(COLLAPSE_VISIBLE) // 8 newest stay
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3']) // 4 oldest
+    expect(pill.collapse!.groupKind).toBe('Pod')
+    const visibleIds = new Set(realPods.map((n) => n.id))
+    expect(visibleIds.has('p0')).toBe(false) // oldest is hidden
+    expect(visibleIds.has('p11')).toBe(true) // newest is shown
+  })
+
+  it('expanding via its key shows all nodes and drops the pill', () => {
+    const l = layoutGraphByKind(pods(12), [], new Set(['kind:Pod']))
+    expect(l.nodes.some((n) => n.collapse)).toBe(false)
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12)
+  })
+
+  it('does not collapse when it would hide fewer than 2 (9 pods → show all 9)', () => {
+    const l = layoutGraphByKind(pods(9), [])
+    expect(l.nodes.some((n) => n.collapse)).toBe(false)
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(9)
+  })
+
+  it('chooses the oldest by creation time regardless of input order', () => {
+    const l = layoutGraphByKind([...pods(12)].reverse(), [])
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3'])
+  })
+
+  it('keeps the pill inside its kind box, with no phantom __collapse__ group', () => {
+    const l = layoutGraphByKind(pods(12), [])
+    const groups = kindGroups(l)
+    expect(groups.map((g) => g.kind)).toEqual(['Pod'])
+    const pill = l.nodes.find((n) => n.collapse)!
+    const g = groups[0]
+    expect(pill.x - pill.width / 2).toBeGreaterThanOrEqual(g.x - 0.001)
+    expect(pill.x + pill.width / 2).toBeLessThanOrEqual(g.x + g.width + 0.001)
+  })
+
+  it('collapses a host’s pods but never the Node card', () => {
+    const nodeCard: KNode = { id: 'node', kind: 'Node', name: 'node-a', health: 'Healthy' }
+    const hostPods = pods(12).map((p) => ({ ...p, host: 'node-a' }))
+    const l = layoutGraphByHost([nodeCard, ...hostPods], [])
+    expect(l.nodes.find((n) => n.id === 'node')).toBeTruthy() // Node card always shown
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden).toHaveLength(4)
+    expect(pill.collapse!.groupKind).toBe('Pod')
+    // The pill rides in the host container (attributed via its host field).
+    const hg = hostGroups(l).find((g) => g.host === 'node-a')!
+    expect(pill.x + pill.width / 2).toBeLessThanOrEqual(hg.x + hg.width + 0.001)
   })
 })
