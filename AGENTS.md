@@ -171,7 +171,8 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   independently (its own `sib:<hub>:<kind>` pill + bundled edge). Multi-card blocks carry a per-kind
   `collapseGroup` (= the same `sib:` key) so `connGroups` draws one tight dashed grouping frame per
   kind — tight because each kind is a contiguous block, never interleaved (an earlier hub-level frame
-  was abandoned once blocks made per-kind bboxes clean). Single-card kinds stay unframed. The frame
+  was abandoned once blocks made per-kind bboxes clean). A kind is framed only when it folds (has a
+  pill), so the border and the show-more affordance appear together — unfolded kinds stay bare. The frame
   (`.conn-frame`, a `--text-dim` dashed border) turns accent (`.conn-frame.expanded`) when its kind is
   expanded. All/Nodes already box by kind/host, so `connGroups` is empty there (avoids a double border).
 - **Scope-keyed auto-fit**: the fit-all effect in `Topology.tsx` keys on `scope` (ctx+namespace) +

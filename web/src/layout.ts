@@ -350,7 +350,7 @@ export function kindGroups(layout: Layout): { kind: string; x: number; y: number
 // connGroups returns one bounding rect per per-kind leaf block (Services, Secrets, …) under a hub, so
 // the renderer can frame each kind's cards separately — the cue that says "these are this parent's
 // Secrets, and the pill inside folds/unfolds the crowded part". Membership is the per-kind frame key
-// on each card + pill (`collapseGroup`, set by collapseHubLeaves on multi-card blocks). Because each
+// on each card + pill (`collapseGroup`, set by collapseHubLeaves on folded blocks only). Because each
 // kind is a contiguous column block, its bbox is tight and never sprawls across another kind. A frame
 // is "expanded" if its pill is expanded. Connectivity views have no kind/host container (unlike
 // All/Nodes), so this is the only grouping cue there.
@@ -477,8 +477,8 @@ function blockDims(m: number): { cols: number; rows: number; w: number; h: numbe
 }
 
 // A LeafBlock is one kind's cards (+ its optional "+N older" pill) under a hub, laid as its own
-// column block. frameKey is set (to the per-kind collapse key) only when the block is worth framing
-// (≥2 cells), so Topology draws a tight per-kind grouping border; single-card kinds stay unframed.
+// column block. frameKey is set (to the per-kind collapse key) only when the kind folds (has a pill),
+// so the grouping border appears exactly when the show-more affordance does — unfolded kinds stay bare.
 interface LeafBlock {
   kind: string
   frameKey?: string
@@ -555,9 +555,10 @@ function collapseHubLeaves(
         pills.push({ id, type: e ? e.type : 'ownerReference' })
       }
     }
-    // Frame a block only when grouping is meaningful (≥2 cells); a lone card needs no border. Tag
-    // each cell with the per-kind frame key so connGroups can box exactly this kind's contiguous column.
-    const frameKey = cells.length >= 2 ? key : undefined
+    // Frame a block only when its kind actually folds (i.e. it has a "+ show N more" pill), so the
+    // grouping border and the show-more affordance appear together — a kind small enough to show in
+    // full needs no border. Tag each cell with the per-kind frame key so connGroups can box it.
+    const frameKey = split.hidden.length ? key : undefined
     const tagged = frameKey ? cells.map((c) => ({ ...c, collapseGroup: frameKey })) : cells
     blocks.push({ kind, frameKey, cells: tagged, ...blockDims(tagged.length) })
   }

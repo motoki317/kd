@@ -370,6 +370,20 @@ describe('same-kind collapse (+N older)', () => {
     expect(expanded[0].height).toBeGreaterThan(frames[0].height) // taller column when unfolded
   })
 
+  it('connectivity: frames a kind only when it folds, not merely when it has ≥2 cards', () => {
+    // A hub with 3 ConfigMaps (below the fold threshold → no pill) and 6 Services (folds). The border
+    // must appear only with the show-more pill, so just the Service block is framed — the 3 ConfigMaps
+    // stay bare even though they're a 3-card group.
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'main', health: 'Healthy' }
+    const cms = pods(3).map((p) => ({ ...p, id: `cm-${p.id}`, kind: 'ConfigMap', name: `cm-${p.name}` }))
+    const svcs = pods(6).map((p) => ({ ...p, id: `svc-${p.id}`, kind: 'Service', name: `svc-${p.name}` }))
+    const kids = [...cms, ...svcs]
+    const e: KEdge[] = kids.map((n) => ({ from: 'es', to: n.id, type: 'ownerReference' as const }))
+    const l = layoutGraph([owner, ...kids], e, 'LR')
+    expect(connGroups(l).map((f) => f.key)).toEqual(['sib:es:Service']) // only the folding kind framed
+    expect(l.nodes.filter((n) => n.kind === 'ConfigMap')).toHaveLength(3) // CMs all shown, just unframed
+  })
+
   it('connectivity: a multi-kind hub groups + folds each kind independently', () => {
     // A CRD-style owner with many Services AND many Secrets: each kind gets its own frame, its own
     // pill, and folds on its own — no mixed-kind grouping.
