@@ -13,7 +13,7 @@
 // column across every view; we trade a taller canvas (more panning) for that uniform alignment.
 
 import dagre from '@dagrejs/dagre'
-import type { KEdge, KNode } from './types'
+import type { EdgeType, KEdge, KNode } from './types'
 
 export const NODE_WIDTH = 220
 export const NODE_HEIGHT = 60
@@ -332,7 +332,7 @@ export function kindGroups(layout: Layout): { kind: string; x: number; y: number
 // server should not emit them). `rankdir` switches the per-component direction — 'LR' (what every
 // relationship view passes) reads left-to-right so a parent's children fan out to its right, like
 // an ArgoCD tree; 'TB' (the default, kept for callers/tests) reads top-down.
-export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Layout {
+export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Layout {
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
@@ -341,7 +341,7 @@ export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'
   // ordering by it would shuffle trees arbitrarily; the smallest kind/name in a component is stable
   // (adding/removing a pod doesn't change it) and reads sensibly (workload roots sort near the top).
   groups.sort((a, b) => componentKey(a.nodes).localeCompare(componentKey(b.nodes)))
-  const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir))
+  const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir, expanded))
 
   return packComponents(components)
 }
@@ -404,18 +404,57 @@ function gridDims(n: number, rankdir: 'TB' | 'LR' = 'TB'): { cols: number; rows:
 
 interface Hub {
   id: string
-  leaves: KNode[]
+  // Leaves to actually place: the visible cards plus any "+N older" pill (carrying its CollapseMeta).
+  leaves: Array<KNode & { collapse?: CollapseMeta }>
   // Whether the leaf grid sits AFTER the hub in the flow direction (below it in TB / to its right
   // in LR). True for a parent whose children are leaves (edges point hub->leaf); false when the
   // hub is the shared target the leaves point at (e.g. pods->Node), so the grid sits before it.
   after: boolean
   grid: { cols: number; rows: number; w: number; h: number }
+  // One entry per "+N older" pill folded out of this hub's leaves: the pill id and the edge type to
+  // bundle from the hub to it (all hidden same-kind siblings shared the hub via this relationship).
+  pills: { id: string; type: EdgeType }[]
+}
+
+// collapseHubLeaves folds a hub's degree-1 same-kind siblings: per kind, the newest COLLAPSE_VISIBLE
+// stay and the older remainder hides behind one "+N older" pill leaf (D5). The hidden leaves vanish
+// from the component — their only edge was to the hub, so it's replaced by a single bundled hub→pill
+// edge (D6), whose type matches the relationship the siblings shared with the hub.
+function collapseHubLeaves(
+  hubId: string,
+  leaves: KNode[],
+  edges: KEdge[],
+  expanded: ReadonlySet<string>,
+): { leaves: Array<KNode & { collapse?: CollapseMeta }>; pills: { id: string; type: EdgeType }[] } {
+  const byKind = new Map<string, KNode[]>()
+  for (const l of leaves) {
+    if (!byKind.has(l.kind)) byKind.set(l.kind, [])
+    byKind.get(l.kind)!.push(l)
+  }
+  const visible: KNode[] = []
+  const pillLeaves: Array<KNode & { collapse: CollapseMeta }> = []
+  const pills: { id: string; type: EdgeType }[] = []
+  for (const [kind, list] of byKind) {
+    const key = `sib:${hubId}:${kind}`
+    const split = splitByAge(list, expanded.has(key))
+    visible.push(...split.visible)
+    if (split.hidden.length) {
+      const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden }
+      const id = `${COLLAPSE_KIND}:${key}`
+      pillLeaves.push({ id, kind: COLLAPSE_KIND, name: `+${split.hidden.length} older`, health: 'Healthy', collapse: meta })
+      const hid = new Set(split.hidden.map((h) => h.id))
+      const e = edges.find((x) => (x.from === hubId && hid.has(x.to)) || (x.to === hubId && hid.has(x.from)))
+      pills.push({ id, type: e ? e.type : 'ownerReference' })
+    }
+  }
+  visible.sort((a, b) => a.name.localeCompare(b.name))
+  return { leaves: [...visible, ...pillLeaves], pills }
 }
 
 // findHubs detects nodes whose many degree-1 neighbors should be grid-wrapped. A leaf is wrapped
 // under (TB) / beside (LR) the neighbor it connects to; the grid sits on the leaf side of the edge
 // (a Node's pods read below/right of it; a ReplicaSet's pods do too, since edges point parent->child).
-function findHubs(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'): { hubs: Hub[]; wrapped: Set<string> } {
+function findHubs(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR', expanded: ReadonlySet<string>): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const degree = new Map<string, number>()
   for (const e of edges) {
@@ -441,7 +480,18 @@ function findHubs(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'): { hubs:
   for (const [id, { leaves, hubIsTarget }] of leavesOf) {
     if (leaves.length < FANOUT_MIN) continue
     leaves.sort((a, b) => a.name.localeCompare(b.name))
-    hubs.push({ id, leaves, after: hubIsTarget <= leaves.length / 2, grid: gridDims(leaves.length, rankdir) })
+    // Fold this hub's crowded same-kind siblings into "+N older" pills (D5/D6). The grid sizes to
+    // the post-collapse cell count (visible cards + pills), so a 30-pod ReplicaSet shrinks to 8 + a pill.
+    const collapsed = collapseHubLeaves(id, leaves, edges, expanded)
+    hubs.push({
+      id,
+      leaves: collapsed.leaves,
+      after: hubIsTarget <= leaves.length / 2,
+      grid: gridDims(collapsed.leaves.length, rankdir),
+      pills: collapsed.pills,
+    })
+    // Every ORIGINAL leaf is owned by the hub (excluded from the Dagre skeleton); hidden ones simply
+    // never get placed, and their hub edge is replaced by the bundled hub→pill edge below.
     for (const l of leaves) wrapped.add(l.id)
   }
   return { hubs, wrapped }
@@ -454,8 +504,8 @@ function findHubs(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'): { hubs:
 // (a Node hosting many pods, a ReplicaSet with many replicas) reserve a tall/wide Dagre box and
 // place their leaves in a grid — but only in 'TB' mode where the existing side='above'/'below'
 // math fits; 'LR' lets Dagre do its natural rank layout instead so the orientation stays clean.
-function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB'): Component {
-  const { hubs, wrapped } = findHubs(nodes, edges, rankdir)
+function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Component {
+  const { hubs, wrapped } = findHubs(nodes, edges, rankdir, expanded)
   const hubById = new Map(hubs.map((h) => [h.id, h]))
   const skeleton = nodes.filter((n) => !wrapped.has(n.id))
   const skeletonEdges = edges.filter((e) => !wrapped.has(e.from) && !wrapped.has(e.to))
@@ -525,6 +575,18 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
     }
     const ge = g.edge(e.from, e.to)
     if (ge) positionedEdges.push({ ...e, points: ge.points })
+  }
+
+  // Bundled hub→pill edges (D6): one straight line from each hub card to its "+N older" pill, in
+  // place of the many edges to the leaves the pill folds away. Keyed by the relationship the hidden
+  // siblings shared with the hub, so a pod fold reads "owns →" and a mount fold reads "mounts →".
+  for (const hub of hubs) {
+    const center = cardCenter.get(hub.id)
+    if (!center) continue
+    for (const pill of hub.pills) {
+      const pp = positioned.find((n) => n.id === pill.id)
+      if (pp) positionedEdges.push({ from: hub.id, to: pill.id, type: pill.type, points: [{ x: center.x, y: center.y }, { x: pp.x, y: pp.y }] })
+    }
   }
 
   const xs = positioned.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])

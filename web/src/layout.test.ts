@@ -102,8 +102,9 @@ describe('layoutGraph', () => {
     expect(l1.nodes.find((n) => n.id === 'da')!.y).toBeLessThan(l1.nodes.find((n) => n.id === 'db')!.y)
   })
 
-  it('grid-wraps a high-fanout hub instead of one wide rank', () => {
-    // One Node with 20 pods scheduled on it (nodes view): scheduledOn edges point pod -> node.
+  it('collapses a high-fanout hub to the newest 8 + a "+N older" pill, kept compact', () => {
+    // One Node with 20 pods scheduled on it (nodes view): scheduledOn edges point pod -> node. The
+    // crowd folds to 8 visible pods + one pill (the older 12), grid-wrapped under the hub.
     const hub: KNode = { id: 'node', kind: 'Node', name: 'n1', health: 'Healthy' }
     const pods: KNode[] = []
     const e: KEdge[] = []
@@ -112,10 +113,13 @@ describe('layoutGraph', () => {
       e.push({ from: `p${i}`, to: 'node', type: 'scheduledOn' })
     }
     const l = layoutGraph([hub, ...pods], e)
-    expect(l.nodes).toHaveLength(21)
-    // 20 pods in one rank would be ~20*NODE_WIDTH wide (>3800). Wrapping keeps it under ~5 columns.
+    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // hub + 8 visible + 1 pill
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden).toHaveLength(12)
+    // A single bundled edge runs hub -> pill in place of the folded pods' scheduledOn edges.
+    expect(l.edges.some((x) => x.from === 'node' && x.to === pill.id && x.type === 'scheduledOn')).toBe(true)
+    // Wrapping keeps it compact, and no two cards share a center.
     expect(l.width).toBeLessThan(NODE_WIDTH * 8)
-    // No overlapping cards: every node center is distinct.
     const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
     expect(seen.size).toBe(l.nodes.length)
   })
@@ -135,10 +139,9 @@ describe('layoutGraph', () => {
     expect(x('rs')).toBeLessThan(x('p2'))
   })
 
-  it('grid-wraps a high-fanout hub in LR into columns, not one tall single-file stack (cycle 310)', () => {
-    // A ReplicaSet owning 24 pods. In LR a naive layout stacks all 24 in one vertical rank
-    // (~24*NODE_HEIGHT ≈ 1900px tall); the orientation-aware wrap must break them into columns
-    // that grow rightward instead, keeping the block from becoming an unreadable tall ribbon.
+  it('collapses a high-fanout hub in LR, placing the visible cards + pill to the right (cycle 310)', () => {
+    // A ReplicaSet owning 24 pods. The fold leaves 8 visible pods + a pill; those still wrap into
+    // columns that grow rightward (LR), and the pill sits to the right of the ReplicaSet like a child.
     const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }
     const pods: KNode[] = []
     const e: KEdge[] = []
@@ -147,13 +150,14 @@ describe('layoutGraph', () => {
       e.push({ from: 'rs', to: `p${i}`, type: 'ownerReference' })
     }
     const l = layoutGraph([rs, ...pods], e, 'LR')
-    expect(l.nodes).toHaveLength(25)
-    // Single-file would be ~24 rows tall; wrapping keeps it well under that.
+    expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // rs + 8 visible + 1 pill
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden).toHaveLength(16)
+    expect(l.edges.some((x) => x.from === 'rs' && x.to === pill.id && x.type === 'ownerReference')).toBe(true)
+    // Wrapping keeps it compact; the visible children + pill all sit to the RIGHT of the ReplicaSet.
     expect(l.height).toBeLessThan(NODE_HEIGHT * 12)
-    // The pods sit to the RIGHT of their ReplicaSet (children flow rightward in LR).
     const rsx = l.nodes.find((n) => n.id === 'rs')!.x
-    expect(pods.every((pod) => l.nodes.find((n) => n.id === pod.id)!.x > rsx)).toBe(true)
-    // No two cards share a center (no overlap).
+    expect(l.nodes.filter((n) => n.id !== 'rs').every((n) => n.x > rsx)).toBe(true)
     const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
     expect(seen.size).toBe(l.nodes.length)
   })
@@ -312,6 +316,32 @@ describe('same-kind collapse (+N older)', () => {
     const g = groups[0]
     expect(pill.x - pill.width / 2).toBeGreaterThanOrEqual(g.x - 0.001)
     expect(pill.x + pill.width / 2).toBeLessThanOrEqual(g.x + g.width + 0.001)
+  })
+
+  it('connectivity: expanding a sibling-set shows all leaves and drops the pill + bundle edge', () => {
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web', health: 'Healthy' }
+    const leaves = pods(12)
+    const e: KEdge[] = leaves.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const }))
+    const collapsed = layoutGraph([rs, ...leaves], e, 'LR')
+    expect(collapsed.nodes.some((n) => n.collapse)).toBe(true)
+    const expanded = layoutGraph([rs, ...leaves], e, 'LR', new Set(['sib:rs:Pod']))
+    expect(expanded.nodes.some((n) => n.collapse)).toBe(false)
+    expect(expanded.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12)
+    expect(expanded.edges.some((x) => x.to.startsWith('__collapse__'))).toBe(false)
+  })
+
+  it('connectivity: two parents fold their own siblings independently', () => {
+    const rsA: KNode = { id: 'rsA', kind: 'ReplicaSet', name: 'a', health: 'Healthy' }
+    const rsB: KNode = { id: 'rsB', kind: 'ReplicaSet', name: 'b', health: 'Healthy' }
+    const podsA = pods(12).map((p) => ({ ...p, id: `a-${p.id}` }))
+    const podsB = pods(15).map((p) => ({ ...p, id: `b-${p.id}` }))
+    const e: KEdge[] = [
+      ...podsA.map((p) => ({ from: 'rsA', to: p.id, type: 'ownerReference' as const })),
+      ...podsB.map((p) => ({ from: 'rsB', to: p.id, type: 'ownerReference' as const })),
+    ]
+    const l = layoutGraph([rsA, ...podsA, rsB, ...podsB], e, 'LR')
+    const pills = l.nodes.filter((n) => n.collapse)
+    expect(pills.map((p) => p.collapse!.hidden.length).sort((a, b) => a - b)).toEqual([4, 7]) // 12→4, 15→7
   })
 
   it('collapses a host’s pods but never the Node card', () => {
