@@ -726,7 +726,11 @@ export default function Topology(props: Props) {
     if (!props.onDeselect || !props.selectedId) return
     let el: Element | null = e.target as Element | null
     while (el && el !== svg) {
-      if ((el as Element).classList?.contains('node')) return
+      // A card (.node) OR a collapse pill (.collapse-pill) is an interactive target with its own
+      // onClick — treat it as a hit, not background. Without the pill check, clicking "show more"
+      // while a resource is selected also ran this background branch and deselected it, closing the
+      // drawer out from under the operator who only meant to expand the cluster.
+      if ((el as Element).classList?.contains('node') || (el as Element).classList?.contains('collapse-pill')) return
       el = el.parentElement
     }
     props.onDeselect()
@@ -738,7 +742,11 @@ export default function Topology(props: Props) {
   function onBackgroundDblClick(e: MouseEvent) {
     let el: Element | null = e.target as Element | null
     while (el && el !== svg) {
-      if ((el as Element).classList?.contains('node')) return
+      // A card (.node) OR a collapse pill (.collapse-pill) is an interactive target with its own
+      // onClick — treat it as a hit, not background. Without the pill check, clicking "show more"
+      // while a resource is selected also ran this background branch and deselected it, closing the
+      // drawer out from under the operator who only meant to expand the cluster.
+      if ((el as Element).classList?.contains('node') || (el as Element).classList?.contains('collapse-pill')) return
       el = el.parentElement
     }
     resetView()
