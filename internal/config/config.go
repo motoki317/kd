@@ -11,9 +11,17 @@ import (
 	"time"
 )
 
+// DefaultUserHeader is the request header carrying the authenticated username, as emitted by the
+// forward-auth proxy. Exported so EffectiveDevUser can distinguish a default header from one an
+// operator explicitly set (an explicit header implies a real proxy, suppressing auto dev mode).
+const DefaultUserHeader = "X-Forwarded-User"
+
+// AutoDevUser is the fixed identity injected when local dev mode is auto-enabled.
+const AutoDevUser = "dev"
+
 // Config is the fully-resolved server configuration.
 type Config struct {
-	Addr string // listen address, e.g. ":8080"
+	Addr string // listen address, e.g. ":9123"
 
 	// Proxy authentication.
 	UserHeader      string
@@ -48,8 +56,8 @@ func Load(args []string) (Config, error) {
 		skipKinds      string
 		eagerKinds     string
 	)
-	fs.StringVar(&c.Addr, "addr", envOr("KD_ADDR", ":8080"), "HTTP listen address")
-	fs.StringVar(&c.UserHeader, "user-header", envOr("KD_USER_HEADER", "X-Forwarded-User"), "request header carrying the authenticated username")
+	fs.StringVar(&c.Addr, "addr", envOr("KD_ADDR", ":9123"), "HTTP listen address")
+	fs.StringVar(&c.UserHeader, "user-header", envOr("KD_USER_HEADER", DefaultUserHeader), "request header carrying the authenticated username")
 	fs.StringVar(&c.GroupsHeader, "groups-header", envOr("KD_GROUPS_HEADER", ""), "optional request header carrying the user's groups")
 	fs.StringVar(&c.GroupsDelimiter, "groups-delimiter", envOr("KD_GROUPS_DELIMITER", ","), "delimiter splitting the groups header value")
 	fs.StringVar(&trustedProxies, "trusted-proxies", envOr("KD_TRUSTED_PROXIES", ""), "comma-separated CIDRs allowed to assert the identity header (empty = trust all)")
@@ -74,6 +82,27 @@ func Load(args []string) (Config, error) {
 	c.SkipKinds = splitCSV(skipKinds)
 	c.EagerKinds = splitCSV(eagerKinds)
 	return c, nil
+}
+
+// EffectiveDevUser resolves the dev identity for this run and reports whether it was auto-enabled.
+// An explicit -dev-user always wins. Otherwise, when kd is not running in-cluster AND no proxy
+// auth was configured, it auto-enables local dev mode (AutoDevUser, true) so the dashboard is
+// reachable without a forward-auth proxy. Any explicit auth setting suppresses auto-mode, so a
+// non-cluster host sitting behind a real proxy never silently loses authentication.
+func (c Config) EffectiveDevUser(inCluster bool) (user string, autoEnabled bool) {
+	if c.DevUser != "" {
+		return c.DevUser, false
+	}
+	if inCluster || c.authConfigured() {
+		return "", false
+	}
+	return AutoDevUser, true
+}
+
+// authConfigured reports whether any proxy-auth setting was explicitly provided, judged by value:
+// each field's zero/default state means "unconfigured" (Go flags leave defaults when unset).
+func (c Config) authConfigured() bool {
+	return len(c.TrustedProxies) > 0 || c.UserHeader != DefaultUserHeader || c.GroupsHeader != ""
 }
 
 // splitCSV trims and drops empty entries from a comma-separated list.

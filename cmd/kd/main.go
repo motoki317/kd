@@ -45,7 +45,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	reg, err := newRegistry(cfg.Kubeconfig, cfg.Resync, store.Options{
+	reg, inCluster, err := newRegistry(cfg.Kubeconfig, cfg.Resync, store.Options{
 		SkipKinds:  cfg.SkipKinds,
 		EagerKinds: cfg.EagerKinds,
 	})
@@ -72,12 +72,13 @@ func run() error {
 		})
 	}
 
+	devUser, autoDev := cfg.EffectiveDevUser(inCluster)
 	authCfg := auth.Config{
 		UserHeader:      cfg.UserHeader,
 		GroupsHeader:    cfg.GroupsHeader,
 		GroupsDelimiter: cfg.GroupsDelimiter,
 		TrustedProxies:  cfg.TrustedProxies,
-		DevUser:         cfg.DevUser,
+		DevUser:         devUser,
 	}
 	handler := server.New(authCfg, api.New(api.FromRegistry(reg), enforcer).Routes())
 
@@ -95,8 +96,11 @@ func run() error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	if cfg.DevUser != "" {
-		slog.Warn("dev mode: trusting a fixed identity, authentication disabled", "user", cfg.DevUser)
+	switch {
+	case autoDev:
+		slog.Warn("dev mode auto-enabled: not running in-cluster and no proxy auth configured; injecting a fixed identity and disabling authentication (set --dev-user, --trusted-proxies, or --user-header to override)", "user", devUser)
+	case devUser != "":
+		slog.Warn("dev mode: trusting a fixed identity, authentication disabled", "user", devUser)
 	}
 	slog.Info("kd listening", "addr", cfg.Addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -107,24 +111,26 @@ func run() error {
 
 // newRegistry chooses between in-cluster mode (single hidden context) and kubeconfig mode
 // (UI-selectable contexts). In-cluster is preferred only when no explicit --kubeconfig was
-// given AND rest.InClusterConfig() succeeds — matching the prior single-client behavior.
-func newRegistry(kubeconfigPath string, resync time.Duration, storeOpts store.Options) (*registry.Registry, error) {
+// given AND rest.InClusterConfig() succeeds — matching the prior single-client behavior. The
+// returned bool reports which branch was taken; callers use it to gate auto dev mode (off
+// in-cluster, candidate when local).
+func newRegistry(kubeconfigPath string, resync time.Duration, storeOpts store.Options) (*registry.Registry, bool, error) {
 	if kubeconfigPath == "" {
 		if cfg, err := rest.InClusterConfig(); err == nil {
 			typed, err := kubernetes.NewForConfig(cfg)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			dyn, err := dynamic.NewForConfig(cfg)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			return registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, resync, storeOpts), nil
+			return registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, resync, storeOpts), true, nil
 		}
 	}
 	loader, err := kubeconfig.Load(kubeconfigPath)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return registry.NewKubeconfig(loader, resync, storeOpts), nil
+	return registry.NewKubeconfig(loader, resync, storeOpts), false, nil
 }
