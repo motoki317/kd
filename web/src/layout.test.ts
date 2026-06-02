@@ -103,26 +103,43 @@ describe('layoutGraph', () => {
   })
 
   it('collapses a high-fanout hub to the newest COLLAPSE_VISIBLE + a "+N older" pill, kept compact', () => {
-    // One Node with 20 pods scheduled on it (nodes view): scheduledOn edges point pod -> node. The
-    // crowd folds to the newest COLLAPSE_VISIBLE pods + one pill (the older remainder), grid-wrapped.
-    const hub: KNode = { id: 'node', kind: 'Node', name: 'n1', health: 'Healthy' }
+    // One owner with 20 child pods (fan-OUT): ownerReference edges point owner -> pod. The crowd folds
+    // to the newest COLLAPSE_VISIBLE pods + one pill (the older remainder), grid-wrapped.
+    const hub: KNode = { id: 'owner', kind: 'ReplicaSet', name: 'r1', health: 'Healthy' }
     const pods: KNode[] = []
     const e: KEdge[] = []
     for (let i = 0; i < 20; i++) {
       pods.push({ id: `p${i}`, kind: 'Pod', name: `pod-${i}`, health: 'Healthy' })
-      e.push({ from: `p${i}`, to: 'node', type: 'scheduledOn' })
+      e.push({ from: 'owner', to: `p${i}`, type: 'ownerReference' })
     }
     const l = layoutGraph([hub, ...pods], e)
     expect(l.nodes).toHaveLength(1 + COLLAPSE_VISIBLE + 1) // hub + visible + 1 pill
     const pill = l.nodes.find((n) => n.collapse)!
     expect(pill.collapse!.hidden).toHaveLength(20 - COLLAPSE_VISIBLE)
-    // A single bundled edge stands in for the folded pods' scheduledOn edges, drawn in their real
-    // direction (pod→node): the pods are the sources, so it runs pill → node, not node → pill.
-    expect(l.edges.some((x) => x.from === pill.id && x.to === 'node' && x.type === 'scheduledOn')).toBe(true)
+    // A single bundled edge stands in for the folded pods' ownerReference edges, drawn in their real
+    // direction (owner→pod): the owner is the source, so it runs owner → pill.
+    expect(l.edges.some((x) => x.from === 'owner' && x.to === pill.id && x.type === 'ownerReference')).toBe(true)
     // Wrapping keeps it compact, and no two cards share a center.
     expect(l.width).toBeLessThan(NODE_WIDTH * 8)
     const seen = new Set(l.nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`))
     expect(seen.size).toBe(l.nodes.length)
+  })
+
+  it('does NOT fold a fan-IN hub: its many parents stay aligned in the leftmost depth column', () => {
+    // The Volumes "weird grouping" fix: a shared target (one Secret mounted by 12 Pods) must not fold
+    // its degree-1 PARENTS behind a pill. Folding a subset of the Pod kind — while other Pods in the
+    // same column stay bare — drew a confusing partial frame around the middle of the parent column.
+    // Every parent stays a real card, all sharing depth 0 (the leftmost column), Secret at depth 1.
+    const secret: KNode = { id: 'sec', kind: 'Secret', name: 'shared', health: 'Healthy' }
+    const pods = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, kind: 'Pod', name: `pod-${i}`, health: 'Healthy' as const }))
+    const e: KEdge[] = pods.map((p) => ({ from: p.id, to: 'sec', type: 'mounts' as const }))
+    const l = layoutGraph([secret, ...pods], e, 'LR')
+    expect(l.nodes.filter((n) => n.collapse)).toHaveLength(0) // no pill — nothing folds
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(12) // every parent rendered
+    expect(connGroups(l)).toHaveLength(0) // and no grouping frame in the parent column
+    const podX = new Set(l.nodes.filter((n) => n.kind === 'Pod').map((n) => Math.round(n.x)))
+    expect(podX.size).toBe(1) // all parents share the leftmost depth column
+    expect([...podX][0]).toBeLessThan(l.nodes.find((n) => n.id === 'sec')!.x) // left of the Secret
   })
 
   it('keeps each tree internally top-to-bottom after packing', () => {

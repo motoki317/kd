@@ -584,10 +584,10 @@ function collapseHubLeaves(
   return { blocks, pills }
 }
 
-// findHubs detects nodes whose many degree-1 neighbors should be grid-wrapped. A leaf is wrapped
-// beside (LR) / under (TB) its hub; only the DOMINANT-direction neighbors are wrapped (children if a
-// hub mostly fans out, parents if it mostly fans in). The minority side stays in the Dagre skeleton
-// so its edge keeps the graph's natural left-to-right flow — see the per-hub note below.
+// findHubs detects nodes whose many degree-1 CHILDREN should be grid-wrapped. A leaf is wrapped
+// beside (LR) / under (TB) its hub. Only fan-OUT children are wrapped — a fan-IN hub's many parents
+// stay in the Dagre skeleton so they align in their own depth column rather than folding into a
+// confusing partial frame (see the per-hub note below).
 function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const degree = new Map<string, number>()
@@ -595,36 +595,30 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
     degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
   }
-  // For each potential hub, split its degree-1 neighbors by edge direction: children (hub is the
-  // edge source, hub->leaf) vs parents (hub is the target, leaf->hub). Keeping the two apart is what
-  // lets us wrap only one side.
+  // Collect each potential hub's degree-1 CHILD leaves (hub is the edge source, hub->leaf). Only
+  // children are wrappable — see the fan-in note below — so the symmetric parent side is not tracked.
   const childrenOf = new Map<string, KNode[]>()
-  const parentsOf = new Map<string, KNode[]>()
   for (const e of edges) {
-    const leafId = degree.get(e.from) === 1 ? e.from : degree.get(e.to) === 1 ? e.to : null
-    if (!leafId) continue
-    const hubId = leafId === e.from ? e.to : e.from
-    const leaf = byId.get(leafId)
+    if (degree.get(e.to) !== 1) continue // only a degree-1 target is a wrappable child leaf
+    const leaf = byId.get(e.to)
     if (!leaf) continue
-    const side = hubId === e.from ? childrenOf : parentsOf
-    const list = side.get(hubId) ?? []
+    const list = childrenOf.get(e.from) ?? []
     list.push(leaf)
-    side.set(hubId, list)
+    childrenOf.set(e.from, list)
   }
 
   const hubs: Hub[] = []
   const wrapped = new Set<string>()
-  for (const id of new Set([...childrenOf.keys(), ...parentsOf.keys()])) {
+  for (const id of childrenOf.keys()) {
     const children = childrenOf.get(id) ?? []
-    const parents = parentsOf.get(id) ?? []
-    // Wrap only the dominant-direction neighbors. The minority side — e.g. a ReplicaSet's single
-    // Deployment parent among many pod children — stays in the Dagre skeleton, so Dagre keeps the
-    // parent to the hub's LEFT (LR) and its ownerReference arrow flows left→right. Wrapping it as a
-    // leaf had dragged it onto the children's side (the hub's right), reversing that arrow.
-    const useChildren = children.length >= parents.length
-    const leaves = useChildren ? children : parents
-    if (leaves.length < FANOUT_MIN) continue
-    leaves.sort((a, b) => a.name.localeCompare(b.name))
+    // Wrap only fan-OUT children (the hub is their shared parent). Fan-IN parents are deliberately
+    // NOT wrapped: folding a shared target's many degree-1 PARENTS (e.g. the dozen Pods that all
+    // mount one Secret in the Volumes view) split the Pod kind into a framed mid-column subset with
+    // its unrelated siblings stranded above and below — a confusing partial frame in the parent
+    // column. Left in the skeleton, those parents instead align cleanly in the leftmost depth column
+    // (placeColumns) with one honest edge each, which is what the operator expects.
+    if (children.length < FANOUT_MIN) continue
+    const leaves = [...children].sort((a, b) => a.name.localeCompare(b.name))
     // Group this hub's leaves per kind and fold each crowded kind into its own "+N older" pill
     // (D5/D6). All kind blocks sit at one depth (stacked down the column in LR), so a multi-kind CRD
     // owner's Services / Secrets / … all read as direct children on the same level.
@@ -632,7 +626,7 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     hubs.push({
       id,
       blocks: collapsed.blocks,
-      after: useChildren,
+      after: true, // children always sit AFTER the hub in flow (to its right in LR)
       pills: collapsed.pills,
     })
     // Every ORIGINAL leaf is owned by the hub (excluded from the Dagre skeleton); hidden ones simply
@@ -712,9 +706,12 @@ function dagreSeedY(skeleton: KNode[], edges: KEdge[], wrapped: ReadonlySet<stri
 }
 
 // A column-placement unit: one card or one wrapped leaf block, at a depth, with a seed y and a placer
-// that emits its PositionedNode(s) once the column's x and the unit's stacked top are resolved.
+// that emits its PositionedNode(s) once the column's x and the unit's stacked top are resolved. `kind`
+// drives the inter-unit gap: same-kind neighbours pack tight (LEAF_GAP_Y), different kinds get the
+// wider BLOCK_GAP so each kind reads as its own group (the user's "little spacing between kinds").
 interface ColUnit {
   rank: number
+  kind: string
   w: number
   h: number
   seedY: number
@@ -742,7 +739,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   for (const n of skeleton) {
     const r = rank.get(n.id) ?? 0
     units.push({
-      rank: r, w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
+      rank: r, kind: n.kind, w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
       place: (left, top) => out.push({ ...n, x: left + NODE_WIDTH / 2, y: top + NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT }),
     })
   }
@@ -754,7 +751,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     for (const b of hub.blocks) {
       const block = b
       units.push({
-        rank: r, w: block.w, h: block.h, seedY: top + block.h / 2,
+        rank: r, kind: block.kind, w: block.w, h: block.h, seedY: top + block.h / 2,
         place: (left, t) => placeBlockCells(block, left, t, out),
       })
       top += block.h + BLOCK_GAP
@@ -769,15 +766,23 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   let cx = 0
   for (const r of ranks) { colLeft.set(r, cx); cx += colWidth.get(r)! + COLUMN_GAP }
 
-  // Within each column, order by seed y and de-overlap downward — preserves Dagre's ordering while
-  // guaranteeing no two units collide (a wide grid block reserves its own vertical run).
+  // Within each column, order by seed y, then stack the units CONTIGUOUSLY from the topmost unit's
+  // seed — same-kind neighbours separated by COL_V_GAP, different kinds by the wider BLOCK_GAP. We
+  // anchor only the first unit to its seed and pack the rest tight rather than honouring each unit's
+  // seedY as a floor: a skeleton child (e.g. a StatefulSet seeded at its hub's centre) used to punch
+  // a tall hole into the hub's centred block stack, and adjacent kinds drifted to inconsistent gaps.
+  // Tight, kind-gapped packing gives every kind the same visible separation and removes the hole;
+  // Dagre's crossing-minimised ORDER (the sort) still keeps children near their parent's row.
   for (const r of ranks) {
     const col = units.filter((u) => u.rank === r).sort((a, b) => a.seedY - b.seedY)
     let cursor = -Infinity
+    let prevKind: string | null = null
     for (const u of col) {
-      const top = Math.max(u.seedY - u.h / 2, cursor + COL_V_GAP)
+      const gap = prevKind === null ? 0 : u.kind === prevKind ? COL_V_GAP : BLOCK_GAP
+      const top = cursor === -Infinity ? u.seedY - u.h / 2 : cursor + gap
       u.place(colLeft.get(r)!, top)
       cursor = top + u.h
+      prevKind = u.kind
     }
   }
   return out

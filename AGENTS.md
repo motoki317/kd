@@ -148,12 +148,17 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   is its widest unit, so a large same-kind group still wraps into a smart grid block (`blockDims`) and
   merely widens its column without breaking any other column's alignment. Vertical order within a
   column is *seeded* from Dagre (run on the skeleton only, via `dagreSeedY`, for its crossing-minimized
-  order — its x is discarded) then de-overlapped downward. This replaced the old "Dagre lays the
-  skeleton, grids parked next to the hub card" placement, which (a) let a hub's wide reserved box shove
-  its card out of its rank, (b) stranded wrapped leaves in a private near-hub column instead of their
-  depth column, and (c) dragged a fan-in hub's wrapped *source* parents deep next to the node they
-  point at (the Volumes "boxes everywhere" report — now every source sits in column 0). TB
-  (test/legacy) still uses `placeWithDagre`. Cross-component column alignment is only approximate
+  order — its x is discarded), then the column is packed **contiguously** from the topmost unit's seed:
+  same-kind neighbours separated by `COL_V_GAP`, different kinds by the wider `BLOCK_GAP`, so every
+  kind reads as its own group (the user's "little spacing between kinds"). We anchor only the first
+  unit to its seed and pack the rest tight rather than honouring each unit's seedY as a floor — a
+  skeleton child (e.g. a StatefulSet seeded at its hub's centre) otherwise punched a tall hole into
+  the hub's centred block stack, and adjacent kinds drifted to inconsistent gaps. This replaced the
+  old "Dagre lays the skeleton, grids parked next to the hub card" placement, which (a) let a hub's
+  wide reserved box shove its card out of its rank, (b) stranded wrapped leaves in a private near-hub
+  column instead of their depth column, and (c) dragged a fan-in hub's *source* parents deep next to
+  the node they point at (the Volumes "boxes everywhere" report — now every source sits in column 0).
+  TB (test/legacy) still uses `placeWithDagre`. Cross-component column alignment is only approximate
   (each component normalizes independently); within a component it is exact.
 - **Single-column packing**: `packComponents` stacks every component in one vertical column — one
   tree per row, left-aligned, never two side by side (the user's explicit "all views" arrangement).
@@ -175,6 +180,10 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   double-count). It only collapses when it hides ≥2. This is a CLIENT-side, reveal-able fold of
   *live* resources — distinct from the server-side permanent drop of dead ReplicaSets/Pods in
   `graph/build.go` (`isHistorical`).
+- **Fan-out only (`findHubs`)**: only a hub's degree-1 fan-OUT *children* are wrapped into leaf blocks.
+  A fan-IN hub's many *parents* (e.g. the dozen Pods that all mount one Secret in Volumes) are NOT
+  wrapped/folded — folding a subset of one kind while its siblings stay bare drew a confusing partial
+  frame mid-column; left in the skeleton they instead align cleanly in the leftmost depth column.
 - **Per-kind hub leaf blocks + frames (`collapseHubLeaves` → `connGroups`)**: a hub's degree-1 leaves
   are grouped **per kind** into separate column blocks (Services together, Secrets together, …), each a
   vertical column laid out by `blockDims` (fills down to `LEAF_COL_MAX` before wrapping) so the kind's
