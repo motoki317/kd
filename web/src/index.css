@@ -588,27 +588,6 @@ button.conn.conn-retry:focus-visible {
   font-variant-numeric: tabular-nums;
   margin-left: auto;
 }
-/* Quiet always-visible key explaining the per-row health dot and the trailing not-ready count, so a
-   first-time visitor isn't left guessing what the colors and numbers mean. Dim so it recedes once
-   learned; the color↔state mapping itself lives in the toolbar health pills. */
-.sidebar-key {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 6px 2px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.sidebar-key-dot {
-  background: var(--text-dim);
-}
-.sidebar-key-sep {
-  opacity: 0.5;
-}
-.sidebar-key-num {
-  color: var(--text-dim);
-  font-weight: 700;
-}
 .sidebar-filter-field {
   position: relative;
   display: flex;
@@ -631,6 +610,53 @@ button.conn.conn-retry:focus-visible {
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  /* Take the slack between the filter and the pinned legend so the list scrolls and the legend
+     stays glued to the sidebar's bottom edge. min-height:0 lets a flex item shrink below content. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Always-visible health legend pinned at the bottom of the sidebar (replaces hover-only native
+   tooltips): every dot color with its meaning, plus what the trailing per-row number counts. Dim so
+   it recedes once learned. The color↔state names also appear in the toolbar pills; here they teach
+   the sidebar's own dots and the count. */
+.ns-legend {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ns-legend-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.ns-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ns-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns-legend-num {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ns-legend-num-badge {
+  color: var(--text-dim);
+  font-weight: 700;
 }
 .ns-list button {
   width: 100%;

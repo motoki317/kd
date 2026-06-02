@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
-import { healthColor, healthHint, healthSeverity } from '../health'
+import { HEALTH_ORDER, healthColor, healthHint, healthSeverity } from '../health'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -109,17 +109,6 @@ export default function Sidebar(props: Props) {
         <Show when={troubled() > 0}>
           <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>
         </Show>
-      </div>
-      {/* A quiet always-visible key: the colored dot encodes a namespace's health, and the number
-          beside a row is how many of its resources aren't Healthy. First-time visitors couldn't tell
-          what the dot colors or the trailing numbers meant; this spells it out without the clutter of
-          a full color legend (the per-state color↔name mapping lives in the toolbar health pills). */}
-      <div class="sidebar-key">
-        <span class="ns-dot sidebar-key-dot" aria-hidden="true" />
-        <span>= health</span>
-        <span class="sidebar-key-sep">·</span>
-        <span class="ns-count sidebar-key-num">#</span>
-        <span>= not ready</span>
       </div>
       <div class="sidebar-filter-field">
         <svg class="topology-search-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
@@ -253,6 +242,28 @@ export default function Sidebar(props: Props) {
             </Show>
           </ul>
         </Show>
+      </Show>
+      {/* Always-visible health key, pinned at the bottom. The per-row dot colors and trailing counts
+          meant nothing to a first-time visitor; a static legend spells out every state (including the
+          gray "Unknown" that confused people) and the number, with no hover or delay. Shown only once
+          there are real namespaces to annotate — not on the loading / failed / empty states. */}
+      <Show when={!props.loading && !props.failed && props.namespaces.some((n) => n.name !== CLUSTER_SCOPE)}>
+        <div class="ns-legend">
+          <div class="ns-legend-title">What the dots mean</div>
+          <div class="ns-legend-items">
+            <For each={HEALTH_ORDER}>
+              {(h) => (
+                <span class="ns-legend-item" title={healthHint[h]}>
+                  <span class="ns-dot" style={{ background: healthColor(h) }} />
+                  {h === 'Unknown' ? 'Unknown — can’t classify' : h}
+                </span>
+              )}
+            </For>
+          </div>
+          <div class="ns-legend-num">
+            <span class="ns-count ns-legend-num-badge">#</span>= resources not ready
+          </div>
+        </div>
       </Show>
     </nav>
   )
