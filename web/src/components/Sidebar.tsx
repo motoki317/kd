@@ -244,18 +244,20 @@ export default function Sidebar(props: Props) {
         </Show>
       </Show>
       {/* Always-visible health key, pinned at the bottom. The per-row dot colors and trailing counts
-          meant nothing to a first-time visitor; a static legend spells out every state (including the
-          gray "Unknown" that confused people) and the number, with no hover or delay. Shown only once
-          there are real namespaces to annotate — not on the loading / failed / empty states. */}
+          meant nothing to a first-time visitor; a static legend spells out every state and the
+          number, with no hover or delay. Shown only once there are real namespaces to annotate —
+          not on the loading / failed / empty states. Unknown is omitted: a namespace's color and
+          count both ignore Unknown resources (non-actionable noise), so a namespace dot is never
+          gray — listing Unknown would explain a state the list can't show. */}
       <Show when={!props.loading && !props.failed && props.namespaces.some((n) => n.name !== CLUSTER_SCOPE)}>
         <div class="ns-legend">
           <div class="ns-legend-title">Legend</div>
           <div class="ns-legend-items">
-            <For each={HEALTH_ORDER}>
+            <For each={HEALTH_ORDER.filter((h) => h !== 'Unknown')}>
               {(h) => (
                 <span class="ns-legend-item" title={healthHint[h]}>
                   <span class="ns-dot" style={{ background: healthColor(h) }} />
-                  {h === 'Unknown' ? 'Unknown — can’t classify' : h}
+                  {h}
                 </span>
               )}
             </For>

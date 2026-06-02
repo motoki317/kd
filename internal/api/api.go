@@ -179,8 +179,9 @@ type namespaceEntry struct {
 	// Health is the worst resource health in the namespace, so the sidebar can flag trouble
 	// without the user opening each one.
 	Health string `json:"health"`
-	// NonReady is how many resources are not Healthy, so the sidebar can convey the scale of
-	// trouble (3 degraded things vs 1) for triage at cluster scale.
+	// NonReady is how many resources are actionably not Healthy (Unknown is ignored as noise),
+	// so the sidebar can convey the scale of trouble (3 degraded things vs 1) for triage at
+	// cluster scale.
 	NonReady int `json:"nonReady,omitempty"`
 }
 

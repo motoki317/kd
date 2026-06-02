@@ -40,12 +40,13 @@ describe('Sidebar', () => {
     ))
     const legend = container.querySelector('.ns-legend')
     expect(legend).toBeTruthy()
-    // One swatch per health state, so a first-time visitor can map every color — including the gray
-    // "Unknown" — without hovering.
-    expect(legend!.querySelectorAll('.ns-dot').length).toBe(5)
+    // One swatch per *actionable* health state, so a first-time visitor can map every color a
+    // namespace dot can take — without hovering. Unknown is omitted: namespace health ignores
+    // Unknown resources, so a namespace dot is never gray and listing it would mislead.
+    expect(legend!.querySelectorAll('.ns-dot').length).toBe(4)
     const text = legend!.textContent ?? ''
     expect(text).toContain('Healthy')
-    expect(text).toContain('Unknown')
+    expect(text).not.toContain('Unknown')
     expect(text).toContain('not ready') // the number is spelled out too
     // No divider anymore — the alphabetical list has no troubled/healthy boundary to mark.
     expect(container.querySelectorAll('.ns-divider').length).toBe(0)

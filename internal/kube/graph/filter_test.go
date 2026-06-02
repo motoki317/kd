@@ -206,6 +206,33 @@ status:
 	}
 }
 
+// TestSummarizeIgnoresUnknown pins the rule that Unknown resources (unclassifiable custom
+// resources) are noise an operator can't act on, so they affect neither the actionable "not
+// ready" count NOR the dot color — a namespace reads by its actionable resources alone.
+func TestSummarizeIgnoresUnknown(t *testing.T) {
+	// A namespace mixing one real problem with Unknown noise: the count reflects only the
+	// actionable Degraded resource, and the color is Degraded (Unknown doesn't change either).
+	mixed := &Graph{Nodes: []Node{
+		{Namespace: "shop", Health: HealthHealthy},
+		{Namespace: "shop", Health: HealthDegraded},
+		{Namespace: "shop", Health: HealthUnknown},
+		{Namespace: "shop", Health: HealthUnknown},
+	}}
+	if got := SummarizeBuilt(mixed, false); got.NonReady != 1 || got.Health != HealthDegraded {
+		t.Errorf("SummarizeBuilt(mixed) = %+v, want Degraded/1", got)
+	}
+
+	// Healthy + Unknown reads as Healthy/0: the Unknown resource doesn't drag an otherwise-fine
+	// namespace to a misleading gray.
+	withUnknown := &Graph{Nodes: []Node{
+		{Namespace: "shop", Health: HealthHealthy},
+		{Namespace: "shop", Health: HealthUnknown},
+	}}
+	if got := SummarizeBuilt(withUnknown, false); got.NonReady != 0 || got.Health != HealthHealthy {
+		t.Errorf("SummarizeBuilt(withUnknown) = %+v, want Healthy/0", got)
+	}
+}
+
 // Every namespace's snapshot carries the cluster-scoped Nodes (for placement edges), so a single
 // unhealthy Node — cordoned (Suspended) or NotReady (Degraded) — must not roll into a per-namespace
 // indicator and make every namespace look troubled over one cluster-level event. Nodes surface in

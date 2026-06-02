@@ -21,7 +21,7 @@ var severity = map[Health]int{
 // match the /namespaces and SSE `summary` event wire format, so the client uses one shape for both.
 type Summary struct {
 	Health   Health `json:"health"`
-	NonReady int    `json:"nonReady,omitempty"` // resources whose health != Healthy (the count behind the dot)
+	NonReady int    `json:"nonReady,omitempty"` // actionable not-Healthy resources (Unknown ignored entirely) — the count behind the dot
 }
 
 // Summarize rolls a namespace snapshot up to its worst resource health and non-ready count, so the
@@ -56,6 +56,14 @@ func SummarizeBuilt(g *Graph, clusterScope bool) Summary {
 		// flag every namespace that's scheduled on it). The cluster rollup is the inverse — only
 		// cluster-scoped objects.
 		if clusterScope != (n.Namespace == "") {
+			continue
+		}
+		// Unknown is ignored entirely — both the count AND the dot color. kd can't classify these
+		// (often custom resources), so they're noise an operator can't act on: counting them
+		// inflated the badge, and letting them set the color painted otherwise-healthy namespaces
+		// a misleading gray. Skipping them means a namespace reads by its actionable resources
+		// alone (Healthy/Progressing/Degraded/Suspended).
+		if n.Health == HealthUnknown {
 			continue
 		}
 		if n.Health != HealthHealthy {
