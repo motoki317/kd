@@ -22,6 +22,7 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 | Add a kind icon | `web/src/icons.tsx` + extend `icons.test.ts` coverage |
 | Add a short kind label | `web/src/names.ts` (`KIND_SHORT_LABELS`) + alias if not substring |
 | Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + view spec |
+| Add a CR/CRD health rule | `internal/kube/graph/health_cr.go` (group/kind dispatch) + `health_cr_test.go` |
 | Add an SSE event | `internal/api/sse.go` (server) + `web/src/api.ts` (client handler) |
 | Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `deploy/policy-configmap.yaml` |
 | ADR for a decision | `docs/ADR/YYYYMMDD-title.md` (template at `_template.md`) |

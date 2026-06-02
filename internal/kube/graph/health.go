@@ -43,43 +43,6 @@ func health(obj runtime.Object) Health {
 	}
 }
 
-// crHealth is the catch-all health rule for custom resources (kinds kd has no dedicated
-// rule for). It inspects status.conditions[] for a Ready or Available condition: True →
-// Healthy, False → Degraded, missing → Unknown. A CR without conditions falls back to
-// Healthy (existence == health), matching ConfigMap/Service semantics.
-//
-// This covers most controller-written CRs (Argo, Crossplane, cert-manager, ExternalSecret,
-// KEDA, …) without per-CRD config, while being honest about a CR that has no controller
-// signal we can read.
-func crHealth(u *unstructured.Unstructured) Health {
-	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
-	if err != nil || !found || len(conds) == 0 {
-		return HealthHealthy
-	}
-	// First Ready/Available decides; if neither is present, the CR has conditions but
-	// none kd interprets, so report Unknown rather than glossing as Healthy.
-	for _, c := range conds {
-		m, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		typ, _ := m["type"].(string)
-		if typ != "Ready" && typ != "Available" {
-			continue
-		}
-		status, _ := m["status"].(string)
-		switch status {
-		case "True":
-			return HealthHealthy
-		case "False":
-			return HealthDegraded
-		default:
-			return HealthUnknown
-		}
-	}
-	return HealthUnknown
-}
-
 // pvHealth mirrors pvcHealth for the backing volume: Available (unbound) is healthy (it exists and is
 // ready for a PVC to claim it), Bound (claimed) is healthy, Released is Progressing (waiting for a new
 // claim or to be reclaimed), Failed means the recycler/reclaimer failed (Degraded).

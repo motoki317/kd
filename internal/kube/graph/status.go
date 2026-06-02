@@ -51,14 +51,11 @@ func statusSummary(obj runtime.Object) string {
 		}
 		return o.Spec.Schedule
 	default:
-		// For custom resources that went through crHealth: surface a minimal status string so
-		// the card isn't completely blank. "Unknown" means conditions present but uninterpretable;
-		// a healthy-by-existence CR (no conditions) stays silent.
+		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
+		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
+		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.
 		if IsUnstructuredCR(obj) {
-			h := crHealth(obj.(*unstructured.Unstructured))
-			if h == HealthUnknown {
-				return "unknown state"
-			}
+			return crStatusSummary(obj.(*unstructured.Unstructured))
 		}
 		return ""
 	}
