@@ -249,7 +249,7 @@ export default function Sidebar(props: Props) {
           there are real namespaces to annotate — not on the loading / failed / empty states. */}
       <Show when={!props.loading && !props.failed && props.namespaces.some((n) => n.name !== CLUSTER_SCOPE)}>
         <div class="ns-legend">
-          <div class="ns-legend-title">What the dots mean</div>
+          <div class="ns-legend-title">Legend</div>
           <div class="ns-legend-items">
             <For each={HEALTH_ORDER}>
               {(h) => (
