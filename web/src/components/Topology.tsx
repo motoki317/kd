@@ -67,6 +67,11 @@ const DASHED: Partial<Record<EdgeType, boolean>> = {
 
 const EDGE_CORNER = 7 // elbow rounding radius for orthogonal edges — soft ArgoCD-style corners
 
+// Floor for the auto-fit scale. Below this, cards shrink past legibility (names fade out at the
+// 0.45 labels-hidden threshold), so a resource-dense view that can't fit at this scale opens
+// zoomed to the floor on its first resources instead of fitting everything into an unreadable speck.
+const MIN_FIT_SCALE = 0.55
+
 // lerpTo returns the point `d` units from `from` toward `to` (clamped to the segment, 0 if coincident).
 function lerpTo(from: Point, to: Point, d: number): Point {
   const len = Math.hypot(to.x - from.x, to.y - from.y)
@@ -573,7 +578,21 @@ export default function Topology(props: Props) {
     }
     pendingFit = false
     const target = computeFitFor(0, 0, l.width, l.height, 1.4)
-    target.scale *= 0.92
+    target.scale *= 0.92 // a little breathing room when the whole graph already fits comfortably
+    if (target.scale < MIN_FIT_SCALE) {
+      // Too many resources to fit readably: rather than shrink the whole graph to an unreadable
+      // speck, clamp to a legible floor (a hard minimum, applied AFTER the breathing room so it's
+      // never undercut) and open on the top-left — the first resources. Center the axis that still
+      // fits at the floor; anchor the overflowing axis to its start. The operator zooms out from
+      // there for the whole picture (the fit button / `f` still frames everything on demand).
+      const rect = svg.getBoundingClientRect()
+      const pad = 60
+      const contentW = l.width * MIN_FIT_SCALE
+      const contentH = l.height * MIN_FIT_SCALE
+      target.scale = MIN_FIT_SCALE
+      target.tx = contentW + pad * 2 <= rect.width ? (rect.width - contentW) / 2 : pad
+      target.ty = contentH + pad * 2 <= rect.height ? (rect.height - contentH) / 2 : pad
+    }
     if (firstFit) {
       firstFit = false
       setScale(target.scale)

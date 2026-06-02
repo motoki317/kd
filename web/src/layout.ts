@@ -206,9 +206,10 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: Read
   }
 
   // Use a wider gap between kind boxes than between connectivity components: the kind group
-  // background rects need breathing room so they don't visually merge into each other.
+  // background rects need breathing room so they don't visually merge into each other. Grid-pack
+  // (not single-column) so the kind boxes flow across the width instead of one tall stack.
   const KIND_BOX_GAP = 64
-  const packed = packComponents(components, KIND_BOX_GAP)
+  const packed = packComponentsGrid(components, KIND_BOX_GAP)
 
   // Resolve cross-kind edges against the packed global positions, so ownership backbone
   // (Deployment→ReplicaSet→Pod) and CR refs draw as straight lines across kind boxes.
@@ -286,8 +287,9 @@ export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: Rea
   }
   // Slightly wider gap between host containers than between connectivity components — the host
   // group bg rects need breathing room. Same constant as layoutGraphByKind for visual rhythm.
+  // Grid-pack so host boxes flow across the width instead of stacking into one tall column.
   const HOST_BOX_GAP = 64
-  const packed = packComponents(components, HOST_BOX_GAP)
+  const packed = packComponentsGrid(components, HOST_BOX_GAP)
   // No edges drawn in this view; scheduledOn is implied by containment.
   return { ...packed, edges: [] }
 }
@@ -941,5 +943,73 @@ function packComponents(components: Component[], gap = COMPONENT_GAP): Layout {
     edges: allEdges,
     width: maxRight + margin,
     height: cursorY - gap + margin, // cursorY overshot by one trailing gap after the last row
+  }
+}
+
+// packComponentsGrid arranges the component boxes into an aligned grid instead of one tall column,
+// so the All / Nodes views (independent kind/host boxes with no cross-tree backbone to keep
+// vertically aligned) use the viewport's width. The single-column packComponents stays for the
+// connectivity views, where one-tree-per-row is the intended reading order.
+//
+// We pick the COLUMN COUNT whose resulting grid aspect (w/h) lands closest to a landscape target,
+// rather than a width-threshold shelf pack: with wide boxes (a Node's pod grid) an area-derived
+// width barely fits two boxes and collapses to a single column, wasting the screen. Searching the
+// column count instead reliably finds the balanced 2-3 column grid. Columns size to their widest
+// box and rows to their tallest, so every box aligns into a clean lattice. Order is the caller's
+// (alphabetical) for stability; the count is derived from content (not the live viewport) so the
+// layout is stable across resizes — the fit step scales the whole thing to the screen afterwards.
+function packComponentsGrid(components: Component[], gap = COMPONENT_GAP): Layout {
+  if (components.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
+
+  const margin = 28
+  const n = components.length
+  const GRID_TARGET_ASPECT = 1.6 // overall grid a touch wider than tall, matching typical screens
+
+  // Evaluate each candidate column count and keep the one whose grid aspect is closest to target.
+  let best: { cols: number; colW: number[]; rowH: number[]; w: number; h: number } | null = null
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols)
+    const colW = new Array(cols).fill(0)
+    const rowH = new Array(rows).fill(0)
+    components.forEach((c, i) => {
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      colW[col] = Math.max(colW[col], c.width)
+      rowH[row] = Math.max(rowH[row], c.height)
+    })
+    const w = colW.reduce((a, b) => a + b, 0) + (cols - 1) * gap
+    const h = rowH.reduce((a, b) => a + b, 0) + (rows - 1) * gap
+    const score = Math.abs(w / h - GRID_TARGET_ASPECT)
+    if (!best || score < Math.abs(best.w / best.h - GRID_TARGET_ASPECT)) best = { cols, colW, rowH, w, h }
+  }
+
+  const { cols, colW, rowH } = best!
+  const colX: number[] = []
+  let x = margin
+  for (const cw of colW) {
+    colX.push(x)
+    x += cw + gap
+  }
+  const rowY: number[] = []
+  let y = margin
+  for (const rh of rowH) {
+    rowY.push(y)
+    y += rh + gap
+  }
+
+  const allNodes: PositionedNode[] = []
+  const allEdges: PositionedEdge[] = []
+  components.forEach((c, i) => {
+    const dx = colX[i % cols]
+    const dy = rowY[Math.floor(i / cols)]
+    for (const node of c.nodes) allNodes.push({ ...node, x: node.x + dx, y: node.y + dy })
+    for (const e of c.edges) allEdges.push({ ...e, points: e.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) })
+  })
+
+  return {
+    nodes: allNodes,
+    edges: allEdges,
+    width: best!.w + margin * 2,
+    height: best!.h + margin * 2,
   }
 }

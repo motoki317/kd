@@ -351,6 +351,27 @@ describe('layoutGraphByKind', () => {
     expect(l.nodes).toEqual([])
     expect(l.edges).toEqual([])
   })
+
+  it('shelf-packs the kind boxes into a grid, not one tall column', () => {
+    // Many single-card kinds: a single-column stack would leave every box on its own row. The
+    // grid pack must instead flow them across the width, so at least one pair of kind boxes shares
+    // a horizontal band (overlapping y-range at different x) — proving width is used, not just height.
+    const many: KNode[] = Array.from({ length: 9 }, (_, i) => ({
+      id: `n${i}`,
+      kind: `Kind${String.fromCharCode(97 + i)}`, // distinct kinds Kinda…Kindi
+      name: `r${i}`,
+      health: 'Healthy' as const,
+    }))
+    const l = layoutGraphByKind(many, [])
+    const groups = kindGroups(l)
+    expect(groups).toHaveLength(9)
+    const sharesRow = groups.some((a) =>
+      groups.some((b) => a.kind !== b.kind && a.y < b.y + b.height && b.y < a.y + a.height && a.x !== b.x),
+    )
+    expect(sharesRow).toBe(true)
+    // The packed box is wider than a single column (the whole point of using the width).
+    expect(l.width).toBeGreaterThan(NODE_WIDTH * 2)
+  })
 })
 
 describe('layoutGraphByHost (Nodes view, cycle 205)', () => {
@@ -394,6 +415,26 @@ describe('layoutGraphByHost (Nodes view, cycle 205)', () => {
 
   it('handles an empty graph', () => {
     expect(layoutGraphByHost([], [])).toEqual({ nodes: [], edges: [], width: 0, height: 0 })
+  })
+
+  it('arranges many hosts into a multi-column grid, not one tall column', () => {
+    // Mirrors a real multi-node cluster: several hosts each running a few pods. A single-column
+    // stack wastes the screen's width (the reported bug); the grid must place at least one pair of
+    // host boxes side by side (overlapping y-range at different x).
+    const nodes: KNode[] = []
+    for (let h = 0; h < 7; h++) {
+      const host = `node-${h}`
+      nodes.push({ id: `node-${h}`, kind: 'Node', name: host, health: 'Healthy' })
+      for (let p = 0; p < 3; p++) nodes.push({ id: `p-${h}-${p}`, kind: 'Pod', name: `pod-${h}-${p}`, health: 'Healthy', host })
+    }
+    const l = layoutGraphByHost(nodes, [])
+    const groups = hostGroups(l)
+    expect(groups).toHaveLength(7)
+    const sharesRow = groups.some((a) =>
+      groups.some((b) => a.host !== b.host && a.y < b.y + b.height && b.y < a.y + a.height && a.x !== b.x),
+    )
+    expect(sharesRow).toBe(true)
+    expect(l.width).toBeGreaterThan(NODE_WIDTH * 2)
   })
 })
 
