@@ -543,14 +543,30 @@ export default function Topology(props: Props) {
   let fitScope = ' init'
   let pendingFit = true
   let firstFit = true
+  // freshData closes a race: a view switch flips props.viewId synchronously, but the new view's
+  // nodes stream in asynchronously, so for one beat layout() is computed from the OLD view's nodes
+  // under the NEW viewId (a giant transient box). Fitting that and consuming pendingFit stranded the
+  // viewport zoomed far out: by the time the real, smaller layout arrived, pendingFit was already
+  // spent. App always resets the graph to empty before the new stream fills it (closes the old SSE
+  // and setGraph(emptyState()) on any ctx/ns/view change), so width === 0 is a reliable "the new
+  // scope's data is incoming" marker. We refuse to fit until we have seen that reset since the scope
+  // changed, which skips the stale pre-reset layout and fits the real one. Initial mount is already
+  // primed (the store starts empty), so the first real frame still fits.
+  let freshData = true
   createEffect(() => {
     const l = layout()
     const scope = `${props.scope ?? ''}|${props.viewId ?? ''}`
     if (scope !== fitScope) {
       fitScope = scope
       pendingFit = true
+      freshData = false // wait for this scope's graph to reset before trusting its geometry
     }
-    if (!svg || l.width === 0 || !pendingFit) return
+    if (!svg) return
+    if (l.width === 0) {
+      freshData = true // the graph was cleared for the incoming scope; the next non-empty is real
+      return
+    }
+    if (!pendingFit || !freshData) return
     if (props.selectedId) {
       pendingFit = false // selection-fit owns this scope's first frame; don't also fit-all
       return
