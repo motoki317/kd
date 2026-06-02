@@ -20,24 +20,53 @@ const namespaces: NamespaceInfo[] = [
 const noop = () => {}
 
 describe('Sidebar', () => {
-  it('sorts troubled namespaces first (severity, then name) and counts them', () => {
+  it('lists namespaces in stable alphabetical order regardless of health, and counts the troubled', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
     const order = [...container.querySelectorAll('.ns-name')].map((e) => e.textContent)
-    // Degraded > Progressing > the two Healthy (alphabetical) — independent of input order.
-    expect(order).toEqual(['zzz-broken', 'mmm', 'aaa', 'bbb'])
+    // Plain A→Z — health no longer reorders rows, so a row never moves as its dot color changes.
+    expect(order).toEqual(['aaa', 'bbb', 'mmm', 'zzz-broken'])
+    // The trouble badge still counts Degraded/Progressing namespaces even though they don't float up.
     expect(container.querySelector('.ns-trouble')?.textContent).toBe('2')
-    // Each troubled namespace shows its non-ready count; healthy ones show none.
-    const counts = [...container.querySelectorAll('.ns-count')].map((e) => e.textContent)
-    expect(counts).toEqual(['3', '1'])
+    // Each troubled namespace shows its non-ready count (in alpha order: mmm=1, zzz-broken=3).
+    const counts = [...container.querySelectorAll('.ns-list .ns-count')].map((e) => e.textContent)
+    expect(counts).toEqual(['1', '3'])
+  })
+
+  it('shows a quiet key explaining the dot and the count, and never a troubled/healthy divider', () => {
+    const { container, getByText } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // The key spells out both signals for first-time visitors.
+    expect(container.querySelector('.sidebar-key')).toBeTruthy()
+    expect(getByText('= health')).toBeTruthy()
+    expect(getByText('= not ready')).toBeTruthy()
+    // No divider anymore — the alphabetical list has no troubled/healthy boundary to mark.
+    expect(container.querySelectorAll('.ns-divider').length).toBe(0)
+  })
+
+  it('explains each health state in the dot tooltip, not just the bare enum word', () => {
+    const mix: NamespaceInfo[] = [
+      { name: 'crd-only', health: 'Unknown', nonReady: 4 },
+      { name: 'fine', health: 'Healthy' },
+    ]
+    const { container } = render(() => (
+      <Sidebar namespaces={mix} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // Alpha order: crd-only (Unknown) then fine (Healthy). The gray dot's tooltip says what Unknown means.
+    const titles = [...container.querySelectorAll('.ns-list .ns-dot')].map((e) => e.getAttribute('title'))
+    expect(titles[0]).toContain('Unknown')
+    expect(titles[0]).toContain("can't classify")
+    expect(titles[1]).toContain('Healthy')
   })
 
   it('renders a filled health dot for every namespace — healthy reads green, not a hollow gray ring (cycle 308)', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
-    const dots = [...container.querySelectorAll('.ns-dot')] as HTMLElement[]
+    // Scope to .ns-list so the key's sample dot (also .ns-dot, under the title) isn't counted.
+    const dots = [...container.querySelectorAll('.ns-list .ns-dot')] as HTMLElement[]
     // One dot per namespace, each with a non-transparent background bound to its health color.
     expect(dots.length).toBe(namespaces.length)
     for (const d of dots) {
@@ -46,8 +75,8 @@ describe('Sidebar', () => {
     }
     // No leftover hollow-placeholder class — healthy is a real (green) dot now.
     expect(container.querySelector('.ns-dot-ok')).toBeNull()
-    // The healthy dots resolve to the healthy color var (sorted last; the first two are troubled).
-    expect(dots[dots.length - 1].style.background).toBe('var(--health-healthy)')
+    // The healthy dots resolve to the healthy color var (alpha order: aaa, bbb are the first two).
+    expect(dots[0].style.background).toBe('var(--health-healthy)')
   })
 
   it('counts only Degraded/Progressing in the "needs attention" badge, not Unknown/Suspended (cycle 313)', () => {
@@ -63,17 +92,16 @@ describe('Sidebar', () => {
     ))
     // Only the Degraded + Progressing namespaces raise the alarm; Unknown/Suspended don't.
     expect(container.querySelector('.ns-trouble')?.textContent).toBe('2')
-    // All four non-Healthy namespaces still sort above the divider (grouping is unchanged).
-    expect(container.querySelectorAll('.ns-divider').length).toBe(1)
   })
 
   it('names the health state in the ns-count tooltip (cycle 317)', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
-    // The fixture's troubled ns sort first: zzz-broken (Degraded, 3), mmm (Progressing, 1).
-    const titles = [...container.querySelectorAll('.ns-count')].map((e) => e.getAttribute('title'))
-    expect(titles).toEqual(['3 non-ready · Degraded', '1 non-ready · Progressing'])
+    // Alpha order, counts only on the troubled rows: mmm (Progressing, 1) then zzz-broken (Degraded, 3).
+    // Scope to .ns-list so the key's sample "#" (also .ns-count) doesn't join the assertion.
+    const titles = [...container.querySelectorAll('.ns-list .ns-count')].map((e) => e.getAttribute('title'))
+    expect(titles).toEqual(['1 non-ready · Progressing', '3 non-ready · Degraded'])
   })
 
   it('filters the list by name', async () => {
@@ -162,52 +190,6 @@ describe('Sidebar', () => {
     // Click forwards CLUSTER_SCOPE through onSelect — the server uses this exact value in URLs.
     fireEvent.click(getByText('[cluster]'))
     expect(onSelect).toHaveBeenCalledWith(CLUSTER_SCOPE)
-  })
-
-  it('degraded [cluster] entry does not shift the divider (cluster scope excluded from dividerAt)', () => {
-    // A degraded [cluster] entry + one troubled namespace + two healthy ones: the divider
-    // should appear between the one troubled namespace and the two healthy ones — [cluster]
-    // must not count as the first troubled namespace, which would place the divider at index 0
-    // (hiding the boundary).
-    const withClusterDegraded: NamespaceInfo[] = [
-      { name: CLUSTER_SCOPE, health: 'Degraded', nonReady: 2 },
-      { name: 'a', health: 'Degraded', nonReady: 1 },
-      { name: 'b', health: 'Healthy' },
-      { name: 'c', health: 'Healthy' },
-    ]
-    const { container } = render(() => (
-      <Sidebar namespaces={withClusterDegraded} selected={null} onSelect={noop} loading={false} failed={false} />
-    ))
-    // Exactly one divider between the troubled and healthy namespaces (not zero).
-    expect(container.querySelectorAll('.ns-divider').length).toBe(1)
-  })
-
-  it('inserts a divider between troubled and healthy namespaces (none when all-troubled / all-healthy)', () => {
-    // Mixed: divider should render once between the troubled group and the healthy group.
-    const mixed = render(() => (
-      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
-    ))
-    expect(mixed.container.querySelectorAll('.ns-divider').length).toBe(1)
-    cleanup()
-    // All healthy: no boundary to mark.
-    const allHealthy: NamespaceInfo[] = [
-      { name: 'a', health: 'Healthy' },
-      { name: 'b', health: 'Healthy' },
-    ]
-    const healthy = render(() => (
-      <Sidebar namespaces={allHealthy} selected={null} onSelect={noop} loading={false} failed={false} />
-    ))
-    expect(healthy.container.querySelectorAll('.ns-divider').length).toBe(0)
-    cleanup()
-    // All troubled: no boundary to mark either.
-    const allTroubled: NamespaceInfo[] = [
-      { name: 'a', health: 'Degraded', nonReady: 1 },
-      { name: 'b', health: 'Progressing', nonReady: 1 },
-    ]
-    const troubled = render(() => (
-      <Sidebar namespaces={allTroubled} selected={null} onSelect={noop} loading={false} failed={false} />
-    ))
-    expect(troubled.container.querySelectorAll('.ns-divider').length).toBe(0)
   })
 
   // A programmatic jump (Alt+T / first-load) bumps the flash tick; the selected row pulses so the

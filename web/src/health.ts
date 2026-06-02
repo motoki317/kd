@@ -14,6 +14,16 @@ export const healthSeverity: Record<Health, number> = {
   Healthy: 0,
 }
 
+// Plain-English gloss for each health state. The bare enum word — "Unknown" especially — doesn't
+// tell a first-time operator what a colored dot means, so tooltips use this instead of the raw word.
+export const healthHint: Record<Health, string> = {
+  Healthy: 'Healthy — all resources are OK',
+  Progressing: 'Progressing — a change is rolling out',
+  Degraded: 'Degraded — something is broken',
+  Suspended: 'Suspended — intentionally paused',
+  Unknown: "Unknown — kd can't classify these (often custom resources)",
+}
+
 export function healthColor(h: Health): string {
   switch (h) {
     case 'Healthy':

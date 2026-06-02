@@ -2,8 +2,9 @@ import { healthSeverity } from './health'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 
 // compareNamespaces orders namespaces troubled-first (worst health, then most non-ready resources),
-// breaking ties alphabetically — the order operators want, with what needs attention up top. Shared
-// by the sidebar's display sort and the first-load default selection so the two agree.
+// breaking ties alphabetically. The sidebar LIST is plain alphabetical now (a stable row order the
+// operator can aim at), so this is used only to pick the first-load default selection — landing the
+// operator on the most attention-worthy namespace via mostTroubled() without reordering the list.
 export function compareNamespaces(a: NamespaceInfo, b: NamespaceInfo): number {
   return (
     healthSeverity[b.health] - healthSeverity[a.health] ||

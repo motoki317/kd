@@ -588,6 +588,27 @@ button.conn.conn-retry:focus-visible {
   font-variant-numeric: tabular-nums;
   margin-left: auto;
 }
+/* Quiet always-visible key explaining the per-row health dot and the trailing not-ready count, so a
+   first-time visitor isn't left guessing what the colors and numbers mean. Dim so it recedes once
+   learned; the color↔state mapping itself lives in the toolbar health pills. */
+.sidebar-key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.sidebar-key-dot {
+  background: var(--text-dim);
+}
+.sidebar-key-sep {
+  opacity: 0.5;
+}
+.sidebar-key-num {
+  color: var(--text-dim);
+  font-weight: 700;
+}
 .sidebar-filter-field {
   position: relative;
   display: flex;
@@ -793,12 +814,6 @@ button.conn.conn-retry:focus-visible {
   .ns-list button.ns-flash {
     animation: none;
   }
-}
-.ns-divider {
-  list-style: none;
-  height: 1px;
-  background: var(--border);
-  margin: 6px 9px;
 }
 .ns-empty,
 .sidebar-loading {

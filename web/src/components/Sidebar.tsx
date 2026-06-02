@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
-import { healthColor, healthSeverity } from '../health'
-import { compareNamespaces } from '../ns'
+import { healthColor, healthHint, healthSeverity } from '../health'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -20,23 +19,28 @@ interface Props {
   flash?: number
 }
 
-// Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) with a
-// quick filter box. Each namespace carries a health dot — green when healthy, red/amber/gray for
-// trouble — so an operator reads the cluster's state as a column of color without opening each one.
+// Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) in a stable
+// alphabetical order, with a quick filter box. Each namespace carries a health dot — green when
+// healthy, red/amber/gray for trouble — so an operator reads the cluster's state as a column of
+// color without opening each one; a quiet key under the title spells out the dot and the count for
+// first-time visitors.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
   // The cluster pseudo-namespace is split out from the rest: it's pinned above the namespace
   // list (and the filter doesn't apply to it) so it stays a stable jump target regardless of
   // what the operator is searching for. Server-side it's identified by CLUSTER_SCOPE.
   const clusterEntry = createMemo(() => props.namespaces.find((n) => n.name === CLUSTER_SCOPE) ?? null)
-  // Troubled namespaces sort to the top (operators look there first); ties break alphabetically.
-  // Exclude the cluster entry — it has its own pinned row, not part of the alpha-sorted list.
+  // Plain alphabetical order — a namespace keeps its row no matter how its health changes. We used
+  // to float troubled namespaces to the top, but that re-shuffled the list every time a rollout or
+  // failure changed a namespace's health, so the row an operator was aiming for moved under the
+  // cursor. Health is already conveyed by the dot colour, so a stable A→Z list is easier to operate.
+  // Exclude the cluster entry — it has its own pinned row above the list.
   const shown = createMemo(() => {
     const f = filter().toLowerCase()
     return props.namespaces
       .filter((n) => n.name !== CLUSTER_SCOPE && n.name.toLowerCase().includes(f))
       .slice()
-      .sort(compareNamespaces)
+      .sort((a, b) => a.name.localeCompare(b.name))
   })
   // The red "needs attention" badge counts only namespaces that are actively not-OK — Degraded
   // (broken) or Progressing (mid-rollout). Unknown (a CR/resource kd can't classify) and Suspended
@@ -46,13 +50,6 @@ export default function Sidebar(props: Props) {
   const troubled = createMemo(
     () => props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE && healthSeverity[n.health] >= healthSeverity.Progressing).length,
   )
-  // Index of the first healthy entry in the sorted list, so a divider can mark the transition
-  // between "needs attention" and "fine"; -1 means no boundary (all troubled or all healthy).
-  const dividerAt = createMemo(() => {
-    const list = shown()
-    const firstHealthy = list.findIndex((n) => n.health === 'Healthy')
-    return firstHealthy > 0 && firstHealthy < list.length ? firstHealthy : -1
-  })
 
   // Scroll the active ns into view when the selection changes externally — e.g. on first load
   // when mostTroubled() picks the auto-selected namespace, or when a URL change navigates to
@@ -108,6 +105,17 @@ export default function Sidebar(props: Props) {
           <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>
         </Show>
       </div>
+      {/* A quiet always-visible key: the colored dot encodes a namespace's health, and the number
+          beside a row is how many of its resources aren't Healthy. First-time visitors couldn't tell
+          what the dot colors or the trailing numbers meant; this spells it out without the clutter of
+          a full color legend (the per-state color↔name mapping lives in the toolbar health pills). */}
+      <div class="sidebar-key">
+        <span class="ns-dot sidebar-key-dot" aria-hidden="true" />
+        <span>= health</span>
+        <span class="sidebar-key-sep">·</span>
+        <span class="ns-count sidebar-key-num">#</span>
+        <span>= not ready</span>
+      </div>
       <div class="sidebar-filter-field">
         <svg class="topology-search-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
           <circle cx="6" cy="6" r="3.5" />
@@ -127,9 +135,8 @@ export default function Sidebar(props: Props) {
             }
             else if (e.key === 'Enter') {
               // Jump straight to the top-of-list match — operators expect filter+Enter to be
-              // an explicit "go" action, not a "remember the search" no-op (cycle 223). The
-              // first item is troubled-first sorted, so this lands on the most attention-worthy
-              // ns matching the filter.
+              // an explicit "go" action, not a "remember the search" no-op (cycle 223). The list
+              // is alphabetical, so this lands on the first matching ns by name.
               const first = shown()[0]
               if (first) {
                 props.onSelect(first.name)
@@ -183,7 +190,7 @@ export default function Sidebar(props: Props) {
                     classList={{ active: c().name === props.selected }}
                     onClick={() => props.onSelect(c().name)}
                   >
-                    <span class="ns-dot" style={{ background: healthColor(c().health) }} title={c().health} />
+                    <span class="ns-dot" style={{ background: healthColor(c().health) }} title={healthHint[c().health]} />
                     {/* Tiny cluster/server glyph echoes the Node icon and signals "cluster scope"
                         without requiring the user to read the bracketed text first. */}
                     <svg class="ns-cluster-icon" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
@@ -207,17 +214,10 @@ export default function Sidebar(props: Props) {
               )}
             </Show>
             <For each={shown()}>
-              {(ns, i) => (
-                <>
-                  {/* Quiet rule between the last troubled and first healthy namespace, so the
-                      troubled-first sort reads as deliberate grouping ("here's what's wrong",
-                      then "here's everything else") rather than an unmotivated order. */}
-                  <Show when={i() === dividerAt()}>
-                    <li class="ns-divider" aria-hidden="true" />
-                  </Show>
+              {(ns) => (
                 <li>
                   <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
-                    <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={ns.health} />
+                    <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={healthHint[ns.health]} />
                     <span class="ns-name">{ns.name}</span>
                     <Show when={(ns.nonReady ?? 0) > 0}>
                       {/* Inline color matches the dot (and the topology health-stroke), so the
@@ -235,7 +235,6 @@ export default function Sidebar(props: Props) {
                     </Show>
                   </button>
                 </li>
-                </>
               )}
             </For>
             <Show when={shown().length === 0}>
