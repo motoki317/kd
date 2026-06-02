@@ -46,6 +46,20 @@ describe('Sidebar', () => {
     expect(container.querySelectorAll('.ns-divider').length).toBe(0)
   })
 
+  it('puts the health tooltip on the whole row, not just the 8px dot (hovering the name shows it)', () => {
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // Alpha order: aaa(Healthy), bbb(Healthy), mmm(Progressing,1), zzz-broken(Degraded,3).
+    const buttons = [...container.querySelectorAll('.ns-list button')] as HTMLElement[]
+    // A healthy row carries the bare gloss — no count to mention.
+    expect(buttons[0].getAttribute('title')).toBe('Healthy — all resources are OK')
+    // A troubled row's title is self-complete (gloss + not-ready count), so the whole row is a
+    // hover target — an operator no longer has to land on the tiny dot to learn what's wrong.
+    const broken = buttons.find((b) => b.textContent?.includes('zzz-broken'))!
+    expect(broken.getAttribute('title')).toBe('Degraded — something is broken · 3 not ready')
+  })
+
   it('explains each health state in the dot tooltip, not just the bare enum word', () => {
     const mix: NamespaceInfo[] = [
       { name: 'crd-only', health: 'Unknown', nonReady: 4 },

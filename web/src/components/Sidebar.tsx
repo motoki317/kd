@@ -26,6 +26,11 @@ interface Props {
 // first-time visitors.
 export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal('')
+  // The whole row carries the health tooltip, not just the 8px dot: the dot is too small a target to
+  // land on, so an operator hovering the namespace NAME (the obvious target) saw nothing. Native
+  // `title` resolves to the nearest ancestor with one, so this covers the name, padding, and dot.
+  const rowTitle = (n: NamespaceInfo) =>
+    healthHint[n.health] + ((n.nonReady ?? 0) > 0 ? ` · ${n.nonReady} not ready` : '')
   // The cluster pseudo-namespace is split out from the rest: it's pinned above the namespace
   // list (and the filter doesn't apply to it) so it stays a stable jump target regardless of
   // what the operator is searching for. Server-side it's identified by CLUSTER_SCOPE.
@@ -189,6 +194,7 @@ export default function Sidebar(props: Props) {
                     class="ns-cluster"
                     classList={{ active: c().name === props.selected }}
                     onClick={() => props.onSelect(c().name)}
+                    title={rowTitle(c())}
                   >
                     <span class="ns-dot" style={{ background: healthColor(c().health) }} title={healthHint[c().health]} />
                     {/* Tiny cluster/server glyph echoes the Node icon and signals "cluster scope"
@@ -216,7 +222,11 @@ export default function Sidebar(props: Props) {
             <For each={shown()}>
               {(ns) => (
                 <li>
-                  <button classList={{ active: ns.name === props.selected }} onClick={() => props.onSelect(ns.name)}>
+                  <button
+                    classList={{ active: ns.name === props.selected }}
+                    onClick={() => props.onSelect(ns.name)}
+                    title={rowTitle(ns)}
+                  >
                     <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={healthHint[ns.health]} />
                     <span class="ns-name">{ns.name}</span>
                     <Show when={(ns.nonReady ?? 0) > 0}>
