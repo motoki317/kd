@@ -46,6 +46,61 @@ describe('Topology', () => {
     expect(depChip?.querySelector('.kind-chip-dot')).toBeFalsy()
   })
 
+  it('renders the health filter pills in the toolbar, one per present state', () => {
+    // nodes: 2 Healthy + 1 Degraded → pills [Healthy 2, Degraded 1] in HEALTH_ORDER. onHealthFilter
+    // must be present for the pills to render (the Show gate).
+    const onHealthFilter = vi.fn()
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onHealthFilter={onHealthFilter} />
+    ))
+    const pills = [...container.querySelectorAll('.topology-health-pills .legend-item')] as HTMLButtonElement[]
+    expect(pills.length).toBe(2)
+    // Order is HEALTH_ORDER (Healthy before Degraded); counts come from the node set.
+    expect(pills[0].textContent).toContain('Healthy')
+    expect(pills[0].querySelector('.legend-count')?.textContent).toBe('2')
+    expect(pills[1].textContent).toContain('Degraded')
+    expect(pills[1].querySelector('.legend-count')?.textContent).toBe('1')
+  })
+
+  it('renders the full-width health-distribution stripe with one segment per present state', () => {
+    // The stripe is a status bar pinned to the top of the canvas — independent of the filter pills,
+    // so it renders even without an onHealthFilter handler (it's a display, not a control).
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const stripe = container.querySelector('.topology-stripe')
+    expect(stripe).toBeTruthy()
+    expect(stripe!.querySelectorAll('span').length).toBe(2) // Healthy + Degraded
+  })
+
+  it('toggles the health filter when a pill is clicked, and clears it when the active pill is re-clicked', () => {
+    const onHealthFilter = vi.fn()
+    // No active filter: clicking Degraded spotlights it.
+    const off = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} onHealthFilter={onHealthFilter} />)
+    const degraded = [...off.container.querySelectorAll('.topology-health-pills .legend-item')].find((p) =>
+      p.textContent?.includes('Degraded'),
+    ) as HTMLButtonElement
+    fireEvent.click(degraded)
+    expect(onHealthFilter).toHaveBeenCalledWith('Degraded')
+    cleanup()
+    onHealthFilter.mockClear()
+    // Degraded already active: clicking it again clears the filter (null).
+    const on = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} healthFilter="Degraded" onHealthFilter={onHealthFilter} />
+    ))
+    const active = [...on.container.querySelectorAll('.topology-health-pills .legend-item')].find((p) =>
+      p.textContent?.includes('Degraded'),
+    ) as HTMLButtonElement
+    expect(active.classList.contains('active')).toBe(true)
+    fireEvent.click(active)
+    expect(onHealthFilter).toHaveBeenCalledWith(null)
+  })
+
+  it('hides the health filter pills when no onHealthFilter handler is wired (the stripe still shows)', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    expect(container.querySelector('.topology-health-pills')).toBeNull()
+    // The stripe is a status display, not a filter, so it survives without a handler.
+    expect(container.querySelector('.topology-stripe')).toBeTruthy()
+  })
+
   it('renders a kind-filter chip per present kind, ordered by count (cycle 203)', () => {
     // nodes has 2 Pods + 1 Deployment, so the chips should be [Pod (2), Deployment (1)].
     const onKindFilter = vi.fn()

@@ -4,7 +4,6 @@ import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph,
 import { setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
-import { HEALTH_ORDER, healthColor } from './health'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
 import type { Health, KNode, View } from './types'
@@ -381,14 +380,14 @@ export default function App() {
     return list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
   })
 
+  // Health distribution across the view, kept here for the favicon attention badge. The toolbar's
+  // health-filter pills + stripe (moved out of the topbar into the Topology toolbar) derive their
+  // own counts from the same node set.
   const counts = createMemo(() => {
     const c: Record<string, number> = {}
     for (const n of nodes()) c[n.health] = (c[n.health] ?? 0) + 1
     return c
   })
-  // Only surface health states actually present, so the legend stays a quiet summary until
-  // something needs attention rather than a row of zeros.
-  const shownHealth = createMemo(() => HEALTH_ORDER.filter((h) => counts()[h]))
 
   // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the current
   // view as a colored dot on the brand mark, so multi-tab operators spot trouble without clicking
@@ -461,35 +460,6 @@ export default function App() {
                 title={v.hint}
               >
                 {v.label}
-              </button>
-            )}
-          </For>
-        </div>
-        <div class="legend">
-          <For each={shownHealth()}>
-            {(h) => (
-              <button
-                class="legend-item"
-                aria-pressed={healthFilter() === h}
-                classList={{ active: healthFilter() === h }}
-                // Active pill borrows the health hue for its border + background tint, so the
-                // visual connection to "spotlighting THIS color" is explicit (vs a neutral grey
-                // active pill that loses the link to the health it represents).
-                style={
-                  healthFilter() === h
-                    ? {
-                        'border-color': healthColor(h),
-                        background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
-                        color: 'var(--text)',
-                      }
-                    : undefined
-                }
-                onClick={() => setHealthFilter((cur) => (cur === h ? null : h))}
-                title={`Spotlight ${h} resources`}
-              >
-                <span class="dot" style={{ background: healthColor(h) }} />
-                {h}
-                <span class="legend-count">{counts()[h]}</span>
               </button>
             )}
           </For>
@@ -570,22 +540,6 @@ export default function App() {
         <button class="help-btn" onClick={() => setShowHelp((s) => !s)} title="Keyboard shortcuts (?)" aria-label="Show keyboard shortcuts">
           ?
         </button>
-        {/* Health-distribution stripe (cycle 132): a 3px bar along the bottom edge of the topbar
-            with one segment per present health state, sized in proportion. Reads as a quick
-            answer to "what's the cluster doing right now?" — a sliver of red on a sea of green
-            telegraphs the same idea the legend pills do, but without needing to read numbers. */}
-        <Show when={shownHealth().length > 0}>
-          <div class="topbar-stripe" aria-hidden="true">
-            <For each={shownHealth()}>
-              {(h) => (
-                <span
-                  style={{ flex: counts()[h], 'background-color': healthColor(h) }}
-                  title={`${h}: ${counts()[h]}`}
-                />
-              )}
-            </For>
-          </div>
-        </Show>
       </header>
 
       <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }}>
@@ -607,6 +561,7 @@ export default function App() {
             healthFilter={healthFilter()}
             kindFilter={kindFilter()}
             onKindFilter={toggleKind}
+            onHealthFilter={(h) => setHealthFilter(h)}
             onClearFilters={() => {
               // Same effect as Escape with no selection: reset every filter at once.
               setSearch('')

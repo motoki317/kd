@@ -85,20 +85,7 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   z-index: 5;
-  position: relative; /* anchor the cycle-132 health-distribution stripe */
-}
-.topbar-stripe {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px; /* sit on top of the topbar's bottom border so the colored stripe IS the divider */
-  height: 3px;
-  display: flex;
-  pointer-events: none;
-}
-.topbar-stripe > span {
-  height: 100%;
-  transition: flex 0.3s ease;
+  position: relative;
 }
 .brand {
   /* Now a <button> (cycle 290) so clicking the logo resets the view. Strip button chrome so it
@@ -986,6 +973,38 @@ button.conn.conn-retry:focus-visible {
   /* Keep the chip row from blanketing too much of the canvas in dense kind sets: the topology
      scroll handlers see the underlying SVG behind a clipped overflow row. */
   max-width: calc(100% - 28px);
+}
+/* Health-filter pills (moved from the topbar): their own toolbar line under the search field. */
+.topology-health-pills {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* On the canvas overlay the pills need a solid backing to read against the topology (the topbar
+   gave them one for free); match the kind chips' surface + border so the two filter rows read as
+   siblings (repetition). The active inline tint still wins (two-class < inline). */
+.topology-health-pills .legend-item {
+  background: var(--surface);
+  border-color: var(--border);
+}
+/* Fixed full-width health-distribution stripe pinned to the top edge of the main view — a status
+   bar like the old topbar stripe, but for the current namespace's resources. Width is the canvas,
+   not the pills, so it never varies as filter states come and go. Sits on top of the canvas's top
+   border so the colored bar reads as the divider. */
+.topology-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  display: flex;
+  pointer-events: none;
+  z-index: 3;
+}
+.topology-stripe > span {
+  height: 100%;
+  transition: flex 0.3s ease;
 }
 .topology-kinds {
   /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". Wrap so

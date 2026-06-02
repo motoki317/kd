@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { COLLAPSE_KIND, connGroups, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
-import { healthColor, healthSeverity } from '../health'
+import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
@@ -21,6 +21,10 @@ interface Props {
   // Toggle (or "solo" with Shift) a kind in the filter. `solo` clears the existing set and sets
   // the filter to exactly this kind — paired with the chip's onClick passing e.shiftKey.
   onKindFilter?: (k: string, solo?: boolean) => void
+  // Spotlight a health state, or clear it (null). Drives the health-filter pills that now live in
+  // this toolbar — moved out of the global topbar so every "filter the resources in front of me"
+  // control sits in one block beside the search and kind chips.
+  onHealthFilter?: (h: Health | null) => void
   connected: boolean
   viewLabel: string
   // viewHint is the "what this view shows" tagline, displayed in the empty state so the operator
@@ -364,6 +368,18 @@ export default function Topology(props: Props) {
       .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
       .map(([k, s]) => ({ kind: k, count: s.count, worst: s.worst })),
   )
+  // Health distribution across the view's resources — the data behind the toolbar's health-filter
+  // pills and the proportion stripe. Counts props.nodes directly: those are the raw graph nodes
+  // (no synthetic collapse pills — pills are layout-only), and a collapsed cluster only hides LIVE
+  // resources that are still in props.nodes, so the totals are the true per-health counts.
+  const healthStats = createMemo(() => {
+    const c = {} as Record<Health, number>
+    for (const n of props.nodes) c[n.health] = (c[n.health] ?? 0) + 1
+    return c
+  })
+  // Only surface states actually present (stable HEALTH_ORDER), so the row reads as a quiet "all
+  // healthy" when nothing's wrong rather than a line of zeros.
+  const shownHealth = createMemo(() => HEALTH_ORDER.filter((h) => healthStats()[h]))
   // Nodes that pass the kind filter — used both for fading and to short-circuit the related/search
   // intersection. Kinds compose with search and healthFilter (intersection: a node must match all).
   const nodeKindOk = (kind: string) => {
@@ -864,6 +880,23 @@ export default function Topology(props: Props) {
     // icon-only cards; hover/click still reveal the detail. The icon + card color carry kind + health
     // at any zoom (cycle 325).
     <div class="topology" classList={{ 'labels-hidden': scale() < 0.45 }}>
+      {/* Health-distribution stripe: a thin bar pinned to the top edge of the canvas, one segment
+          per present state sized in proportion — the "what's this namespace doing?" read at a
+          glance (a sliver of red on a sea of green). Spans the FULL width of the main view (a
+          fixed status bar, like the old topbar stripe), deliberately decoupled from the filter
+          pills so its width never varies with how many pills are showing. */}
+      <Show when={shownHealth().length > 0}>
+        <div class="topology-stripe" aria-hidden="true">
+          <For each={shownHealth()}>
+            {(h) => (
+              <span
+                style={{ flex: healthStats()[h], 'background-color': healthColor(h) }}
+                title={`${h}: ${healthStats()[h]}`}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
       {/* Filtered-everything-out overlay (cycle 219): when a filter is active and nothing
           is lit, surface that clearly + a one-click clear button so the operator doesn't have
           to guess why the canvas looks dim. Sits above the canvas like the empty state. */}
@@ -999,9 +1032,46 @@ export default function Topology(props: Props) {
             clear
           </button>
         </Show>
+        {/* Health facet — the namespace's health filter, moved out of the global topbar so every
+            "filter / summarise the resources in front of me" control reads as one block (proximity)
+            instead of being split between the screen-top chrome and the canvas. Each pill
+            spotlights a health state with the same toggle semantics as the kind chips below
+            (repetition); the at-a-glance proportion lives in the fixed-width stripe pinned to the
+            top of the canvas (rendered below), not here — so this row never changes the stripe's
+            width as states come and go. */}
+        <Show when={shownHealth().length > 0 && props.onHealthFilter}>
+          <div class="topology-health-pills" role="toolbar" aria-label="Health filter">
+            <For each={shownHealth()}>
+              {(h) => (
+                <button
+                  class="legend-item"
+                  aria-pressed={props.healthFilter === h}
+                  classList={{ active: props.healthFilter === h }}
+                  // Active pill borrows the health hue for its border + tint, so the link to
+                  // "spotlighting THIS color" stays explicit (matches the kind chips' accent).
+                  style={
+                    props.healthFilter === h
+                      ? {
+                          'border-color': healthColor(h),
+                          background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
+                          color: 'var(--text)',
+                        }
+                      : undefined
+                  }
+                  onClick={() => props.onHealthFilter?.(props.healthFilter === h ? null : h)}
+                  title={`Spotlight ${h} resources`}
+                >
+                  <span class="dot" style={{ background: healthColor(h) }} />
+                  {h}
+                  <span class="legend-count">{healthStats()[h]}</span>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
         {/* Kind filter chips (cycle 203): one chip per kind present in the current view. Click
             toggles the kind in/out of the active set; multi-select composes with search and the
-            legend health filter. Hidden when only one kind is present (no filter would do
+            health filter. Hidden when only one kind is present (no filter would do
             anything). Each chip carries the same monochrome silhouette as its cards, so the
             chip row reads as a compact legend of "what kinds are here". */}
         <Show when={kindChips().length > 1 && props.onKindFilter}>
