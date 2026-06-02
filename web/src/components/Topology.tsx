@@ -926,7 +926,15 @@ export default function Topology(props: Props) {
           fixed status bar, like the old topbar stripe), deliberately decoupled from the filter
           pills so its width never varies with how many pills are showing. */}
       <Show when={shownHealth().length > 0}>
-        <div class="topology-stripe" aria-hidden="true">
+        {/* The stripe lives inside .topology, which is the flex child that shrinks to make room
+            for the detail drawer. Left alone it would narrow with the canvas; stripe-over-drawer
+            extends it back across the drawer so the status bar always spans the full main view.
+            The overflow:hidden on .main clips the (over-extended) tail to the main edge. */}
+        <div
+          class="topology-stripe"
+          classList={{ 'stripe-over-drawer': !!props.selectedId }}
+          aria-hidden="true"
+        >
           <For each={shownHealth()}>
             {(h) => (
               <span

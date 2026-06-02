@@ -864,6 +864,8 @@ button.conn.conn-retry:focus-visible {
   display: flex;
   min-width: 0;
   position: relative;
+  /* Clip the health stripe's over-extension (see .stripe-over-drawer) to the main edge. */
+  overflow: hidden;
 }
 .topology {
   flex: 1;
@@ -1005,6 +1007,13 @@ button.conn.conn-retry:focus-visible {
 .topology-stripe > span {
   height: 100%;
   transition: flex 0.3s ease;
+}
+/* When the drawer is open .topology shrinks by the drawer width, which would shrink the stripe with
+   it. Extend the stripe right by the max drawer width so it spans the full main view again (the
+   drawer is a static sibling, so .topology's positioned stripe paints over its top edge); .main's
+   overflow:hidden trims any surplus to the main edge. */
+.topology-stripe.stripe-over-drawer {
+  right: calc(-1 * var(--drawer-w));
 }
 .topology-kinds {
   /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". Wrap so
