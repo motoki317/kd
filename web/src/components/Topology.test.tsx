@@ -498,6 +498,25 @@ describe('Topology', () => {
     expect(onSelect).toHaveBeenCalledWith('2') // the web-abc Pod
   })
 
+  it('All view hides edges until a resource is selected', () => {
+    // No selection: the cross-kind backbone lines are suppressed (they fan across the matrix as
+    // noise). The lone ownerReference edge must not render.
+    const none = render(() => <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" />)
+    expect(none.container.querySelectorAll('.edges > g').length).toBe(0)
+    cleanup()
+    // With a resource selected, edges come back as the "what connects to this" highlight.
+    const sel = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" selectedId="1" />
+    ))
+    expect(sel.container.querySelectorAll('.edges > g').length).toBe(1)
+  })
+
+  it('non-All views show edges even with no selection', () => {
+    // Ownership keeps its backbone always — the gate is All-view-specific.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" viewId="ownership" {...base} />)
+    expect(container.querySelectorAll('.edges > g').length).toBe(1)
+  })
+
   it('All view: search still fades non-matching nodes when viewId=all', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="web" viewId="all" {...base} viewLabel="All" />

@@ -436,6 +436,11 @@ export default function Topology(props: Props) {
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
+  // All-view arrows: the cross-kind backbone lines fan across the whole kind matrix and read as
+  // noise when you are just scanning which kinds exist — so hide them until a resource is selected,
+  // when they become the useful "what connects to THIS" highlight. Every other view keeps its edges
+  // always (their layouts route edges meaningfully along the backbone).
+  const renderedEdges = createMemo(() => (props.viewId === 'all' && !props.selectedId ? [] : layout().edges))
   // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
   // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
   // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
@@ -1271,7 +1276,7 @@ export default function Topology(props: Props) {
             </g>
           </Show>
           <g class="edges">
-            <For each={layout().edges}>
+            <For each={renderedEdges()}>
               {(e) => (
                 <g
                   // Hovering anywhere on the edge halos both endpoint cards (cycle 330/R4). The hit
