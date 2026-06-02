@@ -183,6 +183,97 @@ describe('layoutGraph', () => {
     const depEdge = l.edges.find((ed) => ed.from === 'dep' && ed.to === 'rs')!
     expect(depEdge.points[0].x).toBeLessThan(depEdge.points[depEdge.points.length - 1].x)
   })
+
+  it('routes LR edges orthogonally: parent right edge → child left edge, axis-aligned segments', () => {
+    // Deployment → ReplicaSet → 2 Pods. Each edge must leave the parent's RIGHT edge and enter the
+    // child's LEFT edge, with every segment purely horizontal or vertical (the "blocky" ArgoCD look).
+    const dep: KNode = { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }
+    const pods: KNode[] = [
+      { id: 'p0', kind: 'Pod', name: 'web-x-0', health: 'Healthy' },
+      { id: 'p1', kind: 'Pod', name: 'web-x-1', health: 'Healthy' },
+    ]
+    const e: KEdge[] = [
+      { from: 'dep', to: 'rs', type: 'ownerReference' },
+      ...pods.map((p) => ({ from: 'rs', to: p.id, type: 'ownerReference' as const })),
+    ]
+    const l = layoutGraph([dep, rs, ...pods], e, 'LR')
+    const box = (id: string) => l.nodes.find((n) => n.id === id)!
+    for (const ed of l.edges) {
+      const src = box(ed.from), dst = box(ed.to)
+      const pts = ed.points
+      // Anchored on the source's right edge and the target's left edge.
+      expect(pts[0].x).toBeCloseTo(src.x + src.width / 2, 3)
+      expect(pts[0].y).toBeCloseTo(src.y, 3)
+      expect(pts[pts.length - 1].x).toBeCloseTo(dst.x - dst.width / 2, 3)
+      expect(pts[pts.length - 1].y).toBeCloseTo(dst.y, 3)
+      // Every consecutive segment is axis-aligned (shares an x or a y).
+      for (let i = 1; i < pts.length; i++) {
+        const horizontal = Math.abs(pts[i].y - pts[i - 1].y) < 1e-6
+        const vertical = Math.abs(pts[i].x - pts[i - 1].x) < 1e-6
+        expect(horizontal || vertical).toBe(true)
+      }
+    }
+  })
+
+  it('seats a hub’s wrapped children the same depth-gap from the parent as an ungrouped child', () => {
+    // Regression for "grouped children crowd too close / arrows look stunted": a hub's wrapped leaf
+    // grid must sit a full rank-gap from the hub card — the SAME horizontal gap a normal Dagre child
+    // gets — not the tighter HUB_GAP it used before. Two disconnected trees, compared:
+    //   solo:  one Service → one Pod      (ungrouped — a plain Dagre rank)
+    //   hub:   one Service → six Pods     (grouped — wrapped into a per-kind block + a fold pill)
+    const soloParent: KNode = { id: 'sp', kind: 'Service', name: 'solo', health: 'Healthy' }
+    const soloChild: KNode = { id: 'sc', kind: 'Pod', name: 'solo-pod', health: 'Healthy' }
+    const hub: KNode = { id: 'hub', kind: 'Service', name: 'hub', health: 'Healthy' }
+    const leaves: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `l${i}`, kind: 'Pod', name: `hub-pod-${i}`, health: 'Healthy' }))
+    const edges: KEdge[] = [
+      { from: 'sp', to: 'sc', type: 'selects' },
+      ...leaves.map((l) => ({ from: 'hub', to: l.id, type: 'selects' as const })),
+    ]
+    const l = layoutGraph([soloParent, soloChild, hub, ...leaves], edges, 'LR')
+    const box = (id: string) => l.nodes.find((n) => n.id === id)!
+    const rightOf = (b: { x: number; width: number }) => b.x + b.width / 2
+    const leftOf = (b: { x: number; width: number }) => b.x - b.width / 2
+
+    const soloGap = leftOf(box('sc')) - rightOf(box('sp'))
+    // The wrapped leaves fold to COLLAPSE_VISIBLE cards + a pill; every one is a direct child of the
+    // hub and must share the same left x (one depth). Measure the gap from the hub card to that depth.
+    const wrapped = l.nodes.filter((n) => n.kind === 'Pod' && n.name.startsWith('hub-pod'))
+    expect(wrapped).toHaveLength(COLLAPSE_VISIBLE) // 6 → 3 shown + a fold pill
+    const hubGap = leftOf(wrapped[0]) - rightOf(box('hub'))
+    expect(wrapped.every((n) => Math.abs(leftOf(n) - leftOf(wrapped[0])) < 0.5)).toBe(true) // one column
+    expect(hubGap).toBeCloseTo(soloGap, 0) // grouped children align with the normal child rank
+    expect(hubGap).toBeGreaterThan(60) // and are clearly not crowded at the old ~36px HUB_GAP
+  })
+
+  it('aligns nodes into depth columns: same graph-depth ⇒ same x, even with shared/fan-in children', () => {
+    // The Volumes "boxes everywhere" case in miniature. Two Pods both mount a shared Secret; one of
+    // them also mounts a PVC that binds a PV. By depth: Pods=0, Secret/PVC=1, PV=2. Every node must
+    // land in its depth's column (one x per depth) — in particular both Pods share column 0 even
+    // though one has a longer downstream chain, and the shared Secret doesn't drag a parent rightward.
+    const podA: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', health: 'Healthy' }
+    const podB: KNode = { id: 'pb', kind: 'Pod', name: 'pod-b', health: 'Healthy' }
+    const secret: KNode = { id: 'se', kind: 'Secret', name: 'shared', health: 'Healthy' }
+    const pvc: KNode = { id: 'pvc', kind: 'PersistentVolumeClaim', name: 'data', health: 'Healthy' }
+    const pv: KNode = { id: 'pv', kind: 'PersistentVolume', name: 'vol', health: 'Healthy' }
+    const edges: KEdge[] = [
+      { from: 'pa', to: 'se', type: 'mounts' },
+      { from: 'pb', to: 'se', type: 'mounts' },
+      { from: 'pa', to: 'pvc', type: 'mounts' },
+      { from: 'pvc', to: 'pv', type: 'mounts' },
+    ]
+    const l = layoutGraph([podA, podB, secret, pvc, pv], edges, 'LR')
+    const x = (id: string) => l.nodes.find((n) => n.id === id)!.x
+    // Depth 0: both pods share one column.
+    expect(x('pa')).toBeCloseTo(x('pb'), 3)
+    // Depth 1: the shared Secret and the PVC share the next column.
+    expect(x('se')).toBeCloseTo(x('pvc'), 3)
+    // Strictly increasing depth: pods < {secret,pvc} < pv.
+    expect(x('pa')).toBeLessThan(x('se'))
+    expect(x('pvc')).toBeLessThan(x('pv'))
+    // Exactly three distinct columns for three depths.
+    expect(new Set(l.nodes.map((n) => Math.round(n.x))).size).toBe(3)
+  })
 })
 
 describe('layoutGraphByKind', () => {

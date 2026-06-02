@@ -61,8 +61,33 @@ const DASHED: Partial<Record<EdgeType, boolean>> = {
   refers: true,
 }
 
+const EDGE_CORNER = 7 // elbow rounding radius for orthogonal edges — soft ArgoCD-style corners
+
+// lerpTo returns the point `d` units from `from` toward `to` (clamped to the segment, 0 if coincident).
+function lerpTo(from: Point, to: Point, d: number): Point {
+  const len = Math.hypot(to.x - from.x, to.y - from.y)
+  if (len === 0) return { x: from.x, y: from.y }
+  const t = Math.min(1, d / len)
+  return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
+}
+
+// edgePath renders an orthogonal point list as an SVG path with rounded elbows: each interior vertex
+// becomes a short quadratic-bezier corner, its radius clamped to half the shorter adjacent segment so
+// stubby segments don't overshoot. A 2-point (straight) edge falls through to a plain line — and the
+// final segment stays axis-aligned, so marker-end keeps pointing squarely into the target's edge.
 function edgePath(points: Point[]): string {
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ')
+  if (points.length < 3) return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ')
+  let d = `M ${points[0].x},${points[0].y}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1], cur = points[i], next = points[i + 1]
+    const r = Math.min(EDGE_CORNER, Math.hypot(cur.x - prev.x, cur.y - prev.y) / 2, Math.hypot(next.x - cur.x, next.y - cur.y) / 2)
+    const a = lerpTo(cur, prev, r)
+    const b = lerpTo(cur, next, r)
+    d += ` L ${a.x},${a.y} Q ${cur.x},${cur.y} ${b.x},${b.y}`
+  }
+  const last = points[points.length - 1]
+  d += ` L ${last.x},${last.y}`
+  return d
 }
 
 // cardTitle builds the SVG <title> tooltip for a node — the small thing native browsers show on

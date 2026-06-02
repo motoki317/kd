@@ -36,9 +36,28 @@ const HUB_GAP = 36 // vertical gap between a hub card and its grid of leaves
 const LEAF_COL_MAX = 8
 const BLOCK_GAP = 30
 
+// EDGE_STUB is the minimum straight run an orthogonal edge takes off a box before it may turn, so a
+// link always reads as leaving the parent's RIGHT edge and entering the child's LEFT edge (LR) even
+// when the two cards nearly share a column. See orthRoute.
+const EDGE_STUB = 16
+
+// LR depth-column layout (placeColumns): COLUMN_GAP is the horizontal gap between adjacent depth
+// columns; COL_V_GAP is the minimum vertical gap between two stacked units (cards or grid blocks)
+// within one column.
+const COLUMN_GAP = 80
+const COL_V_GAP = 18
+
 export interface Point {
   x: number
   y: number
+}
+
+// A positioned box, enough geometry to anchor an orthogonal edge on one of its four sides.
+interface Box {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 // COLLAPSE_KIND marks a synthetic "+N older" pill — a PositionedNode that stands in for the older
@@ -623,35 +642,167 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
   return { hubs, wrapped }
 }
 
-// layoutComponent runs Dagre over one component and returns its local geometry (origin at 0,0)
-// plus its bounding size. rankdir picks the orientation: 'TB' (the default, ownership tree)
-// stacks parents above children; 'LR' lays them left-to-right and is used by Volumes view so
-// "Pod mounts ConfigMap" reads as an arrow that flows the same way as the eye. High-fanout hubs
-// (a Node hosting many pods, a ReplicaSet with many replicas) reserve a tall/wide Dagre box and
-// place their leaves in a grid — but only in 'TB' mode where the existing side='above'/'below'
-// math fits; 'LR' lets Dagre do its natural rank layout instead so the orientation stays clean.
-function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Component {
-  const { hubs, wrapped } = findHubs(nodes, edges, expanded)
+// orthRoute builds an orthogonal ("blocky") connector between two card boxes — only horizontal and
+// vertical segments, the ArgoCD resource-tree look. In LR every link leaves the source's RIGHT edge
+// and enters the target's LEFT edge, so a parent's links all fan out of its right side and a child's
+// all arrive at its left side; that single rule is what makes a dense graph's arrows legible. The
+// common forward edge (target clearly to the right — guaranteed by hub wrapping keeping parents on
+// the left) becomes a three-segment "S": horizontal out to a mid-x gutter, vertical to the target's
+// row, horizontal in. A same-row edge collapses to one straight line. A rare edge whose target is
+// not clearly to the right detours through a mid-y lane via outward stubs so it still leaves-right /
+// enters-left rather than cutting back through a box. TB mirrors the whole thing onto the y axis
+// (bottom→top) for the test-only vertical layout.
+function orthRoute(a: Box, b: Box, rankdir: 'TB' | 'LR'): Point[] {
+  if (rankdir === 'TB') {
+    const start = { x: a.x, y: a.y + a.height / 2 }
+    const end = { x: b.x, y: b.y - b.height / 2 }
+    if (Math.abs(start.x - end.x) < 0.5) return [start, end]
+    if (end.y - start.y >= 2 * EDGE_STUB) {
+      const midY = (start.y + end.y) / 2
+      return [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end]
+    }
+    const oy = start.y + EDGE_STUB
+    const iy = end.y - EDGE_STUB
+    const midX = (start.x + end.x) / 2
+    return [start, { x: start.x, y: oy }, { x: midX, y: oy }, { x: midX, y: iy }, { x: end.x, y: iy }, end]
+  }
+  const start = { x: a.x + a.width / 2, y: a.y }
+  const end = { x: b.x - b.width / 2, y: b.y }
+  if (Math.abs(start.y - end.y) < 0.5) return [start, end]
+  if (end.x - start.x >= 2 * EDGE_STUB) {
+    const midX = (start.x + end.x) / 2
+    return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end]
+  }
+  const ox = start.x + EDGE_STUB
+  const ix = end.x - EDGE_STUB
+  const midY = (start.y + end.y) / 2
+  return [start, { x: ox, y: start.y }, { x: ox, y: midY }, { x: ix, y: midY }, { x: ix, y: end.y }, end]
+}
+
+// computeRanks assigns each node an integer depth (longest path from a source) over the FULL graph —
+// every node, including a hub's wrapped leaves. Computing depth on the whole graph (not the
+// hub-stripped skeleton) is what keeps a fan-in hub's wrapped PARENTS at their true shallow depth
+// instead of parked next to the deep node they point at. Sources are depth 0; an edge from→to forces
+// depth(to) ≥ depth(from)+1. Bounded relaxation tolerates the rare cycle without looping forever.
+function computeRanks(nodes: KNode[], edges: KEdge[]): Map<string, number> {
+  const rank = new Map(nodes.map((n) => [n.id, 0]))
+  for (let pass = 0; pass < nodes.length; pass++) {
+    let changed = false
+    for (const e of edges) {
+      const rf = rank.get(e.from)
+      const rt = rank.get(e.to)
+      if (rf === undefined || rt === undefined) continue
+      if (rt < rf + 1) { rank.set(e.to, rf + 1); changed = true }
+    }
+    if (!changed) break
+  }
+  return rank
+}
+
+// dagreSeedY runs Dagre over the skeleton (uniform card sizes) purely to borrow its crossing-minimized
+// vertical ORDER as a seed — placeColumns keeps the y and discards Dagre's x (the depth columns own x).
+function dagreSeedY(skeleton: KNode[], edges: KEdge[], wrapped: ReadonlySet<string>): Map<string, number> {
+  const g = new dagre.graphlib.Graph()
+  g.setGraph({ rankdir: 'LR', nodesep: 24, ranksep: COLUMN_GAP, marginx: 0, marginy: 0 })
+  g.setDefaultEdgeLabel(() => ({}))
+  for (const n of skeleton) g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
+  for (const e of edges) if (!wrapped.has(e.from) && !wrapped.has(e.to)) g.setEdge(e.from, e.to)
+  dagre.layout(g)
+  return new Map(skeleton.map((n) => [n.id, g.node(n.id).y as number]))
+}
+
+// A column-placement unit: one card or one wrapped leaf block, at a depth, with a seed y and a placer
+// that emits its PositionedNode(s) once the column's x and the unit's stacked top are resolved.
+interface ColUnit {
+  rank: number
+  w: number
+  h: number
+  seedY: number
+  place: (left: number, top: number) => void
+}
+
+// placeColumns is the LR layout: strict depth columns. Every node sits in the column of its graph
+// depth (computeRanks over the full graph), so the most-parent resources share the leftmost column,
+// their children the next, and so on — the alignment an operator expects even when relationships fan
+// out (the Volumes "boxes everywhere" report). A column's WIDTH grows to fit the widest unit in it, so
+// a large same-kind group still wraps into a smart grid block (blockDims) and merely makes its column
+// wider — without knocking any other column out of depth alignment. Vertical order within a column is
+// seeded from Dagre's crossing-minimized ordering, then de-overlapped downward so nothing collides
+// while staying near its seed (which keeps children roughly across from their parent). This replaces
+// the old "Dagre lays the skeleton, grids are parked next to their hub card" placement, which let a
+// hub's wide reserved box shove its card out of its rank and stranded wrapped leaves in a private
+// near-hub column instead of their true depth column.
+function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<string>): PositionedNode[] {
+  const rank = computeRanks(nodes, edges)
+  const skeleton = nodes.filter((n) => !wrapped.has(n.id))
+  const seedY = dagreSeedY(skeleton, edges, wrapped)
+  const out: PositionedNode[] = []
+  const units: ColUnit[] = []
+
+  for (const n of skeleton) {
+    const r = rank.get(n.id) ?? 0
+    units.push({
+      rank: r, w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
+      place: (left, top) => out.push({ ...n, x: left + NODE_WIDTH / 2, y: top + NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT }),
+    })
+  }
+  for (const hub of hubs) {
+    const hr = rank.get(hub.id) ?? 0
+    const r = hub.after ? hr + 1 : hr - 1 // children sit one column right; fan-in parents one column left
+    const areaH = hubArea(hub.blocks, 'LR').h
+    let top = (seedY.get(hub.id) ?? 0) - areaH / 2 // center the hub's per-kind block stack on its row
+    for (const b of hub.blocks) {
+      const block = b
+      units.push({
+        rank: r, w: block.w, h: block.h, seedY: top + block.h / 2,
+        place: (left, t) => placeBlockCells(block, left, t, out),
+      })
+      top += block.h + BLOCK_GAP
+    }
+  }
+
+  // Column x: each depth's width is its widest unit; columns run left→right separated by COLUMN_GAP.
+  const colWidth = new Map<number, number>()
+  for (const u of units) colWidth.set(u.rank, Math.max(colWidth.get(u.rank) ?? NODE_WIDTH, u.w))
+  const ranks = [...colWidth.keys()].sort((a, b) => a - b)
+  const colLeft = new Map<number, number>()
+  let cx = 0
+  for (const r of ranks) { colLeft.set(r, cx); cx += colWidth.get(r)! + COLUMN_GAP }
+
+  // Within each column, order by seed y and de-overlap downward — preserves Dagre's ordering while
+  // guaranteeing no two units collide (a wide grid block reserves its own vertical run).
+  for (const r of ranks) {
+    const col = units.filter((u) => u.rank === r).sort((a, b) => a.seedY - b.seedY)
+    let cursor = -Infinity
+    for (const u of col) {
+      const top = Math.max(u.seedY - u.h / 2, cursor + COL_V_GAP)
+      u.place(colLeft.get(r)!, top)
+      cursor = top + u.h
+    }
+  }
+  return out
+}
+
+// placeWithDagre is the TB (test/legacy) placement: Dagre lays the skeleton, reserving a tall box per
+// hub so its leaf grid stacks below the card. The LR connectivity views use placeColumns instead.
+function placeWithDagre(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<string>, rankdir: 'TB' | 'LR'): PositionedNode[] {
   const hubById = new Map(hubs.map((h) => [h.id, h]))
   const areaById = new Map(hubs.map((h) => [h.id, hubArea(h.blocks, rankdir)]))
   const skeleton = nodes.filter((n) => !wrapped.has(n.id))
   const skeletonEdges = edges.filter((e) => !wrapped.has(e.from) && !wrapped.has(e.to))
-
+  const ranksep = rankdir === 'LR' ? 80 : 52
+  const hubGap = rankdir === 'LR' ? ranksep : HUB_GAP
   const g = new dagre.graphlib.Graph()
-  // ranksep is the gap between ranks; in 'LR' Dagre uses it horizontally, so a slightly larger
-  // value gives the LR layout a noticeably column-like rhythm rather than a cramped grid.
-  g.setGraph({ rankdir, nodesep: 24, ranksep: rankdir === 'LR' ? 80 : 52, marginx: 0, marginy: 0 })
+  g.setGraph({ rankdir, nodesep: 24, ranksep, marginx: 0, marginy: 0 })
   g.setDefaultEdgeLabel(() => ({}))
   for (const n of skeleton) {
     const hub = hubById.get(n.id)
     if (hub) {
-      // Reserve a box big enough for the hub card PLUS its leaf grid, oriented along the flow:
-      // taller in TB (grid stacks below), wider in LR (grid sits to the side).
       const area = areaById.get(n.id)!
       if (rankdir === 'LR') {
-        g.setNode(n.id, { width: NODE_WIDTH + HUB_GAP + area.w, height: Math.max(NODE_HEIGHT, area.h) })
+        g.setNode(n.id, { width: NODE_WIDTH + hubGap + area.w, height: Math.max(NODE_HEIGHT, area.h) })
       } else {
-        g.setNode(n.id, { width: Math.max(NODE_WIDTH, area.w), height: NODE_HEIGHT + HUB_GAP + area.h })
+        g.setNode(n.id, { width: Math.max(NODE_WIDTH, area.w), height: NODE_HEIGHT + hubGap + area.h })
       }
     } else {
       g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
@@ -661,7 +812,6 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
   dagre.layout(g)
 
   const positioned: PositionedNode[] = []
-  const cardCenter = new Map<string, Point>() // hub id -> its card center, for edge endpoints
   for (const n of skeleton) {
     const p = g.node(n.id)
     const hub = hubById.get(n.id)
@@ -670,67 +820,51 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
       continue
     }
     const area = areaById.get(n.id)!
-    if (rankdir === 'LR') {
-      // Hub card pinned to one edge of its reserved box; its per-kind blocks fill the rest at a
-      // single x (all direct children at the same depth), stacked down and centered on the card.
-      // after=true → card on the left, blocks to its right (children flow →).
-      const boxW = NODE_WIDTH + HUB_GAP + area.w
-      const leftEdge = p.x - boxW / 2
-      const cardX = hub.after ? leftEdge + NODE_WIDTH / 2 : p.x + boxW / 2 - NODE_WIDTH / 2
-      const gridLeft = hub.after ? leftEdge + NODE_WIDTH + HUB_GAP : leftEdge
-      positioned.push({ ...n, x: cardX, y: p.y, width: NODE_WIDTH, height: NODE_HEIGHT })
-      cardCenter.set(n.id, { x: cardX, y: p.y })
-      placeBlocksLR(hub, gridLeft, p.y, area.h, positioned)
-      continue
-    }
-    const boxH = NODE_HEIGHT + HUB_GAP + area.h
+    const boxH = NODE_HEIGHT + hubGap + area.h
     const top = p.y - boxH / 2
     const cardY = hub.after ? top + NODE_HEIGHT / 2 : p.y + boxH / 2 - NODE_HEIGHT / 2
-    const gridTop = hub.after ? top + NODE_HEIGHT + HUB_GAP : top
+    const gridTop = hub.after ? top + NODE_HEIGHT + hubGap : top
     positioned.push({ ...n, x: p.x, y: cardY, width: NODE_WIDTH, height: NODE_HEIGHT })
-    cardCenter.set(n.id, { x: p.x, y: cardY })
     placeBlocksTB(hub, p.x, gridTop, area.w, positioned)
   }
+  return positioned
+}
 
+// layoutComponent lays out one connected component at origin (0,0) and returns its bounding size.
+// rankdir picks the strategy: 'LR' (every connectivity view) uses placeColumns — strict depth columns
+// with grid-wrapped hubs; 'TB' (test/legacy) uses placeWithDagre. Edge routing, bundled hub↔pill
+// edges, and normalization are shared across both.
+function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Component {
+  const { hubs, wrapped } = findHubs(nodes, edges, expanded)
+  const positioned = rankdir === 'LR'
+    ? placeColumns(nodes, edges, hubs, wrapped)
+    : placeWithDagre(nodes, edges, hubs, wrapped, rankdir)
+
+  const posById = new Map(positioned.map((n) => [n.id, n]))
   const positionedEdges: PositionedEdge[] = []
+  // Route every edge orthogonally between its two card boxes — right-of-parent → left-of-child (LR).
+  // Wrapped hub↔leaf edges and Dagre skeleton edges resolve through the SAME box-to-box routing: we
+  // discard Dagre's spline interior, because a blocky line in the empty inter-rank gutter reads far
+  // better than a diagonal and the gutter is clear by construction (cards live within ranks, not the
+  // gaps). Edges into a hub anchor on the hub CARD (its positioned node is the card, not the wide
+  // reserved box). An edge to a hidden (folded) leaf finds no positioned target and is dropped — the
+  // bundled hub↔pill edge below stands in for the whole fold.
   for (const e of edges) {
-    if (wrapped.has(e.from) || wrapped.has(e.to)) {
-      // Hub<->leaf: straight line drawn in EDGE ORDER (from→to), so the arrowhead lands on the true
-      // target and the relationship keeps its direction — a child fold points hub→leaf, a parent
-      // fold points leaf→hub. (Drawing hub→leaf unconditionally reversed parent-side folds.)
-      const a = positioned.find((n) => n.id === e.from)
-      const b = positioned.find((n) => n.id === e.to)
-      if (a && b) positionedEdges.push({ ...e, points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }] })
-      continue
-    }
-    const ge = g.edge(e.from, e.to)
-    if (ge) {
-      // Re-aim a hub endpoint at its card: Dagre routed the edge to the hub's wide reserved box
-      // (card + leaf grid), but the card is pinned to one edge of that box — without this, an edge
-      // into a hub (e.g. Deployment→ReplicaSet) would point at the empty middle of the leaf grid.
-      const pts: Point[] = ge.points.map((p: Point) => ({ x: p.x, y: p.y }))
-      const fc = cardCenter.get(e.from)
-      const tc = cardCenter.get(e.to)
-      if (fc) pts[0] = fc
-      if (tc) pts[pts.length - 1] = tc
-      positionedEdges.push({ ...e, points: pts })
-    }
+    const a = posById.get(e.from)
+    const b = posById.get(e.to)
+    if (a && b) positionedEdges.push({ ...e, points: orthRoute(a, b, rankdir) })
   }
 
-  // Bundled hub↔pill edges (D6): one straight line standing in for the many edges to the leaves the
-  // pill folds away, typed by the relationship the siblings shared with the hub. Drawn in the real
-  // direction so the arrow flows the same way as the unfolded edges would: children fold → hub→pill,
-  // parents fold → pill→hub.
+  // Bundled hub↔pill edges (D6): one orthogonal connector standing in for the many edges to the
+  // leaves the pill folds away, typed by the relationship the siblings shared with the hub. Drawn in
+  // the real direction so the arrow flows the same way as the unfolded edges would: children fold →
+  // hub→pill, parents fold → pill→hub.
   for (const hub of hubs) {
-    const center = cardCenter.get(hub.id)
-    if (!center) continue
+    if (!posById.has(hub.id)) continue
     for (const pill of hub.pills) {
-      const pp = positioned.find((n) => n.id === pill.id)
-      if (!pp) continue
-      const ends = hub.after
-        ? { from: hub.id, to: pill.id, points: [{ x: center.x, y: center.y }, { x: pp.x, y: pp.y }] }
-        : { from: pill.id, to: hub.id, points: [{ x: pp.x, y: pp.y }, { x: center.x, y: center.y }] }
-      positionedEdges.push({ ...ends, type: pill.type })
+      if (!posById.has(pill.id)) continue
+      const [from, to] = hub.after ? [hub.id, pill.id] : [pill.id, hub.id]
+      positionedEdges.push({ from, to, type: pill.type, points: orthRoute(posById.get(from)!, posById.get(to)!, rankdir) })
     }
   }
 
@@ -762,18 +896,7 @@ function placeBlockCells(b: LeafBlock, blockLeft: number, blockTop: number, out:
   })
 }
 
-// placeBlocksLR stacks a hub's per-kind blocks DOWN a single column at gridLeft (one x, so every kind
-// sits at the same depth — all direct children on the same level), the whole stack centered on the
-// hub's centerY. Each kind reads as a vertical run separated by BLOCK_GAP, with its pill at the bottom.
-function placeBlocksLR(hub: Hub, gridLeft: number, centerY: number, areaH: number, out: PositionedNode[]): void {
-  let y = centerY - areaH / 2
-  for (const b of hub.blocks) {
-    placeBlockCells(b, gridLeft, y, out)
-    y += b.h + BLOCK_GAP
-  }
-}
-
-// placeBlocksTB is the TB analog: blocks lay left-to-right below the hub at a single y (all children
+// placeBlocksTB lays a hub's per-kind blocks left-to-right below the hub at a single y (all children
 // on the same level), the whole row centered on the hub's centerX, each block filling its column down.
 function placeBlocksTB(hub: Hub, centerX: number, gridTop: number, areaW: number, out: PositionedNode[]): void {
   let x = centerX - areaW / 2

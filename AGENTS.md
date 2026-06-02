@@ -141,6 +141,20 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   now LR like the rest per user request); Nodes = `layoutGraphByHost` (host-grouped containers, no
   scheduledOn edges drawn); All = `layoutGraphByKind`. Adding a view = adding to `View` type + a
   layout case in `Topology.tsx`.
+- **LR depth-column layout (`placeColumns`)**: the LR connectivity views do NOT use Dagre for
+  placement — they use strict depth columns. `computeRanks` assigns every node (over the FULL graph,
+  not the hub-stripped skeleton) an integer depth = longest path from a source; depth = column, so
+  the most-parent resources share the leftmost column, their children the next, etc. A column's WIDTH
+  is its widest unit, so a large same-kind group still wraps into a smart grid block (`blockDims`) and
+  merely widens its column without breaking any other column's alignment. Vertical order within a
+  column is *seeded* from Dagre (run on the skeleton only, via `dagreSeedY`, for its crossing-minimized
+  order — its x is discarded) then de-overlapped downward. This replaced the old "Dagre lays the
+  skeleton, grids parked next to the hub card" placement, which (a) let a hub's wide reserved box shove
+  its card out of its rank, (b) stranded wrapped leaves in a private near-hub column instead of their
+  depth column, and (c) dragged a fan-in hub's wrapped *source* parents deep next to the node they
+  point at (the Volumes "boxes everywhere" report — now every source sits in column 0). TB
+  (test/legacy) still uses `placeWithDagre`. Cross-component column alignment is only approximate
+  (each component normalizes independently); within a component it is exact.
 - **Single-column packing**: `packComponents` stacks every component in one vertical column — one
   tree per row, left-aligned, never two side by side (the user's explicit "all views" arrangement).
   This replaced an earlier viewport-aspect bin-pack; do **not** reintroduce horizontal placement to
@@ -165,9 +179,10 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   are grouped **per kind** into separate column blocks (Services together, Secrets together, …), each a
   vertical column laid out by `blockDims` (fills down to `LEAF_COL_MAX` before wrapping) so the kind's
   "+ show N more" pill sits at the *bottom* of its column, vertically aligned under its cards. All blocks of
-  one hub sit at a **single depth** (one x in LR / one y in TB — `hubArea` + `placeBlocksLR`/
-  `placeBlocksTB` stack them along the cross axis, NOT the depth axis), because they are all direct
-  children: depth must not vary by kind, or kinds look like different tree levels. Each kind folds
+  one hub sit at a **single depth** (one column in LR; `placeColumns` puts every block at the hub's
+  depth ±1 and stacks them down the cross axis, NOT the depth axis — TB's `placeWithDagre` uses
+  `placeBlocksTB`), because they are all direct children: depth must not vary by kind, or kinds look
+  like different tree levels. Each kind folds
   independently (its own `sib:<hub>:<kind>` pill + bundled edge). Multi-card blocks carry a per-kind
   `collapseGroup` (= the same `sib:` key) so `connGroups` draws one tight dashed grouping frame per
   kind — tight because each kind is a contiguous block, never interleaved (an earlier hub-level frame
@@ -189,6 +204,16 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   Node via the unrouted edge set.
 - **PVC → PV edge** (cycle 235): emitted as `EdgeMounts` (not a new edge type) so the existing
   volumes view picks it up automatically. The "Pod → PVC → PV" chain is complete.
+- **Orthogonal edge routing (`orthRoute`)**: connectivity views (LR) draw "blocky" edges — every link
+  leaves its parent's RIGHT edge and enters its child's LEFT edge, with only horizontal/vertical
+  segments (the ArgoCD resource-tree look). Dagre's spline interior is **discarded**; `orthRoute`
+  re-routes purely from the two card boxes (forward edge → 3-segment "S" through the empty inter-rank
+  gutter; same-row → one straight line; rare back/tight edge → outward stubs + a mid-y lane). This is
+  why endpoints sit on the box EDGE now (arrowheads are visible) instead of under the card center, and
+  why `cardCenter` was deleted — the positioned hub node already *is* the card center. `edgePath`
+  (Topology) rounds each elbow with a clamped quadratic bezier. **Scoped to LR**: the All view (kind
+  matrix, `layoutGraphByKind`) keeps straight cross-kind lines — its vertically-stacked columns have no
+  parent-left semantics, so right-out/left-in would be wrong there; Nodes view draws no edges.
 - **Composing filters**: `nodeFaded` checks selection first (selected node never fades), then
   kind filter, then search ∩ health ∩ related-subtree. Keep that order if you add a new filter.
 - **Conventions for new layouts**: add a `layoutGraphBy<Whatever>` to `layout.ts`, dispatch in
