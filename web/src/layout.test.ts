@@ -125,6 +125,46 @@ describe('layoutGraph', () => {
     expect(seen.size).toBe(l.nodes.length)
   })
 
+  it('folds a crowded same-kind sibling group even when the siblings own subtrees (status-agnostic)', () => {
+    // Motivating case: many Workflows under one WorkflowTemplate, where some Workflows own Pods
+    // (degree > 1) so the leaf-block path never folds them. The whole Workflow group must fold by
+    // age — and a folded Workflow's Pod subtree folds away with it (restored on expand).
+    const tmpl: KNode = { id: 'tmpl', kind: 'WorkflowTemplate', name: 'build', health: 'Healthy' }
+    const wfs: KNode[] = []
+    const pods: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 6; i++) {
+      const id = `wf${i}`
+      wfs.push({ id, kind: 'Workflow', name: `wf-${i}`, health: 'Healthy', createdAt: `2026-06-0${i + 1}T00:00:00Z` })
+      e.push({ from: 'tmpl', to: id, type: 'refers' })
+      // Give two of them a Pod child so the group is non-leaf (the case the leaf-block path skips).
+      if (i % 3 === 0) {
+        pods.push({ id: `${id}-pod`, kind: 'Pod', name: `${id}-pod`, health: 'Healthy' })
+        e.push({ from: id, to: `${id}-pod`, type: 'ownerReference' })
+      }
+    }
+    const l = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR')
+    const pill = l.nodes.find((n) => n.collapse)
+    expect(pill).toBeTruthy()
+    expect(pill!.collapse!.groupKind).toBe('Workflow')
+    expect(pill!.collapse!.hidden).toHaveLength(6 - COLLAPSE_VISIBLE) // older 3 folded
+    // Only the newest COLLAPSE_VISIBLE Workflows are drawn; the rest are behind the pill.
+    expect(l.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(COLLAPSE_VISIBLE)
+    // A folded Workflow's Pod folds away with it (wf-0 is oldest → hidden; its pod is gone), while a
+    // visible Workflow's Pod stays. Net: only the visible non-leaf workflows' pods remain.
+    const drawnPodIds = new Set(l.nodes.filter((n) => n.kind === 'Pod').map((n) => n.id))
+    expect(drawnPodIds.has('wf0-pod')).toBe(false) // wf-0 (oldest) folded → its pod folded too
+    expect(drawnPodIds.has('wf3-pod')).toBe(true) // wf-3 (newer) visible → its pod stays
+    // The folded Pod is tracked as a hidden descendant so the Pod chip can stay honest.
+    expect(pill!.collapse!.hiddenDescendants!.some((n) => n.id === 'wf0-pod')).toBe(true)
+    // The pill hangs off the template (one bundled edge), and expanding restores everyone.
+    expect(l.edges.some((x) => x.from === 'tmpl' && x.to === pill!.id)).toBe(true)
+    const expanded = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR', new Set([pill!.collapse!.key]))
+    expect(expanded.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(6) // all shown
+    expect(expanded.nodes.some((n) => n.id === 'wf0-pod')).toBe(true) // subtree restored
+    expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true) // pill is now a "show fewer" toggle
+  })
+
   it('does NOT fold a fan-IN hub: its many parents stay aligned in the leftmost depth column', () => {
     // The Volumes "weird grouping" fix: a shared target (one Secret mounted by 12 Pods) must not fold
     // its degree-1 PARENTS behind a pill. Folding a subset of the Pod kind — while other Pods in the

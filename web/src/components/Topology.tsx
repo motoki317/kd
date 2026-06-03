@@ -361,7 +361,12 @@ export default function Topology(props: Props) {
       // EXPANDED, those nodes are present as real cards and counted below — folding them back too
       // would double-count — so the expanded pill contributes nothing.
       if (n.collapse) {
-        if (!n.collapse.expanded) for (const h of n.collapse.hidden) add(h)
+        if (!n.collapse.expanded) {
+          for (const h of n.collapse.hidden) add(h)
+          // A sibling-subtree fold also hides a different kind (a folded Workflow's Pods); count
+          // those back too so e.g. the Pod chip stays honest while the Workflow group is collapsed.
+          for (const h of n.collapse.hiddenDescendants ?? []) add(h)
+        }
         continue
       }
       add(n)

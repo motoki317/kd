@@ -81,6 +81,11 @@ export interface CollapseMeta {
   // True once this cluster is expanded: the pill stays as a "show fewer" re-collapse toggle (the
   // older cards are now drawn), so a single pill drives both directions (FR: expand AND collapse).
   expanded: boolean
+  // Descendant nodes folded away ALONGSIDE the hidden siblings (a folded Workflow drags its Pods
+  // with it). Of a different kind than groupKind, so they're tracked separately from `hidden`: the
+  // "+N more" label counts siblings only, but the kind chips fold these back too so a different
+  // kind's count stays honest while collapsed. Empty for same-kind leaf folds.
+  hiddenDescendants?: KNode[]
 }
 
 export interface PositionedNode extends KNode {
@@ -138,6 +143,95 @@ function splitByAge(nodes: KNode[], expanded: boolean): { visible: KNode[]; hidd
   return { visible: nodes.filter((n) => !hiddenIds.has(n.id)), hidden }
 }
 
+// foldSiblingSubtrees folds a parent's crowded same-kind children into a "+N more" pill EVEN when
+// those children own subtrees — the case findHubs/leaf-blocks can't handle (it only wraps degree-1
+// leaves). A column of Argo Workflows under one WorkflowTemplate is the motivating case: the
+// running/failed ones own Pods (so they have degree > 1) and therefore never folded, leaving the
+// column cluttered no matter how many runs piled up. Here we fold by age across the WHOLE same-kind
+// group, status-agnostic: the newest COLLAPSE_VISIBLE stay (with their subtrees), the rest — and
+// their descendant subtrees — fold away behind one pill, all restored on expand.
+//
+// It runs as a pre-layout graph rewrite (returns reduced nodes+edges plus synthetic pill nodes) so
+// the intricate column / leaf-block placement downstream is untouched: a pill is just another child
+// of the hub. Pure degree-1 leaf clusters (a Node's 50 Pods) are deliberately LEFT ALONE — they fold
+// more compactly through the existing leaf-block grid — so this only engages when a same-kind sibling
+// group contains a non-leaf (a child with its own children).
+function foldSiblingSubtrees(
+  nodes: KNode[],
+  edges: KEdge[],
+  expanded: ReadonlySet<string>,
+): { nodes: KNode[]; edges: KEdge[] } {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const childEdgesOf = new Map<string, KEdge[]>()
+  const isParent = new Set<string>() // node has at least one child (is a non-leaf)
+  for (const e of edges) {
+    if (!byId.has(e.from) || !byId.has(e.to)) continue
+    const list = childEdgesOf.get(e.from)
+    if (list) list.push(e)
+    else childEdgesOf.set(e.from, [e])
+    isParent.add(e.from)
+  }
+  // descendantsOf collects every node reachable downward from the given roots (excluding the roots),
+  // following child edges — the subtree that folds away with a hidden sibling. BFS, cycle-guarded.
+  const descendantsOf = (roots: string[]): KNode[] => {
+    const seen = new Set(roots)
+    const out: KNode[] = []
+    const queue = [...roots]
+    while (queue.length) {
+      for (const e of childEdgesOf.get(queue.shift()!) ?? []) {
+        if (seen.has(e.to)) continue
+        seen.add(e.to)
+        const n = byId.get(e.to)
+        if (n) out.push(n)
+        queue.push(e.to)
+      }
+    }
+    return out
+  }
+
+  const removed = new Set<string>()
+  const pills: Array<KNode & { _collapse: CollapseMeta }> = []
+  const pillEdges: KEdge[] = []
+  for (const [parentId, childEdges] of childEdgesOf) {
+    const byKind = new Map<string, { node: KNode; type: EdgeType }[]>()
+    for (const e of childEdges) {
+      const child = byId.get(e.to)!
+      const g = byKind.get(child.kind)
+      if (g) g.push({ node: child, type: e.type })
+      else byKind.set(child.kind, [{ node: child, type: e.type }])
+    }
+    for (const [kind, group] of byKind) {
+      if (kind === COLLAPSE_KIND) continue
+      // Only groups the leaf-block path can't fold: at least one sibling owns a subtree. Pure-leaf
+      // groups keep their compact grid fold via findHubs/collapseHubLeaves.
+      if (!group.some((g) => isParent.has(g.node.id))) continue
+      const key = `sib:${parentId}:${kind}`
+      const isExpanded = expanded.has(key)
+      const { hidden } = splitByAge(group.map((g) => g.node), isExpanded)
+      if (hidden.length < COLLAPSE_MIN_HIDDEN) continue
+
+      const descendants = descendantsOf(hidden.map((n) => n.id))
+      pills.push({
+        id: `${COLLAPSE_KIND}:${key}`,
+        kind: COLLAPSE_KIND,
+        name: `+${hidden.length} more`,
+        health: 'Healthy',
+        _collapse: { key, groupKind: kind, hidden, expanded: isExpanded, hiddenDescendants: descendants },
+      })
+      pillEdges.push({ from: parentId, to: `${COLLAPSE_KIND}:${key}`, type: group[0].type })
+      if (!isExpanded) {
+        for (const n of hidden) removed.add(n.id)
+        for (const n of descendants) removed.add(n.id)
+      }
+    }
+  }
+  if (pills.length === 0) return { nodes, edges }
+
+  const keptNodes = nodes.filter((n) => !removed.has(n.id))
+  const keptEdges = edges.filter((e) => !removed.has(e.from) && !removed.has(e.to))
+  return { nodes: [...keptNodes, ...pills], edges: [...keptEdges, ...pillEdges] }
+}
+
 // pillCell builds the synthetic KNode for a "+N older" affordance, tagged with its CollapseMeta so
 // the placement loop can lift it onto the resulting PositionedNode. `host` is set for host-group
 // pills so hostGroups() attributes the pill to the right container.
@@ -150,6 +244,14 @@ function pillCell(meta: CollapseMeta, host?: string): KNode & { _collapse: Colla
     ...(host ? { host } : {}),
     _collapse: meta,
   }
+}
+
+// placeSkeletonNode positions a single skeleton card at (cx, cy) and lifts a pre-fold pill's
+// _collapse tag onto the PositionedNode (real cards have no _collapse, so they pass straight
+// through). Used by both placers so a foldSiblingSubtrees pill carries its CollapseMeta into render.
+function placeSkeletonNode(n: KNode, cx: number, cy: number): PositionedNode {
+  const { _collapse, ...rest } = n as KNode & { _collapse?: CollapseMeta }
+  return { ...rest, x: cx, y: cy, width: NODE_WIDTH, height: NODE_HEIGHT, ...(_collapse ? { collapse: _collapse } : {}) }
 }
 
 // place lays a list of cells row-major into a grid and lifts any pill's _collapse tag onto the
@@ -414,6 +516,9 @@ export function connGroups(layout: Layout): { key: string; expanded: boolean; x:
 // relationship view passes) reads left-to-right so a parent's children fan out to its right, like
 // an ArgoCD tree; 'TB' (the default, kept for callers/tests) reads top-down.
 export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Layout {
+  // Fold crowded same-kind sibling subtrees (e.g. many Workflows under one WorkflowTemplate) before
+  // anything else, so the rest of the pipeline lays out the reduced graph + its pills normally.
+  ;({ nodes, edges } = foldSiblingSubtrees(nodes, edges, expanded))
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
@@ -603,7 +708,7 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
   for (const e of edges) {
     if (degree.get(e.to) !== 1) continue // only a degree-1 target is a wrappable child leaf
     const leaf = byId.get(e.to)
-    if (!leaf) continue
+    if (!leaf || leaf.kind === COLLAPSE_KIND) continue // a pre-folded pill is not a wrappable leaf
     const list = childrenOf.get(e.from) ?? []
     list.push(leaf)
     childrenOf.set(e.from, list)
@@ -742,7 +847,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     const r = rank.get(n.id) ?? 0
     units.push({
       rank: r, kind: n.kind, w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
-      place: (left, top) => out.push({ ...n, x: left + NODE_WIDTH / 2, y: top + NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT }),
+      place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),
     })
   }
   for (const hub of hubs) {
@@ -823,7 +928,7 @@ function placeWithDagre(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Se
     const p = g.node(n.id)
     const hub = hubById.get(n.id)
     if (!hub) {
-      positioned.push({ ...n, x: p.x, y: p.y, width: NODE_WIDTH, height: NODE_HEIGHT })
+      positioned.push(placeSkeletonNode(n, p.x, p.y))
       continue
     }
     const area = areaById.get(n.id)!
