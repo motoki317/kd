@@ -550,7 +550,7 @@ export default function Topology(props: Props) {
   // a pod; both must preserve the current pan/zoom. `pendingFit` defers the fit until the new
   // scope's layout actually has geometry (the first SSE frame can arrive after the scope flips,
   // while width is still 0). First mount is a snap (no animation); later scope switches glide.
-  let fitScope = ' init'
+  let fitScope = 'init'
   let pendingFit = true
   let firstFit = true
   // freshData closes a race: a view switch flips props.viewId synchronously, but the new view's
