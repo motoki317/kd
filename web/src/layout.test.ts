@@ -210,6 +210,71 @@ describe('layoutGraph', () => {
     expect(y('web-1')).toBeLessThan(y('web-2'))
   })
 
+  it('centres a small child group on its parent in LR, even when the parent column is re-packed', () => {
+    // The parent (sts) shares its column with a tall sibling stack (many secrets), which pushes sts
+    // away from its raw Dagre seed when the column is packed. Its 3 pods (one column right, below the
+    // fold threshold) must follow sts and stay centred on it — not sink to their own stale seed. Assert
+    // the pod group's mid-y is close to the parent's centre.
+    const sts: KNode = { id: 'sts', kind: 'StatefulSet', name: 'es', health: 'Healthy' }
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'es', health: 'Healthy' }
+    const pods: KNode[] = [0, 1, 2].map((i) => ({ id: `es-${i}`, kind: 'Pod', name: `es-${i}`, health: 'Healthy' }))
+    const secrets: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `sec-${i}`, kind: 'Secret', name: `sec-${i}`, health: 'Healthy' }))
+    const e: KEdge[] = [
+      { from: 'es', to: 'sts', type: 'ownerReference' },
+      ...pods.map((p): KEdge => ({ from: 'sts', to: p.id, type: 'ownerReference' })),
+      ...secrets.map((s): KEdge => ({ from: 'es', to: s.id, type: 'ownerReference' })),
+    ]
+    const l = layoutGraph([owner, sts, ...pods, ...secrets], e, 'LR')
+    const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
+    const podMid = (y('es-0') + y('es-2')) / 2
+    expect(Math.abs(podMid - y('sts'))).toBeLessThan(NODE_HEIGHT) // pods stay centred on their parent
+  })
+
+  it('straddles a parent with its many children in LR rather than hanging them below it', () => {
+    // A parent (es) with many children that collide in the child column. The children must be CENTRED
+    // around the parent's height — some above, some below — not all start at the parent and cascade
+    // down. Assert the children's bounding mid-y is close to the parent, and at least one child sits
+    // above the parent and one below.
+    const owner: KNode = { id: 'es', kind: 'Elasticsearch', name: 'es', health: 'Healthy' }
+    const kids: KNode[] = Array.from({ length: 8 }, (_, i) => ({ id: `c-${i}`, kind: i % 2 ? 'ConfigMap' : 'Service', name: `c-${i}`, health: 'Healthy' }))
+    const e: KEdge[] = kids.map((k): KEdge => ({ from: 'es', to: k.id, type: 'ownerReference' }))
+    const l = layoutGraph([owner, ...kids], e, 'LR')
+    const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
+    const ys = kids.map((k) => y(k.id))
+    const mid = (Math.min(...ys) + Math.max(...ys)) / 2
+    expect(Math.abs(mid - y('es'))).toBeLessThan(NODE_HEIGHT) // stack centred on the parent
+    expect(Math.min(...ys)).toBeLessThan(y('es')) // some children above the parent
+    expect(Math.max(...ys)).toBeGreaterThan(y('es')) // some below
+  })
+
+  it('separates two same-kind sibling leaf blocks (different parents) by more than the in-block gap', () => {
+    // Two CronWorkflows under one template, each owning a high-fanout set of Workflows that wraps into
+    // its own dashed leaf block. The two blocks are the same kind (Workflow) but different parents, so
+    // they must read as separate framed groupings with a real margin between them — not the tight
+    // within-block gap that would let the two frames touch.
+    const tmpl: KNode = { id: 'wt', kind: 'WorkflowTemplate', name: 'wt', health: 'Healthy' }
+    const crons: KNode[] = ['a', 'b'].map((s) => ({ id: `c-${s}`, kind: 'CronWorkflow', name: `cron-${s}`, health: 'Healthy' }))
+    const wfs: KNode[] = []
+    const e: KEdge[] = crons.map((c): KEdge => ({ from: 'wt', to: c.id, type: 'ownerReference' }))
+    for (const c of crons) {
+      for (let i = 0; i < 6; i++) {
+        const id = `${c.id}-wf-${i}`
+        wfs.push({ id, kind: 'Workflow', name: `${c.name}-wf-${i}`, health: 'Healthy' })
+        e.push({ from: c.id, to: id, type: 'ownerReference' })
+      }
+    }
+    const l = layoutGraph([tmpl, ...crons, ...wfs], e, 'LR')
+    const ext = (prefix: string) => {
+      const cards = l.nodes.filter((n) => n.id.startsWith(prefix))
+      return { top: Math.min(...cards.map((n) => n.y - NODE_HEIGHT / 2)), bot: Math.max(...cards.map((n) => n.y + NODE_HEIGHT / 2)) }
+    }
+    const a = ext('c-a-wf')
+    const b = ext('c-b-wf')
+    const [upper, lower] = a.bot <= b.top ? [a, b] : [b, a]
+    expect(lower.top).toBeGreaterThan(upper.bot) // the two blocks don't overlap or interleave
+    expect(lower.top - upper.bot).toBeGreaterThan(18) // wider than the within-block COL_V_GAP
+  })
+
   it('lays parents left of their children in LR (Ownership view orientation, cycle 310)', () => {
     const l = layoutGraph(nodes, edges, 'LR')
     const x = (id: string) => l.nodes.find((n) => n.id === id)!.x

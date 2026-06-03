@@ -826,11 +826,13 @@ function dagreSeedY(skeleton: KNode[], edges: KEdge[], wrapped: ReadonlySet<stri
 
 // A column-placement unit: one card or one wrapped leaf block, at a depth, with a seed y and a placer
 // that emits its PositionedNode(s) once the column's x and the unit's stacked top are resolved. `kind`
-// drives the inter-unit gap: same-kind neighbours pack tight (LEAF_GAP_Y), different kinds get the
+// drives the inter-group gap: same-kind neighbours pack tight (COL_V_GAP), different kinds get the
 // wider BLOCK_GAP so each kind reads as its own group (the user's "little spacing between kinds").
 // `group` identifies a set of same-parent same-kind siblings (a StatefulSet's pods): siblings are
-// ordered among THEMSELVES by natural name (so they read web-0,1,2), while the groups as a whole keep
-// Dagre's crossing-minimized order. `name` is the natural-sort key within a group ('' for leaf blocks).
+// ordered among THEMSELVES by natural name (so they read web-0,1,2), and the group as a whole is
+// centred on `parent`'s placed position. `name` is the natural-sort key within a group ('' for leaf
+// blocks). `id` (skeleton card only) lets a child column read this card's placed centre; `parent` is
+// the shallowest source feeding this unit (a hub id for its leaf blocks) so the group centres on it.
 interface ColUnit {
   rank: number
   kind: string
@@ -839,6 +841,8 @@ interface ColUnit {
   w: number
   h: number
   seedY: number
+  id?: string
+  parent?: string
   place: (left: number, top: number) => void
 }
 
@@ -880,7 +884,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     const par = parentOf.get(n.id)
     units.push({
       rank: r, kind: n.kind, group: par !== undefined ? `${par}|${n.kind}` : `root:${n.id}`, name: n.name,
-      w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
+      w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0, id: n.id, parent: par,
       place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),
     })
   }
@@ -888,12 +892,12 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     const hr = rank.get(hub.id) ?? 0
     const r = hub.after ? hr + 1 : hr - 1 // children sit one column right; fan-in parents one column left
     const areaH = hubArea(hub.blocks, 'LR').h
-    let top = (seedY.get(hub.id) ?? 0) - areaH / 2 // center the hub's per-kind block stack on its row
+    let top = (seedY.get(hub.id) ?? 0) - areaH / 2 // seed only; the block stack is re-centred on the hub below
     for (const b of hub.blocks) {
       const block = b
       units.push({
         rank: r, kind: block.kind, group: `block:${hub.id}:${block.kind}`, name: '',
-        w: block.w, h: block.h, seedY: top + block.h / 2,
+        w: block.w, h: block.h, seedY: top + block.h / 2, parent: hub.id,
         place: (left, t) => placeBlockCells(block, left, t, out),
       })
       top += block.h + BLOCK_GAP
@@ -908,32 +912,84 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   let cx = 0
   for (const r of ranks) { colLeft.set(r, cx); cx += colWidth.get(r)! + COLUMN_GAP }
 
-  // Within each column, order sibling GROUPS by Dagre's crossing-minimized seed (the group's topmost
-  // seedY) but order units INSIDE a group by natural name — so a StatefulSet's pods read web-0,1,2 even
-  // though Dagre seeded them in some other order, while unrelated subtrees keep their crossing-min
-  // placement. Then stack the units CONTIGUOUSLY from the topmost unit's seed — same-kind neighbours
-  // separated by COL_V_GAP, different kinds by the wider BLOCK_GAP. We anchor only the first unit to its
-  // seed and pack the rest tight rather than honouring each unit's seedY as a floor: a skeleton child
-  // (e.g. a StatefulSet seeded at its hub's centre) used to punch a tall hole into the hub's centred
-  // block stack, and adjacent kinds drifted to inconsistent gaps. Tight, kind-gapped packing gives every
-  // kind the same visible separation and removes the hole.
+  // Within each column we place one GROUP (same parent + same kind) at a time, vertically CENTRED on its
+  // parent's already-placed centre — columns are processed left→right (ranks ascending), so by the time a
+  // child column is laid out every parent in a shallower column has a real position recorded in
+  // `placedCenter`. This is what keeps children "right next to" their parent: re-packing a parent column
+  // moves a card off its raw Dagre seed, and a child centred on the seed (the old behaviour) drifted away
+  // — es-default's pods and a WorkflowTemplate's Workflows both sank below their parent. Centring on the
+  // placed parent makes the child follow. A group with no placed parent (a root / fan-in source) falls
+  // back to its own seed. Units INSIDE a group are ordered by natural name (so a StatefulSet's pods read
+  // web-0,1,2) and packed tight (COL_V_GAP).
+  //
+  // Overlapping groups are de-overlapped by a standard 1-D cluster merge rather than a one-directional
+  // push-down: when a group would collide with the one above it the two merge into a CLUSTER laid out
+  // contiguously, and the cluster is positioned to minimise the squared distance of every member from its
+  // own desired centre (T = mean(desired − offset)). So a parent's many children straddle the parent's
+  // height instead of all starting at it and cascading down — the "centred around the parent" the user
+  // asked for. The connecting gap is kind-aware (same kind COL_V_GAP, different kinds the wider BLOCK_GAP)
+  // so each kind still reads as its own group and a dense column never blows up vertically.
+  const placedCenter = new Map<string, number>()
   for (const r of ranks) {
     const col = units.filter((u) => u.rank === r)
-    const groupSeed = new Map<string, number>() // a group sorts by its topmost (smallest) seed
-    for (const u of col) groupSeed.set(u.group, Math.min(groupSeed.get(u.group) ?? Infinity, u.seedY))
-    col.sort((a, b) =>
-      a.group !== b.group
-        ? groupSeed.get(a.group)! - groupSeed.get(b.group)! || a.group.localeCompare(b.group)
-        : byName(a, b) || a.seedY - b.seedY,
+    const groups = new Map<string, ColUnit[]>()
+    for (const u of col) (groups.get(u.group) ?? groups.set(u.group, []).get(u.group)!).push(u)
+    const blocks = [...groups.entries()].map(([key, gus]) => {
+      gus.sort((a, b) => byName(a, b) || a.seedY - b.seedY)
+      const h = gus.reduce((s, u) => s + u.h, 0) + Math.max(0, gus.length - 1) * COL_V_GAP
+      const parent = gus[0].parent
+      const desired = parent !== undefined && placedCenter.has(parent)
+        ? placedCenter.get(parent)!
+        : gus.reduce((s, u) => s + u.seedY, 0) / gus.length
+      return { key, gus, h, kind: gus[0].kind, parent, desired }
+    })
+    blocks.sort((a, b) => a.desired - b.desired || a.key.localeCompare(b.key))
+    // Tight COL_V_GAP only between groups that are the SAME kind AND the SAME parent — i.e. one logical
+    // cluster (fan-in roots all share an undefined parent). Two same-kind groups under DIFFERENT parents
+    // (e.g. each CronWorkflow's own wrapped Workflow block) are distinct, separately-framed groupings and
+    // get the wider BLOCK_GAP, matching the margin between a parent's differing-kind child groups.
+    const gapBefore = blocks.map((b, i) =>
+      i === 0 ? 0 : b.kind === blocks[i - 1].kind && b.parent === blocks[i - 1].parent ? COL_V_GAP : BLOCK_GAP,
     )
-    let cursor = -Infinity
-    let prevKind: string | null = null
-    for (const u of col) {
-      const gap = prevKind === null ? 0 : u.kind === prevKind ? COL_V_GAP : BLOCK_GAP
-      const top = cursor === -Infinity ? u.seedY - u.h / 2 : cursor + gap
-      u.place(colLeft.get(r)!, top)
-      cursor = top + u.h
-      prevKind = u.kind
+
+    // Greedy cluster merge: each cluster is a contiguous run of blocks laid out from its top `t`; `off` is
+    // a block's centre offset within the cluster. A new block joins as its own cluster, then merges left
+    // while it overlaps the cluster above it. After each merge the cluster's bounding box is recentred on
+    // the mean of its members' desired centres — so the whole run STRADDLES the parent (its geometric
+    // middle on the parent's height) instead of starting at the parent and cascading down. Centring the
+    // bbox (not the least-squares mean of per-block offsets) is what the user asked for: a tall wrapped
+    // block in the run must not skew where the extent sits relative to the parent.
+    type Member = { blk: (typeof blocks)[number]; off: number }
+    const clusters: { members: Member[]; height: number; top: number }[] = []
+    const recenter = (c: (typeof clusters)[number]) => {
+      const meanDesired = c.members.reduce((s, m) => s + m.blk.desired, 0) / c.members.length
+      c.top = meanDesired - c.height / 2
+    }
+    for (const blk of blocks) {
+      const c = { members: [{ blk, off: blk.h / 2 }], height: blk.h, top: blk.desired - blk.h / 2 }
+      clusters.push(c)
+      while (clusters.length >= 2) {
+        const cur = clusters[clusters.length - 1]
+        const prev = clusters[clusters.length - 2]
+        const gap = gapBefore[blocks.indexOf(cur.members[0].blk)]
+        if (prev.top + prev.height + gap <= cur.top) break // no overlap — leave both placed
+        const base = prev.height + gap
+        for (const m of cur.members) prev.members.push({ blk: m.blk, off: base + m.off })
+        prev.height = base + cur.height
+        recenter(prev)
+        clusters.pop()
+      }
+    }
+
+    for (const c of clusters) {
+      for (const m of c.members) {
+        let cursor = c.top + m.off - m.blk.h / 2 // cluster top + block-centre offset − half block = block top
+        for (const u of m.blk.gus) {
+          u.place(colLeft.get(r)!, cursor)
+          if (u.id !== undefined) placedCenter.set(u.id, cursor + u.h / 2)
+          cursor += u.h + COL_V_GAP
+        }
+      }
     }
   }
   return out
