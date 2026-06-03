@@ -54,7 +54,10 @@ interface Props {
 
 // Edges other than ownership are drawn dashed so the parent-child backbone stays visually
 // dominant (the primary relationship operators scan for first). EdgeRefers (CR-defined
-// references) joins the dashed family — it's a relationship but not the ownership backbone.
+// references) is rendered identically to the other non-ownership edges — same grey, same dash,
+// same arrowhead — because "refers to" is semantically just another non-ownership relationship;
+// only the hover tooltip names the specific kind. (Colour/shape distinction was dropped: it
+// cluttered a dense canvas and the categories read the same to operators.)
 const DASHED: Partial<Record<EdgeType, boolean>> = {
   selects: true,
   routes: true,
@@ -1173,11 +1176,6 @@ export default function Topology(props: Props) {
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge-color)" />
           </marker>
-          {/* Separate arrowhead for 'refers' edges so the head color matches the violet body
-              instead of inheriting the grey --edge-color. */}
-          <marker id="arrow-refers" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge-refers)" />
-          </marker>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
           {/* Nodes view: each host's container rect + "host: <name>" header, drawn under the
@@ -1305,10 +1303,10 @@ export default function Topology(props: Props) {
                     classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e), owner: e.type === 'ownerReference' }}
                     d={edgePath(e.points)}
                     fill="none"
-                    stroke={e.type === 'refers' ? 'var(--edge-refers)' : 'var(--edge-color)'}
+                    stroke="var(--edge-color)"
                     stroke-width={e.type === 'ownerReference' ? 1.8 : 1.2}
                     stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
-                    marker-end={e.type === 'refers' ? 'url(#arrow-refers)' : 'url(#arrow)'}
+                    marker-end="url(#arrow)"
                   />
                 </g>
               )}

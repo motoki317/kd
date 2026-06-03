@@ -693,27 +693,24 @@ export default function App() {
             </section>
             <section class="help-section">
               <h4>Edges</h4>
-              {/* Compact legend matching the topology rendering: solid = ownership backbone, dashed
-                  = non-ownership relationship, violet dashed = CR-defined reference (custom CR
-                  *Ref fields). Helps a new operator decode the canvas at a glance. */}
+              {/* Compact legend matching the topology rendering — everything is grey; the only cue is
+                  shape, not colour (colour clutters a dense canvas). Solid = ownership backbone;
+                  dashed = any non-ownership relationship (refers/selects/mounts/… all read alike —
+                  hover an edge to see its kind). Helps a new operator decode the canvas at a glance. */}
               <ul class="help-edges">
                 <li>
                   <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
-                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-color)" stroke-width="2" />
+                    <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="2" />
+                    <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
                   </svg>
                   Owns (ownerReference) — the controller→child backbone
                 </li>
                 <li>
                   <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
-                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
+                    <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
+                    <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
                   </svg>
-                  Non-ownership — selects / routes / mounts / scheduledOn / binds
-                </li>
-                <li>
-                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
-                    <line x1="0" y1="5" x2="34" y2="5" stroke="var(--edge-refers)" stroke-width="1.4" stroke-dasharray="5 4" />
-                  </svg>
-                  Refers — CR-defined reference (Workflow→Template, Certificate→Issuer, …)
+                  Non-ownership — refers / selects / routes / mounts / scheduledOn / binds
                 </li>
               </ul>
             </section>

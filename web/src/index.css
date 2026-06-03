@@ -8,7 +8,6 @@
   --text-dim: #6b7280;
   --accent: #2f6feb;
   --edge-color: #b6bdc7;
-  --edge-refers: #8b72d6;
 
   --health-healthy: #18be94;
   --health-progressing: #2f86eb;
@@ -18,7 +17,7 @@
 
   /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
-     glance. Distinct enough from --health-progressing (blue) and --edge-refers (violet) to not
+     glance. Distinct enough from --health-progressing (blue) to not
      trigger a status read; close enough to the K8s brand to feel canonical. Only affects the
      icon and the small kind label — never the health border/tint. */
   --pod-accent: #5b6cf0;
@@ -48,7 +47,6 @@
   --text-dim: #98a2b3;
   --accent: #4d8bf0;
   --edge-color: #3f4654;
-  --edge-refers: #7b6abf;
   --pod-accent: #8593f5;
   color-scheme: dark;
 }
