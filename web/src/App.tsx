@@ -6,28 +6,30 @@ import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphSt
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
-import type { Health, KNode, View } from './types'
+import type { GroupBy, Health, KNode, RelCategory } from './types'
+import { REL_CATEGORIES } from './relationships'
 import Sidebar from './components/Sidebar'
-import Topology from './components/Topology'
+import Topology, { GROUP_OPTIONS } from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
 
-// Each view is a relationship lens the user explicitly asked for. 'All' is the kind-grouped
-// catch-all (FR-006): every node lays out in per-kind boxes, ownership edges still drawn —
-// the readable replacement for the previously-removed hairball, important once CRs (which
-// have no edges to the workload kinds) enter the picture.
-// `hint` is shown both as a hover tooltip on the tab and as the empty-state subtitle when the
-// view has nothing to show, so the operator learns what the view *would* contain without having
-// to flip between views to deduce it (cycle 204).
-const VIEWS: { id: View; label: string; hint: string }[] = [
-  { id: 'ownership', label: 'Ownership', hint: 'Parent→child workload tree (ownerReferences)' },
-  { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic flow' },
-  { id: 'nodes', label: 'Nodes', hint: 'Pods grouped by the node they run on' },
-  { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount' },
-  { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and their Subjects' },
-  { id: 'all', label: 'All', hint: 'Every resource, grouped by kind' },
-]
+// Group-by is the layout strategy — how resources are arranged on the canvas. It replaced the old
+// fixed view tabs: grouping is now orthogonal to *which relationships are drawn* (the composable
+// relationship filter, see relationships.ts). The segmented control that sets it lives in the
+// Topology toolbar (GROUP_OPTIONS is shared from there); App keeps the signal, the URL/localStorage
+// persistence, the number-key shortcuts (1..3), and the help overlay listing.
+const GROUP_IDS = GROUP_OPTIONS.map((g) => g.id)
+const REL_IDS = new Set(REL_CATEGORIES.map((c) => c.id))
+const DEFAULT_RELS = (): Set<RelCategory> => new Set<RelCategory>(['ownership'])
+
+// Parse a comma-separated relationship list (URL or localStorage). Returns null when the source is
+// absent (so the next source / the default applies); an explicit empty string round-trips to the
+// empty set, letting "all relationships off" persist rather than snapping back to the default.
+function parseRels(raw: string | null): Set<RelCategory> | null {
+  if (raw === null) return null
+  return new Set(raw.split(',').filter((x): x is RelCategory => REL_IDS.has(x as RelCategory)))
+}
 
 export default function App() {
   // The contexts list drives the topbar switcher (FR-005) and the default context the URL falls back
@@ -35,12 +37,34 @@ export default function App() {
   // never change the set.
   const [contextsRes] = createResource(fetchContexts)
   const contextsInfo = createMemo(() => (contextsRes.error ? null : contextsRes() ?? null))
-  // Seed namespace/view/ctx from the URL so a link or reload restores the same place.
+  // Seed namespace/ctx/grouping/relationships from the URL so a link or reload restores the same
+  // place. Grouping + relationship filter also fall back to localStorage (then their defaults), so
+  // a plain reload of an un-shared URL still remembers how the operator last arranged the canvas.
   const params = new URLSearchParams(location.search)
-  const urlView = params.get('view') as View
   const [ctx, setCtx] = createSignal<string | null>(params.get('ctx'))
   const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
-  const [view, setView] = createSignal<View>(VIEWS.some((v) => v.id === urlView) ? urlView : 'ownership')
+  const urlGroup = params.get('group') as GroupBy
+  const lsGroup = localStorage.getItem('kd:groupBy') as GroupBy
+  const [groupBy, setGroupBy] = createSignal<GroupBy>(
+    GROUP_IDS.includes(urlGroup) ? urlGroup : GROUP_IDS.includes(lsGroup) ? lsGroup : 'relationship',
+  )
+  createEffect(() => localStorage.setItem('kd:groupBy', groupBy()))
+  const [relFilter, setRelFilter] = createSignal<Set<RelCategory>>(
+    parseRels(params.get('rels')) ?? parseRels(localStorage.getItem('kd:rels')) ?? DEFAULT_RELS(),
+  )
+  createEffect(() => localStorage.setItem('kd:rels', [...relFilter()].sort().join(',')))
+  // Toggle a relationship in/out of the filter; Shift "solos" it (exactly this one, clearing the
+  // rest), mirroring the kind chips' toggle/solo gesture.
+  const toggleRel = (c: RelCategory, solo = false) => {
+    if (solo) {
+      if (relFilter().size === 1 && relFilter().has(c)) setRelFilter(new Set<RelCategory>())
+      else setRelFilter(new Set<RelCategory>([c]))
+      return
+    }
+    const s = new Set(relFilter())
+    s.has(c) ? s.delete(c) : s.add(c)
+    setRelFilter(s)
+  }
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
 
   // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
@@ -184,7 +208,12 @@ export default function App() {
     const p = new URLSearchParams()
     if (ctx() && contextsInfo()?.enabled) p.set('ctx', ctx()!)
     if (namespace()) p.set('ns', namespace()!)
-    p.set('view', view())
+    // Grouping + relationships are view config worth sharing; omit when at the defaults to keep
+    // URLs clean. The relationship list round-trips even when empty (an explicit `?rels=`) so a
+    // shared "all relationships off" link restores faithfully.
+    if (groupBy() !== 'relationship') p.set('group', groupBy())
+    const rels = [...relFilter()].sort().join(',')
+    if (rels !== 'ownership') p.set('rels', rels)
     const id = selectedId()
     const n = id ? graph.nodes[id] : null
     if (n) p.set('sel', `${n.kind}/${n.name}`)
@@ -267,8 +296,8 @@ export default function App() {
       } else if (e.key === '/' && !typing) {
         e.preventDefault()
         filterEl?.focus()
-      } else if (!typing && num >= 1 && num <= VIEWS.length) {
-        setView(VIEWS[num - 1].id) // 1-6: Ownership / Network / Nodes / Volumes / RBAC / All
+      } else if (!typing && num >= 1 && num <= GROUP_OPTIONS.length) {
+        setGroupBy(GROUP_OPTIONS[num - 1].id) // 1-3: Relationship / Nodes / Kind grouping
       } else if (!typing && (e.key === 'j' || e.key === 'ArrowDown')) {
         // Walk selection through the graph, troubled-first, so stepping surfaces problems before
         // healthy nodes. Scoped to the active search/health filter so stepping visits only what's
@@ -312,20 +341,21 @@ export default function App() {
   // the server just came back and doesn't want to wait the rest of the backoff window.
   const [reconnectTick, setReconnectTick] = createSignal(0)
 
-  // (Re)subscribe to the graph feed whenever the context, namespace, or view changes. A context
-  // switch closes the old SSE stream and opens a fresh one against the new cluster's cache.
+  // (Re)subscribe to the graph feed whenever the context or namespace changes. A context switch
+  // closes the old SSE stream and opens a fresh one against the new cluster's cache. Grouping and
+  // relationship-filter changes do NOT resubscribe — the server streams the full graph and the
+  // client re-projects it locally, so they're pure client-side relayouts.
   // The first run keeps URL-seeded filters (?kinds=) — only an actual change resets them.
   let firstSubscribe = true
   createEffect(() => {
     const c = ctx()
     const ns = namespace()
-    const v = view()
     reconnectTick() // tracked: a manual reconnect (cycle 291) re-fires the effect
     if (!c || !ns) return
-    // Preserve the selection across a view switch when the same resource exists in the new view
-    // (UIDs are stable across views), so "look at pod X, switch to Volumes" keeps X selected. A
-    // namespace change naturally clears it: the old UID won't be in the new namespace's graph.
-    // untrack so reading the current selection doesn't make this effect re-subscribe on selection.
+    // Preserve the selection across a resubscribe when the same resource still exists (UIDs are
+    // stable), so a manual reconnect keeps the selection. A namespace change naturally clears it:
+    // the old UID won't be in the new namespace's graph. untrack so reading the current selection
+    // doesn't make this effect re-subscribe on selection.
     const keepSel = untrack(selectedId)
     if (!firstSubscribe) {
       // A stale search/health/kind filter would fade the whole new graph. Cleared only on
@@ -337,9 +367,9 @@ export default function App() {
     }
     firstSubscribe = false
     setGraph(reconcile(emptyState()))
-    setLiveSummary(null) // previous stream's summary belongs to the previous (ns, view) — clear it
+    setLiveSummary(null) // previous stream's summary belongs to the previous namespace — clear it
     setConnState('connecting')
-    const close = streamGraph(c, ns, v, {
+    const close = streamGraph(c, ns, {
       snapshot: (g) => {
         // Decide the selection from the snapshot's own nodes BEFORE mutating the store, so this set
         // is authoritative over the reactive deep-link restore below (which would otherwise race and
@@ -402,16 +432,17 @@ export default function App() {
   return (
     <div class="app">
       <header class="topbar">
-        {/* Clickable home: resets view + filters + selection without touching the namespace
-            (cycle 290). Operators end up on Ownership with no spotlight — the default "what's
-            in this ns" stance — without having to hunt for the right tab + clear button. */}
+        {/* Clickable home: resets grouping + relationships + filters + selection without touching
+            the namespace (cycle 290). Operators land on the default "group by relationship,
+            ownership only, no spotlight" stance — without hunting for the right controls. */}
         <button
           class="brand"
           type="button"
-          title="Reset view (Ownership, no filters)"
+          title="Reset view (group by relationship, ownership only, no filters)"
           aria-label="Reset to default view"
           onClick={() => {
-            setView('ownership')
+            setGroupBy('relationship')
+            setRelFilter(DEFAULT_RELS())
             setSearch('')
             setHealthFilter(null)
             setKindFilter(new Set<string>())
@@ -450,20 +481,9 @@ export default function App() {
           </span>
         </Show>
         <div class="topbar-spacer" />
-        <div class="views">
-          <For each={VIEWS}>
-            {(v) => (
-              <button
-                classList={{ active: v.id === view() }}
-                aria-pressed={v.id === view()}
-                onClick={() => setView(v.id)}
-                title={v.hint}
-              >
-                {v.label}
-              </button>
-            )}
-          </For>
-        </div>
+        {/* The group-by segmented control + relationship/health/kind filters all live together in
+            the Topology toolbar now (one control surface on the canvas), so the topbar stays just
+            brand · context · breadcrumb · status · theme. */}
         {/* When offline (cycle 291), the conn pill becomes clickable as a manual reconnect:
             EventSource auto-reconnects, but on a long backoff — operators who know the server is
             back shouldn't have to wait it out. role/title shift to reflect the affordance. */}
@@ -569,9 +589,10 @@ export default function App() {
               setKindFilter(new Set<string>())
             }}
             connected={connected()}
-            viewLabel={VIEWS.find((v) => v.id === view())?.label ?? view()}
-            viewHint={VIEWS.find((v) => v.id === view())?.hint}
-            viewId={view()}
+            groupBy={groupBy()}
+            onGroupBy={setGroupBy}
+            relFilter={relFilter()}
+            onRelFilter={toggleRel}
             scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
             search={search()}
             onSearch={setSearch}
@@ -616,9 +637,9 @@ export default function App() {
         <div class="help-backdrop" onClick={() => setShowHelp(false)}>
           <div class="help-panel" onClick={(e) => e.stopPropagation()}>
             <h3>Keyboard shortcuts</h3>
-            {/* Grouped so the overlay reads as a reference card (Navigation / Views / Actions),
-                not a flat undifferentiated list. Each VIEWS entry is enumerated explicitly so
-                "5 jumps to RBAC" is discoverable without counting tabs. */}
+            {/* Grouped so the overlay reads as a reference card (Navigation / Grouping /
+                Relationships / Actions), not a flat undifferentiated list. The grouping modes are
+                enumerated with their number keys so "2 groups by node" is discoverable. */}
             <section class="help-section">
               <h4>Navigation</h4>
               <ul>
@@ -662,15 +683,30 @@ export default function App() {
               </ul>
             </section>
             <section class="help-section">
-              <h4>Views</h4>
+              <h4>Grouping</h4>
               <ul>
-                {/* Surface the view hint alongside the number so the help overlay teaches
-                    "what does this view show" — same line of text the tooltip and empty
-                    state use, but visible without hovering. */}
-                <For each={VIEWS}>
-                  {(v, i) => (
+                {/* Surface the grouping hint alongside the number so the overlay teaches what each
+                    layout does — same text the tab tooltip uses, visible without hovering. */}
+                <For each={GROUP_OPTIONS}>
+                  {(g, i) => (
                     <li>
-                      <kbd>{i() + 1}</kbd> {v.label} <span class="help-hint">{v.hint}</span>
+                      <kbd>{i() + 1}</kbd> Group by {g.label} <span class="help-hint">{g.hint}</span>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </section>
+            <section class="help-section">
+              <h4>Relationships</h4>
+              <ul>
+                <li class="help-hint">
+                  Toggle which relationships are drawn — they compose, so several can be on at once.
+                  Click a relationship chip in the toolbar (<kbd>Shift</kbd>+click solos).
+                </li>
+                <For each={REL_CATEGORIES}>
+                  {(c) => (
+                    <li>
+                      {c.label} <span class="help-hint">{c.hint}</span>
                     </li>
                   )}
                 </For>

@@ -7,7 +7,18 @@ import { cardKindLabel, cardName, cardStatus, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
-import type { EdgeType, Health, KEdge, KNode } from '../types'
+import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
+import type { EdgeType, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
+
+const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
+
+// The group-by options, exported so App's keyboard shortcuts (1–3) and help overlay stay in sync
+// with the segmented control rendered in the toolbar. Order = number-key order.
+export const GROUP_OPTIONS: { id: GroupBy; label: string; hint: string }[] = [
+  { id: 'relationship', label: 'Relationship', hint: 'Lay resources out along the relationships you enable' },
+  { id: 'nodes', label: 'Nodes', hint: 'Group pods into the node they run on' },
+  { id: 'kind', label: 'Kind', hint: 'Group every resource into per-kind boxes' },
+]
 
 interface Props {
   nodes: KNode[]
@@ -26,17 +37,18 @@ interface Props {
   // control sits in one block beside the search and kind chips.
   onHealthFilter?: (h: Health | null) => void
   connected: boolean
-  viewLabel: string
-  // viewHint is the "what this view shows" tagline, displayed in the empty state so the operator
-  // knows what a view *would* show before the namespace fills out (cycle 204).
-  viewHint?: string
+  // groupBy selects the layout strategy: 'kind' → per-kind boxes, 'nodes' → host containers,
+  // 'relationship' (default) → relationship depth-column tree. Replaces the old viewId. The
+  // segmented control that sets it lives in this toolbar (onGroupBy); App owns the signal.
+  groupBy?: import('../types').GroupBy
+  onGroupBy?: (g: import('../types').GroupBy) => void
+  // relFilter is the set of relationship categories whose edges are drawn (and which therefore
+  // drive connectivity). The toolbar's relationship chips toggle it via onRelFilter.
+  relFilter?: ReadonlySet<RelCategory>
+  onRelFilter?: (c: RelCategory, solo?: boolean) => void
   // onClearFilters clears every active filter at once (search + health + kinds). Optional —
   // when omitted, the chip row's individual clears stay the only way to reset.
   onClearFilters?: () => void
-  // viewId is the lower-case view key — Topology switches layout strategy on 'all' to use
-  // the kind-grouped variant (FR-006). All other views fall back to the default
-  // connectivity-based layout.
-  viewId?: import('../types').View
   // scope identifies the current cluster+namespace, so the auto-fit re-frames only on a real
   // context/namespace switch — not when an SSE patch or a collapse expand/refold changes the node
   // set within the same scope (which must preserve the operator's current pan/zoom).
@@ -158,42 +170,58 @@ export default function Topology(props: Props) {
       return next
     })
 
+  // Project the full streamed edge set onto the active relationship categories (reversing the
+  // referenced-as-parent ones) — the client-side replacement for the old server per-view Filter.
+  // Drives the LAYOUT and the selection-spotlight/fit (related()), so clicking a node only lights
+  // and frames what's actually drawn. ownerName() still scans the full props.edges — name
+  // shortening is a readability aid independent of which relationships are toggled on.
+  const displayEdges = createMemo(() => projectEdges(props.edges, props.relFilter ?? EMPTY_RELS))
+
   const layout = createMemo(() => {
-    if (props.viewId === 'all') return layoutGraphByKind(props.nodes, props.edges, expandedClusters())
-    // Nodes view: each host becomes a labeled container with the Node card + its pods inside.
-    // scheduledOn edges are implied by containment, so the layout doesn't draw them — cuts the
-    // visual noise of N identical lines to the same Node card (cycle 205).
-    if (props.viewId === 'nodes') return layoutGraphByHost(props.nodes, props.edges, expandedClusters())
-    // Volumes view: left-to-right so "Pod mounts ConfigMap/Secret/PVC" reads as a left→right
-    // dependency flow rather than a top-down ownership tree (cycle 206). Same renderer, just
-    // a different Dagre rankdir per connected component.
-    if (props.viewId === 'volumes') return layoutGraph(props.nodes, props.edges, 'LR', expandedClusters())
-    // Network view (cycle 207): Ingress → Service → Pod is a traffic flow, naturally read
-    // left-to-right (external → routing → workload). LR rankdir keeps the visual metaphor
-    // aligned with how an operator already thinks about ingress traffic.
-    if (props.viewId === 'network') return layoutGraph(props.nodes, props.edges, 'LR', expandedClusters())
-    // RBAC view (cycle 207): RoleBinding → Role is a "binds" arrow; subjects are listed inside
-    // the binding card. LR keeps "binding → role" reading the way the relationship does.
-    if (props.viewId === 'rbac') return layoutGraph(props.nodes, props.edges, 'LR', expandedClusters())
-    // Ownership view (cycle 310): left-to-right like the other relationship views. A card is far
-    // wider than it is tall, so a parent's children read better stacked in a vertical column to the
-    // right (LR) than strung across a horizontal rank (TB), which wasted width and forced more
-    // zoom-out. High-fanout hubs (ReplicaSet→pods, Node→pods) still grid-wrap — the wrap is now
-    // orientation-aware (see layout.ts placeLeavesLR), so a 30-replica Deployment stays compact
-    // instead of becoming a 30-tall single-file column.
-    return layoutGraph(props.nodes, props.edges, 'LR', expandedClusters())
+    const edges = displayEdges()
+    // Kind grouping: every resource in a per-kind box; the projected edges still draw on top
+    // (suppressed until selection — see renderedEdges) so the cross-kind matrix stays readable.
+    if (props.groupBy === 'kind') return layoutGraphByKind(props.nodes, edges, expandedClusters())
+    // Nodes grouping: each host becomes a labeled container with the Node card + its pods inside.
+    // scheduledOn is implied by containment, so the layout ignores edges entirely (cycle 205).
+    if (props.groupBy === 'nodes') return layoutGraphByHost(props.nodes, edges, expandedClusters())
+    // Relationship grouping (default): left-to-right depth columns following the displayed
+    // relationship edges. A card is far wider than it is tall, so a parent's children read better
+    // stacked in a vertical column to the right (LR). Nodes untouched by any displayed edge fall
+    // out as per-kind orphan blocks (layoutGraph folds them), so the canvas stays a complete
+    // namespace inventory regardless of which relationships are active.
+    return layoutGraph(props.nodes, edges, 'LR', expandedClusters())
   })
-  // In the All view we draw a faint kind-label band above each kind box so the operator can
-  // scan "this section is all Pods, that's all Services" without inferring it from card kinds.
-  const groups = createMemo(() => (props.viewId === 'all' ? kindGroups(layout()) : []))
-  // Nodes view: per-host group bounding boxes for the host-container bg rect + header label.
-  const hosts = createMemo(() => (props.viewId === 'nodes' ? hostGroups(layout()) : []))
-  // Connectivity views (ownership/network/volumes/rbac) have no kind/host container, so a fold's
-  // siblings + pill get a dedicated grouping frame. All/Nodes already box by kind/host — drawing a
-  // second frame there would double-border, so connGroups is empty for those.
+  // Kind grouping draws a faint kind-label band above each kind box so the operator can scan
+  // "this section is all Pods, that's all Services" without inferring it from card kinds.
+  const groups = createMemo(() => (props.groupBy === 'kind' ? kindGroups(layout()) : []))
+  // Nodes grouping: per-host group bounding boxes for the host-container bg rect + header label.
+  const hosts = createMemo(() => (props.groupBy === 'nodes' ? hostGroups(layout()) : []))
+  // Relationship grouping has no kind/host container, so a fold's siblings + pill get a dedicated
+  // grouping frame. Kind/Nodes already box by kind/host — a second frame there would double-border,
+  // so connGroups is empty for those.
   const connFrames = createMemo(() =>
-    props.viewId && props.viewId !== 'all' && props.viewId !== 'nodes' ? connGroups(layout()) : [],
+    props.groupBy !== 'kind' && props.groupBy !== 'nodes' ? connGroups(layout()) : [],
   )
+  // Hint shown under the empty-state message, describing the current lens (grouping +
+  // relationships) so an empty canvas still tells the operator what they're looking through.
+  const emptyHint = () => {
+    if (props.groupBy === 'nodes') return 'Pods grouped by the node they run on'
+    if (props.groupBy === 'kind') return 'Every resource grouped by kind'
+    const rels = [...(props.relFilter ?? EMPTY_RELS)]
+    if (rels.length === 0) return 'No relationships selected — toggle one in the toolbar above'
+    const labels = REL_CATEGORIES.filter((c) => rels.includes(c.id)).map((c) => c.label)
+    return `Showing ${labels.join(', ')} relationships`
+  }
+  // Relationship toggle chips: one per category actually present in the graph (mirroring how the
+  // kind chips derive from kinds present), each badged with how many of its edges exist.
+  const relChips = createMemo(() => {
+    const present = relCategoriesPresent(props.edges)
+    return REL_CATEGORIES.filter((c) => present.has(c.id)).map((c) => {
+      const types = new Set(c.edges)
+      return { ...c, count: props.edges.filter((e) => types.has(e.type)).length }
+    })
+  })
   // Pod count per host, used in the host-group header chip — derived once to keep the SVG
   // markup clean (the alternative is an inline expression that has to re-derive the orphan
   // bucket condition every render). The orphan host bucket counts pods that have either no
@@ -276,23 +304,25 @@ export default function Topology(props: Props) {
   }
   const label = (n: KNode) => cardName(n.name, ownerName().get(n.id))
 
-  // When a node is selected, walk its full connected component (edges treated as undirected) so
-  // the entire ownership/relationship tree containing the selection stays lit while everything
-  // else fades out — ArgoCD-style focus on "this resource and what relates to it". Cycle 157
-  // promoted this from immediate-neighbors to full-component because the auto-fit (below) targets
-  // the same set: clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
+  // When a node is selected, walk its connected component (edges treated as undirected) so the
+  // entire relationship tree containing the selection stays lit while everything else fades out —
+  // ArgoCD-style focus on "this resource and what relates to it". Cycle 157 promoted this from
+  // immediate-neighbors to full-component because the auto-fit (below) targets the same set:
+  // clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
   const related = createMemo(() => {
     const id = props.selectedId
     if (!id) return null
     const nodes = new Set<string>([id])
     const edges = new Set<string>()
     const queue = [id]
-    // Walk the unrouted props.edges (the streamed view's full edge set), not layout().edges —
-    // layouts like Nodes view drop edges from rendering (containment carries them), but
-    // selecting a pod should still light its Node and siblings (cycle 226 fix).
+    // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full
+    // edge set. Following relationships the operator hasn't enabled lit (and framed) nodes they
+    // can't even see — e.g. a Pod dragging in its Node via scheduledOn when Scheduling is off, so
+    // the selection-fit zoomed way out to include it. The spotlight now matches what's on screen.
+    const relEdges = displayEdges()
     while (queue.length > 0) {
       const cur = queue.shift()!
-      for (const e of props.edges) {
+      for (const e of relEdges) {
         const k = `${e.from}|${e.to}|${e.type}`
         if (edges.has(k)) continue
         if (e.from === cur || e.to === cur) {
@@ -459,7 +489,7 @@ export default function Topology(props: Props) {
   // noise when you are just scanning which kinds exist — so hide them until a resource is selected,
   // when they become the useful "what connects to THIS" highlight. Every other view keeps its edges
   // always (their layouts route edges meaningfully along the backbone).
-  const renderedEdges = createMemo(() => (props.viewId === 'all' && !props.selectedId ? [] : layout().edges))
+  const renderedEdges = createMemo(() => (props.groupBy === 'kind' && !props.selectedId ? [] : layout().edges))
   // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
   // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
   // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
@@ -483,6 +513,9 @@ export default function Topology(props: Props) {
     return !!h && (h.from === id || h.to === id)
   }
   let svg: SVGSVGElement | undefined
+  // The full-width control bar overlays the top of the canvas; the fit reads its live height so it
+  // can centre the graph in the VISIBLE area below the bar instead of behind it.
+  let toolbarEl: HTMLDivElement | undefined
   let pointerDown = false
   let dragging = false
   let startX = 0
@@ -525,11 +558,16 @@ export default function Topology(props: Props) {
   // given padding. Caps max scale so single-card selections don't zoom in to absurd sizes.
   function computeFitFor(minX: number, minY: number, maxX: number, maxY: number, maxScale: number) {
     const rect = svg!.getBoundingClientRect()
+    // The control bar overlays the top strip of the canvas, so frame the graph into the area BELOW
+    // it: shrink the usable height by the bar's height and push the vertical centre down by the same,
+    // otherwise the topmost cards land behind the bar (the user's "resources hidden by the panel").
+    const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
+    const availH = Math.max(1, rect.height - topInset)
     const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY)
     const padding = 60
-    const s = Math.min((rect.width - padding * 2) / w, (rect.height - padding * 2) / h, maxScale)
+    const s = Math.min((rect.width - padding * 2) / w, Math.max(1, availH - padding * 2) / h, maxScale)
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-    return { scale: s, tx: rect.width / 2 - cx * s, ty: rect.height / 2 - cy * s }
+    return { scale: s, tx: rect.width / 2 - cx * s, ty: topInset + availH / 2 - cy * s }
   }
 
   // selectionMaxScale lets a small selection zoom in close while a big subtree stays moderate. The
@@ -563,32 +601,37 @@ export default function Topology(props: Props) {
     return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
   }
 
-  // Fit-all only on a real scope switch (context/namespace/view), keyed on scope + viewId — NOT on
-  // node count. The previous node-count key re-fit on every shape change, which yanked the viewport
-  // back to fit-all whenever the operator expanded a collapse cluster or an SSE patch added/removed
-  // a pod; both must preserve the current pan/zoom. `pendingFit` defers the fit until the new
-  // scope's layout actually has geometry (the first SSE frame can arrive after the scope flips,
-  // while width is still 0). First mount is a snap (no animation); later scope switches glide.
+  // Fit-all on a real scope switch (context/namespace) OR a client-side restructure (grouping /
+  // relationship-filter change) — but NOT on node-count churn (a collapse expand or an SSE
+  // add/remove must preserve the operator's pan/zoom). `pendingFit` defers the fit until the
+  // layout actually has geometry (the first SSE frame can arrive after a flip, while width is
+  // still 0). First mount is a snap (no animation); later switches glide.
   let fitScope = 'init'
+  let layoutKey = 'init'
   let pendingFit = true
   let firstFit = true
-  // freshData closes a race: a view switch flips props.viewId synchronously, but the new view's
-  // nodes stream in asynchronously, so for one beat layout() is computed from the OLD view's nodes
-  // under the NEW viewId (a giant transient box). Fitting that and consuming pendingFit stranded the
-  // viewport zoomed far out: by the time the real, smaller layout arrived, pendingFit was already
-  // spent. App always resets the graph to empty before the new stream fills it (closes the old SSE
-  // and setGraph(emptyState()) on any ctx/ns/view change), so width === 0 is a reliable "the new
-  // scope's data is incoming" marker. We refuse to fit until we have seen that reset since the scope
-  // changed, which skips the stale pre-reset layout and fits the real one. Initial mount is already
-  // primed (the store starts empty), so the first real frame still fits.
+  // freshData closes a race that exists ONLY for real scope switches: App closes the old SSE and
+  // setGraph(emptyState()) on a ctx/ns change, so the new namespace's nodes stream in async — for
+  // one beat layout() is computed from the OLD nodes (a giant transient box). width === 0 is the
+  // reliable "the new scope's data is incoming" marker; we refuse to fit until we've seen that
+  // reset, skipping the stale pre-reset layout. A grouping/relationship change is DIFFERENT — it
+  // re-projects the SAME, already-present graph (no resubscribe, no empty frame), so it must fit
+  // immediately and must NOT arm the freshData wait, or the fit would never fire.
   let freshData = true
+  const relKey = () => [...(props.relFilter ?? EMPTY_RELS)].sort().join(',')
   createEffect(() => {
     const l = layout()
-    const scope = `${props.scope ?? ''}|${props.viewId ?? ''}`
+    const scope = props.scope ?? ''
+    const lk = `${props.groupBy ?? ''}|${relKey()}`
     if (scope !== fitScope) {
       fitScope = scope
+      layoutKey = lk
       pendingFit = true
-      freshData = false // wait for this scope's graph to reset before trusting its geometry
+      freshData = false // real scope switch: wait for the graph reset before trusting geometry
+    } else if (lk !== layoutKey) {
+      layoutKey = lk
+      pendingFit = true
+      freshData = true // client-only restructure: data already present, fit the next frame
     }
     if (!svg) return
     if (l.width === 0) {
@@ -611,11 +654,15 @@ export default function Topology(props: Props) {
       // there for the whole picture (the fit button / `f` still frames everything on demand).
       const rect = svg.getBoundingClientRect()
       const pad = 60
+      // Anchor below the control bar, not behind it: inset the top by the bar height so the first
+      // resources open just under the bar rather than hidden under it.
+      const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
+      const availH = Math.max(1, rect.height - topInset)
       const contentW = l.width * MIN_FIT_SCALE
       const contentH = l.height * MIN_FIT_SCALE
       target.scale = MIN_FIT_SCALE
       target.tx = contentW + pad * 2 <= rect.width ? (rect.width - contentW) / 2 : pad
-      target.ty = contentH + pad * 2 <= rect.height ? (rect.height - contentH) / 2 : pad
+      target.ty = contentH + pad * 2 <= availH ? topInset + (availH - contentH) / 2 : topInset + pad
     }
     if (firstFit) {
       firstFit = false
@@ -1010,18 +1057,25 @@ export default function Topology(props: Props) {
                 Connecting…
               </>
             }>
-              Nothing to show in the {props.viewLabel} view.
+              Nothing to show in this namespace.
             </Show>
           </div>
-          {/* When the canvas is empty but the stream is live, surface the view's "what this view
-              shows" hint so the operator learns the view's purpose instead of bouncing between
-              views to deduce it. Hidden while connecting (the line above carries the message). */}
-          <Show when={props.connected && props.viewHint}>
-            <div class="topology-empty-hint">{props.viewHint}</div>
+          {/* When the canvas is empty but the stream is live, surface a hint describing the current
+              grouping / relationship selection, so the operator understands the lens they're
+              looking through. Hidden while connecting (the line above carries the message). */}
+          <Show when={props.connected}>
+            <div class="topology-empty-hint">{emptyHint()}</div>
           </Show>
         </div>
       </Show>
-      <div class="topology-search">
+      {/* The canvas control bar: a full-width strip across the top of the canvas, three short rows
+          — search + Group, Relationships + Health, then Kinds — instead of one facet per line, so
+          it stays shallow. Each facet is an inline label hugging its controls (proximity). The
+          Kinds row is a strict single line that scrolls horizontally on overflow, so the bar height
+          never grows with the number of kinds. */}
+      <div class="topology-toolbar" ref={toolbarEl}>
+      {/* Row 1 — search + group: the resource search plus the layout selector. */}
+      <div class="toolbar-row topology-search">
         {/* Wraps the input so the magnifier glyph (positional, decorative) and the clear-X button
             sit inside the field's frame instead of beside it. */}
         <div class="topology-search-field">
@@ -1099,15 +1153,63 @@ export default function Topology(props: Props) {
             clear
           </button>
         </Show>
-        {/* Health facet — the namespace's health filter, moved out of the global topbar so every
-            "filter / summarise the resources in front of me" control reads as one block (proximity)
-            instead of being split between the screen-top chrome and the canvas. Each pill
-            spotlights a health state with the same toggle semantics as the kind chips below
-            (repetition); the at-a-glance proportion lives in the fixed-width stripe pinned to the
-            top of the canvas (rendered below), not here — so this row never changes the stripe's
-            width as states come and go. */}
+        {/* Group facet — the layout selector. Single-select, so a connected segmented control (the
+            contrast against the toggle chips signals "pick one mode"). Shares row 1 with the search
+            field to keep the panel short. */}
+        <Show when={props.onGroupBy}>
+          <div class="toolbar-facet">
+            <span class="toolbar-label">Group</span>
+            <div class="group-seg" role="group" aria-label="Group resources by">
+              <For each={GROUP_OPTIONS}>
+                {(g) => (
+                  <button
+                    classList={{ active: (props.groupBy ?? 'relationship') === g.id }}
+                    aria-pressed={(props.groupBy ?? 'relationship') === g.id}
+                    onClick={() => props.onGroupBy?.(g.id)}
+                    title={g.hint}
+                  >
+                    {g.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+      </div>
+        {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. */}
+        <Show when={(relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
+          <div class="toolbar-row">
+        {/* Relationships facet — which relationship categories are drawn (and so drive
+            connectivity). Composable toggles: several can be active at once. One chip per category
+            present in the graph; Shift+click solos. */}
+        <Show when={relChips().length > 0 && props.onRelFilter}>
+          <div class="toolbar-facet">
+            <span class="toolbar-label">Relationships</span>
+            <div class="topology-rels" role="toolbar" aria-label="Relationship filter">
+            <For each={relChips()}>
+              {(c) => (
+                <button
+                  class="rel-chip"
+                  classList={{ active: props.relFilter?.has(c.id) ?? false }}
+                  aria-pressed={props.relFilter?.has(c.id) ?? false}
+                  onClick={(e) => props.onRelFilter?.(c.id, e.shiftKey)}
+                  title={`${c.hint} · Click to toggle · Shift+click to solo`}
+                >
+                  {c.label}
+                  <span class="rel-chip-count">{c.count}</span>
+                </button>
+              )}
+            </For>
+            </div>
+          </div>
+        </Show>
+        {/* Health facet — spotlight a health state. Shares row 2 with Relationships. The
+            at-a-glance proportion lives in the fixed-width stripe pinned to the top of the canvas
+            (rendered below), not here — so this row never changes the stripe's width. */}
         <Show when={shownHealth().length > 0 && props.onHealthFilter}>
-          <div class="topology-health-pills" role="toolbar" aria-label="Health filter">
+          <div class="toolbar-facet">
+            <span class="toolbar-label">Health</span>
+            <div class="topology-health-pills" role="toolbar" aria-label="Health filter">
             <For each={shownHealth()}>
               {(h) => (
                 <button
@@ -1134,15 +1236,20 @@ export default function Topology(props: Props) {
                 </button>
               )}
             </For>
+            </div>
           </div>
         </Show>
-        {/* Kind filter chips (cycle 203): one chip per kind present in the current view. Click
-            toggles the kind in/out of the active set; multi-select composes with search and the
-            health filter. Hidden when only one kind is present (no filter would do
-            anything). Each chip carries the same monochrome silhouette as its cards, so the
-            chip row reads as a compact legend of "what kinds are here". */}
+          </div>
+        </Show>
+        {/* Row 3 — Kinds: the kind filter, usually the widest row, on its own line. Click toggles a
+            kind in/out of the active set (multi-select, composes with search + health); Shift+click
+            solos. Hidden when only one kind is present. Each chip carries the same monochrome
+            silhouette as its cards, so the row reads as a legend of "what kinds are here". */}
         <Show when={kindChips().length > 1 && props.onKindFilter}>
-          <div class="topology-kinds" role="toolbar" aria-label="Kind filter">
+          <div class="toolbar-row">
+          <div class="toolbar-facet toolbar-facet-grow">
+            <span class="toolbar-label">Kinds</span>
+            <div class="topology-kinds" role="toolbar" aria-label="Kind filter">
             <For each={kindChips()}>
               {(c) => (
                 <button
@@ -1171,6 +1278,8 @@ export default function Topology(props: Props) {
                 </button>
               )}
             </For>
+            </div>
+          </div>
           </div>
         </Show>
       </div>
@@ -1474,14 +1583,13 @@ export default function Topology(props: Props) {
             fallback={
               <>
                 {props.nodes.length} resource{props.nodes.length === 1 ? '' : 's'}
-                {/* Per-view summary (cycle 231): All shows kind count, Nodes shows hosts +
-                    pods, Volumes shows pods + mounts, Network shows ingress/service/pod
-                    counts. Each summary surfaces the dimension the view actually exposes —
-                    "is this view dense?" without parsing the canvas. */}
-                <Show when={props.viewId === 'all' && groups().length > 1}>
+                {/* Per-grouping summary (cycle 231): Kind grouping shows the kind count, Nodes
+                    grouping shows the host count — each surfaces the dimension that grouping
+                    actually exposes, so "is this dense?" reads without parsing the canvas. */}
+                <Show when={props.groupBy === 'kind' && groups().length > 1}>
                   {' '}· {groups().length} kinds
                 </Show>
-                <Show when={props.viewId === 'nodes' && hosts().length > 0}>
+                <Show when={props.groupBy === 'nodes' && hosts().length > 0}>
                   {' '}· {hosts().length} host{hosts().length === 1 ? '' : 's'}
                 </Show>
               </>

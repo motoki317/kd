@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
-import type { KEdge, KNode } from '../types'
+import type { KEdge, KNode, RelCategory } from '../types'
 
 afterEach(cleanup)
 
@@ -12,7 +12,15 @@ const nodes: KNode[] = [
 ]
 const edges: KEdge[] = [{ from: '1', to: '2', type: 'ownerReference' }]
 
-const base = { selectedId: null, connected: true, viewLabel: 'Ownership', onSearch: () => {}, onSelect: () => {} }
+// Default base = group by relationship with the Ownership relationship on, reproducing the old
+// landing Ownership view (the ownerReference backbone is drawn, names shorten under their owner).
+const base = {
+  selectedId: null,
+  connected: true,
+  relFilter: new Set<RelCategory>(['ownership']),
+  onSearch: () => {},
+  onSelect: () => {},
+}
 const faded = (c: Element) => c.querySelectorAll('g.node.faded').length
 
 describe('Topology', () => {
@@ -279,7 +287,7 @@ describe('Topology', () => {
     }
   })
 
-  it('clicking an All-view kind group bg solos that kind (cycle 276)', () => {
+  it('clicking a kind-grouping kind group bg solos that kind (cycle 276)', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
       <Topology
@@ -289,7 +297,7 @@ describe('Topology', () => {
         {...base}
         onKindFilter={onKindFilter}
         kindFilter={new Set<string>()}
-        viewId="all"
+        groupBy="kind"
       />
     ))
     // First kind group's bg rect is the click target since it covers the area. Group order is
@@ -324,7 +332,7 @@ describe('Topology', () => {
       { from: 'p1', to: 'node-a', type: 'scheduledOn' },
       { from: 'p2', to: 'node-a', type: 'scheduledOn' },
     ]
-    const { container } = render(() => <Topology nodes={nodesV} edges={edgesV} search="" {...base} viewId="nodes" />)
+    const { container } = render(() => <Topology nodes={nodesV} edges={edgesV} search="" {...base} groupBy="nodes" />)
     expect(container.querySelectorAll('.host-group').length).toBe(1)
     // scheduledOn edges are dropped from rendering (containment carries them).
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
@@ -411,6 +419,33 @@ describe('Topology', () => {
     expect(faded(container)).toBe(1)
   })
 
+  it('selection spotlight follows only the SELECTED relationships, not all edges', () => {
+    // Pod(1) is wired to its Node(2) by scheduledOn and to a sibling Pod(3) by nothing. With only
+    // the Ownership relationship on, selecting the Pod must NOT drag in the Node via the (hidden)
+    // scheduledOn edge — otherwise the spotlight + selection-fit reach a node that isn't even drawn.
+    const ns: KNode[] = [
+      { id: '1', kind: 'Pod', name: 'web', health: 'Healthy' },
+      { id: '2', kind: 'Node', name: 'host-1', health: 'Healthy' },
+      { id: '3', kind: 'Pod', name: 'other', health: 'Healthy' },
+    ]
+    const es: KEdge[] = [{ from: '1', to: '2', type: 'scheduledOn' }]
+
+    // Ownership only (scheduledOn not drawn): the Node + the other Pod both fade — nothing relates
+    // to the selected Pod through a visible relationship.
+    const ownership = render(() => (
+      <Topology nodes={ns} edges={es} search="" {...base} relFilter={new Set<RelCategory>(['ownership'])} selectedId="1" />
+    )).container
+    expect(faded(ownership)).toBe(2)
+    cleanup()
+
+    // Turn Scheduling on and the Node lights up (the scheduledOn edge is now displayed), so only the
+    // unrelated sibling Pod fades.
+    const scheduling = render(() => (
+      <Topology nodes={ns} edges={es} search="" {...base} relFilter={new Set<RelCategory>(['scheduling'])} selectedId="1" />
+    )).container
+    expect(faded(scheduling)).toBe(1) // only the other Pod
+  })
+
   it('collapse pill: a bare selection shows no "N match" badge (empty search)', () => {
     // Regression: selecting a resource lights its whole related subtree (related()). A fold inside
     // that subtree must NOT report its hidden siblings as search "matches" while the search box is
@@ -468,11 +503,11 @@ describe('Topology', () => {
     expect(onDeselect).not.toHaveBeenCalled()
   })
 
-  it('All view: renders all 3 nodes in kind-grouped layout (viewId=all)', () => {
+  it('Kind grouping: renders all 3 nodes in kind-grouped layout (groupBy=kind)', () => {
     const { container } = render(() => (
-      <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" />
+      <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" />
     ))
-    // The All view should still render one chip per node regardless of layout strategy.
+    // Kind grouping should still render one chip per node regardless of layout strategy.
     expect(container.querySelectorAll('g.node').length).toBe(3)
   })
 
@@ -498,28 +533,28 @@ describe('Topology', () => {
     expect(onSelect).toHaveBeenCalledWith('2') // the web-abc Pod
   })
 
-  it('All view hides edges until a resource is selected', () => {
+  it('Kind grouping hides edges until a resource is selected', () => {
     // No selection: the cross-kind backbone lines are suppressed (they fan across the matrix as
     // noise). The lone ownerReference edge must not render.
-    const none = render(() => <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" />)
+    const none = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" />)
     expect(none.container.querySelectorAll('.edges > g').length).toBe(0)
     cleanup()
     // With a resource selected, edges come back as the "what connects to this" highlight.
     const sel = render(() => (
-      <Topology nodes={nodes} edges={edges} search="" viewId="all" {...base} viewLabel="All" selectedId="1" />
+      <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" selectedId="1" />
     ))
     expect(sel.container.querySelectorAll('.edges > g').length).toBe(1)
   })
 
-  it('non-All views show edges even with no selection', () => {
-    // Ownership keeps its backbone always — the gate is All-view-specific.
-    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" viewId="ownership" {...base} />)
+  it('relationship grouping shows edges even with no selection', () => {
+    // Relationship grouping keeps its backbone always — the suppression gate is kind-specific.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="relationship" />)
     expect(container.querySelectorAll('.edges > g').length).toBe(1)
   })
 
-  it('All view: search still fades non-matching nodes when viewId=all', () => {
+  it('Kind grouping: search still fades non-matching nodes', () => {
     const { container } = render(() => (
-      <Topology nodes={nodes} edges={edges} search="web" viewId="all" {...base} viewLabel="All" />
+      <Topology nodes={nodes} edges={edges} search="web" {...base} groupBy="kind" />
     ))
     expect(faded(container)).toBe(1) // api-xyz is faded
   })

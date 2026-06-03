@@ -15,7 +15,16 @@ export type EdgeType =
   // scanner). Rendered subtler than ownership so the topology backbone stays the primary read.
   | 'refers'
 
-export type View = 'ownership' | 'nodes' | 'network' | 'rbac' | 'volumes' | 'all'
+// How the topology arranges resources. Replaces the old fixed `View` enum: grouping (the layout
+// strategy) is now orthogonal to which relationships are drawn (see RelCategory + relationships.ts).
+//   relationship — depth-column tree following the displayed relationship edges
+//   nodes         — pods grouped into their host's container
+//   kind          — every resource in per-kind boxes
+export type GroupBy = 'relationship' | 'nodes' | 'kind'
+
+// A relationship category the operator can toggle on/off; each maps to one or more EdgeType
+// (see REL_CATEGORIES in relationships.ts). Composable — several can be active at once.
+export type RelCategory = 'ownership' | 'network' | 'volumes' | 'rbac' | 'scheduling'
 
 export interface KNode {
   id: string

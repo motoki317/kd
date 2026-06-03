@@ -175,39 +175,41 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.views {
+/* Group-by segmented control (the Group facet in the topology toolbar). Single-select, so connected
+   buttons in a pill — the contrast against the toggle chips signals "pick one mode". */
+.group-seg {
   display: inline-flex;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 2px;
 }
-.views button {
+.group-seg button {
   border: 0;
   background: transparent;
-  padding: 5px 12px;
+  padding: 4px 11px;
   border-radius: 6px;
   cursor: pointer;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
 }
-.views button:hover {
+.group-seg button:hover {
   color: var(--text);
   background: var(--surface);
 }
-.views button.active {
+.group-seg button.active {
   background: var(--accent);
   color: #fff;
-  /* Soft lift on the active tab so it reads as "the one you picked" instead of just a flat fill —
-     pairs with hover so the tabs feel tactile. */
+  /* Soft lift on the active segment so it reads as "the one you picked" instead of just a flat
+     fill — pairs with hover so the control feels tactile. */
   box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
-.views button.active:hover {
+.group-seg button.active:hover {
   background: color-mix(in srgb, var(--accent) 92%, white);
 }
-.views button:focus-visible {
+.group-seg button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -958,25 +960,67 @@ button.conn.conn-retry:focus-visible {
   max-width: 320px;
   text-align: center;
 }
-.topology-search {
+/* The canvas control panel: a translucent surface at top-left that unifies the search, grouping,
+   relationship, health, and kind controls into one block (proximity) rather than scattered floating
+   chips. The blur lets the topology faintly show through so it doesn't feel like it blankets the
+   namespace. Capped in both axes so a kind-dense namespace scrolls within the panel instead of
+   running it off the canvas. */
+/* Full-width control bar pinned across the top of the canvas. Edge-to-edge (no side margins or
+   rounded corners) with just a bottom border separating it from the topology — so the Kinds row
+   below gets the whole width before it needs to scroll. Translucent + blurred so the canvas reads
+   faintly through it rather than being walled off. */
+.topology-toolbar {
   position: absolute;
-  left: 14px;
-  top: 14px;
-  display: flex;
-  align-items: center;
-  /* Wrap the kind-chip row to a second line when it gets long, so the canvas isn't pushed off
-     screen by a wide topology with many kinds. The search field + matches count anchor the
-     first line; the chip row flows underneath. */
-  flex-wrap: wrap;
-  gap: 8px;
+  left: 0;
+  right: 0;
+  top: 0;
   z-index: 2;
-  /* Keep the chip row from blanketing too much of the canvas in dense kind sets: the topology
-     scroll handlers see the underlying SVG behind a clipped overflow row. */
-  max-width: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 10px color-mix(in srgb, #000 7%, transparent);
 }
-/* Health-filter pills (moved from the topbar): their own toolbar line under the search field. */
+/* A toolbar row holds one or two facets side by side (search+group, relationships+health, kinds),
+   so the panel is a few short rows instead of one per facet. Wraps internally on a narrow canvas. */
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  width: 100%;
+}
+.topology-search {
+  /* The search field anchors row 1; it shouldn't stretch, so the Group control sits right beside
+     it rather than being shoved to the far edge of a wide panel. */
+  justify-content: flex-start;
+}
+/* Each facet is an inline label hugging its control group (proximity), so several can share a row. */
+.toolbar-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.toolbar-label {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+/* Health-filter pills: the controls column of the Health facet — fill the row beside the label and
+   wrap internally. */
 .topology-health-pills {
-  flex-basis: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1013,13 +1057,81 @@ button.conn.conn-retry:focus-visible {
 .topology-stripe.stripe-over-drawer {
   right: calc(-1 * var(--drawer-w));
 }
-.topology-kinds {
-  /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". Wrap so
-     the row grows downward as kinds accumulate; gap matches the legend pills' rhythm. */
-  flex-basis: 100%;
+/* Relationship facet — composable toggles for which relationship categories are drawn. Same row
+   rhythm + chip surface as the kind/health filters so the toolbar reads as one block of sibling
+   facets (repetition). Labels are proper-case ("Ownership"), so unlike kind chips they are NOT
+   upper-cased. */
+.topology-rels {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+.rel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
+.rel-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.rel-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.rel-chip:active {
+  transform: translateY(0);
+}
+.rel-chip.active {
+  /* Active relationships borrow the accent tint like the kind chips, so the drawn relationships
+     read at a glance against the inactive grey row. */
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.rel-chip-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.topology-kinds {
+  /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". A strict
+     single line that scrolls horizontally when the kinds overflow — keeps the bar exactly one row
+     tall regardless of how many kinds a namespace has (the user's slim-bar requirement). */
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 4px;
+  scrollbar-width: thin;
+  padding-bottom: 2px; /* room for the scrollbar track so it doesn't clip the chips */
+}
+.topology-kinds::-webkit-scrollbar {
+  height: 6px;
+}
+.topology-kinds::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+/* The Kinds facet fills the bar so its chip row has the full width before scrolling. */
+.toolbar-facet-grow {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .kind-chip {
   display: inline-flex;

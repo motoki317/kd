@@ -2,7 +2,7 @@
 // The identity header is supplied by the forward-auth proxy (or the Vite dev proxy), so
 // EventSource needs no custom headers. See docs/ADR/20260527-realtime-transport-sse.md.
 
-import type { Health, KGraph, Patch, View } from './types'
+import type { Health, KGraph, Patch } from './types'
 
 const base = '/api/v1'
 
@@ -113,9 +113,10 @@ export interface GraphStreamHandlers {
   error?: () => void
 }
 
-// streamGraph opens the SSE graph feed and returns a function that closes it.
-export function streamGraph(ctx: string, ns: string, view: View, h: GraphStreamHandlers): () => void {
-  const es = new EventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream?view=${view}`)
+// streamGraph opens the SSE graph feed and returns a function that closes it. The server streams
+// the full graph; the client projects relationship subsets and grouping itself.
+export function streamGraph(ctx: string, ns: string, h: GraphStreamHandlers): () => void {
+  const es = new EventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream`)
   es.addEventListener('snapshot', (e) => h.snapshot(JSON.parse((e as MessageEvent).data)))
   es.addEventListener('patch', (e) => h.patch(JSON.parse((e as MessageEvent).data)))
   es.addEventListener('summary', (e) => h.summary?.(JSON.parse((e as MessageEvent).data) as NamespaceSummary))
