@@ -306,6 +306,28 @@ describe('layoutGraph', () => {
     expect(seen.size).toBe(l.nodes.length)
   })
 
+  it('wraps a high-fanout hub whose leaves have a SECOND parent (argocd Application case)', () => {
+    // 12 Applications, each owned by an ApplicationSet (ownerReference) AND referring to one AppProject
+    // (refers) — so every leaf has degree 2. The old degree===1 test left them all unwrapped, strung
+    // down the skeleton one per row. They must now fold under the ApplicationSet (its ownerReference
+    // wins as the primary hub), with the AppProject left in the skeleton, not wrapped.
+    const appset: KNode = { id: 'appset', kind: 'ApplicationSet', name: 'apps', health: 'Healthy' }
+    const proj: KNode = { id: 'proj', kind: 'AppProject', name: 'default', health: 'Healthy' }
+    const apps = Array.from({ length: 12 }, (_, i) => ({ id: `app${i}`, kind: 'Application', name: `app-${i}`, health: 'Healthy' as const }))
+    const e: KEdge[] = [
+      ...apps.map((a) => ({ from: 'appset', to: a.id, type: 'ownerReference' as const })),
+      ...apps.map((a) => ({ from: 'proj', to: a.id, type: 'refers' as const })),
+    ]
+    const l = layoutGraph([appset, proj, ...apps], e, 'LR')
+    const pill = l.nodes.find((n) => n.collapse)
+    expect(pill).toBeTruthy() // the group folded instead of stringing 12 rows down the skeleton
+    expect(pill!.collapse!.hidden).toHaveLength(12 - COLLAPSE_VISIBLE)
+    expect(l.nodes.filter((n) => n.kind === 'Application')).toHaveLength(COLLAPSE_VISIBLE) // rest folded away
+    // The fold is owned by the ApplicationSet (primary hub); the AppProject stays an unwrapped skeleton card.
+    expect(l.edges.some((x) => x.from === 'appset' && x.to === pill!.id)).toBe(true)
+    expect(l.nodes.some((n) => n.id === 'proj')).toBe(true)
+  })
+
   it('keeps a hub’s degree-1 parent to its left so ownerReference flows left→right', () => {
     // Deployment → ReplicaSet → 12 pods. The RS is a hub (many pod children), but its lone Deployment
     // parent must NOT be wrapped onto the children's (right) side — it stays left so dep→rs→pod all

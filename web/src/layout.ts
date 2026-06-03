@@ -709,21 +709,34 @@ function collapseHubLeaves(
 // confusing partial frame (see the per-hub note below).
 function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const degree = new Map<string, number>()
+  const outdeg = new Map<string, number>()
+  for (const e of edges) outdeg.set(e.from, (outdeg.get(e.from) ?? 0) + 1)
+
+  // A wrappable fan-out leaf is a SINK — it owns no children (out-degree 0). It may still have MORE
+  // than one PARENT: an Argo Application is owned by an ApplicationSet yet also refers to an AppProject,
+  // so keying off total degree (the old degree===1 test) left every such multi-parent leaf unwrapped —
+  // the argocd "long ungrouped column" report. Each leaf is claimed by ONE primary hub so it is wrapped
+  // exactly once: an ownerReference parent wins over a looser refers parent, ties broken by id for
+  // determinism. Secondary parents keep their honest edges to whatever stays visible. Only the child
+  // (fan-out) side is wrapped — a shared target's many PARENTS stay in the skeleton (see the note below).
+  const ownerPrio = (e: KEdge) => (e.type === 'ownerReference' ? 0 : 1)
+  const parentsOf = new Map<string, KEdge[]>()
   for (const e of edges) {
-    degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
-    degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
-  }
-  // Collect each potential hub's degree-1 CHILD leaves (hub is the edge source, hub->leaf). Only
-  // children are wrappable — see the fan-in note below — so the symmetric parent side is not tracked.
-  const childrenOf = new Map<string, KNode[]>()
-  for (const e of edges) {
-    if (degree.get(e.to) !== 1) continue // only a degree-1 target is a wrappable child leaf
     const leaf = byId.get(e.to)
-    if (!leaf || leaf.kind === COLLAPSE_KIND) continue // a pre-folded pill is not a wrappable leaf
-    const list = childrenOf.get(e.from) ?? []
-    list.push(leaf)
-    childrenOf.set(e.from, list)
+    if (!leaf || leaf.kind === COLLAPSE_KIND) continue // missing or a pre-folded pill is not a wrappable leaf
+    if ((outdeg.get(e.to) ?? 0) !== 0) continue // a node with children of its own is not a leaf
+    const list = parentsOf.get(e.to)
+    if (list) list.push(e)
+    else parentsOf.set(e.to, [e])
+  }
+  const childrenOf = new Map<string, KNode[]>()
+  for (const [leafId, parentEdges] of parentsOf) {
+    const primary = parentEdges.reduce((best, e) =>
+      ownerPrio(e) < ownerPrio(best) || (ownerPrio(e) === ownerPrio(best) && e.from < best.from) ? e : best,
+    )
+    const list = childrenOf.get(primary.from) ?? []
+    list.push(byId.get(leafId)!)
+    childrenOf.set(primary.from, list)
   }
 
   const hubs: Hub[] = []
