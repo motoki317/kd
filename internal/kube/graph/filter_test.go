@@ -3,6 +3,9 @@ package graph
 import (
 	"slices"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func kindsPresent(g *Graph) map[string]bool {
@@ -102,11 +105,46 @@ func TestFilterViews(t *testing.T) {
 
 	t.Run("ownership view keeps workloads and owner edges", func(t *testing.T) {
 		g := Build(decodeFixture(t, ownershipFixture)).Filter(ViewOwnership)
-		if et := edgeTypesPresent(g); !et[EdgeOwner] || len(et) != 1 {
-			t.Errorf("ownership view edges = %v, want only ownerReference", et)
+		if et := edgeTypesPresent(g); !et[EdgeOwner] {
+			t.Errorf("ownership view edges = %v, want ownerReference present", et)
 		}
 		if k := kindsPresent(g); !k["Deployment"] || !k["ReplicaSet"] || !k["Pod"] {
 			t.Error("ownership view should include the workload tree kinds")
+		}
+	})
+
+	// A Workflow derives from its WorkflowTemplate via a curated EdgeRefers (stored Workflow→
+	// Template). The ownership view must include that link with the template as the parent — i.e.
+	// the projected edge points Template→Workflow — so the workflow tree shows where it came from.
+	t.Run("ownership view folds in CRD refs as template→workflow", func(t *testing.T) {
+		wf := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+			"metadata": map[string]any{"name": "run-1", "namespace": "ci", "uid": "wf-uid"},
+			"spec":     map[string]any{"workflowTemplateRef": map[string]any{"name": "build"}},
+		}}
+		tmpl := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "WorkflowTemplate",
+			"metadata": map[string]any{"name": "build", "namespace": "ci", "uid": "tmpl-uid"},
+		}}
+		g := Build([]runtime.Object{wf, tmpl}).Filter(ViewOwnership)
+		if k := kindsPresent(g); !k["Workflow"] || !k["WorkflowTemplate"] {
+			t.Fatalf("ownership view should include both Workflow and WorkflowTemplate, got %v", kindsPresent(g))
+		}
+		var found bool
+		for _, e := range g.Edges {
+			if e.Type != EdgeRefers {
+				continue
+			}
+			found = true
+			if from := nodeByID(g, e.From); from == nil || from.Kind != "WorkflowTemplate" {
+				t.Errorf("refers edge From = %v, want WorkflowTemplate (the parent)", from)
+			}
+			if to := nodeByID(g, e.To); to == nil || to.Kind != "Workflow" {
+				t.Errorf("refers edge To = %v, want Workflow (the child)", to)
+			}
+		}
+		if !found {
+			t.Error("ownership view dropped the Workflow→WorkflowTemplate refers edge")
 		}
 	})
 }

@@ -166,17 +166,26 @@ const (
 	ViewVolumes   View = "volumes"   // Pod -> mounted ConfigMaps/Secrets/PVCs
 )
 
-// viewSpec defines a view: which edge types to keep and which kinds to always show even when
-// unconnected (so e.g. a Service with no endpoints still appears in the network view).
+// viewSpec defines a view: which edge types to keep, which to flip (referenced-as-parent), and
+// which kinds to always show even when unconnected (so e.g. a Service with no endpoints still
+// appears in the network view).
 type viewSpec struct {
-	edges       []EdgeType
-	alwaysKinds []string
+	edges        []EdgeType
+	reverseEdges []EdgeType // rendered with From/To swapped so the referenced target is the parent
+	alwaysKinds  []string
 }
 
 var viewSpecs = map[View]viewSpec{
+	// Ownership is the "what created/derives-from what" tree. Alongside real ownerReferences it
+	// also folds in curated CRD references (EdgeRefers): a Workflow derives from its
+	// WorkflowTemplate, a Certificate from its Issuer — a parent-child relationship in spirit even
+	// though there's no ownerReference. Those edges are stored referrer→referenced (Workflow→
+	// Template) but reversed here so the template/issuer reads as the parent (leftmost column),
+	// matching the owner→owned direction of the rest of the tree.
 	ViewOwnership: {
-		edges:       []EdgeType{EdgeOwner},
-		alwaysKinds: []string{"Deployment", "ReplicaSet", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"},
+		edges:        []EdgeType{EdgeOwner, EdgeRefers},
+		reverseEdges: []EdgeType{EdgeRefers},
+		alwaysKinds:  []string{"Deployment", "ReplicaSet", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"},
 	},
 	ViewNodes: {
 		edges:       []EdgeType{EdgeScheduledOn},
@@ -218,11 +227,15 @@ func (g *Graph) Filter(v View) *Graph {
 	edges := make([]Edge, 0, len(g.Edges))
 	connected := map[string]bool{}
 	for _, e := range g.Edges {
-		if slices.Contains(spec.edges, e.Type) {
-			edges = append(edges, e)
-			connected[e.From] = true
-			connected[e.To] = true
+		if !slices.Contains(spec.edges, e.Type) {
+			continue
 		}
+		if slices.Contains(spec.reverseEdges, e.Type) {
+			e.From, e.To = e.To, e.From // referenced provider becomes the parent (e is a range copy)
+		}
+		edges = append(edges, e)
+		connected[e.From] = true
+		connected[e.To] = true
 	}
 
 	nodes := make([]Node, 0, len(g.Nodes))
