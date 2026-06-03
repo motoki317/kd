@@ -7,8 +7,9 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 
 - Server: `cmd/kd/main.go` (entry) → `internal/server` (router, embed) → `internal/api` (REST+SSE).
 - Cache: `internal/kube/store` (dynamic informer per discovered GVR, one factory per context).
-- Graph: `internal/kube/graph` — `Build` produces nodes + edges from a cache snapshot; `Filter`
-  projects onto a view; `Summarize`/`SummarizeBuilt` roll up to a health digest.
+- Graph: `internal/kube/graph` — `Build` produces nodes + edges (every relationship) from a cache
+  snapshot; `Summarize`/`SummarizeBuilt` roll up to a health digest. The server streams the FULL
+  graph; the client projects relationship subsets + grouping itself (no server-side view Filter).
 - Auth: `internal/auth` (proxy header) + `internal/rbac` (Casbin-style policy.csv, hot-reloaded).
 - Multi-context: `internal/kube/registry` (lazy per-context cache) + `internal/kube/kubeconfig`
   (merged kubeconfig snapshot at startup).
@@ -18,10 +19,10 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 
 | Concern | File |
 | --- | --- |
-| Add a new view layout | `web/src/layout.ts` + dispatch in `web/src/components/Topology.tsx` |
+| Add a grouping layout | `web/src/layout.ts` + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
 | Add a kind icon | `web/src/icons.tsx` + extend `icons.test.ts` coverage |
 | Add a short kind label | `web/src/names.ts` (`KIND_SHORT_LABELS`) + alias if not substring |
-| Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + view spec |
+| Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + a `web/src/relationships.ts` category |
 | Add a CR/CRD health rule | `internal/kube/graph/health_cr.go` (group/kind dispatch) + `health_cr_test.go` |
 | Add an SSE event | `internal/api/sse.go` (server) + `web/src/api.ts` (client handler) |
 | Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `deploy/policy-configmap.yaml` |
@@ -137,11 +138,28 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
 - **SSE `summary` event** (cycle 201): server emits a per-stream `summary` computed on the
   UNFILTERED graph; the client overrides the sidebar entry with that. Never roll up filtered
   nodes on the client — the bug fix is the whole reason `rollupHealth` was deleted.
-- **Per-view layout dispatch**: Ownership/Network/Volumes/RBAC all = `layoutGraph` with `'LR'`
-  (parent→child fans left-to-right, ArgoCD-style — Ownership was briefly TB and then LR-bin-packed,
-  now LR like the rest per user request); Nodes = `layoutGraphByHost` (host-grouped containers, no
-  scheduledOn edges drawn); All = `layoutGraphByKind`. Adding a view = adding to `View` type + a
-  layout case in `Topology.tsx`.
+- **Group-by + relationship filter (replaced the fixed views)**: there is no longer a server `View`
+  or per-view tab. Two orthogonal, composable client controls drive the canvas: (1) a **group-by**
+  segmented control (`GroupBy` = `relationship` | `nodes` | `kind`, default `relationship`) in the
+  Topology toolbar selecting the layout — `relationship` → `layoutGraph` LR (depth-column tree, ArgoCD
+  parent→child fan-left), `nodes` → `layoutGraphByHost` (host containers, scheduledOn implied by
+  containment), `kind` → `layoutGraphByKind`; and (2) **relationship filter** chips
+  (`RelCategory` = ownership/network/volumes/rbac/scheduling, `relationships.ts` maps each to
+  EdgeTypes, Topology toolbar) that re-project which edges are drawn. `Topology.displayEdges` =
+  `projectEdges(props.edges, relFilter)` (reverses `refers` so the referenced provider is the
+  parent) and feeds the layout ONLY; `related()`/`ownerName()` keep walking the full `props.edges`
+  so selection-spotlight and name-shortening stay relationship-agnostic. Adding a grouping = a new
+  `GroupBy` value + a `layout()` case; adding a relationship dimension = a `relationships.ts`
+  category. Both group-by and relFilter persist to `localStorage` (`kd:groupBy`, `kd:rels`) and the
+  URL (`?group=`, `?rels=`); an empty `?rels=` is a real "no relationships" state, not the default.
+  All of these controls — search, Group, Relationships, Health, Kinds — live in ONE control bar
+  (`.topology-toolbar`, a full-width translucent strip across the top of the canvas, `left/right: 0`,
+  bottom border) as inline-labelled facets in three short `.toolbar-row`s (search+Group,
+  Relationships+Health, Kinds) to keep it shallow. The Kinds row is a strict single line
+  (`flex-wrap: nowrap; overflow-x: auto`, its facet `.toolbar-facet-grow` fills the bar) so the bar
+  height never grows with the kind count — it scrolls horizontally instead. `GROUP_OPTIONS` is
+  exported from `Topology.tsx` so App's number-key shortcuts (1–3) + help overlay share one source
+  of truth with the segmented control.
 - **LR depth-column layout (`placeColumns`)**: the LR connectivity views do NOT use Dagre for
   placement — they use strict depth columns. `computeRanks` assigns every node (over the FULL graph,
   not the hub-stripped skeleton) an integer depth = longest path from a source; depth = column, so
@@ -200,12 +218,21 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   pill), so the border and the show-more affordance appear together — unfolded kinds stay bare. The frame
   (`.conn-frame`, a `--text-dim` dashed border) turns accent (`.conn-frame.expanded`) when its kind is
   expanded. All/Nodes already box by kind/host, so `connGroups` is empty there (avoids a double border).
-- **Scope-keyed auto-fit**: the fit-all effect in `Topology.tsx` keys on `scope` (ctx+namespace) +
-  `viewId`, NOT node count. A node-count key re-fit on every shape change, yanking the viewport back
-  to fit-all whenever the operator expanded a collapse cluster or an SSE patch added/removed a pod —
-  both must preserve the current pan/zoom. `pendingFit` defers the fit until the new scope's layout
-  has geometry (the first SSE frame can land after the scope flips, while width is still 0). A real
-  context/namespace/view switch still re-fits; churn and expand/refold do not.
+- **Scope-keyed auto-fit**: the fit-all effect in `Topology.tsx` keys on `scope` (ctx+namespace)
+  and, separately, on a client `layoutKey` (`groupBy` + sorted `relFilter`), NOT node count. A
+  node-count key re-fit on every shape change, yanking the viewport back to fit-all whenever the
+  operator expanded a collapse cluster or an SSE patch added/removed a pod — both must preserve the
+  current pan/zoom. The two triggers differ critically: a real ctx/ns switch resubscribes SSE and
+  App resets the graph to empty, so `freshData`/width-0 guards the race (fit only the post-reset
+  layout); a group-by/relationship change re-projects the SAME already-present graph with NO
+  resubscribe and NO empty frame, so it must set `freshData=true` and fit the next frame
+  immediately — gating it behind the width-0 wait would mean the fit never fires. `pendingFit`
+  defers until the layout has geometry. A real context/namespace switch OR a grouping/relationship
+  change re-fits; churn and expand/refold do not. **Top-bar inset**: the full-width control bar
+  overlays the top of the canvas, so `computeFitFor` reads the live `.topology-toolbar` height
+  (`toolbarEl` ref) and frames the graph into the area BELOW it — shrinking the usable height and
+  pushing the vertical centre down by the bar height — otherwise the topmost cards land hidden
+  behind the bar. The `MIN_FIT_SCALE` overflow branch applies the same inset to its `ty` anchor.
 - **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`)
   is treated everywhere as a real namespace by route shape, but expands to the cluster's
   cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.

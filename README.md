@@ -15,13 +15,15 @@ state at a glance and app developers can jump straight to pod status and logs.
 ## Features
 
 **See the whole namespace at a glance**
-- 2D topology across six lenses — each lens uses the layout that fits its relationship:
-  Ownership / Network / Volumes / RBAC read left-to-right (a parent's children fan out to its
-  right, like an ArgoCD resource tree), Nodes view groups pods inside labeled host containers
-  (containment carries scheduledOn, no fan of edges), and the All view groups every resource by
-  kind. Every lens lays out per connected component and stacks the components in a single vertical
-  column — one tree per row, all left-aligned, never two side by side — so the eye scans straight
-  down the list.
+- One 2D topology you compose, instead of fixed tabs. A **group-by** control lays the canvas out by
+  relationship (depth-column trees, a parent's children fan out to its right like an ArgoCD resource
+  tree), by node (pods inside labeled host containers, containment carries scheduledOn), or by kind
+  (every resource in per-kind boxes). Composable **relationship filters** — Ownership, Network,
+  Volumes, RBAC, Scheduling — toggle which relationships are drawn, so you can see ownership and
+  network arrows together (something fixed views never allowed); resources untouched by the active
+  relationships fold into per-kind blocks so the canvas stays a complete inventory. The relationship
+  layout stacks each connected component in a single vertical column — one tree per row, all
+  left-aligned — so the eye scans straight down the list.
 - Every kind the cluster exposes is watched via a dynamic informer factory, including custom
   resources defined by CRDs. Workflows, Certificates, ExternalSecrets, ArgoCD Applications,
   Crossplane composites — all render in the topology with their ownership chains down to Pods.
@@ -78,12 +80,13 @@ state at a glance and app developers can jump straight to pod status and logs.
 **Keyboard & sharing**
 - `j`/`k` (or `↓`/`↑`) step through resources (troubled first, scoped to the active filter), `/`
   focuses the namespace filter (`↑`/`↓` also walk it without leaving the input), `⌘K`/`Ctrl+K`
-  focuses the resource search (Enter jumps to the top match), `1`–`6` switch views (the 6th is
-  "all"), `f` or a double-click on the canvas fits to view, `Esc` backs out, `?` shows shortcuts.
-- Shift+click a kind chip to solo it (clear other kinds and keep only this one).
+  focuses the resource search (Enter jumps to the top match), `1`–`3` switch the grouping
+  (relationship / nodes / kind), `f` or a double-click on the canvas fits to view, `Esc` backs out,
+  `?` shows shortcuts.
+- Shift+click a kind chip — or a relationship chip — to solo it (clear the rest, keep only this one).
 - The topbar shows a "kd › <namespace>" breadcrumb and a live/connecting/offline connection pill.
-- Namespace, view, and selected resource live in the URL — links and reloads restore the same place;
-  the selection follows you across views.
+- Namespace, grouping, relationships, and selected resource live in the URL — links and reloads
+  restore the same place; the selection follows you across grouping/relationship changes.
 - Follows the OS light/dark preference.
 
 ## Status
