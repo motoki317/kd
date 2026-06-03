@@ -117,8 +117,16 @@ export function middleTruncate(s: string, max = 22): string {
 const CARD_NAME_MAX = 22
 const CARD_STATUS_MAX = 24
 
+// A leading ellipsis marks a card name whose owner prefix was elided, so "…-2xkp" reads as a relative
+// name at a glance. Stripping used to be silent — the short name looked identical to a full one, and an
+// operator could only discover the elision by opening the drawer. The separator hyphen is kept after the
+// mark so the boundary is obvious; the full name still shows in the hover tooltip and the drawer.
+const PREFIX_MARK = '…'
+
 export function cardName(name: string, ownerName?: string): string {
-  return middleTruncate(relativeName(name, ownerName), CARD_NAME_MAX)
+  const rel = relativeName(name, ownerName)
+  if (rel !== name) return PREFIX_MARK + middleTruncate('-' + rel, CARD_NAME_MAX - PREFIX_MARK.length)
+  return middleTruncate(name, CARD_NAME_MAX)
 }
 
 // cardStatus end-truncates a long status to its own row's width. End (not middle) keeps the leading

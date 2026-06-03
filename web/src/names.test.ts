@@ -83,8 +83,20 @@ describe('middleTruncate', () => {
 })
 
 describe('cardName', () => {
-  it('strips the owner prefix and leaves a fitting name intact', () => {
-    expect(cardName('api-7d9f-2xkp', 'api-7d9f')).toBe('2xkp')
+  it('strips the owner prefix and marks the elision with a leading "…-"', () => {
+    expect(cardName('api-7d9f-2xkp', 'api-7d9f')).toBe('…-2xkp')
+  })
+  it('leaves a non-relative name unmarked', () => {
+    expect(cardName('api-7d9f-2xkp', 'docker-desktop')).toBe('api-7d9f-2xkp')
+    expect(cardName('web', undefined)).toBe('web')
+  })
+  it('middle-truncates the relative tail but keeps the elision mark within budget', () => {
+    const out = cardName('owner', 'owner') // no strip (would be empty) → unmarked
+    expect(out).toBe('owner')
+    const long = cardName(`api-7d9f-${'x'.repeat(40)}`, 'api-7d9f')
+    expect(out.length).toBeLessThanOrEqual(22)
+    expect(long.startsWith('…-')).toBe(true)
+    expect(long.length).toBeLessThanOrEqual(22)
   })
   it('middle-truncates an over-long name to the card budget', () => {
     // After cycle 126 the name has its own row, no badge competing — full CARD_NAME_MAX is used.

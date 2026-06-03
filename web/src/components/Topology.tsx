@@ -237,12 +237,23 @@ export default function Topology(props: Props) {
   })
   const exitingIds = createMemo(() => new Set(exiting().map((n) => n.id)))
 
-  // Map each node to its owner's name, so children render relative to their parent in the tree.
+  // Map each node to the longest PREFIX-PARENT name, so a child renders relative to its parent in the
+  // tree. We scan every edge (not just ownerReference) and keep the longest source name that is a
+  // '-'-bounded prefix of the child's name — so generated children of ANY kind shorten the same way:
+  // Pods under a ReplicaSet, but also CRD instances under their owner/parent (e.g. Workflows named
+  // "<template>-<id>" under their WorkflowTemplate via a refers edge). The prefix test is the guard: an
+  // edge whose source name is not an actual ancestor prefix (a Service that selects a Pod) never strips,
+  // and the longest match wins so the closest ancestor (ReplicaSet over Deployment) is used.
   const ownerName = createMemo(() => {
     const nameById = new Map(props.nodes.map((n) => [n.id, n.name]))
     const m = new Map<string, string>()
     for (const e of props.edges) {
-      if (e.type === 'ownerReference' && nameById.has(e.from)) m.set(e.to, nameById.get(e.from)!)
+      const parent = nameById.get(e.from)
+      const child = nameById.get(e.to)
+      if (parent === undefined || child === undefined) continue
+      if (child.length <= parent.length + 1 || !child.startsWith(parent + '-')) continue
+      const cur = m.get(e.to)
+      if (cur === undefined || parent.length > cur.length) m.set(e.to, parent)
     }
     return m
   })
