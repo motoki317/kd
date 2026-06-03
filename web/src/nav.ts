@@ -1,4 +1,5 @@
 import { healthSeverity } from './health'
+import { byName } from './layout'
 import { nodeMatches } from './search'
 import type { Health, KNode } from './types'
 
@@ -47,7 +48,7 @@ export function orderedForNav(nodes: KNode[]): KNode[] {
     const s = healthSeverity[b.health] - healthSeverity[a.health]
     if (s !== 0) return s
     if (a.kind !== b.kind) return a.kind.localeCompare(b.kind)
-    return a.name.localeCompare(b.name)
+    return byName(a, b)
   })
 }
 

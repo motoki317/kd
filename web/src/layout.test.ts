@@ -127,17 +127,19 @@ describe('layoutGraph', () => {
 
   it('folds a crowded same-kind sibling group even when the siblings own subtrees (status-agnostic)', () => {
     // Motivating case: many Workflows under one WorkflowTemplate, where some Workflows own Pods
-    // (degree > 1) so the leaf-block path never folds them. The whole Workflow group must fold by
-    // age — and a folded Workflow's Pod subtree folds away with it (restored on expand).
+    // (degree > 1) so the leaf-block path never folds them. The whole Workflow group folds by natural
+    // name order, keeping the first + last two — and a hidden Workflow's Pod subtree folds with it
+    // (restored on expand).
     const tmpl: KNode = { id: 'tmpl', kind: 'WorkflowTemplate', name: 'build', health: 'Healthy' }
     const wfs: KNode[] = []
     const pods: KNode[] = []
     const e: KEdge[] = []
     for (let i = 0; i < 6; i++) {
       const id = `wf${i}`
-      wfs.push({ id, kind: 'Workflow', name: `wf-${i}`, health: 'Healthy', createdAt: `2026-06-0${i + 1}T00:00:00Z` })
+      wfs.push({ id, kind: 'Workflow', name: `wf-${i}`, health: 'Healthy' })
       e.push({ from: 'tmpl', to: id, type: 'refers' })
-      // Give two of them a Pod child so the group is non-leaf (the case the leaf-block path skips).
+      // Give two of them a Pod child so the group is non-leaf (the case the leaf-block path skips):
+      // wf-0 (the head → stays visible) and wf-3 (a middle one → folds away with its pod).
       if (i % 3 === 0) {
         pods.push({ id: `${id}-pod`, kind: 'Pod', name: `${id}-pod`, health: 'Healthy' })
         e.push({ from: id, to: `${id}-pod`, type: 'ownerReference' })
@@ -147,21 +149,21 @@ describe('layoutGraph', () => {
     const pill = l.nodes.find((n) => n.collapse)
     expect(pill).toBeTruthy()
     expect(pill!.collapse!.groupKind).toBe('Workflow')
-    expect(pill!.collapse!.hidden).toHaveLength(6 - COLLAPSE_VISIBLE) // older 3 folded
-    // Only the newest COLLAPSE_VISIBLE Workflows are drawn; the rest are behind the pill.
+    expect(pill!.collapse!.hidden).toHaveLength(6 - COLLAPSE_VISIBLE) // middle 3 folded (wf-1,2,3)
+    // Only the head + last two Workflows are drawn (wf-0, wf-4, wf-5); the middle is behind the pill.
     expect(l.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(COLLAPSE_VISIBLE)
-    // A folded Workflow's Pod folds away with it (wf-0 is oldest → hidden; its pod is gone), while a
-    // visible Workflow's Pod stays. Net: only the visible non-leaf workflows' pods remain.
+    // A hidden Workflow's Pod folds away with it (wf-3 is in the middle → hidden; its pod is gone),
+    // while a visible Workflow's Pod stays. Net: only the visible non-leaf workflows' pods remain.
     const drawnPodIds = new Set(l.nodes.filter((n) => n.kind === 'Pod').map((n) => n.id))
-    expect(drawnPodIds.has('wf0-pod')).toBe(false) // wf-0 (oldest) folded → its pod folded too
-    expect(drawnPodIds.has('wf3-pod')).toBe(true) // wf-3 (newer) visible → its pod stays
+    expect(drawnPodIds.has('wf3-pod')).toBe(false) // wf-3 (middle) folded → its pod folded too
+    expect(drawnPodIds.has('wf0-pod')).toBe(true) // wf-0 (head) visible → its pod stays
     // The folded Pod is tracked as a hidden descendant so the Pod chip can stay honest.
-    expect(pill!.collapse!.hiddenDescendants!.some((n) => n.id === 'wf0-pod')).toBe(true)
+    expect(pill!.collapse!.hiddenDescendants!.some((n) => n.id === 'wf3-pod')).toBe(true)
     // The pill hangs off the template (one bundled edge), and expanding restores everyone.
     expect(l.edges.some((x) => x.from === 'tmpl' && x.to === pill!.id)).toBe(true)
     const expanded = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR', new Set([pill!.collapse!.key]))
     expect(expanded.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(6) // all shown
-    expect(expanded.nodes.some((n) => n.id === 'wf0-pod')).toBe(true) // subtree restored
+    expect(expanded.nodes.some((n) => n.id === 'wf3-pod')).toBe(true) // folded subtree restored
     expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true) // pill is now a "show fewer" toggle
   })
 
@@ -187,6 +189,25 @@ describe('layoutGraph', () => {
     const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
     expect(y('dep')).toBeLessThan(y('rs'))
     expect(y('rs')).toBeLessThan(y('p1'))
+  })
+
+  it('orders a non-collapsing sibling group top-to-bottom by natural name in LR (StatefulSet pods)', () => {
+    // A StatefulSet with 3 pods is below the fold threshold, so its pods land in the Dagre-seeded
+    // skeleton column — where Dagre's crossing-min seed used to leave them in an arbitrary order
+    // (web-1, web-0, web-2). The siblings must instead read web-0,1,2 down the column. Scramble both
+    // the node and edge order so the result can't be an accident of input order.
+    const sts: KNode = { id: 'sts', kind: 'StatefulSet', name: 'web', health: 'Healthy' }
+    const p = (i: number): KNode => ({ id: `web-${i}`, kind: 'Pod', name: `web-${i}`, health: 'Healthy' })
+    const podsIn = [p(2), p(0), p(1)]
+    const e: KEdge[] = [
+      { from: 'sts', to: 'web-1', type: 'ownerReference' },
+      { from: 'sts', to: 'web-2', type: 'ownerReference' },
+      { from: 'sts', to: 'web-0', type: 'ownerReference' },
+    ]
+    const l = layoutGraph([sts, ...podsIn], e, 'LR')
+    const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
+    expect(y('web-0')).toBeLessThan(y('web-1')) // top-to-bottom natural order
+    expect(y('web-1')).toBeLessThan(y('web-2'))
   })
 
   it('lays parents left of their children in LR (Ownership view orientation, cycle 310)', () => {
@@ -478,8 +499,8 @@ describe('layoutGraphByHost (Nodes view, cycle 205)', () => {
   })
 })
 
-describe('same-kind collapse (+N older)', () => {
-  // n pods with strictly increasing creation times: pod-00 oldest … pod-(n-1) newest.
+describe('same-kind collapse (+N more)', () => {
+  // n pods named pod-00 … pod-(n-1); the fold keeps the head + last two of this natural name order.
   const pods = (n: number): KNode[] =>
     Array.from({ length: n }, (_, i) => ({
       id: `p${i}`,
@@ -489,18 +510,19 @@ describe('same-kind collapse (+N older)', () => {
       createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
     }))
 
-  it('folds everything past the newest COLLAPSE_VISIBLE behind one pill, hiding the OLDEST', () => {
+  it('folds the MIDDLE behind one pill, keeping the first and the last two cards', () => {
     const l = layoutGraphByKind(pods(12), [])
     const realPods = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse)
-    expect(realPods).toHaveLength(COLLAPSE_VISIBLE) // newest COLLAPSE_VISIBLE stay
+    expect(realPods).toHaveLength(COLLAPSE_VISIBLE) // head (1) + tail (2) stay
     const pill = l.nodes.find((n) => n.collapse)!
-    // 12 pods, newest 3 shown → oldest 9 hidden (p0..p8).
-    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'])
+    // 12 pods in natural order p0..p11: keep p0 + p10,p11, hide the middle p1..p9.
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9'])
     expect(pill.collapse!.groupKind).toBe('Pod')
     expect(pill.collapse!.expanded).toBe(false)
     const visibleIds = new Set(realPods.map((n) => n.id))
-    expect(visibleIds.has('p0')).toBe(false) // oldest is hidden
-    expect(visibleIds.has('p11')).toBe(true) // newest is shown
+    expect(visibleIds.has('p0')).toBe(true) // first card stays visible
+    expect(visibleIds.has('p10')).toBe(true) // and the last two
+    expect(visibleIds.has('p11')).toBe(true)
   })
 
   it('expanding via its key shows all nodes and keeps the pill as a "show fewer" toggle', () => {
@@ -517,10 +539,44 @@ describe('same-kind collapse (+N older)', () => {
     expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(4)
   })
 
-  it('chooses the oldest by creation time regardless of input order', () => {
+  it('hides the same middle set regardless of input order', () => {
     const l = layoutGraphByKind([...pods(12)].reverse(), [])
     const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'])
+    expect(pill.collapse!.hidden.map((n) => n.id).sort()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9'])
+  })
+
+  it('orders ordinals numerically (web-10 after web-9), keeping the numeric first + last two', () => {
+    // Unpadded names: a lexical sort would order web-10 right after web-1, so the "last two" would
+    // wrongly be web-8/web-9. Numeric sort keeps web-0 as head and web-10/web-11 as the tail, hiding
+    // the numeric middle web-1..web-9 — the StatefulSet "0,1,2,…,10,11" reading the user asked for.
+    const webPods: KNode[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `w${i}`,
+      kind: 'Pod',
+      name: `web-${i}`,
+      health: 'Healthy' as const,
+    }))
+    const l = layoutGraphByKind(webPods, [])
+    const visibleNames = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse).map((n) => n.name).sort()
+    expect(visibleNames).toEqual(['web-0', 'web-10', 'web-11']) // numeric head + last two
+    const pill = l.nodes.find((n) => n.collapse)!
+    const hiddenNames = pill.collapse!.hidden.map((n) => n.name)
+    expect(hiddenNames).toContain('web-9') // web-9 is mid-pack, not the largest → hidden
+    expect(hiddenNames).not.toContain('web-10') // web-10 is numerically last → visible, not hidden
+  })
+
+  it('keeps head + tail in place across expand (no reshuffle), pill stays a show-fewer toggle', () => {
+    // The whole point of folding the middle: the visible cards an operator already sees must not jump
+    // when they expand. The head (p0) and tail (p10,p11) of the collapsed view are still present and in
+    // the same natural order once expanded — expanding only reveals the previously-hidden middle.
+    const collapsed = layoutGraphByKind(pods(12), [])
+    const visibleBefore = collapsed.nodes.filter((n) => n.kind === 'Pod' && !n.collapse).map((n) => n.id).sort()
+    expect(visibleBefore).toEqual(['p0', 'p10', 'p11'])
+    const expanded = layoutGraphByKind(pods(12), [], new Set(['kind:Pod']))
+    const allShown = expanded.nodes.filter((n) => n.kind === 'Pod').map((n) => n.id)
+    expect(allShown).toHaveLength(12) // every card now shown
+    // Head + tail are a subset of the expanded set, so they never disappeared/moved out on expand.
+    expect(visibleBefore.every((id) => allShown.includes(id))).toBe(true)
+    expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true)
   })
 
   it('keeps the pill inside its kind box, with no phantom __collapse__ group', () => {

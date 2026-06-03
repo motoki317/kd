@@ -18,6 +18,12 @@ import type { EdgeType, KEdge, KNode } from './types'
 export const NODE_WIDTH = 220
 export const NODE_HEIGHT = 60
 
+// byName orders resources by name with numeric awareness, so an ordinal suffix sorts numerically
+// (web-2 before web-10, not lexically after it) and a StatefulSet's pods read 0,1,2,… rather than the
+// lexical 0,1,10,2. Used everywhere same-kind resources are listed, grid-packed, or folded.
+export const byName = (a: { name: string }, b: { name: string }): number =>
+  a.name.localeCompare(b.name, undefined, { numeric: true })
+
 // Target width:height of the packed block, so fit-to-view fills both axes instead of a thin band.
 const TARGET_ASPECT = 1.7
 const COMPONENT_GAP = 46
@@ -64,12 +70,16 @@ interface Box {
 // same-kind resources hidden behind a collapse, not a real cluster object. Topology renders these
 // specially and excludes them from kind stats / search / nav.
 export const COLLAPSE_KIND = '__collapse__'
-// A same-kind cluster larger than COLLAPSE_VISIBLE shows its newest COLLAPSE_VISIBLE by creation
-// time and hides the older remainder — but only when that hides at least COLLAPSE_MIN_HIDDEN, so a
-// lone "+1 older" pill never replaces a card it could have just shown. Kept small (the user's
-// "most users aren't interested in most of them") so a crowded cluster folds aggressively to its
-// few newest.
-export const COLLAPSE_VISIBLE = 3
+// When a crowded same-kind cluster folds we keep the FIRST card and the LAST COLLAPSE_TAIL of the
+// natural-sorted run and hide the MIDDLE behind the pill. Keeping a contiguous head+tail of the *same*
+// order the expanded view uses means expanding only fills the gap in the middle — it never reshuffles
+// the cards, so the operator's eye keeps its place. (The old fold kept the "newest N by creation time",
+// so expanding swapped to name order and the whole group jumped — disorienting.) 1 + 2 keeps the lowest
+// ordinal (e.g. web-0) and the two latest in view. A cluster folds only when the hidden middle has at
+// least COLLAPSE_MIN_HIDDEN cards, so a lone "+1" pill never replaces a card it could have just shown.
+const COLLAPSE_HEAD = 1
+const COLLAPSE_TAIL = 2
+export const COLLAPSE_VISIBLE = COLLAPSE_HEAD + COLLAPSE_TAIL
 const COLLAPSE_MIN_HIDDEN = 2
 
 // CollapseMeta rides on the synthetic pill so Topology can expand it (key), attribute its box to the
@@ -124,32 +134,37 @@ interface Component {
 // rendered by the Topology (a 12px icon at top, then a text row). 30px gives comfortable padding.
 export const KIND_HEADER_HEIGHT = 30
 
-// splitByAge partitions a same-kind cluster into the cards to show and the older ones the fold
-// covers. A cluster is foldable only when it would hide at least COLLAPSE_MIN_HIDDEN (FR-007), so a
-// lone "+1 older" pill never replaces a card it could have shown. `hidden` is the by-age fold set
-// (newest COLLAPSE_VISIBLE stay; a missing createdAt sorts oldest). When `expanded`, every card is
-// visible but `hidden` still reports the set the pill folds, so the pill persists as a "show fewer"
-// re-collapse toggle. The visible list keeps the caller's incoming order (name / health-severity)
-// so grid placement and snapshot stability are unchanged — only the *fold set* is chosen by age.
-function splitByAge(nodes: KNode[], expanded: boolean): { visible: KNode[]; hidden: KNode[] } {
-  if (nodes.length < COLLAPSE_VISIBLE + COLLAPSE_MIN_HIDDEN) {
-    return { visible: nodes, hidden: [] }
+// splitForFold sorts a same-kind cluster by natural name order (numeric-aware, so web-2 precedes
+// web-10 and a StatefulSet reads 0,1,2,…) and partitions it for collapsing: the first COLLAPSE_HEAD
+// and last COLLAPSE_TAIL cards stay visible, the middle hides behind the pill. `pillIndex` tells the
+// caller where to splice the "+N more" pill into `visible` — between head and tail while collapsed,
+// at the very end once expanded (the full run then reads in natural order followed by a trailing
+// show-fewer toggle). Because head and tail keep their slots in both states, expanding only reveals
+// the hidden middle — it never reshuffles the visible cards (FR: order preserved on expand/collapse).
+// `cmp` overrides the order (the Nodes view sorts troubled pods first); the fold still keeps the
+// head+tail of whatever order it produces. A cluster folds only when the middle has ≥ COLLAPSE_MIN_HIDDEN.
+function splitForFold(
+  nodes: KNode[],
+  expanded: boolean,
+  cmp: (a: KNode, b: KNode) => number = byName,
+): { visible: KNode[]; hidden: KNode[]; pillIndex: number } {
+  const sorted = [...nodes].sort(cmp)
+  if (sorted.length < COLLAPSE_VISIBLE + COLLAPSE_MIN_HIDDEN) {
+    return { visible: sorted, hidden: [], pillIndex: sorted.length }
   }
-  const age = (n: KNode) => (n.createdAt ? Date.parse(n.createdAt) : 0)
-  const newestFirst = [...nodes].sort((a, b) => age(b) - age(a) || a.name.localeCompare(b.name))
-  const hiddenIds = new Set(newestFirst.slice(COLLAPSE_VISIBLE).map((n) => n.id))
-  const hidden = nodes.filter((n) => hiddenIds.has(n.id))
-  if (expanded) return { visible: nodes, hidden }
-  return { visible: nodes.filter((n) => !hiddenIds.has(n.id)), hidden }
+  const hidden = sorted.slice(COLLAPSE_HEAD, sorted.length - COLLAPSE_TAIL)
+  if (expanded) return { visible: sorted, hidden, pillIndex: sorted.length }
+  const visible = [...sorted.slice(0, COLLAPSE_HEAD), ...sorted.slice(sorted.length - COLLAPSE_TAIL)]
+  return { visible, hidden, pillIndex: COLLAPSE_HEAD }
 }
 
 // foldSiblingSubtrees folds a parent's crowded same-kind children into a "+N more" pill EVEN when
 // those children own subtrees — the case findHubs/leaf-blocks can't handle (it only wraps degree-1
 // leaves). A column of Argo Workflows under one WorkflowTemplate is the motivating case: the
 // running/failed ones own Pods (so they have degree > 1) and therefore never folded, leaving the
-// column cluttered no matter how many runs piled up. Here we fold by age across the WHOLE same-kind
-// group, status-agnostic: the newest COLLAPSE_VISIBLE stay (with their subtrees), the rest — and
-// their descendant subtrees — fold away behind one pill, all restored on expand.
+// column cluttered no matter how many runs piled up. Here we fold across the WHOLE same-kind group,
+// status-agnostic: the head+tail of the natural-sorted run stay (with their subtrees), the hidden
+// middle — and its descendant subtrees — folds away behind one pill, all restored on expand.
 //
 // It runs as a pre-layout graph rewrite (returns reduced nodes+edges plus synthetic pill nodes) so
 // the intricate column / leaf-block placement downstream is untouched: a pill is just another child
@@ -207,7 +222,7 @@ function foldSiblingSubtrees(
       if (!group.some((g) => isParent.has(g.node.id))) continue
       const key = `sib:${parentId}:${kind}`
       const isExpanded = expanded.has(key)
-      const { hidden } = splitByAge(group.map((g) => g.node), isExpanded)
+      const { hidden } = splitForFold(group.map((g) => g.node), isExpanded)
       if (hidden.length < COLLAPSE_MIN_HIDDEN) continue
 
       const descendants = descendantsOf(hidden.map((n) => n.id))
@@ -275,25 +290,24 @@ function placeGridCells(cells: Array<KNode & { _collapse?: CollapseMeta }>, grid
 export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string> = new Set()): Layout {
   if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
-  // Group nodes by kind, names sorted alphabetically inside each group for stable layout
-  // (so reloads don't shuffle, and snapshot equality holds across patches that don't change
-  // the kind set).
+  // Group nodes by kind; splitForFold sorts each group by natural name order for a stable layout
+  // (so reloads don't shuffle, and snapshot equality holds across patches that don't change the
+  // kind set).
   const byKind = new Map<string, KNode[]>()
   for (const n of nodes) {
     if (!byKind.has(n.kind)) byKind.set(n.kind, [])
     byKind.get(n.kind)!.push(n)
   }
-  for (const list of byKind.values()) list.sort((a, b) => a.name.localeCompare(b.name))
 
   const components: Component[] = []
   for (const [kind, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    // Fold the older cards in a crowded kind box behind a "+N older" pill (one extra grid cell);
-    // when expanded, the pill stays as a "show fewer" toggle after the now-visible cards.
+    // Fold a crowded kind box's middle cards behind a "+N more" pill (one extra grid cell), keeping
+    // the first and last cards in place so expanding only fills the gap — same order both ways.
     const key = `kind:${kind}`
     const isExpanded = expanded.has(key)
-    const { visible, hidden } = splitByAge(list, isExpanded)
+    const { visible, hidden, pillIndex } = splitForFold(list, isExpanded)
     const cells: Array<KNode & { _collapse?: CollapseMeta }> = [...visible]
-    if (hidden.length) cells.push(pillCell({ key, groupKind: kind, hidden, expanded: isExpanded }))
+    if (hidden.length) cells.splice(pillIndex, 0, pillCell({ key, groupKind: kind, hidden, expanded: isExpanded }))
 
     const grid = gridDims(cells.length)
     // Left-align rows (rather than centering) so the kind box's left edge is the natural column
@@ -349,14 +363,11 @@ export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: Rea
     if (!podsByHost.has(key)) podsByHost.set(key, [])
     podsByHost.get(key)!.push(n)
   }
-  // Cards inside each host group sort by health-severity (troubled first) then name, so an
-  // operator scanning a node sees its problem pods at the top of the host's grid.
-  for (const list of podsByHost.values()) {
-    list.sort((a, b) => {
-      const sev = (n: KNode) => (n.health === 'Healthy' ? 0 : 1)
-      return sev(b) - sev(a) || a.name.localeCompare(b.name)
-    })
-  }
+  // Cards inside each host group sort by health-severity (troubled first) then natural name, so an
+  // operator scanning a node sees its problem pods at the top of the host's grid. The fold below keeps
+  // the head+tail of THIS order (not raw name order), so troubled pods stay on top even when collapsed.
+  const sev = (n: KNode) => (n.health === 'Healthy' ? 0 : 1)
+  const bySeverityThenName = (a: KNode, b: KNode) => sev(b) - sev(a) || byName(a, b)
 
   // Build one component per Node card present in the graph (alphabetical by host name for
   // stable layout); append the orphan group last if any pods landed there.
@@ -370,13 +381,14 @@ export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: Rea
     // pods (drained, freshly added), the host group still shows so the operator sees "this Node
     // is here". The orphan group has no Node card; it uses the header for "Unscheduled".
     const nodeCard = nodeByName.get(host) ?? null
-    // Fold a crowded host's older pods behind a "+N older" pill — never the Node card, which is the
+    // Fold a crowded host's middle pods behind a "+N more" pill — never the Node card, which is the
     // host anchor, not a same-kind cluster member. The pill carries `host` so hostGroups attributes it.
     const key = `host:${host}`
     const isExpanded = expanded.has(key)
-    const { visible, hidden } = splitByAge(pods, isExpanded)
-    const cells: Array<KNode & { _collapse?: CollapseMeta }> = nodeCard ? [nodeCard, ...visible] : [...visible]
-    if (hidden.length) cells.push(pillCell({ key, groupKind: 'Pod', hidden, expanded: isExpanded }, host))
+    const { visible, hidden, pillIndex } = splitForFold(pods, isExpanded, bySeverityThenName)
+    const podCells: Array<KNode & { _collapse?: CollapseMeta }> = [...visible]
+    if (hidden.length) podCells.splice(pillIndex, 0, pillCell({ key, groupKind: 'Pod', hidden, expanded: isExpanded }, host))
+    const cells: Array<KNode & { _collapse?: CollapseMeta }> = nodeCard ? [nodeCard, ...podCells] : podCells
     if (cells.length === 0) continue
     const grid = gridDims(cells.length)
     const positioned = placeGridCells(cells, grid)
@@ -642,8 +654,8 @@ function hubArea(blocks: LeafBlock[], rankdir: 'TB' | 'LR'): { w: number; h: num
 }
 
 // collapseHubLeaves groups a hub's degree-1 leaves per kind into separate blocks (Services together,
-// Secrets together, …) and folds each kind independently: the newest COLLAPSE_VISIBLE of a kind stay
-// and the older remainder hides behind that kind's own "+N older" pill (D5). A kind's hidden leaves
+// Secrets together, …) and folds each kind independently: the first + last cards of a kind stay and
+// its hidden middle folds behind that kind's own "+N more" pill (D5). A kind's hidden leaves
 // vanish from the component — their only edge was to the hub — replaced by one bundled hub→pill edge
 // (D6) typed by the relationship they shared with the hub. Each multi-card block carries a per-kind
 // frameKey so Topology frames the kinds separately.
@@ -664,14 +676,14 @@ function collapseHubLeaves(
   for (const [kind, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const key = `sib:${hubId}:${kind}`
     const isExpanded = expanded.has(key)
-    const split = splitByAge(list, isExpanded)
-    const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )
+    const split = splitForFold(list, isExpanded)
+    const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
     if (split.hidden.length) {
       const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
       const id = `${COLLAPSE_KIND}:${key}`
-      cells.push({ id, kind: COLLAPSE_KIND, name: `+${split.hidden.length} more`, health: 'Healthy', collapse: meta })
+      // Splice the pill into its slot in the column — between the first and last cards while collapsed,
+      // at the bottom once expanded — so the kind reads in one stable natural order whichever way.
+      cells.splice(split.pillIndex, 0, { id, kind: COLLAPSE_KIND, name: `+${split.hidden.length} more`, health: 'Healthy', collapse: meta })
       // Bundle the hub's edges to the hidden siblings into one hub→pill edge — but only while
       // collapsed. Expanded, the siblings are drawn as real leaves with their own hub edges, so the
       // pill is a bare re-collapse toggle with no edge.
@@ -725,7 +737,7 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     // column. Left in the skeleton, those parents instead align cleanly in the leftmost depth column
     // (placeColumns) with one honest edge each, which is what the operator expects.
     if (children.length < FANOUT_MIN) continue
-    const leaves = [...children].sort((a, b) => a.name.localeCompare(b.name))
+    const leaves = [...children].sort(byName)
     // Group this hub's leaves per kind and fold each crowded kind into its own "+N older" pill
     // (D5/D6). All kind blocks sit at one depth (stacked down the column in LR), so a multi-kind CRD
     // owner's Services / Secrets / … all read as direct children on the same level.
@@ -816,9 +828,14 @@ function dagreSeedY(skeleton: KNode[], edges: KEdge[], wrapped: ReadonlySet<stri
 // that emits its PositionedNode(s) once the column's x and the unit's stacked top are resolved. `kind`
 // drives the inter-unit gap: same-kind neighbours pack tight (LEAF_GAP_Y), different kinds get the
 // wider BLOCK_GAP so each kind reads as its own group (the user's "little spacing between kinds").
+// `group` identifies a set of same-parent same-kind siblings (a StatefulSet's pods): siblings are
+// ordered among THEMSELVES by natural name (so they read web-0,1,2), while the groups as a whole keep
+// Dagre's crossing-minimized order. `name` is the natural-sort key within a group ('' for leaf blocks).
 interface ColUnit {
   rank: number
   kind: string
+  group: string
+  name: string
   w: number
   h: number
   seedY: number
@@ -843,10 +860,27 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   const out: PositionedNode[] = []
   const units: ColUnit[] = []
 
+  // Each skeleton node's primary parent = the shallowest source of an edge into it (ties broken by id),
+  // so a node's same-kind siblings under one parent share a `group` and get ordered by name below. A
+  // node with no shallower neighbour (a root / fan-in source) is its own group, left in Dagre's order.
+  const parentOf = new Map<string, string>()
+  for (const e of edges) {
+    if (wrapped.has(e.from) || wrapped.has(e.to)) continue
+    const rf = rank.get(e.from) ?? 0
+    const rt = rank.get(e.to) ?? 0
+    if (rf >= rt) continue // e.from must be shallower to be a parent of e.to
+    const cur = parentOf.get(e.to)
+    if (cur === undefined || rf < (rank.get(cur) ?? 0) || (rf === (rank.get(cur) ?? 0) && e.from < cur)) {
+      parentOf.set(e.to, e.from)
+    }
+  }
+
   for (const n of skeleton) {
     const r = rank.get(n.id) ?? 0
+    const par = parentOf.get(n.id)
     units.push({
-      rank: r, kind: n.kind, w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
+      rank: r, kind: n.kind, group: par !== undefined ? `${par}|${n.kind}` : `root:${n.id}`, name: n.name,
+      w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0,
       place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),
     })
   }
@@ -858,7 +892,8 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     for (const b of hub.blocks) {
       const block = b
       units.push({
-        rank: r, kind: block.kind, w: block.w, h: block.h, seedY: top + block.h / 2,
+        rank: r, kind: block.kind, group: `block:${hub.id}:${block.kind}`, name: '',
+        w: block.w, h: block.h, seedY: top + block.h / 2,
         place: (left, t) => placeBlockCells(block, left, t, out),
       })
       top += block.h + BLOCK_GAP
@@ -873,15 +908,24 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   let cx = 0
   for (const r of ranks) { colLeft.set(r, cx); cx += colWidth.get(r)! + COLUMN_GAP }
 
-  // Within each column, order by seed y, then stack the units CONTIGUOUSLY from the topmost unit's
-  // seed — same-kind neighbours separated by COL_V_GAP, different kinds by the wider BLOCK_GAP. We
-  // anchor only the first unit to its seed and pack the rest tight rather than honouring each unit's
-  // seedY as a floor: a skeleton child (e.g. a StatefulSet seeded at its hub's centre) used to punch
-  // a tall hole into the hub's centred block stack, and adjacent kinds drifted to inconsistent gaps.
-  // Tight, kind-gapped packing gives every kind the same visible separation and removes the hole;
-  // Dagre's crossing-minimised ORDER (the sort) still keeps children near their parent's row.
+  // Within each column, order sibling GROUPS by Dagre's crossing-minimized seed (the group's topmost
+  // seedY) but order units INSIDE a group by natural name — so a StatefulSet's pods read web-0,1,2 even
+  // though Dagre seeded them in some other order, while unrelated subtrees keep their crossing-min
+  // placement. Then stack the units CONTIGUOUSLY from the topmost unit's seed — same-kind neighbours
+  // separated by COL_V_GAP, different kinds by the wider BLOCK_GAP. We anchor only the first unit to its
+  // seed and pack the rest tight rather than honouring each unit's seedY as a floor: a skeleton child
+  // (e.g. a StatefulSet seeded at its hub's centre) used to punch a tall hole into the hub's centred
+  // block stack, and adjacent kinds drifted to inconsistent gaps. Tight, kind-gapped packing gives every
+  // kind the same visible separation and removes the hole.
   for (const r of ranks) {
-    const col = units.filter((u) => u.rank === r).sort((a, b) => a.seedY - b.seedY)
+    const col = units.filter((u) => u.rank === r)
+    const groupSeed = new Map<string, number>() // a group sorts by its topmost (smallest) seed
+    for (const u of col) groupSeed.set(u.group, Math.min(groupSeed.get(u.group) ?? Infinity, u.seedY))
+    col.sort((a, b) =>
+      a.group !== b.group
+        ? groupSeed.get(a.group)! - groupSeed.get(b.group)! || a.group.localeCompare(b.group)
+        : byName(a, b) || a.seedY - b.seedY,
+    )
     let cursor = -Infinity
     let prevKind: string | null = null
     for (const u of col) {
