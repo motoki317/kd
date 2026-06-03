@@ -117,6 +117,63 @@ func TestConventionRefEdges_IgnoresNameValuePair(t *testing.T) {
 
 // nodeByID is the inverse of the existing nodeByName helper; we look up the target end of
 // an edge to assert on it.
+// TestArgoWorkflowTemplateRefs pins the Argo lineage shaping: a CronWorkflow-owned Workflow's
+// direct WorkflowTemplate edge is suppressed (the cron roots it instead), the CronWorkflow itself
+// links to the template (nested workflowSpec path), and a standalone Workflow keeps its edge. The
+// net is a clean template → cronworkflow → workflows tree instead of two-parent workflows that
+// fold under neither mechanism.
+func TestArgoWorkflowTemplateRefs(t *testing.T) {
+	tmpl := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "WorkflowTemplate",
+		"metadata": map[string]any{"name": "build", "namespace": "ci", "uid": "tmpl-uid"},
+	}}
+	cron := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "CronWorkflow",
+		"metadata": map[string]any{"name": "nightly", "namespace": "ci", "uid": "cron-uid"},
+		"spec":     map[string]any{"workflowSpec": map[string]any{"workflowTemplateRef": map[string]any{"name": "build"}}},
+	}}
+	ctrl := true
+	ownedWF := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+		"metadata": map[string]any{"name": "nightly-123", "namespace": "ci", "uid": "owned-uid",
+			"ownerReferences": []any{map[string]any{"apiVersion": "argoproj.io/v1alpha1", "kind": "CronWorkflow", "name": "nightly", "uid": "cron-uid", "controller": ctrl}}},
+		"spec": map[string]any{"workflowTemplateRef": map[string]any{"name": "build"}},
+	}}
+	standaloneWF := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+		"metadata": map[string]any{"name": "adhoc", "namespace": "ci", "uid": "adhoc-uid"},
+		"spec":     map[string]any{"workflowTemplateRef": map[string]any{"name": "build"}},
+	}}
+
+	g := Build([]runtime.Object{tmpl, cron, ownedWF, standaloneWF})
+	refersToTmpl := func(fromKind string) bool {
+		for _, e := range g.Edges {
+			if e.Type != EdgeRefers {
+				continue
+			}
+			if from := nodeByID(g, e.From); from != nil && from.Kind == fromKind {
+				if to := nodeByID(g, e.To); to != nil && to.Kind == "WorkflowTemplate" {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if !refersToTmpl("CronWorkflow") {
+		t.Error("CronWorkflow should reference its WorkflowTemplate (workflowSpec.workflowTemplateRef)")
+	}
+	if !refersToTmpl("Workflow") {
+		t.Error("a standalone (unowned) Workflow should still reference its WorkflowTemplate")
+	}
+	// The owned Workflow's direct template edge must be gone (the only Workflow→Template edge left
+	// is the standalone one). Assert exactly one such edge, and that it's NOT the owned workflow's.
+	for _, e := range g.Edges {
+		if e.Type == EdgeRefers && e.From == "owned-uid" {
+			t.Error("a controller-owned Workflow must not emit its own WorkflowTemplate edge")
+		}
+	}
+}
+
 func nodeByID(g *Graph, id string) *Node {
 	for i := range g.Nodes {
 		if g.Nodes[i].ID == id {

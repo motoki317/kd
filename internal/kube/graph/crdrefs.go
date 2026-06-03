@@ -37,15 +37,28 @@ type crdRefRule struct {
 	// namespaced reports whether the referenced kind is namespaced; cross-namespace refs
 	// in v1 only resolve when the target lives in the same namespace as the referrer.
 	namespaced bool
+	// skipIfOwned drops this edge when the CR is controller-owned, because its owner already roots
+	// it in the tree and the owner carries the same reference. A CronWorkflow-created Workflow both
+	// is owned by the cron AND copies its workflowTemplateRef; without this it gets two parents
+	// (cron + template) and folds under neither. Suppressing the direct template edge collapses it
+	// to a single-parent leaf under the cron (template → cron → workflows), which folds cleanly.
+	skipIfOwned bool
 }
 
 // crdRefRules is the v1 curated registry. Kept small and focused so each rule has a clear
 // purpose; new entries should pair with a fixture test in crdrefs_test.go.
 var crdRefRules = []crdRefRule{
-	// Argo Workflows: a Workflow can reference a WorkflowTemplate (cluster-scoped or
-	// namespaced) for templates it doesn't define inline.
+	// Argo Workflows: a Workflow references a WorkflowTemplate for templates it doesn't define
+	// inline. Suppressed when the Workflow is controller-owned (created by a CronWorkflow), which
+	// roots it under the cron instead — the cron carries the same template link (rule below).
 	{fromGroup: "argoproj.io", fromKind: "Workflow",
 		jsonPath: []string{"workflowTemplateRef", "name"},
+		toKind:   "WorkflowTemplate", toGroup: "argoproj.io", namespaced: true, skipIfOwned: true},
+	// A CronWorkflow references the template it instantiates (nested under spec.workflowSpec), so
+	// the template still anchors the tree (template → cronworkflow → workflows) even though each
+	// owned Workflow's own template edge is suppressed.
+	{fromGroup: "argoproj.io", fromKind: "CronWorkflow",
+		jsonPath: []string{"workflowSpec", "workflowTemplateRef", "name"},
 		toKind:   "WorkflowTemplate", toGroup: "argoproj.io", namespaced: true},
 	// cert-manager: a Certificate references its issuer through spec.issuerRef (kind is
 	// either Issuer or ClusterIssuer; we encode both as separate rules).
@@ -77,13 +90,29 @@ var crdRefRules = []crdRefRule{
 		toKind:   "AppProject", toGroup: "argoproj.io", namespaced: true},
 }
 
+// hasControllerOwner reports whether the object has a controller ownerReference — i.e. something
+// created and manages it (a CronWorkflow owning its Workflows). Used to suppress redundant ref
+// edges whose information the owner already carries.
+func hasControllerOwner(u *unstructured.Unstructured) bool {
+	for _, or := range u.GetOwnerReferences() {
+		if or.Controller != nil && *or.Controller {
+			return true
+		}
+	}
+	return false
+}
+
 // curatedRefEdges runs the curated registry against one CR and returns the edges it
 // produces. Unknown kinds (no rule matches) get no curated edges; the convention scanner
 // picks up the slack.
 func (b *edgeBuilder) curatedRefEdges(fromID string, u *unstructured.Unstructured) {
 	gvk := u.GroupVersionKind()
+	owned := hasControllerOwner(u)
 	for _, rule := range crdRefRules {
 		if rule.fromGroup != gvk.Group || rule.fromKind != gvk.Kind {
+			continue
+		}
+		if rule.skipIfOwned && owned {
 			continue
 		}
 		path := append([]string{"spec"}, rule.jsonPath...)
@@ -183,4 +212,3 @@ func asConventionRef(m map[string]any) (conventionRef, bool) {
 	}
 	return ref, true
 }
-
