@@ -236,8 +236,8 @@ func (a *API) handleGraph(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	view := graph.ParseView(r.URL.Query().Get("view"))
-	g := graph.Build(store.SnapshotNamespace(ns)).Filter(view)
+	// The full graph: the client projects relationship subsets and grouping itself.
+	g := graph.Build(store.SnapshotNamespace(ns))
 	writeJSON(w, g)
 }
 

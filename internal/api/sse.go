@@ -39,15 +39,14 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	changes, unsubscribe := store.Subscribe()
 	defer unsubscribe()
 
-	view := graph.ParseView(r.URL.Query().Get("view"))
 	clusterScope := ns == ClusterScopeNamespace
-	// Build the unfiltered graph once per tick: the filtered projection drives the topology, and
-	// the same unfiltered graph drives the namespace rollup. Otherwise the sidebar's "is this ns
-	// healthy?" would only see kinds the current view keeps — a Service with no endpoints would
-	// look healthy from the ownership view, contradicting /namespaces.
+	// Stream the full graph: the client now projects relationship subsets and groups them itself
+	// (relationship filters + group-by replaced the server's per-view Filter), so there is no
+	// server-side view to pick. The same graph drives the namespace rollup — the sidebar's "is this
+	// ns healthy?" always sees every kind, so e.g. a Service with no endpoints can't look healthy.
 	build := func() (*graph.Graph, graph.Summary) {
 		full := graph.Build(store.SnapshotNamespace(ns))
-		return full.Filter(view), graph.SummarizeBuilt(full, clusterScope)
+		return full, graph.SummarizeBuilt(full, clusterScope)
 	}
 
 	prev, prevSummary := build()
