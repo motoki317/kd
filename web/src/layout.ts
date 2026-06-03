@@ -522,6 +522,33 @@ export function connGroups(layout: Layout): { key: string; expanded: boolean; x:
     }))
 }
 
+// orphanBlock lays one kind's UNCONNECTED (parentless) nodes into a single collapsible grid block —
+// the same compact fold a hub's per-kind leaves get, but with no hub to hang off. The ownership view
+// keeps every resource in the namespace (filter.go allNodes), so a namespace's loose ConfigMaps,
+// Secrets, EphemeralReports, … would otherwise be a wall of single cards; folded per kind they read as
+// one framed "+N more" block. Every cell carries the `orphan:<kind>` collapseGroup so connGroups draws
+// the dashed frame, and the pill drives expand/collapse through the same key as any other fold.
+function orphanBlock(kind: string, list: KNode[], expanded: ReadonlySet<string>): Component {
+  const key = `orphan:${kind}`
+  const isExpanded = expanded.has(key)
+  const split = splitForFold(list, isExpanded)
+  const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
+  if (split.hidden.length) {
+    const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
+    cells.splice(split.pillIndex, 0, { id: `${COLLAPSE_KIND}:${key}`, kind: COLLAPSE_KIND, name: `+${split.hidden.length} more`, health: 'Healthy', collapse: meta })
+  }
+  const dims = blockDims(cells.length)
+  const nodes: PositionedNode[] = cells.map((cell, i) => ({
+    ...cell,
+    collapseGroup: key, // frame the whole block via connGroups, like a hub's per-kind leaf block
+    x: Math.floor(i / dims.rows) * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2,
+    y: (i % dims.rows) * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2,
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+  }))
+  return { nodes, edges: [], width: dims.w, height: dims.h }
+}
+
 // layoutGraph lays out each connected component on its own, then stacks the components in a single
 // vertical column (see packComponents). Edges with a missing endpoint are dropped defensively (the
 // server should not emit them). `rankdir` switches the per-component direction — 'LR' (what every
@@ -534,14 +561,35 @@ export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
-  const groups = connectedComponents(nodes, laidEdges)
+  // Group a crowded same-kind set of unconnected nodes into one collapsible block at the bottom (see
+  // orphanBlock); below the fan-out threshold they stay individual cards and flow through the normal
+  // per-component path unchanged, so a couple of loose resources still read as plain cards.
+  const touched = new Set<string>()
+  for (const e of laidEdges) (touched.add(e.from), touched.add(e.to))
+  const orphansByKind = new Map<string, KNode[]>()
+  for (const n of nodes) {
+    if (touched.has(n.id) || n.kind === COLLAPSE_KIND) continue
+    const l = orphansByKind.get(n.kind)
+    if (l) l.push(n)
+    else orphansByKind.set(n.kind, [n])
+  }
+  const blocked = new Set<string>()
+  const orphanComponents: Component[] = []
+  for (const [kind, list] of [...orphansByKind].sort(([a], [b]) => a.localeCompare(b))) {
+    if (list.length < FANOUT_MIN) continue
+    orphanComponents.push(orphanBlock(kind, list, expanded))
+    for (const n of list) blocked.add(n.id)
+  }
+
+  const groups = connectedComponents(blocked.size ? nodes.filter((n) => !blocked.has(n.id)) : nodes, laidEdges)
   // Stable vertical order: each tree keeps its row across SSE patches. node.id is a random UID, so
   // ordering by it would shuffle trees arbitrarily; the smallest kind/name in a component is stable
   // (adding/removing a pod doesn't change it) and reads sensibly (workload roots sort near the top).
   groups.sort((a, b) => componentKey(a.nodes).localeCompare(componentKey(b.nodes)))
   const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir, expanded))
 
-  return packComponents(components)
+  // Grouped orphan blocks pack after the connectivity trees, so the tree backbone reads first.
+  return packComponents([...components, ...orphanComponents])
 }
 
 // componentKey is a stable sort key for a component: the lexicographically smallest "kind/name"

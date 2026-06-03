@@ -166,13 +166,14 @@ const (
 	ViewVolumes   View = "volumes"   // Pod -> mounted ConfigMaps/Secrets/PVCs
 )
 
-// viewSpec defines a view: which edge types to keep, which to flip (referenced-as-parent), and
-// which kinds to always show even when unconnected (so e.g. a Service with no endpoints still
-// appears in the network view).
+// viewSpec defines a view: which edge types to keep, which to flip (referenced-as-parent), which
+// kinds to always show even when unconnected (so e.g. a Service with no endpoints still appears in
+// the network view), and whether to keep EVERY node regardless of connectivity.
 type viewSpec struct {
 	edges        []EdgeType
 	reverseEdges []EdgeType // rendered with From/To swapped so the referenced target is the parent
 	alwaysKinds  []string
+	allNodes     bool // keep every node even when unconnected (the ownership view shows the whole namespace)
 }
 
 var viewSpecs = map[View]viewSpec{
@@ -182,10 +183,15 @@ var viewSpecs = map[View]viewSpec{
 	// though there's no ownerReference. Those edges are stored referrer→referenced (Workflow→
 	// Template) but reversed here so the template/issuer reads as the parent (leftmost column),
 	// matching the owner→owned direction of the rest of the tree.
+	//
+	// allNodes keeps every resource, not just those on an ownership edge: an orphaned ConfigMap,
+	// a standalone Service, a lone CRD — they render as parentless single cards rather than being
+	// dropped, so the ownership view is a complete inventory of the namespace (the user wants to
+	// see *all* resources here, with the ones that do have parents arranged into their tree).
 	ViewOwnership: {
 		edges:        []EdgeType{EdgeOwner, EdgeRefers},
 		reverseEdges: []EdgeType{EdgeRefers},
-		alwaysKinds:  []string{"Deployment", "ReplicaSet", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"},
+		allNodes:     true,
 	},
 	ViewNodes: {
 		edges:       []EdgeType{EdgeScheduledOn},
@@ -240,7 +246,7 @@ func (g *Graph) Filter(v View) *Graph {
 
 	nodes := make([]Node, 0, len(g.Nodes))
 	for _, n := range g.Nodes {
-		if connected[n.ID] || slices.Contains(spec.alwaysKinds, n.Kind) {
+		if spec.allNodes || connected[n.ID] || slices.Contains(spec.alwaysKinds, n.Kind) {
 			nodes = append(nodes, n)
 		}
 	}

@@ -349,6 +349,27 @@ describe('layoutGraph', () => {
     expect(depEdge.points[0].x).toBeLessThan(depEdge.points[depEdge.points.length - 1].x)
   })
 
+  it('folds a crowded same-kind set of unconnected (orphan) nodes into one block', () => {
+    // The ownership view keeps every resource, including parentless ones. A namespace's many loose
+    // ConfigMaps must not string down the canvas one per row — once they pass the fan-out threshold
+    // they fold into a single collapsible block, while a small set stays as individual cards.
+    const dep: KNode = { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const pod: KNode = { id: 'pod', kind: 'Pod', name: 'web-x', health: 'Healthy' }
+    const cms = Array.from({ length: 9 }, (_, i) => ({ id: `cm${i}`, kind: 'ConfigMap', name: `cfg-${i}`, health: 'Healthy' as const }))
+    const secrets = Array.from({ length: 2 }, (_, i) => ({ id: `s${i}`, kind: 'Secret', name: `sec-${i}`, health: 'Healthy' as const }))
+    const e: KEdge[] = [{ from: 'dep', to: 'pod', type: 'ownerReference' }]
+    const l = layoutGraph([dep, pod, ...cms, ...secrets], e, 'LR')
+    // 9 ConfigMaps fold: only COLLAPSE_VISIBLE remain as cards + one pill, framed as one block.
+    const cmCards = l.nodes.filter((n) => n.kind === 'ConfigMap')
+    expect(cmCards).toHaveLength(COLLAPSE_VISIBLE)
+    const pill = l.nodes.find((n) => n.collapse?.groupKind === 'ConfigMap')!
+    expect(pill.collapse!.hidden).toHaveLength(9 - COLLAPSE_VISIBLE)
+    expect(cmCards.every((n) => n.collapseGroup === 'orphan:ConfigMap')).toBe(true) // framed as a group
+    // 2 Secrets are below the threshold → individual cards, not folded.
+    expect(l.nodes.filter((n) => n.kind === 'Secret')).toHaveLength(2)
+    expect(l.nodes.some((n) => n.collapse?.groupKind === 'Secret')).toBe(false)
+  })
+
   it('routes LR edges orthogonally: parent right edge → child left edge, axis-aligned segments', () => {
     // Deployment → ReplicaSet → 2 Pods. Each edge must leave the parent's RIGHT edge and enter the
     // child's LEFT edge, with every segment purely horizontal or vertical (the "blocky" ArgoCD look).

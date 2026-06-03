@@ -147,6 +147,22 @@ func TestFilterViews(t *testing.T) {
 			t.Error("ownership view dropped the Workflow→WorkflowTemplate refers edge")
 		}
 	})
+
+	// The ownership view is a complete namespace inventory: a resource with no owner and no curated
+	// reference (an orphaned ConfigMap, a standalone Service) must still appear — as a parentless
+	// card — rather than being dropped. Other views stay connectivity-scoped.
+	t.Run("ownership view keeps orphaned resources, other views drop them", func(t *testing.T) {
+		cm := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "ConfigMap",
+			"metadata": map[string]any{"name": "loose", "namespace": "shop", "uid": "cm-uid"},
+		}}
+		if k := kindsPresent(Build([]runtime.Object{cm}).Filter(ViewOwnership)); !k["ConfigMap"] {
+			t.Errorf("ownership view dropped an orphaned ConfigMap, got %v", k)
+		}
+		if k := kindsPresent(Build([]runtime.Object{cm}).Filter(ViewNetwork)); k["ConfigMap"] {
+			t.Errorf("network view should drop an unconnected ConfigMap, got %v", k)
+		}
+	})
 }
 
 // SummarizeBuilt is the cycle-201 entry point used by the SSE handler so the same unfiltered
