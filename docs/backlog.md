@@ -9,6 +9,19 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
+**Status (2026-06-05, batch 3):** Continued a11y + dogfooding sweep. Shipped: copy-success live region
+(`role=status`) so screen readers hear the CopyButton confirm; **completed the single-select a11y sweep**
+by converting the drawer's Manifest YAML/JSON toggle to a `role=radiogroup` (the last bare-`.active`
+pick-one control). The rest of the batch was **adversarial refutation** — most candidates this lens
+surfaced were already-handled or measurement artifacts: a "light-theme renders dark chips / fails AA"
+pair was two agent-browser measurement bugs (a `transition: background` reads stale under headless
+getComputedStyle after a runtime theme toggle; a naive parser mis-reads `color(srgb …/α)` backgrounds),
+both themes are AA-compliant; the topology search's Enter-cycle + "N of M" indicator already exist
+(cycles 284–285); graph nodes are intentionally not per-node tabbable (search-cycling is the keyboard
+path, verified end-to-end); the empty-state is already state-aware. Lessons persisted to
+`dogfooding-kd-ui.md` ("Measurement pitfalls" section). Signal: the UI surface is genuinely thinning —
+this batch was ~1 ship + 1 a11y completion per several refutations. The earlier same-day status follows.
+
 **Status (2026-06-05, cont.):** A second dogfooding+refactor batch (cycles 12–18) shipped on top of the
 pass below. Theme: the "UX surface mature" claim had a real **accessibility blind spot** — prior surveys
 never audited ARIA roles, yet the drawer tabs were `aria-pressed` toggles (not a tablist) and the
@@ -167,6 +180,9 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | `VisibleNamespaces` should gate on `*`/any-resource instead of hardcoded `pods` | already-handled — pods-as-namespace-visibility-gate is the documented RBAC design (ADR 20260527); operators grant blanket access in target namespaces |
 | Validate `-addr` / invalid env durations in `config.Load` (fail earlier) | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later; no operator pain |
 | Sort in-cluster `List()` context order; `defer debounce.Stop()` in sse.go | low-value — in-cluster has a single context (switcher hidden); the debounce timer is GC'd and is not a race |
+| Light theme renders dark toolbar chips / fails AA contrast | refuted — a measurement artifact, not a bug. Runtime theme toggle leaves the chips' `transition: background` stale under headless Chrome (getComputedStyle returns the pre-toggle colour); a fresh load in the target theme reads correctly. The "sub-AA" numbers came from a naive parser mis-reading `color(srgb …/α)` backgrounds. Both themes are AA-compliant. See dogfooding skill "Measurement pitfalls". |
+| Add a match-count / Enter-cycle hint to the topology search | already-done — the `.topology-matches` element shows "N of M"/"no matches" and the input + count titles already document Enter/Shift+Enter cycling (cycles 284–285). Verified live ("6 of 21"). The earlier probe just queried the wrong class |
+| Make graph nodes keyboard-focusable (tabindex) for keyboard selection | wrong — 33+ tabbable SVG nodes would be tab-order noise. The keyboard path is search-cycling (⌘K → type → Enter/Shift+Enter steps matches → drawer → `[`/`]` tabs → arrow keys); verified end-to-end. Don't add per-node tab stops |
 
 ## Done
 
