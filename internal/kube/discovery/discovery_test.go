@@ -110,3 +110,20 @@ func (c counterDiscoverer) Discover(context.Context) ([]Resource, error) {
 	*c.calls++
 	return nil, nil
 }
+
+// isSubresource keys solely on a "/" in the resource name — "pods/status", "deployments/scale" are
+// subresources kd must not list/watch as top-level objects; a bare name is a real resource.
+func TestIsSubresource(t *testing.T) {
+	cases := map[string]bool{
+		"pods":              false,
+		"deployments":       false,
+		"pods/status":       true,
+		"pods/log":          true,
+		"deployments/scale": true,
+	}
+	for name, want := range cases {
+		if got := isSubresource(metav1.APIResource{Name: name}); got != want {
+			t.Errorf("isSubresource(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
