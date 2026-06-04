@@ -78,7 +78,9 @@ Drive the **actual UI** with the **`agent-browser`** CLI (NOT playwright), not j
 "Verifying UI changes live (agent-browser)" in AGENTS.md (build → run `./kd -dev-user dev -addr :8099`
 → `agent-browser open/eval/screenshot/close`). **Measure** the thing you changed (class applied,
 computed fill, element in bounds, count, order) — a screenshot shows layout, an `eval` proves
-behaviour. **Dogfood against a real cluster** (`?ctx=<arn>`) for production-scale shapes a local
+behaviour. For kd-specific recipes (capacity-view expand/click/hover) and the **recurring bug classes**
+caught live — fit-zoom direction, viewport-edge clipping of overlays/tooltips, SVG hit-targets — plus a
+"don't re-propose" list of verified-risky Nodes-view changes, see **`dogfooding-kd-ui.md`** in this skill. **Dogfood against a real cluster** (`?ctx=<arn>`) for production-scale shapes a local
 cluster can't reproduce — keeping the real name out of tracked files. Live verification has
 repeatedly caught bugs unit tests could not (keyboard-zoom presses coalescing; toolbar overflow; a
 min-segment overshoot that only shows with many tiny pods on one node).
