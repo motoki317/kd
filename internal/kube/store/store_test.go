@@ -178,6 +178,30 @@ func TestStoreSnapshotCluster(t *testing.T) {
 	}
 }
 
+// SnapshotNodesAndPods is the ONE snapshot that crosses the per-namespace ride-along boundary: the
+// capacity view is cluster-wide (a node hosts pods from every namespace), so it returns EVERY Node
+// and EVERY Pod across all namespaces — and nothing else (no Deployments/Namespaces padding it).
+func TestStoreSnapshotNodesAndPods(t *testing.T) {
+	c := startTestStore(t,
+		ns("alpha"), ns("beta"),
+		node("node-1"), node("node-2"),
+		deployment("alpha", "web"), // must NOT appear — not a Node or Pod
+		pod("alpha", "web-1", "node-1"),
+		pod("beta", "other-1", "node-2"), // a different namespace's pod is still included
+	)
+	objs := c.SnapshotNodesAndPods()
+	kinds := kindCounts(objs)
+	if kinds["Node"] != 2 {
+		t.Errorf("want both Nodes, got %d", kinds["Node"])
+	}
+	if kinds["Pod"] != 2 {
+		t.Errorf("want both pods across alpha+beta (cluster-wide), got %d", kinds["Pod"])
+	}
+	if kinds["Deployment"] != 0 || kinds["Namespace"] != 0 {
+		t.Errorf("only Nodes+Pods belong in the capacity snapshot, got %v", kinds)
+	}
+}
+
 func TestStoreSnapshotClusterSentinel(t *testing.T) {
 	// SnapshotNamespace(ClusterScope) is the same as SnapshotCluster — API handlers use
 	// the sentinel namespace name to route into the cluster scope.
