@@ -199,6 +199,76 @@ func TestBuildInferredEdges(t *testing.T) {
 	}
 }
 
+// The big fixture routes Ingress via HTTP-path backends and binds a namespaced Role to a
+// namespaced subject. These RBAC/ingress branches it doesn't reach: an Ingress DEFAULT backend, a
+// RoleBinding → ClusterRole (cluster-scoped roleRef), and a subject ServiceAccount with no explicit
+// namespace (which must fall back to the binding's namespace).
+func TestRBACAndIngressEdgeCases(t *testing.T) {
+	const fixture = `
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: default-only
+  namespace: shop
+  uid: ing2-uid
+spec:
+  defaultBackend:
+    service:
+      name: fallback-svc
+      port:
+        number: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fallback-svc
+  namespace: shop
+  uid: fbsvc-uid
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: viewer
+  uid: cr-uid
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: robot
+  namespace: shop
+  uid: robot-uid
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bind-cluster
+  namespace: shop
+  uid: rb2-uid
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: viewer
+subjects:
+  - kind: ServiceAccount
+    name: robot
+    # no namespace: must default to the binding's namespace (shop)
+`
+	g := Build(decodeFixture(t, fixture))
+
+	if !hasEdge(g, EdgeRoutes, "Ingress", "default-only", "Service", "fallback-svc") {
+		t.Error("an Ingress default backend should route to its Service")
+	}
+	// roleRef Kind=ClusterRole → cluster-scoped (roleRefNamespace returns ""), so the binds edge
+	// targets the cluster-scoped ClusterRole, not a namespaced Role.
+	if !hasEdge(g, EdgeBinds, "RoleBinding", "bind-cluster", "ClusterRole", "viewer") {
+		t.Error("a RoleBinding should bind its cluster-scoped ClusterRole roleRef")
+	}
+	// The namespace-less subject resolves to the binding's namespace and links to that ServiceAccount.
+	if !hasEdge(g, EdgeBinds, "RoleBinding", "bind-cluster", "ServiceAccount", "robot") {
+		t.Error("a subject without a namespace should fall back to the binding's namespace")
+	}
+}
+
 func TestSelectsRequiresLabelMatch(t *testing.T) {
 	// A service whose selector matches no pod produces no selects edge.
 	const fixture = `
