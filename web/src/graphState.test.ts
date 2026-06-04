@@ -17,6 +17,14 @@ describe('graphState', () => {
     expect(s.edges).toHaveLength(1)
   })
 
+  it('tolerates a snapshot with null/missing edges (no-relationship namespace)', () => {
+    // A namespace whose resources have no edges marshals server-side as `"edges":null`; fromSnapshot
+    // must not throw on it (the `[...null]` crash hung such namespaces forever on "connecting…").
+    const s = fromSnapshot({ nodes: [{ id: 'a', kind: 'ConfigMap', name: 'a', health: 'Healthy' }], edges: null as unknown as [] })
+    expect(Object.keys(s.nodes)).toEqual(['a'])
+    expect(s.edges).toEqual([])
+  })
+
   it('upserts and removes nodes from a patch', () => {
     const s = applyPatch(fromSnapshot(snapshot), {
       upsertNodes: [{ id: 'b', kind: 'Pod', name: 'b', health: 'Degraded' }],

@@ -23,7 +23,9 @@ import (
 // entry boundary so per-kind logic (health rules, edge inferrers) keeps working as-is;
 // unknown kinds (custom resources) stay unstructured and flow through the CR-specific paths.
 func Build(objs []runtime.Object) *Graph {
-	g := &Graph{}
+	// Non-nil Nodes so an empty graph marshals `"nodes":[]`, not `null` (Edges is guarded after
+	// buildEdges below, which reassigns it).
+	g := &Graph{Nodes: []Node{}}
 	objs = slices.Clone(objs)
 	for i, o := range objs {
 		objs[i] = toTyped(o)
@@ -70,6 +72,13 @@ func Build(objs []runtime.Object) *Graph {
 
 	var endpoints map[string]*Endpoints
 	g.Edges, endpoints = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
+	// buildEdges returns a nil slice when nothing relates (a namespace of standalone resources — only
+	// a ConfigMap + ServiceAccount, say). A nil slice marshals as JSON `null`, which the client's
+	// snapshot reducer (`[...g.edges]`) threw on, hanging the whole namespace on "connecting…" forever.
+	// `edges` is non-optional in the wire contract, so force `[]`.
+	if g.Edges == nil {
+		g.Edges = []Edge{}
+	}
 	annotateServiceEndpoints(g.Nodes, endpoints)
 	sortGraph(g)
 	return g

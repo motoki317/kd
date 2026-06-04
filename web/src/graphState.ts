@@ -15,8 +15,13 @@ export const edgeKey = (e: KEdge): string => [e.from, e.to, e.type].join('|')
 
 export function fromSnapshot(g: KGraph): GraphState {
   const nodes: Record<string, KNode> = {}
-  for (const n of g.nodes) nodes[n.id] = n
-  return { nodes, edges: [...g.edges] }
+  // Tolerate a missing/null nodes or edges array: a namespace whose resources have no relationships
+  // (e.g. a system namespace holding only a ConfigMap + ServiceAccount) yields zero edges, which the
+  // server marshals as JSON `null` (a nil Go slice). `[...null]` throws — and the throw landed inside
+  // the EventSource snapshot listener, BEFORE connState flipped to 'live', so such namespaces hung
+  // forever on "connecting…". The server also now sends `[]`, but stay defensive on the client.
+  for (const n of g.nodes ?? []) nodes[n.id] = n
+  return { nodes, edges: [...(g.edges ?? [])] }
 }
 
 export function applyPatch(state: GraphState, p: Patch): GraphState {

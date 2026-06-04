@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -338,5 +339,22 @@ func TestBuildIsDeterministic(t *testing.T) {
 		if g1.Edges[i] != g2.Edges[i] {
 			t.Errorf("edge order differs at %d", i)
 		}
+	}
+}
+
+// A graph with no edges (a namespace of standalone resources, or an empty build) must marshal its
+// edges/nodes as `[]`, never JSON `null` — the client's snapshot reducer iterates them, and a `null`
+// hung such namespaces forever on "connecting…".
+func TestBuildSlicesNeverNil(t *testing.T) {
+	g := Build(nil)
+	if g.Nodes == nil || g.Edges == nil {
+		t.Fatalf("Build(nil) must return non-nil slices, got nodes=%v edges=%v", g.Nodes, g.Edges)
+	}
+	out, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := string(out); !strings.Contains(s, `"edges":[]`) || !strings.Contains(s, `"nodes":[]`) {
+		t.Errorf("empty graph must marshal edges/nodes as [], got %s", s)
 	}
 }
