@@ -913,6 +913,12 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(a.box!.x + a.box!.width).toBeCloseTo(big.x + big.width, 5) // ...and ends at the node's right edge
     expect(a.box!.height).toBe(CAP_BULLET_PAD + 14 + CAP_BULLET_BAR_H * 2 + CAP_BULLET_BAR_GAP + CAP_BULLET_PAD)
     expect(a.height).toBe(CAP_BULLET_BAR_H * 2 + CAP_BULLET_BAR_GAP)
+    // Zoom-to-read focus extent frames the bar region + its labels, capped at the card. A low-usage pod's
+    // bars occupy only a small left slice of the capacity-width card, so focusW is well short of the full
+    // card — clicking zooms IN to the bars, not OUT onto empty space (the click-to-read regression fix).
+    expect(a.focusW).toBeDefined()
+    expect(a.focusW!).toBeGreaterThanOrEqual(a.width) // covers at least the bars
+    expect(a.focusW!).toBeLessThan(a.box!.width) // ...but well short of the full empty card
   })
 
   it('every pod card in a node shares one full width aligned with the node box', () => {

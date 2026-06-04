@@ -432,9 +432,14 @@ export interface CapSeg {
   width: number
   height: number
   // Expanded-pod bullets only: the bordered card framing the pod's name + two bars. Clicking it zooms
-  // the viewport to this box (the user's "click a pod box to read its bars clearly"). Absent on the
+  // the viewport to read the bars (the user's "click a pod box to read its bars clearly"). Absent on the
   // collapsed-bar segments, which carry no card.
   box?: { x: number; y: number; width: number; height: number }
+  // Zoom-to-read horizontal extent, cardX-anchored: cardX → the bar's filled/tick end + its value label.
+  // The card itself spans the FULL node-capacity width (box.width), most of which is empty space right of
+  // a low-usage pod's short bars — fitting that whole card zooms OUT (the bars shrink). Fitting focusW
+  // instead frames just the bars + labels, so a click actually enlarges them. Capped at box.width.
+  focusW?: number
 }
 
 // CapAggregate is a folded block on a bar (or bullet) standing in for several pods, summed. Two
@@ -454,6 +459,7 @@ export interface CapAggregate {
   // The expanded "other namespaces" bullet's bordered card (mirrors CapSeg.box); absent on the
   // collapsed-bar aggregates.
   box?: { x: number; y: number; width: number; height: number }
+  focusW?: number // zoom-to-read extent (mirrors CapSeg.focusW)
 }
 
 // CapBarItem is one own pod's per-resource numbers, the input to buildCapBar (which decides whether
@@ -753,7 +759,8 @@ export function layoutGraphByCapacity(
       for (const d of segData) {
         const useBarY = by + CAP_BULLET_PAD + CAP_BULLET_NAME_H
         const regionMax = Math.max(barExtent(d.use, d.lim), barExtent(d.use, d.req))
-        bullets.push({ ...d, x: barX, y: useBarY, width: regionMax, height: CAP_BULLET_H, box: { x: cardX, y: by, width: cardW, height: CAP_BULLET_CARD_H } })
+        const focusW = Math.min(cardW, CAP_BULLET_AXIS_W + regionMax + CAP_BAR_VALUE_W)
+        bullets.push({ ...d, x: barX, y: useBarY, width: regionMax, height: CAP_BULLET_H, box: { x: cardX, y: by, width: cardW, height: CAP_BULLET_CARD_H }, focusW })
         by += CAP_BULLET_CARD_H + CAP_BULLET_GAP
       }
       if (otherPods.length) {
@@ -761,7 +768,8 @@ export function layoutGraphByCapacity(
         // request/limit tick — it stands for many pods), both at the global scale like the per-pod cards.
         const useBarY = by + CAP_BULLET_PAD + CAP_BULLET_NAME_H
         const regionMax = Math.max(barExtent(otherUse, undefined), barExtent(otherReq, undefined))
-        otherBullet = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: barX, y: useBarY, width: regionMax, height: CAP_BULLET_H, box: { x: cardX, y: by, width: cardW, height: CAP_BULLET_CARD_H } }
+        const focusW = Math.min(cardW, CAP_BULLET_AXIS_W + regionMax + CAP_BAR_VALUE_W)
+        otherBullet = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: barX, y: useBarY, width: regionMax, height: CAP_BULLET_H, box: { x: cardX, y: by, width: cardW, height: CAP_BULLET_CARD_H }, focusW }
         by += CAP_BULLET_CARD_H + CAP_BULLET_GAP
       }
       bottom = by - CAP_BULLET_GAP

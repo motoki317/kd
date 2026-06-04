@@ -1740,11 +1740,16 @@ export default function Topology(props: Props) {
                           const hClass = `h-${b.node.health.toLowerCase()}`
                           const selected = b.node.id === props.selectedId
                           const box = b.box!
+                          // Zoom-to-read frames the BAR region (focusW), not the full card — the card spans
+                          // the node's whole capacity width, so fitting it would zoom OUT on a low-usage pod
+                          // (its short bars sit in a sea of empty card). focusW reaches just past the bars +
+                          // labels, so the click enlarges them. The card is still the full-width click target.
+                          const focusBox = { x: box.x, y: box.y, width: b.focusW ?? box.width, height: box.height }
                           return (
                             <g
                               class="cap-bullet"
                               classList={{ faded: capSegFaded(b.node) }}
-                              onClick={(e) => { e.stopPropagation(); capPodFitBox = box; props.onSelect(b.node.id); fitCapBox(box) }}
+                              onClick={(e) => { e.stopPropagation(); capPodFitBox = focusBox; props.onSelect(b.node.id); fitCapBox(focusBox) }}
                               onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b, 'use'), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >

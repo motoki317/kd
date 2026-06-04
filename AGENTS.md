@@ -257,10 +257,13 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   CAP_ROW_LEFT - CAP_BULLET_AXIS_W`, `cardW = contentRight - cardX`, computed in layout BEFORE the
   bullets so the row's content edge is known), so the cards read as a clean aligned stack spanning the
   node box end-to-end (alignment + repetition). **Clicking a pod card SELECTS the pod AND zooms the
-  viewport to fit that card** (`fitCapBox`, via `selectionMaxScale`) so its small global-scale bars are
-  readable — the card is the affordance for reading a pod whose bar is tiny relative to its node. The
-  selection-fit effect honours a one-shot `capPodFitBox` ref so the pod-card click frames the card, not
-  the whole node row. Each card is ONE hover/click target (same `CapTipData` tooltip as the node-level
+  viewport to read its bars** (`fitCapBox`, via `selectionMaxScale`). It frames the bar REGION
+  (`CapSeg.focusW`, cardX → bar fill/tick end + value label, capped at the card), **NOT** the full card:
+  the card spans the node's whole capacity width, so a low-usage pod's short bars sit in a sea of empty
+  card — fitting that whole box would zoom OUT (the bars shrink, worse with the drawer narrowing the
+  canvas). focusW reaches just past the bars+labels so the click reliably enlarges them. The whole card
+  is still the click target. The selection-fit effect honours a one-shot `capPodFitBox` ref (set to the
+  focus box) so the pod-card click frames the bars, not the whole node row. Each card is ONE hover/click target (same `CapTipData` tooltip as the node-level
   segments); cards show ONLY the FULL pod name (numbers are on hover). A **cursor-following HTML tooltip** (`capTip`,
   `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
   segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
@@ -378,7 +381,8 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   the width sets the scale (cap 1.2, floor `MIN_FIT_SCALE`) and a stack taller than the viewport is
   TOP-anchored (cards are largest-usage-first, so the heaviest pods sit up top and the operator pans down
   for the tail) instead of centred. A short expansion that fits is still centred. And clicking a per-pod CARD fits the
-  viewport to that single card (`fitCapBox`, `selectionMaxScale`) so its global-scale bars are readable.
+  viewport to that card's BAR REGION (`fitCapBox` on `CapSeg.focusW`, `selectionMaxScale`) so its
+  global-scale bars enlarge to readable — framing the full empty-to-the-right card would zoom OUT instead.
   Both read `capRows()` AFTER the toggle (the memo recomputes synchronously, so the box is already the
   new geometry) and defer the actual fit one rAF for layout/DOM to settle. **Top-bar inset**: the full-width control bar
   overlays the top of the canvas, so `computeFitFor` reads the live `.topology-toolbar` height
