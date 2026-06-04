@@ -137,9 +137,17 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
   follows selection / APG automatic activation). **Verify live:** focus the active option, dispatch
   `ArrowRight`, assert `aria-checked`/`aria-selected` moved, `document.activeElement` is the new
   option, and (Group) the URL/layout actually changed.
-- Still TODO (future cycles): sweep the drawer close/back/expand/share buttons and the log-level
-  controls for the same role/state correctness; check focus-trap + Esc in the drawer. (Sidebar list,
-  tabs, segmented controls, and the copy live-region are done.)
+- **Focus restoration on close** (WCAG 2.4.3): the drawer's exit effect (`on(() => props.node)`) is
+  the ONE choke point for "closing" across every trigger (close button, Escape, canvas deselect) — do
+  focus work there, not in each handler. When focus is inside the drawer as it closes it would fall to
+  `<body>` (strands keyboard users); restore it to `.topology-search input` (the keyboard home base),
+  **gated on `asideEl.contains(document.activeElement)`** so a mouse deselect doesn't yank focus.
+  **Verify live both ways:** focus a drawer button → close → assert `activeElement` is the search; and
+  focus OUTSIDE → close → assert focus stayed put. NOTE: focus does NOT auto-move INTO the drawer on
+  open — that is intentional (it would break the search Enter-cycle flow), not a bug.
+- Still TODO (future cycles): sweep the drawer back/expand/share buttons and the log-level controls for
+  role/state correctness. (Sidebar list, tabs, segmented controls, copy live-region, and drawer
+  close-focus-restore are done.)
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
