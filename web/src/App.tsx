@@ -10,6 +10,7 @@ import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
 import { readPref, readRawPref, writePref } from './prefs'
+import { toggleInSet } from './filterToggle'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
 import type { CapResource } from './capacityLayout'
@@ -63,18 +64,8 @@ export default function App() {
     urlCapRes === 'cpu' || urlCapRes === 'memory' ? urlCapRes : readPref('kd:capRes', 'cpu', ['cpu', 'memory']),
   )
   createEffect(() => writePref('kd:capRes', capResource()))
-  // Toggle a relationship in/out of the filter; Shift "solos" it (exactly this one, clearing the
-  // rest), mirroring the kind chips' toggle/solo gesture.
-  const toggleRel = (c: RelCategory, solo = false) => {
-    if (solo) {
-      if (relFilter().size === 1 && relFilter().has(c)) setRelFilter(new Set<RelCategory>())
-      else setRelFilter(new Set<RelCategory>([c]))
-      return
-    }
-    const s = new Set(relFilter())
-    s.has(c) ? s.delete(c) : s.add(c)
-    setRelFilter(s)
-  }
+  // Relationship + kind chips share one toggle/solo semantics — see toggleInSet.
+  const toggleRel = (c: RelCategory, solo = false) => setRelFilter(toggleInSet(relFilter(), c, solo))
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
 
   // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
@@ -139,22 +130,9 @@ export default function App() {
   const [kindFilter, setKindFilter] = createSignal<Set<string>>(
     new Set(urlKinds ? urlKinds.split(',').filter(Boolean) : []),
   )
-  // Click toggles the kind in/out of the set; Shift+click "solos" — sets the filter to exactly
-  // this kind, clearing everything else. Operators reach for solo when they want "show me ONLY
-  // Pods" without first clearing the prior multi-select.
-  const toggleKind = (k: string, solo = false) => {
-    if (solo) {
-      const s = new Set<string>([k])
-      // Clicking the only-active kind a second time with Shift turns the filter off.
-      if (kindFilter().size === 1 && kindFilter().has(k)) setKindFilter(new Set<string>())
-      else setKindFilter(s)
-      return
-    }
-    const s = new Set(kindFilter())
-    if (s.has(k)) s.delete(k)
-    else s.add(k)
-    setKindFilter(s)
-  }
+  // Operators reach for solo when they want "show me ONLY Pods" without first clearing the prior
+  // multi-select. Shared toggle/solo semantics — see toggleInSet.
+  const toggleKind = (k: string, solo = false) => setKindFilter(toggleInSet(kindFilter(), k, solo))
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
