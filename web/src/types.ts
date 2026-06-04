@@ -26,6 +26,29 @@ export type GroupBy = 'relationship' | 'nodes' | 'kind'
 // (see REL_CATEGORIES in relationships.ts). Composable — several can be active at once.
 export type RelCategory = 'ownership' | 'network' | 'volumes' | 'rbac' | 'scheduling'
 
+// Resources are canonical-unit resource quantities: CPU in millicores, memory in bytes, and a pod
+// count (allocatable only). Every field is optional so "no CPU request set" stays distinguishable
+// from "0" — a pod commonly sets a memory request/limit but no CPU one, and that absence is itself
+// the signal (an unconstrained pod) the capacity view renders.
+export interface Resources {
+  cpuMilli?: number
+  memBytes?: number
+  pods?: number
+}
+
+// ResourceUsage is live consumption from metrics-server (CPU millicores, memory bytes), delivered
+// out-of-band of the graph via the `usage` SSE event and merged into client state orthogonally.
+export interface ResourceUsage {
+  cpuMilli?: number
+  memBytes?: number
+}
+
+// Usage is the payload of the `usage` SSE event: live consumption keyed by object UID (both Nodes
+// and Pods). Kept separate from KNode so the ~15s usage refresh never re-diffs the graph store.
+export interface Usage {
+  items: Record<string, ResourceUsage>
+}
+
 export interface KNode {
   id: string
   kind: string
@@ -40,6 +63,12 @@ export interface KNode {
   images?: string[]
   host?: string
   capacity?: string
+  // allocatable is a Node's schedulable capacity (Node kind only) — drives node track length in the
+  // capacity view. requests/limits are a Pod's summed container requests/limits (Pod kind); a field
+  // is absent when no container sets it, so the view can mark unconstrained pods.
+  allocatable?: Resources
+  requests?: Resources
+  limits?: Resources
   clusterIP?: string
   externalIP?: string
   ports?: string[]

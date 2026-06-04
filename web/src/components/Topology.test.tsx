@@ -322,19 +322,18 @@ describe('Topology', () => {
     expect(onKindFilter).toHaveBeenCalledWith('Pod', true)
   })
 
-  it('Nodes view renders a host-group rect for each unique host (cycle 205)', () => {
+  it('Nodes view renders a capacity row per node with a usage segment per pod', () => {
     const nodesV: KNode[] = [
-      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy' },
-      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1' },
-      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1' },
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000, memBytes: 8 * 1024 ** 3 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 200 } },
+      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
     ]
-    const edgesV: KEdge[] = [
-      { from: 'p1', to: 'node-a', type: 'scheduledOn' },
-      { from: 'p2', to: 'node-a', type: 'scheduledOn' },
-    ]
-    const { container } = render(() => <Topology nodes={nodesV} edges={edgesV} search="" {...base} groupBy="nodes" />)
-    expect(container.querySelectorAll('.host-group').length).toBe(1)
-    // scheduledOn edges are dropped from rendering (containment carries them).
+    const usage = { items: { p1: { cpuMilli: 150 }, p2: { cpuMilli: 80 } } }
+    const { container } = render(() => <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" usage={usage} />)
+    // One capacity row for the node, one usage segment per pod.
+    expect(container.querySelectorAll('.cap-row').length).toBe(1)
+    expect(container.querySelectorAll('.cap-seg.use').length).toBe(2)
+    // The capacity view draws no relationship edges (containment carries scheduling).
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
   })
 

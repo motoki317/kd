@@ -408,6 +408,287 @@ export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: Rea
   return { ...packed, edges: [] }
 }
 
+// ---- Capacity & usage view (the Nodes group-by) ----
+//
+// A length-encoded "bullet bar" visualization (see docs/ADR/20260603-nodes-capacity-usage-
+// visualization.md): each node is a horizontal TRACK whose length ∝ its allocatable capacity (on a
+// GLOBAL px-per-unit scale, so node sizes are comparable across the canvas — the "feel the size"
+// goal), and pods are SEGMENTS sized by their actual usage. Reserved (request) vs actual (usage) is
+// shown either as two stacked sub-bars ('split') or one usage bar with a Σrequest marker ('overlay').
+// Expanding a node unfolds per-pod bullet rows (usage fill + request/limit ticks + overshoot). A
+// single resource is shown at a time (CPU or memory), so the two metrics never fight for one channel.
+
+export type CapResource = 'cpu' | 'memory'
+export type CapMode = 'split' | 'overlay'
+
+const CAP_TRACK_MAX = 720 // px length of the largest-capacity node's track; everything scales to this
+const CAP_TRACK_MIN = 130 // a node never narrower than this, so a tiny node stays readable/clickable
+const CAP_ROW_LEFT = 30 // left gutter where every track starts (shared, so bars left-align)
+const CAP_LABEL_H = 22 // header line (node name · capacity · Σreq/Σuse) above the bars
+const CAP_BAR_USE = 22 // the usage bar height
+const CAP_BAR_REQ = 12 // the (thinner) requested bar height, split mode only
+const CAP_BAR_GAP = 3 // gap between the req and use sub-bars
+const CAP_ROW_GAP = 26 // gap between node rows
+const CAP_BULLET_H = 20 // a per-pod bullet row height (expanded detail)
+const CAP_BULLET_GAP = 4
+const CAP_MIN_SEG = 4 // every pod segment is at least this wide, so an idle pod stays visible/hittable
+const CAP_TOP = 28
+const CAP_BOTTOM_PAD = 12
+const CAP_BULLET_LABEL = 190 // trailing space reserved for an expanded bullet's name + values text
+// Expanded bullets use their OWN per-node scale (not the node-capacity scale): a pod's usage,
+// request and limit are tiny against a big node, so at node scale the ticks would be unreadable.
+// Bullets share one scale across a node's pods (so pods stay comparable) zoomed to the largest pod.
+const CAP_BULLET_TRACK = 300
+
+// resourceOf reads the active resource's quantity (CPU millicores or memory bytes) off a Resources
+// object, returning undefined when that resource is unset (the absent-request case the view marks).
+const resourceOf = (r: { cpuMilli?: number; memBytes?: number } | undefined, res: CapResource): number | undefined =>
+  !r ? undefined : res === 'cpu' ? r.cpuMilli : r.memBytes
+
+// CapSeg is one pod rendered as a bar segment (or, in the expanded detail, a per-pod bullet). It
+// carries the raw values so the renderer can draw the usage fill, the request/limit ticks, and the
+// overshoot/near-limit states, plus the box geometry that doubles as the selection hit target.
+export interface CapSeg {
+  node: KNode
+  use: number // active-resource usage in canonical units; 0 when unknown
+  req?: number // summed container request, undefined when no container sets it
+  lim?: number
+  over: boolean // usage exceeds request (and a request exists) — bursting past the reservation
+  nearLimit: boolean // usage within 90% of the limit — OOM/throttle risk
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// CapRow is one node: its track (length ∝ capacity), the pod segments composing the usage (and, in
+// split mode, the requested) bar, aggregate totals, and the expanded per-pod bullets.
+export interface CapRow {
+  host: string
+  label: string
+  node?: KNode // the Node resource; undefined for the synthetic "Unscheduled" bucket
+  cap?: number // allocatable for the active resource; undefined when unknown (orphan bucket)
+  reqTotal: number
+  useTotal: number
+  nodeUse?: number // the node's TOTAL usage (all namespaces, from NodeMetrics) — context backdrop
+  overcommit: boolean // Σrequest exceeds capacity — the node has promised more than it has
+  expanded: boolean
+  x: number
+  y: number
+  width: number
+  height: number
+  trackY: number // y of the (primary) usage bar top
+  trackW: number // full track length in px (capacity · scale)
+  reqBarY?: number // y of the requested bar (split mode only)
+  useSegs: CapSeg[] // pods sized by usage, composing the usage bar
+  reqSegs: CapSeg[] // pods with a request, sized by request (split mode only)
+  reqMarkerX?: number // Σrequest marker position on the track (overlay mode only)
+  bullets: CapSeg[] // per-pod detail rows, present only when expanded
+  bulletScale?: number // px-per-unit for the bullets (per-node, zoomed to the largest pod)
+}
+
+// CapacityLayout is a Layout (so selection/search/fit operate on `nodes` as usual) plus the per-node
+// row model the capacity renderer draws. `nodes` are positioned at each pod's usage segment (the
+// selection box) and each Node's header, so clicking a bar opens the right drawer.
+export interface CapacityLayout extends Layout {
+  rows: CapRow[]
+  scale: number
+  resource: CapResource
+  mode: CapMode
+  hasUsage: boolean
+}
+
+export function layoutGraphByCapacity(
+  nodes: KNode[],
+  usage: Record<string, { cpuMilli?: number; memBytes?: number }> | undefined,
+  resource: CapResource,
+  mode: CapMode,
+  expanded: ReadonlySet<string> = new Set(),
+): CapacityLayout {
+  const base: CapacityLayout = { nodes: [], edges: [], width: 0, height: 0, rows: [], scale: 1, resource, mode, hasUsage: false }
+  if (nodes.length === 0) return base
+
+  const hasUsage = !!usage && Object.keys(usage).length > 0
+  const useOf = (id: string): number => {
+    const u = usage?.[id]
+    return (u ? resourceOf(u, resource) : undefined) ?? 0
+  }
+
+  const nodeByName = new Map<string, KNode>()
+  for (const n of nodes) if (n.kind === 'Node') nodeByName.set(n.name, n)
+
+  const podsByHost = new Map<string, KNode[]>()
+  const ORPHAN = '__orphan__'
+  for (const n of nodes) {
+    if (n.kind !== 'Pod') continue
+    const key = n.host && nodeByName.has(n.host) ? n.host : ORPHAN
+    if (!podsByHost.has(key)) podsByHost.set(key, [])
+    podsByHost.get(key)!.push(n)
+  }
+  const hostNames = [...nodeByName.keys()].sort((a, b) => a.localeCompare(b))
+  if (podsByHost.has(ORPHAN)) hostNames.push(ORPHAN)
+
+  // Global scale: the largest node capacity maps to CAP_TRACK_MAX, so every other node's track is
+  // proportional (a 2× node reads 2× as long). When no capacities are known (a pure orphan bucket),
+  // fall back to the largest demand so the bars still fill the canvas.
+  let maxCap = 0
+  let maxDemand = 0
+  for (const host of hostNames) {
+    const cap = resourceOf(nodeByName.get(host)?.allocatable, resource)
+    if (cap) maxCap = Math.max(maxCap, cap)
+    let use = 0
+    let req = 0
+    for (const p of podsByHost.get(host) ?? []) {
+      use += useOf(p.id)
+      req += resourceOf(p.requests, resource) ?? 0
+    }
+    maxDemand = Math.max(maxDemand, use, req)
+  }
+  const scale = CAP_TRACK_MAX / (maxCap || maxDemand || 1)
+
+  // Troubled pods first, then natural name — the same order the old host view used, so an operator
+  // scanning a node meets its problem pods at the left of the bar.
+  const sev = (n: KNode) => (n.health === 'Healthy' ? 0 : 1)
+  const order = (a: KNode, b: KNode) => sev(b) - sev(a) || byName(a, b)
+
+  const rows: CapRow[] = []
+  const posNodes: PositionedNode[] = []
+  let cursorY = CAP_TOP
+  let maxRight = CAP_ROW_LEFT + CAP_TRACK_MIN
+
+  for (const host of hostNames) {
+    const nodeCard = nodeByName.get(host)
+    const cap = resourceOf(nodeCard?.allocatable, resource)
+    const pods = [...(podsByHost.get(host) ?? [])].sort(order)
+
+    const segData = pods.map((p) => {
+      const use = useOf(p.id)
+      const req = resourceOf(p.requests, resource)
+      const lim = resourceOf(p.limits, resource)
+      return { node: p, use, req, lim, over: req !== undefined && use > req, nearLimit: lim !== undefined && lim > 0 && use >= 0.9 * lim }
+    })
+    const useTotal = segData.reduce((s, d) => s + d.use, 0)
+    const reqTotal = segData.reduce((s, d) => s + (d.req ?? 0), 0)
+    const trackW = Math.max(CAP_TRACK_MIN, (cap ?? Math.max(useTotal, reqTotal)) * scale)
+
+    const headerY = cursorY
+    const reqBarY = mode === 'split' ? headerY + CAP_LABEL_H : undefined
+    const useBarY = mode === 'split' ? reqBarY! + CAP_BAR_REQ + CAP_BAR_GAP : headerY + CAP_LABEL_H
+
+    // Usage bar: every pod a segment sized by usage (or, when metrics-server is absent, by request —
+    // so the view still draws something). Segments tile from the left; the remainder of the track is
+    // headroom, and any overflow past the track end is overcommit/overuse the renderer marks red.
+    // Every pod gets at least CAP_MIN_SEG of width even at zero usage, so a node's full pod
+    // composition stays visible and clickable — a pod idle on the active resource must not vanish
+    // (a CPU-idle pod is the common case). The small inflation is negligible against the track.
+    let ux = CAP_ROW_LEFT
+    const useSegs: CapSeg[] = segData.map((d) => {
+      const val = hasUsage ? d.use : d.req ?? 0
+      const width = Math.max(CAP_MIN_SEG, val * scale)
+      const seg: CapSeg = { ...d, x: ux, y: useBarY, width, height: CAP_BAR_USE }
+      ux += width
+      // Selection box = the usage segment, so clicking a pod's bar opens its drawer.
+      posNodes.push({ ...d.node, x: seg.x + width / 2, y: useBarY + CAP_BAR_USE / 2, width, height: CAP_BAR_USE })
+      return seg
+    })
+
+    // Requested bar (split mode): only pods that set a request appear, sized by request.
+    const reqSegs: CapSeg[] = []
+    let reqMarkerX: number | undefined
+    if (mode === 'split') {
+      let rx = CAP_ROW_LEFT
+      for (const d of segData) {
+        if (d.req === undefined) continue
+        const width = Math.max(CAP_MIN_SEG, d.req * scale)
+        reqSegs.push({ ...d, x: rx, y: reqBarY!, width, height: CAP_BAR_REQ })
+        rx += width
+      }
+    } else {
+      reqMarkerX = CAP_ROW_LEFT + reqTotal * scale
+    }
+
+    let bottom = useBarY + CAP_BAR_USE
+    const isExpanded = expanded.has(`host:${host}`)
+    const bullets: CapSeg[] = []
+    // Per-node bullet scale: zoom to the largest of any pod's usage/request/limit so the smallest
+    // pod's ticks are still legible, while pods stay comparable to each other within the node.
+    const bulletMax = segData.reduce((m, d) => Math.max(m, d.use, d.req ?? 0, d.lim ?? 0), 0)
+    const bulletScale = CAP_BULLET_TRACK / (bulletMax || 1)
+    if (isExpanded && segData.length) {
+      let by = bottom + CAP_BULLET_GAP + 2
+      for (const d of segData) {
+        bullets.push({ ...d, x: CAP_ROW_LEFT, y: by, width: CAP_BULLET_TRACK, height: CAP_BULLET_H })
+        by += CAP_BULLET_H + CAP_BULLET_GAP
+      }
+      bottom = by - CAP_BULLET_GAP
+    }
+
+    // The Node resource itself is selectable via its header label region.
+    if (nodeCard) {
+      posNodes.push({ ...nodeCard, x: CAP_ROW_LEFT + 70, y: headerY + CAP_LABEL_H / 2, width: 140, height: CAP_LABEL_H })
+    }
+
+    const rowRight = CAP_ROW_LEFT + Math.max(trackW, ux - CAP_ROW_LEFT) + (isExpanded ? CAP_BULLET_LABEL : 0)
+    maxRight = Math.max(maxRight, rowRight)
+    rows.push({
+      host,
+      label: host === ORPHAN ? 'Unscheduled' : host,
+      node: nodeCard,
+      cap,
+      reqTotal,
+      useTotal,
+      nodeUse: nodeCard ? useOf(nodeCard.id) || undefined : undefined,
+      overcommit: cap !== undefined && reqTotal > cap,
+      expanded: isExpanded,
+      x: CAP_ROW_LEFT,
+      y: headerY,
+      width: rowRight - CAP_ROW_LEFT,
+      height: bottom - headerY,
+      trackY: useBarY,
+      trackW,
+      reqBarY,
+      useSegs,
+      reqSegs,
+      reqMarkerX,
+      bullets,
+      bulletScale,
+    })
+    cursorY = bottom + CAP_ROW_GAP
+  }
+
+  return {
+    nodes: posNodes,
+    edges: [],
+    width: maxRight + CAP_ROW_LEFT,
+    height: cursorY - CAP_ROW_GAP + CAP_BOTTOM_PAD,
+    rows,
+    scale,
+    resource,
+    mode,
+    hasUsage,
+  }
+}
+
+// formatQuantity renders a canonical-unit resource value for the capacity view's labels: CPU
+// millicores as cores ("1.5") or millicores ("500m") and memory bytes as binary units ("8Gi").
+export function formatQuantity(v: number | undefined, res: CapResource): string {
+  if (v === undefined) return '—'
+  if (res === 'cpu') {
+    if (v === 0) return '0'
+    if (v < 1000) return `${Math.round(v)}m`
+    return `${+(v / 1000).toFixed(2)}` // cores, trailing zeros dropped (1500 → "1.5", 2000 → "2")
+  }
+  if (v === 0) return '0'
+  const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
+  let i = 0
+  let n = v
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
+  }
+  return `${+n.toFixed(i > 0 ? 1 : 0)}${units[i]}` // "8Gi" not "8.0Gi", "8.5Gi" kept
+}
+
 // hostGroups returns the host-container bounding rects in layout coordinates, so the Topology
 // renderer can draw a host-group background rect + a "host: <name>" header without recomputing
 // the grouping. The header label is the host name (or "Unscheduled" for the orphan bucket).

@@ -6,7 +6,7 @@ import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphSt
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
-import type { GroupBy, Health, KNode, RelCategory } from './types'
+import type { GroupBy, Health, KNode, RelCategory, Usage } from './types'
 import { REL_CATEGORIES } from './relationships'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
@@ -184,6 +184,9 @@ export default function App() {
   // polled list — keeping the sidebar from briefly flipping a degraded ns to healthy on click
   // just because the current view (e.g. ownership) doesn't include the unhealthy resource.
   const [liveSummary, setLiveSummary] = createSignal<NamespaceSummary | null>(null)
+  // Live resource usage from metrics-server (keyed by object UID), for the capacity/usage view.
+  // Null until the first `usage` event; cleared on resubscribe so it never carries across scopes.
+  const [usage, setUsage] = createSignal<Usage | null>(null)
   // Bumped on a programmatic jump to a namespace (first-load auto-pick, Alt+T) so the sidebar can
   // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
   const [nsFlash, setNsFlash] = createSignal(0)
@@ -368,6 +371,7 @@ export default function App() {
     firstSubscribe = false
     setGraph(reconcile(emptyState()))
     setLiveSummary(null) // previous stream's summary belongs to the previous namespace — clear it
+    setUsage(null) // same: the previous stream's usage belongs to the previous scope
     setConnState('connecting')
     const close = streamGraph(c, ns, {
       snapshot: (g) => {
@@ -382,6 +386,7 @@ export default function App() {
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
       summary: (s) => setLiveSummary(s),
+      usage: (u) => setUsage(u),
       error: () => setConnState('offline'),
     })
     onCleanup(close)
@@ -594,6 +599,7 @@ export default function App() {
             relFilter={relFilter()}
             onRelFilter={toggleRel}
             scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
+            usage={usage()}
             search={search()}
             onSearch={setSearch}
             searchRef={(el) => (searchEl = el)}

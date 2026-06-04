@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { COLLAPSE_KIND, connGroups, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, type CollapseMeta, type Point } from '../layout'
+import { COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapMode, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -8,7 +8,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import type { EdgeType, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
+import type { EdgeType, GroupBy, Health, KEdge, KNode, RelCategory, Usage } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
 
@@ -53,6 +53,10 @@ interface Props {
   // context/namespace switch — not when an SSE patch or a collapse expand/refold changes the node
   // set within the same scope (which must preserve the operator's current pan/zoom).
   scope?: string
+  // usage is the live metrics-server resource draw (keyed by object UID) for the capacity/usage
+  // view. Null when metrics-server is unavailable or before the first reading arrives.
+  // TODO(capacity-view): consume usage
+  usage?: Usage | null
   search: string
   onSearch: (q: string) => void
   // Lets the app focus the topology search from a global key (Cmd/Ctrl+K) — like Sidebar's
@@ -170,6 +174,26 @@ export default function Topology(props: Props) {
       return next
     })
 
+  // Capacity view (Nodes group-by) controls, persisted to localStorage so the operator's choice of
+  // resource and bar style survives reloads (mirrors the kd:* persistence of group-by/relationships).
+  // capResource: which single resource sizes the bars. capMode: 'split' (separate requested/used
+  // sub-bars) vs 'overlay' (one usage bar + a Σrequest marker) — shipped both so we can pick the
+  // keeper after live review (see the ADR).
+  const readPref = <T extends string>(key: string, fallback: T, allowed: T[]): T => {
+    const v = (typeof localStorage !== 'undefined' && localStorage.getItem(key)) as T | null
+    return v && allowed.includes(v) ? v : fallback
+  }
+  const [capResource, setCapResourceSig] = createSignal<CapResource>(readPref('kd:capRes', 'cpu', ['cpu', 'memory']))
+  const [capMode, setCapModeSig] = createSignal<CapMode>(readPref('kd:capMode', 'split', ['split', 'overlay']))
+  const setCapResource = (r: CapResource) => {
+    setCapResourceSig(r)
+    try { localStorage.setItem('kd:capRes', r) } catch { /* private mode */ }
+  }
+  const setCapMode = (m: CapMode) => {
+    setCapModeSig(m)
+    try { localStorage.setItem('kd:capMode', m) } catch { /* private mode */ }
+  }
+
   // Project the full streamed edge set onto the active relationship categories (reversing the
   // referenced-as-parent ones) — the client-side replacement for the old server per-view Filter.
   // Drives the LAYOUT and the selection-spotlight/fit (related()), so clicking a node only lights
@@ -182,9 +206,11 @@ export default function Topology(props: Props) {
     // Kind grouping: every resource in a per-kind box; the projected edges still draw on top
     // (suppressed until selection — see renderedEdges) so the cross-kind matrix stays readable.
     if (props.groupBy === 'kind') return layoutGraphByKind(props.nodes, edges, expandedClusters())
-    // Nodes grouping: each host becomes a labeled container with the Node card + its pods inside.
-    // scheduledOn is implied by containment, so the layout ignores edges entirely (cycle 205).
-    if (props.groupBy === 'nodes') return layoutGraphByHost(props.nodes, edges, expandedClusters())
+    // Nodes grouping: the capacity & usage visualization — node tracks (length ∝ allocatable) with
+    // pods as usage-sized segments, reserved-vs-actual bars, expandable to per-pod bullets. Driven by
+    // the live metrics-server usage feed (props.usage) + the active resource/mode toggles.
+    if (props.groupBy === 'nodes')
+      return layoutGraphByCapacity(props.nodes, props.usage?.items, capResource(), capMode(), expandedClusters())
     // Relationship grouping (default): left-to-right depth columns following the displayed
     // relationship edges. A card is far wider than it is tall, so a parent's children read better
     // stacked in a vertical column to the right (LR). Nodes untouched by any displayed edge fall
@@ -195,8 +221,11 @@ export default function Topology(props: Props) {
   // Kind grouping draws a faint kind-label band above each kind box so the operator can scan
   // "this section is all Pods, that's all Services" without inferring it from card kinds.
   const groups = createMemo(() => (props.groupBy === 'kind' ? kindGroups(layout()) : []))
-  // Nodes grouping: per-host group bounding boxes for the host-container bg rect + header label.
-  const hosts = createMemo(() => (props.groupBy === 'nodes' ? hostGroups(layout()) : []))
+  // Nodes grouping: the capacity layout's per-node row model (tracks, segments, bullets). Empty for
+  // every other group-by. Cast is safe — layout() returns a CapacityLayout exactly when groupBy is
+  // 'nodes' (the dispatch above), and CapacityLayout is a Layout superset.
+  const capRows = createMemo<CapRow[]>(() => (props.groupBy === 'nodes' ? (layout() as CapacityLayout).rows : []))
+  const capInfo = createMemo(() => layout() as CapacityLayout)
   // Relationship grouping has no kind/host container, so a fold's siblings + pill get a dedicated
   // grouping frame. Kind/Nodes already box by kind/host — a second frame there would double-border,
   // so connGroups is empty for those.
@@ -222,21 +251,6 @@ export default function Topology(props: Props) {
       return { ...c, count: props.edges.filter((e) => types.has(e.type)).length }
     })
   })
-  // Pod count per host, used in the host-group header chip — derived once to keep the SVG
-  // markup clean (the alternative is an inline expression that has to re-derive the orphan
-  // bucket condition every render). The orphan host bucket counts pods that have either no
-  // host string or a host with no matching Node card in the current graph.
-  const podsPerHost = createMemo<Record<string, number>>(() => {
-    const c: Record<string, number> = {}
-    const nodeNames = new Set(props.nodes.filter((n) => n.kind === 'Node').map((n) => n.name))
-    for (const n of props.nodes) {
-      if (n.kind !== 'Pod') continue
-      const key = n.host && nodeNames.has(n.host) ? n.host : '__orphan__'
-      c[key] = (c[key] ?? 0) + 1
-    }
-    return c
-  })
-
   // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
   // We snapshot the prior layout each time createEffect runs and diff against the new one.
@@ -1175,6 +1189,45 @@ export default function Topology(props: Props) {
             </div>
           </div>
         </Show>
+        {/* Capacity-view facets — only in the Nodes group-by. Resource picks which single metric
+            sizes the bars (CPU/memory never share one length channel); Bars switches the
+            reserved-vs-actual presentation (two stacked sub-bars vs one usage bar + a Σrequest mark). */}
+        <Show when={props.groupBy === 'nodes'}>
+          <div class="toolbar-facet">
+            <span class="toolbar-label">Resource</span>
+            <div class="group-seg" role="group" aria-label="Size bars by resource">
+              <For each={[{ id: 'cpu', label: 'CPU' }, { id: 'memory', label: 'Memory' }] as const}>
+                {(r) => (
+                  <button
+                    classList={{ active: capResource() === r.id }}
+                    aria-pressed={capResource() === r.id}
+                    onClick={() => setCapResource(r.id)}
+                    title={`Size node tracks and pod segments by ${r.label}`}
+                  >
+                    {r.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+          <div class="toolbar-facet">
+            <span class="toolbar-label">Bars</span>
+            <div class="group-seg" role="group" aria-label="Bar style">
+              <For each={[{ id: 'split', label: 'Req + Use' }, { id: 'overlay', label: 'Use' }] as const}>
+                {(m) => (
+                  <button
+                    classList={{ active: capMode() === m.id }}
+                    aria-pressed={capMode() === m.id}
+                    onClick={() => setCapMode(m.id)}
+                    title={m.id === 'split' ? 'Two stacked bars: requested and actual usage' : 'One usage bar with a requested marker'}
+                  >
+                    {m.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
       </div>
         {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. */}
         <Show when={(relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
@@ -1298,41 +1351,141 @@ export default function Topology(props: Props) {
           </marker>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
-          {/* Nodes view: each host's container rect + "host: <name>" header, drawn under the
-              cards so the cards sit on top. Mirrors the kind-groups treatment in All view —
-              backdrop + label + tiny server-rack icon — so the two grouped views share a visual
-              language. */}
-          <Show when={hosts().length > 0}>
-            <g class="host-groups">
-              <For each={hosts()}>
-                {(h) => (
-                  <g class="host-group">
-                    <rect
-                      class="host-group-bg"
-                      x={h.x - 10}
-                      y={h.y - 6}
-                      width={h.width + 20}
-                      height={h.height + 16}
-                      rx="8"
-                    />
-                    {/* Small server-rack glyph echoes the [cluster] icon in the sidebar — the
-                        operator recognizes it as "this is a host" without reading the label. */}
-                    <svg class="host-group-icon" x={h.x - 1} y={h.y + 1} viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-                      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2" />
-                      <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2" />
-                    </svg>
-                    <text class="host-group-label" x={h.x + 16} y={h.y + 14}>
-                      {h.label}
-                      {/* Pod count at a glance: lighter weight + tabular nums, separated by a
-                          middle-dot so a long host name + count still reads as one label. */}
-                      <tspan class="host-group-count">
-                        {' '}· {(podsPerHost()[h.host] ?? 0) === 0
-                          ? 'no pods'
-                          : `${podsPerHost()[h.host]} pod${podsPerHost()[h.host] === 1 ? '' : 's'}`}
-                      </tspan>
-                    </text>
-                  </g>
-                )}
+          {/* Nodes view: the capacity & usage visualization. Each node is a horizontal track
+              (length ∝ allocatable) with pods drawn as usage-sized segments; reserved-vs-actual
+              shows as stacked req/use bars (split) or one usage bar + a Σrequest marker (overlay).
+              Expanding a node unfolds per-pod bullets with request/limit ticks + overshoot. */}
+          <Show when={props.groupBy === 'nodes'}>
+            <g class="cap-view">
+              <For each={capRows()}>
+                {(row) => {
+                  const fmt = (v: number | undefined) => formatQuantity(v, capResource())
+                  const pods = row.useSegs.length
+                  const segClasses = (s: CapSeg) => ({
+                    over: s.over,
+                    near: s.nearLimit,
+                    faded: nodeFaded(s.node),
+                    selected: s.node.id === props.selectedId,
+                    [`h-${s.node.health.toLowerCase()}`]: true,
+                  })
+                  return (
+                    <g class="cap-row">
+                      <text class="cap-row-label" x={row.x} y={row.y + 14}>
+                        <Show when={pods > 0}>
+                          <tspan class="cap-caret" onClick={() => toggleCluster(`host:${row.host}`)}>
+                            {row.expanded ? '▾ ' : '▸ '}
+                          </tspan>
+                        </Show>
+                        <tspan class="cap-row-host">{row.label}</tspan>
+                        <tspan class="cap-row-meta">
+                          {row.cap !== undefined ? ` · ${fmt(row.cap)} ${capResource() === 'cpu' ? 'CPU' : 'mem'}` : ''}
+                          {` · ${pods} pod${pods === 1 ? '' : 's'}`}
+                          {pods || row.reqTotal ? ` · use ${fmt(row.useTotal)} · req ${fmt(row.reqTotal)}` : ''}
+                        </tspan>
+                        <Show when={row.overcommit}>
+                          <tspan class="cap-warn"> · overcommit</tspan>
+                        </Show>
+                      </text>
+
+                      {/* Requested bar (split mode): pods that set a request, sized by request. */}
+                      <Show when={capMode() === 'split' && row.reqBarY !== undefined}>
+                        <rect class="cap-track req" x={row.x} y={row.reqBarY!} width={row.trackW} height={12} rx="2" />
+                        <For each={row.reqSegs}>
+                          {(s) => (
+                            <rect
+                              class="cap-seg req"
+                              classList={{ faded: nodeFaded(s.node), selected: s.node.id === props.selectedId }}
+                              x={s.x}
+                              y={s.y}
+                              width={Math.max(0.5, s.width - 0.5)}
+                              height={s.height}
+                              onClick={() => props.onSelect(s.node.id)}
+                            >
+                              <title>{`${s.node.name} · request ${fmt(s.req)}`}</title>
+                            </rect>
+                          )}
+                        </For>
+                      </Show>
+
+                      {/* Usage bar: every pod a segment sized by actual usage. The node's TOTAL usage
+                          (all namespaces) is a faint backdrop, so a namespace's small footprint still
+                          reads against the node's real utilization — the bright segments are THIS
+                          namespace's pods, the faint remainder is other namespaces, the rest headroom. */}
+                      <rect class="cap-track use" x={row.x} y={row.trackY} width={row.trackW} height={22} rx="2" />
+                      <Show when={row.nodeUse !== undefined}>
+                        <rect
+                          class="cap-track-nodeuse"
+                          x={row.x}
+                          y={row.trackY}
+                          width={Math.max(0, Math.min(row.nodeUse! * capInfo().scale, row.trackW))}
+                          height={22}
+                        />
+                      </Show>
+                      <For each={row.useSegs}>
+                        {(s) => (
+                          <Show when={s.width > 0}>
+                            <rect
+                              class="cap-seg use"
+                              classList={segClasses(s)}
+                              x={s.x}
+                              y={s.y}
+                              width={Math.max(0.5, s.width - 0.5)}
+                              height={s.height}
+                              onClick={() => props.onSelect(s.node.id)}
+                            >
+                              <title>
+                                {`${s.node.name} · use ${fmt(s.use)}${s.req !== undefined ? ` · req ${fmt(s.req)}` : ' · no request'}${s.lim !== undefined ? ` · lim ${fmt(s.lim)}` : ''}`}
+                              </title>
+                            </rect>
+                          </Show>
+                        )}
+                      </For>
+                      {/* Σrequest marker (overlay mode). */}
+                      <Show when={capMode() === 'overlay' && row.reqMarkerX !== undefined}>
+                        <line class="cap-reqmark" x1={row.reqMarkerX} y1={row.trackY - 2} x2={row.reqMarkerX} y2={row.trackY + 24} />
+                        <text class="cap-reqmark-label" x={row.reqMarkerX} y={row.trackY - 4}>req</text>
+                      </Show>
+                      {/* Capacity line when requests or usage overflow the track. */}
+                      <Show when={row.cap !== undefined && (row.overcommit || row.useTotal > row.cap)}>
+                        <line class="cap-capline" x1={row.x + row.trackW} y1={row.trackY - 3} x2={row.x + row.trackW} y2={row.trackY + 25} />
+                      </Show>
+
+                      {/* Per-pod bullets (expanded): usage fill + request/limit ticks + overshoot. */}
+                      <For each={row.bullets}>
+                        {(b) => {
+                          const bs = row.bulletScale ?? 1
+                          const usePx = b.use * bs
+                          const reqPx = b.req !== undefined ? b.req * bs : undefined
+                          const limPx = b.lim !== undefined ? b.lim * bs : undefined
+                          const withinW = b.over && reqPx !== undefined ? reqPx : usePx
+                          return (
+                            <g
+                              class="cap-bullet"
+                              classList={{ faded: nodeFaded(b.node), selected: b.node.id === props.selectedId }}
+                              onClick={() => props.onSelect(b.node.id)}
+                            >
+                              <rect class="cap-bullet-track" x={b.x} y={b.y} width={b.width} height={b.height} rx="2" />
+                              <rect class="cap-bullet-fill" x={b.x} y={b.y} width={Math.max(0, Math.min(withinW, b.width))} height={b.height} />
+                              <Show when={b.over && reqPx !== undefined}>
+                                <rect class="cap-bullet-over" x={b.x + reqPx!} y={b.y} width={Math.max(0, Math.min(usePx, b.width) - reqPx!)} height={b.height} />
+                              </Show>
+                              <Show when={reqPx !== undefined && reqPx! <= b.width + 1}>
+                                <line class="cap-tick req" x1={b.x + reqPx!} y1={b.y - 1} x2={b.x + reqPx!} y2={b.y + b.height + 1} />
+                              </Show>
+                              <Show when={limPx !== undefined && limPx! <= b.width + 1}>
+                                <line class="cap-tick lim" x1={b.x + limPx!} y1={b.y - 1} x2={b.x + limPx!} y2={b.y + b.height + 1} />
+                              </Show>
+                              <text class="cap-bullet-vals" x={b.x + b.width + 8} y={b.y + 14}>
+                                <tspan class="cap-bullet-name">{label(b.node)}</tspan>
+                                {`  ${fmt(b.use)}${b.req !== undefined ? ` · req ${fmt(b.req)}` : ' · no req'}${b.lim !== undefined ? ` · lim ${fmt(b.lim)}` : ''}`}
+                              </text>
+                            </g>
+                          )
+                        }}
+                      </For>
+                    </g>
+                  )
+                }}
               </For>
             </g>
           </Show>
@@ -1434,8 +1587,10 @@ export default function Topology(props: Props) {
           </g>
           <g class="nodes">
             {/* Render layout().nodes + exiting() so removed cards keep their last-known position
-                while fading out — operators see "what left" rather than a card vanishing. */}
-            <For each={[...layout().nodes, ...exiting()]}>
+                while fading out — operators see "what left" rather than a card vanishing. The Nodes
+                group-by draws its own bar visualization above (cap-view), so the card renderer is
+                skipped there — its layout().nodes are segment hit-boxes, not cards. */}
+            <For each={props.groupBy === 'nodes' ? [] : [...layout().nodes, ...exiting()]}>
               {(n) => (
                 <Show
                   when={n.collapse}
@@ -1589,8 +1744,8 @@ export default function Topology(props: Props) {
                 <Show when={props.groupBy === 'kind' && groups().length > 1}>
                   {' '}· {groups().length} kinds
                 </Show>
-                <Show when={props.groupBy === 'nodes' && hosts().length > 0}>
-                  {' '}· {hosts().length} host{hosts().length === 1 ? '' : 's'}
+                <Show when={props.groupBy === 'nodes' && capRows().length > 0}>
+                  {' '}· {capRows().length} node{capRows().length === 1 ? '' : 's'}
                 </Show>
               </>
             }

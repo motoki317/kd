@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLLAPSE_VISIBLE, connGroups, hostGroups, kindGroups, layoutGraph, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, connGroups, formatQuantity, hostGroups, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -804,5 +804,94 @@ describe('same-kind collapse (+N more)', () => {
     // The pill rides in the host container (attributed via its host field).
     const hg = hostGroups(l).find((g) => g.host === 'node-a')!
     expect(pill.x + pill.width / 2).toBeLessThanOrEqual(hg.x + hg.width + 0.001)
+  })
+})
+
+describe('layoutGraphByCapacity (Nodes capacity view)', () => {
+  const capNodes: KNode[] = [
+    { id: 'n1', kind: 'Node', name: 'big', health: 'Healthy', allocatable: { cpuMilli: 8000, memBytes: 16 * 1024 ** 3 } },
+    { id: 'n2', kind: 'Node', name: 'small', health: 'Healthy', allocatable: { cpuMilli: 4000, memBytes: 8 * 1024 ** 3 } },
+    { id: 'pa', kind: 'Pod', name: 'a', health: 'Healthy', host: 'big', requests: { cpuMilli: 500 }, limits: { cpuMilli: 1000 } },
+    { id: 'pb', kind: 'Pod', name: 'b', health: 'Healthy', host: 'big' }, // no request
+    { id: 'pc', kind: 'Pod', name: 'c', health: 'Healthy', host: 'small', requests: { cpuMilli: 2000 } },
+  ]
+  const usage = { pa: { cpuMilli: 800 }, pc: { cpuMilli: 100 }, n1: { cpuMilli: 1200 } }
+
+  it('sizes node tracks proportional to capacity on one global scale', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const big = l.rows.find((r) => r.host === 'big')!
+    const small = l.rows.find((r) => r.host === 'small')!
+    expect(big.cap).toBe(8000)
+    expect(small.cap).toBe(4000)
+    expect(big.trackW).toBeCloseTo(small.trackW * 2, 0) // 2× capacity ⇒ 2× track length
+  })
+
+  it('totals requests/usage and flags usage overshooting request', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const big = l.rows.find((r) => r.host === 'big')!
+    expect(big.reqTotal).toBe(500) // only pa sets a request
+    expect(big.useTotal).toBe(800) // pa 800 + pb 0
+    expect(big.useSegs.find((s) => s.node.id === 'pa')!.over).toBe(true) // 800 > 500
+  })
+
+  it('puts only request-bearing pods in the requested bar; every pod gets a usage segment', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const big = l.rows.find((r) => r.host === 'big')!
+    expect(big.reqSegs.map((s) => s.node.id)).toEqual(['pa']) // pb has no request
+    expect(big.useSegs).toHaveLength(2) // pb still gets a (min-width) segment, never vanishes
+    expect(big.useSegs.every((s) => s.width > 0)).toBe(true)
+  })
+
+  it('overlay mode emits a Σrequest marker instead of a requested bar', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'overlay')
+    const big = l.rows.find((r) => r.host === 'big')!
+    expect(big.reqSegs).toHaveLength(0)
+    expect(big.reqMarkerX!).toBeGreaterThan(0)
+  })
+
+  it('flags overcommit when Σrequest exceeds capacity', () => {
+    const over: KNode[] = [
+      { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 1000 } },
+      { id: 'p', kind: 'Pod', name: 'p', health: 'Healthy', host: 'h', requests: { cpuMilli: 2000 } },
+    ]
+    expect(layoutGraphByCapacity(over, {}, 'cpu', 'split').rows[0].overcommit).toBe(true)
+  })
+
+  it('expands a node into per-pod bullets with their own scale', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split', new Set(['host:big']))
+    const big = l.rows.find((r) => r.host === 'big')!
+    expect(big.bullets).toHaveLength(2)
+    expect(big.bulletScale!).toBeGreaterThan(0)
+  })
+
+  it('carries the node total usage as a backdrop value', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    expect(l.rows.find((r) => r.host === 'big')!.nodeUse).toBe(1200)
+  })
+
+  it('buckets host-less pods into an Unscheduled row', () => {
+    const l = layoutGraphByCapacity([{ id: 'p', kind: 'Pod', name: 'p', health: 'Healthy' }], {}, 'cpu', 'split')
+    expect(l.rows.map((r) => r.label)).toContain('Unscheduled')
+  })
+
+  it('returns empty geometry for no nodes', () => {
+    const l = layoutGraphByCapacity([], {}, 'cpu', 'split')
+    expect(l.rows).toEqual([])
+    expect(l.nodes).toEqual([])
+  })
+})
+
+describe('formatQuantity', () => {
+  it('renders CPU millicores as cores or milli', () => {
+    expect(formatQuantity(500, 'cpu')).toBe('500m')
+    expect(formatQuantity(2000, 'cpu')).toBe('2')
+    expect(formatQuantity(1500, 'cpu')).toBe('1.5')
+  })
+  it('renders memory bytes in binary units', () => {
+    expect(formatQuantity(8 * 1024 ** 3, 'memory')).toBe('8Gi')
+    expect(formatQuantity(512 * 1024 ** 2, 'memory')).toBe('512Mi')
+  })
+  it('renders undefined as an em dash', () => {
+    expect(formatQuantity(undefined, 'cpu')).toBe('—')
   })
 })

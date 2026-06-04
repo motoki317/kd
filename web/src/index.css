@@ -784,6 +784,154 @@ button.conn.conn-retry:focus-visible {
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* ---- Capacity & usage view (Nodes group-by) ---- */
+.cap-row-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text);
+  pointer-events: none;
+}
+.cap-row-meta {
+  font-weight: 400;
+  fill: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cap-caret {
+  fill: var(--text-dim);
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cap-caret:hover {
+  fill: var(--accent);
+}
+.cap-warn {
+  fill: var(--health-degraded);
+  font-weight: 600;
+}
+/* Bar tracks: the full-capacity backdrop segments fill against; the remaining length reads as
+   headroom, anything past the right edge as overcommit/overuse (the capacity line marks it). */
+.cap-track {
+  fill: color-mix(in srgb, var(--text-dim) 12%, var(--surface));
+  stroke: var(--border);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.cap-track.req {
+  fill: color-mix(in srgb, var(--text-dim) 7%, var(--surface));
+}
+/* The node's total usage across all namespaces — a faint fill so a namespace's own pods (bright
+   segments on top) read against the node's real utilization rather than the full empty capacity. */
+.cap-track-nodeuse {
+  fill: color-mix(in srgb, var(--text-dim) 22%, var(--surface));
+  pointer-events: none;
+}
+/* Usage segments — each pod sized by actual usage. Health hue tints non-healthy pods; bursting
+   (usage over request) and near-limit get explicit accents so the risk states read at a glance. */
+.cap-seg {
+  cursor: pointer;
+}
+.cap-seg.use {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 0.5;
+}
+.cap-seg.use.h-degraded {
+  fill: var(--health-degraded);
+}
+.cap-seg.use.h-progressing {
+  fill: var(--health-progressing);
+}
+.cap-seg.use.h-suspended {
+  fill: var(--health-suspended);
+}
+.cap-seg.use.h-unknown {
+  fill: var(--health-unknown);
+}
+.cap-seg.use.over {
+  fill: var(--health-suspended);
+}
+.cap-seg.use.near {
+  stroke: var(--health-degraded);
+  stroke-width: 1.4;
+}
+.cap-seg.req {
+  fill: color-mix(in srgb, var(--accent) 45%, var(--surface));
+}
+.cap-seg:hover {
+  filter: brightness(1.08);
+}
+.cap-seg.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.cap-seg.faded {
+  opacity: 0.18;
+}
+.cap-reqmark {
+  stroke: var(--text);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+  pointer-events: none;
+}
+.cap-reqmark-label {
+  font-size: 9px;
+  fill: var(--text-dim);
+  text-anchor: middle;
+  pointer-events: none;
+}
+.cap-capline {
+  stroke: var(--health-degraded);
+  stroke-width: 1.6;
+  pointer-events: none;
+}
+/* Per-pod bullets (expanded detail). */
+.cap-bullet {
+  cursor: pointer;
+}
+.cap-bullet-track {
+  fill: color-mix(in srgb, var(--text-dim) 10%, var(--surface));
+  stroke: var(--border);
+  stroke-width: 0.8;
+}
+.cap-bullet-fill {
+  fill: color-mix(in srgb, var(--accent) 80%, var(--surface));
+  pointer-events: none;
+}
+.cap-bullet-over {
+  fill: var(--health-suspended);
+  pointer-events: none;
+}
+.cap-tick {
+  pointer-events: none;
+}
+.cap-tick.req {
+  stroke: var(--text);
+  stroke-width: 1.4;
+}
+.cap-tick.lim {
+  stroke: var(--health-degraded);
+  stroke-width: 1.4;
+  stroke-dasharray: 2 2;
+}
+.cap-bullet-vals {
+  font-size: 10px;
+  fill: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.cap-bullet-name {
+  fill: var(--text);
+  font-weight: 600;
+}
+.cap-bullet.selected .cap-bullet-track {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+.cap-bullet.faded {
+  opacity: 0.25;
+}
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {
   flex: none;
