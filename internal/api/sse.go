@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,12 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	// pod metrics resolve. metrics-server absence leaves Usage nil (bars fall back to requests).
 	buildCapacity := func() capacityPayload {
 		snap := store.SnapshotNodesAndPods()
+		// The capacity view shows LIVE utilization, so drop terminal (Succeeded/Failed) pods: a
+		// finished or errored pod holds no reservation and consumes nothing, yet would otherwise pad a
+		// node's request/usage bars. Filtering the snapshot itself keeps the node geometry and the
+		// usage feed consistent (both built from the same set). (The topology graph deliberately keeps
+		// Failed pods — they're actionable there; capacity is about what's running now.)
+		snap = slices.DeleteFunc(snap, stoppedPod)
 		g := graph.Build(snap)
 		var usage *graph.Usage
 		if mc := store.MetricsClient(); mc != nil {
@@ -173,6 +180,24 @@ func uidResolvers(snapshot []runtime.Object) (resolvePod, resolveNode graph.UIDR
 		return uid, ok
 	}
 	return resolvePod, resolveNode
+}
+
+// stoppedPod reports whether a pod has reached a terminal phase (Succeeded or Failed) and so no longer
+// reserves or consumes node resources — the capacity view drops these (see buildCapacity). Reads the
+// phase from the cached unstructured shape, or a typed Pod (tests). Non-pods are never "stopped".
+func stoppedPod(obj runtime.Object) bool {
+	switch o := obj.(type) {
+	case *unstructured.Unstructured:
+		if o.GetKind() != "Pod" {
+			return false
+		}
+		phase, _, _ := unstructured.NestedString(o.Object, "status", "phase")
+		return phase == string(corev1.PodSucceeded) || phase == string(corev1.PodFailed)
+	case *corev1.Pod:
+		return o.Status.Phase == corev1.PodSucceeded || o.Status.Phase == corev1.PodFailed
+	default:
+		return false
+	}
 }
 
 // capacityPayload is the SSE `capacity` event: the cluster-wide Node + Pod set the Nodes group-by

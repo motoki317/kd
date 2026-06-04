@@ -172,5 +172,36 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	}
 }
 
+func TestStoppedPod(t *testing.T) {
+	pod := func(phase string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": "Pod",
+			"metadata": map[string]any{"name": "p"},
+			"status":   map[string]any{"phase": phase},
+		}}
+	}
+	node := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Node", "metadata": map[string]any{"name": "n"},
+	}}
+	cases := []struct {
+		name string
+		obj  runtime.Object
+		want bool
+	}{
+		{"running pod kept", pod("Running"), false},
+		{"pending pod kept", pod("Pending"), false},
+		{"succeeded pod dropped", pod("Succeeded"), true},
+		{"failed pod dropped", pod("Failed"), true},
+		{"node never stopped", node, false},
+		{"typed failed pod dropped", &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodFailed}}, true},
+		{"typed running pod kept", &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodRunning}}, false},
+	}
+	for _, c := range cases {
+		if got := stoppedPod(c.obj); got != c.want {
+			t.Errorf("%s: stoppedPod = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func boolp(b bool) *bool    { return &b }
 func int32p(i int32) *int32 { return &i }
