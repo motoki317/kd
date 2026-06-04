@@ -218,8 +218,13 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   bar reads: biggest own segs → small-own fold → gray other-ns fold. The **Req and Use bars share one
   colour scheme** (req is NOT a lighter shade — `.cap-seg.req` carries the same accent/health fills and
   `.selected` stroke as `.cap-seg.use`), so a pod is the same colour on both bars and selection emphasises both.
-  The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
-  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet is
+  The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (`.cap-track-nodeuse`) on the Use bar —
+  the bright pod segments only sum to the selected namespace's pods, so the gray beyond them is the rest
+  (other namespaces + system/kubelet overhead). It is hoverable (`tipFromNodeUse`): the tooltip breaks it
+  down as Node total / All pods (`row.useTotal`) / Overhead (= total − pod sum), so the unlabelled bar is
+  accountable. (The tooltip payload `CapTipData` carries optional `rows` for this custom breakdown;
+  without them it renders the default Usage/Request/Limit triple.)
+  Expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet is
   TWO stacked GAUGES (Use over Req, each `CAP_BULLET_BAR_H` tall, via the module-level `CapGauge`
   component) that BOTH fill with the same value — actual USAGE — and differ only in their reference
   ceiling**: the Use bar gauges usage against the LIMIT (`capUseCeiling` = `lim ?? req ?? use`), the Req

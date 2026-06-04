@@ -829,7 +829,7 @@ button.conn.conn-retry:focus-visible {
    segments on top) read against the node's real utilization rather than the full empty capacity. */
 .cap-track-nodeuse {
   fill: color-mix(in srgb, var(--text-dim) 22%, var(--surface));
-  pointer-events: none;
+  cursor: help;
 }
 /* Usage segments — each pod sized by actual usage. Health hue tints non-healthy pods; bursting
    (usage over request) and near-limit get explicit accents so the risk states read at a glance. */

@@ -393,6 +393,24 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-bullet .cap-seg.use.lap-2').length).toBe(0) // under the limit
   })
 
+  it('Nodes view: the node-usage backdrop shows an overhead tooltip (node total − pod sum)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+    ]
+    // Node total usage 300m (NodeMetrics, keyed by node id) vs the one pod's 100m → 200m overhead
+    // (other namespaces' pods + system/kubelet) that the gray backdrop beyond the pod segment shows.
+    const capacity = { nodes: nodesV, usage: { items: { 'node-a': { cpuMilli: 300 }, p1: { cpuMilli: 100 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    fireEvent.pointerMove(container.querySelector('.cap-track-nodeuse') as Element, { clientX: 50, clientY: 50 })
+    const tip = container.querySelector('.cap-tooltip')!
+    expect(tip.textContent).toContain('Overhead')
+    expect(tip.textContent).toContain('Node total')
+    expect(tip.textContent).toContain('200m') // overhead = 300m total − 100m pods
+  })
+
   it('clears all filters via onClearFilters (cycle 216)', () => {
     const onClearFilters = vi.fn()
     const { container } = render(() => (
