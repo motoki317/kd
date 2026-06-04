@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { connGroups, kindGroups, layoutGraph, layoutGraphByKind, type CollapseMeta } from '../layout'
 import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
-import { edgeKey } from '../graphState'
+import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
@@ -384,33 +384,14 @@ export default function Topology(props: Props) {
   // ArgoCD-style focus on "this resource and what relates to it". Cycle 157 promoted this from
   // immediate-neighbors to full-component because the auto-fit (below) targets the same set:
   // clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
+  // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full edge
+  // set. Following relationships the operator hasn't enabled lit (and framed) nodes they can't even
+  // see — e.g. a Pod dragging in its Node via scheduledOn when Scheduling is off, so the selection-fit
+  // zoomed way out. The spotlight now matches what's on screen. (BFS in spotlightSubtree, graphState.ts.)
   const related = createMemo(() => {
     const id = props.selectedId
     if (!id) return null
-    const nodes = new Set<string>([id])
-    const edges = new Set<string>()
-    const queue = [id]
-    // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full
-    // edge set. Following relationships the operator hasn't enabled lit (and framed) nodes they
-    // can't even see — e.g. a Pod dragging in its Node via scheduledOn when Scheduling is off, so
-    // the selection-fit zoomed way out to include it. The spotlight now matches what's on screen.
-    const relEdges = displayEdges()
-    while (queue.length > 0) {
-      const cur = queue.shift()!
-      for (const e of relEdges) {
-        const k = `${e.from}|${e.to}|${e.type}`
-        if (edges.has(k)) continue
-        if (e.from === cur || e.to === cur) {
-          edges.add(k)
-          const next = e.from === cur ? e.to : e.from
-          if (!nodes.has(next)) {
-            nodes.add(next)
-            queue.push(next)
-          }
-        }
-      }
-    }
-    return { nodes, edges }
+    return spotlightSubtree(id, displayEdges())
   })
 
   // Search dims everything that doesn't match the query (by name, kind, label, or image), so a

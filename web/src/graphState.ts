@@ -13,6 +13,33 @@ export const emptyState = (): GraphState => ({ nodes: {}, edges: [] })
 // edgeKey identifies an edge by its endpoints and type, matching the server's edge identity.
 export const edgeKey = (e: KEdge): string => [e.from, e.to, e.type].join('|')
 
+// spotlightSubtree walks the UNDIRECTED connected component of `id` over `edges` (following each edge
+// in either direction), returning the reachable node ids and the traversed edge keys. Drives the
+// selection spotlight + fit: selecting a node lights its whole related subtree. The caller passes the
+// DISPLAYED edge set (the relFilter projection), so the spotlight matches what's on screen rather than
+// dragging in nodes reachable only via a relationship the operator has turned off.
+export function spotlightSubtree(id: string, edges: KEdge[]): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>([id])
+  const seen = new Set<string>()
+  const queue = [id]
+  while (queue.length > 0) {
+    const cur = queue.shift()!
+    for (const e of edges) {
+      const k = edgeKey(e)
+      if (seen.has(k)) continue
+      if (e.from === cur || e.to === cur) {
+        seen.add(k)
+        const next = e.from === cur ? e.to : e.from
+        if (!nodes.has(next)) {
+          nodes.add(next)
+          queue.push(next)
+        }
+      }
+    }
+  }
+  return { nodes, edges: seen }
+}
+
 export function fromSnapshot(g: KGraph): GraphState {
   const nodes: Record<string, KNode> = {}
   // Tolerate a missing/null nodes or edges array: a namespace whose resources have no relationships

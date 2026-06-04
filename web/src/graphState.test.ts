@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyPatch, edgeKey, fromSnapshot } from './graphState'
-import type { KGraph, Patch } from './types'
+import { applyPatch, edgeKey, fromSnapshot, spotlightSubtree } from './graphState'
+import type { KEdge, KGraph, Patch } from './types'
 
 const snapshot: KGraph = {
   nodes: [
@@ -63,5 +63,39 @@ describe('graphState', () => {
     const e = { from: 'a', to: 'b', type: 'ownerReference' } as const
     const s = applyPatch(fromSnapshot(snapshot), { removeEdges: [e], upsertEdges: [e] })
     expect(s.edges.map(edgeKey)).toEqual(['a|b|ownerReference'])
+  })
+})
+
+describe('spotlightSubtree', () => {
+  const e = (from: string, to: string, type = 'ownerReference'): KEdge => ({ from, to, type } as KEdge)
+
+  it('walks the undirected component, following edges in either direction', () => {
+    // dep → rs → pod (downward), and svc → pod (upward into the same pod). Selecting the pod must
+    // light the whole chain in BOTH directions, not just descendants.
+    const edges = [e('dep', 'rs'), e('rs', 'pod'), e('svc', 'pod', 'selects')]
+    const r = spotlightSubtree('pod', edges)
+    expect([...r.nodes].sort()).toEqual(['dep', 'pod', 'rs', 'svc'])
+    expect(r.edges.size).toBe(3) // every edge in the component is traversed
+  })
+
+  it('stops at the boundary of the connected component', () => {
+    // Two disjoint components: selecting in one must not light the other.
+    const edges = [e('a', 'b'), e('c', 'd')]
+    const r = spotlightSubtree('a', edges)
+    expect([...r.nodes].sort()).toEqual(['a', 'b'])
+    expect(r.edges.size).toBe(1)
+  })
+
+  it('returns just the node itself when it has no edges', () => {
+    const r = spotlightSubtree('lonely', [e('a', 'b')])
+    expect([...r.nodes]).toEqual(['lonely'])
+    expect(r.edges.size).toBe(0)
+  })
+
+  it('terminates on a cycle (each edge traversed once)', () => {
+    const edges = [e('a', 'b'), e('b', 'c'), e('c', 'a')]
+    const r = spotlightSubtree('a', edges)
+    expect([...r.nodes].sort()).toEqual(['a', 'b', 'c'])
+    expect(r.edges.size).toBe(3)
   })
 })
