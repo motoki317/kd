@@ -492,6 +492,26 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/1\/2/)
   })
 
+  it('exposes the manifest YAML/JSON toggle as a radiogroup with roving tabindex', () => {
+    // ConfigMap defaults to the Manifest tab, so the format toggle is rendered.
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const group = container.querySelector('.manifest-format')!
+    expect(group.getAttribute('role')).toBe('radiogroup')
+    expect(group.getAttribute('aria-label')).toBe('Manifest format')
+    const radios = [...group.querySelectorAll('[role="radio"]')] as HTMLButtonElement[]
+    expect(radios.map((r) => r.textContent)).toEqual(['YAML', 'JSON'])
+    // YAML is the default: it's checked and the sole tab stop; JSON is unchecked and roved out.
+    expect(radios[0].getAttribute('aria-checked')).toBe('true')
+    expect(radios[0].tabIndex).toBe(0)
+    expect(radios[1].getAttribute('aria-checked')).toBe('false')
+    expect(radios[1].tabIndex).toBe(-1)
+    // ArrowRight selects JSON (APG single-select keyboard model); the checked/roving state follows.
+    group.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(radios[1].getAttribute('aria-checked')).toBe('true')
+    expect(radios[1].tabIndex).toBe(0)
+    expect(radios[0].getAttribute('aria-checked')).toBe('false')
+  })
+
   it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
     // Stub the events fetch to return an event whose source differs from the root resource —
     // i.e. an aggregated event from a descendant pod.

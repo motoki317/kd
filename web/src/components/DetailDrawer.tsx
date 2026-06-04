@@ -161,6 +161,8 @@ export default function DetailDrawer(props: Props) {
   // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events
   // are fetched as soon as a node is selected, so switching tabs is instant.
   const [format, setFormat] = createSignal<ManifestFormat>('yaml')
+  // Refs so the format radiogroup's arrow keys can move DOM focus to follow the roving tabindex.
+  const formatRefs: Partial<Record<ManifestFormat, HTMLButtonElement>> = {}
   const [detail] = createResource(
     () => (props.node ? { ...key()!, format: format() } : null),
     (k) => fetchResource(k.ctx, k.ns, k.kind, k.name, k.format),
@@ -494,13 +496,36 @@ export default function DetailDrawer(props: Props) {
             aria-labelledby="drawer-tab-manifest"
           >
             <div class="manifest-head">
-              <span class="manifest-format">
-                <button classList={{ active: format() === 'yaml' }} onClick={() => setFormat('yaml')}>
-                  YAML
-                </button>
-                <button classList={{ active: format() === 'json' }} onClick={() => setFormat('json')}>
-                  JSON
-                </button>
+              {/* Single-select (YAML vs JSON) → a radiogroup, matching the toolbar's Group/Resource
+                  segmented controls: a screen reader hears "radio group, YAML selected, 1 of 2" and
+                  ←/→ move between formats. Plain toggle buttons left the active format unannounced. */}
+              <span
+                class="manifest-format"
+                role="radiogroup"
+                aria-label="Manifest format"
+                onKeyDown={(e) => {
+                  const ids: ManifestFormat[] = ['yaml', 'json']
+                  const i = nextRovingIndex(e.key, ids.indexOf(format()), ids.length)
+                  if (i === null) return
+                  e.preventDefault()
+                  setFormat(ids[i])
+                  formatRefs[ids[i]]?.focus()
+                }}
+              >
+                <For each={['yaml', 'json'] as const}>
+                  {(f) => (
+                    <button
+                      ref={(el) => (formatRefs[f] = el)}
+                      role="radio"
+                      aria-checked={format() === f}
+                      tabindex={format() === f ? 0 : -1}
+                      classList={{ active: format() === f }}
+                      onClick={() => setFormat(f)}
+                    >
+                      {f.toUpperCase()}
+                    </button>
+                  )}
+                </For>
               </span>
               {/* Within-manifest find: case-insensitive substring highlight. Enter steps through
                   the matches (scrolling each into view), Esc clears without leaving the drawer. */}
