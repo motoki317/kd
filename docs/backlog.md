@@ -149,6 +149,17 @@ that should reopen it, so a future agent inherits the analysis instead of re-sur
   `port` dimension to the graph model (a backward-incompatible edge-shape change). *Reopen when:*
   operators on large clusters need accurate endpoint readiness — start with an ADR answering the three
   questions plus a cardinality cap.
+- **Timeline / history view ("where did it degrade over time")** — *deferred (different product tier).*
+  A web survey of modern k8s dashboards (cycle 59) found kd already matches their topology/UX patterns —
+  flat fewer-clicks navigation, namespace scoping, detail blades (manifest/events/related), CPU+memory
+  requests-AND-limits visualization (the Nodes capacity view), service→pod→volume dependency graphs —
+  with ONE pattern absent: a time-axis showing when a Deployment rolled out or a resource degraded.
+  kd is fundamentally a LIVE view built on informer caches (current state only); the Events tab is the
+  sole limited timeline (recent k8s events, which age out — see the cycle-44 status-message item). A real
+  timeline needs **historical-state persistence** (a time-series/event store with retention), which is a
+  new subsystem and arguably a different product, not an improvement-cycle slice. *Reopen when:* the
+  product wants historical/post-mortem analysis — then it's a design effort (storage backend + retention
+  + a time-scrubber UI), starting from an ADR, not a cycle.
 - **Last-Event-ID resume on the SSE feed** — *deferred (low value).* The server emits no SSE `id:` today
   and the reconnect path already re-snapshots, which is **idempotent by design** (`graphState.fromSnapshot`
   + Solid `reconcile`) and cheap (~100 ms). Real resume needs a server-side patch ring buffer with TTL +
