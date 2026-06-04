@@ -275,3 +275,17 @@ supersede the corresponding parts of the original Decision:
   zoomed straight to the pods they just opened. A tall many-pod row fits by zooming out, a small row by
   zooming in; both are "fit to that node". Collapsing does not re-fit (it preserves the current
   pan/zoom), so folding the detail back never throws the viewport away.
+- **Expanded pod bars are usage gauges against limit AND request, with overshoot wrapping.** The first
+  two-bar pass drew the Use bar as usage and the Req bar as the request value, normalised to one shared
+  ceiling — so the request bar read as always-full whenever the request was the largest value, and it
+  showed the reservation rather than what the pod was doing. The bars are now two GAUGES that BOTH fill
+  with actual USAGE and differ only in their reference: the Use bar against the limit (`capUseCeiling`),
+  the Req bar against the request (`capReqCeiling`). Each reads "how much of X am I using"
+  (`usage / limit`, `usage / request`), so under-using a reservation reads as a partial Req bar and
+  bursting past it reads as the Req bar going over 100%. Both bars are a fixed-length track (the ceiling
+  at 100%); the pod name moved to a header above the bars and a `usage / ceiling` label sits past each,
+  mirroring a node row. **Overshoot wraps** (`capBulletLaps`): usage beyond the ceiling tiles successive
+  full-width laps left-to-right in escalating colours (normal → amber → orange → red, capped at
+  `CAP_MAX_LAPS`) so an overshoot stays inside the fixed width and the lap count reads as "N× over" —
+  rather than a bar running off-canvas or being silently clamped. The per-node `bulletScale` (and its
+  variable-length bullets, request/limit ticks, and burst hatch) were retired with this change.

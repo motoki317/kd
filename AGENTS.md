@@ -219,18 +219,23 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   colour scheme** (req is NOT a lighter shade — `.cap-seg.req` carries the same accent/health fills and
   `.selected` stroke as `.cap-seg.use`), so a pod is the same colour on both bars and selection emphasises both.
   The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
-  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet
-  MIRRORS the node-level bars: two stacked sub-bars (Use over Req, each `CAP_BULLET_BAR_H` tall) reusing
-  the SAME `.cap-track`/`.cap-seg use`/`.cap-seg req` classes** — the detail reads as a zoomed-in node
-  row in the same visual language, not a separate one-bar-with-ticks idiom (the old `cap-bullet-fill` +
-  req/limit tick form was replaced). Bar LENGTH ∝ value on a PER-NODE zoom scale (`bulletScale` =
-  `CAP_BULLET_TRACK / max(use, request)` — NOT limit, so one slack pod's huge limit can't crush every
-  fill to a sliver; the limit draws as a tick on the Use bar, its reach capped at the track end, exact
-  value on hover) — variable length, not a fixed track with a fill, with a faint per-bar track to the
-  pod's furthest marker. Each pod's whole two-bar group is ONE hover/click target (same `CapTipData`
-  tooltip as the node-level segments); bullets show ONLY the FULL pod name (no prefix-shortening, no
-  inline numbers — those are on hover). Bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`)
-  on the Use bar, NOT a recolor. A **cursor-following HTML tooltip** (`capTip`,
+  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet is
+  TWO stacked GAUGES (Use over Req, each `CAP_BULLET_BAR_H` tall, via the module-level `CapGauge`
+  component) that BOTH fill with the same value — actual USAGE — and differ only in their reference
+  ceiling**: the Use bar gauges usage against the LIMIT (`capUseCeiling` = `lim ?? req ?? use`), the Req
+  bar against the REQUEST (`capReqCeiling` = `req ?? lim ?? use`). So each reads "how much of X am I
+  using" (`usage / limit`, `usage / request`) — the Req bar shows usage, NOT the request value, which
+  was the fix to it reading as always-full. Both bars are a FIXED-length track (`CAP_BULLET_TRACK` = the
+  ceiling at 100%) reusing the SAME `.cap-track`/`.cap-seg use|req` classes as the node bars; the pod
+  NAME is a header line ABOVE the bars (`CAP_BULLET_NAME_H`) and a `usage / ceiling` label sits past each
+  bar (`CAP_BULLET_VALUE_W`), mirroring a node row. (This replaced the earlier variable-length
+  `bulletScale` / `cap-bullet-fill` + req-tick idiom.) **Overshoot WRAPS** (`capBulletLaps`): usage past
+  the ceiling tiles successive full-width laps left-to-right in escalating colours (lap 1 normal, 2
+  amber, 3 orange, 4 red via `.cap-seg.lap-2|3|4`, capped at `CAP_MAX_LAPS`) so it stays inside the fixed
+  width — so a pod bursting past its request shows the Req bar wrapping amber, one exceeding its limit
+  shows the Use bar wrapping. Each pod's whole two-gauge group is ONE hover/click target (same
+  `CapTipData` tooltip as the node-level segments); bullets show ONLY the FULL pod name (numbers are on
+  hover). A **cursor-following HTML tooltip** (`capTip`,
   `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
   segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
   render. **Hover-to-spotlight** (Grafana-style): hovering a segment/bullet sets `capHover` (a pod id or
