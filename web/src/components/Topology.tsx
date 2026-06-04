@@ -1433,6 +1433,11 @@ export default function Topology(props: Props) {
                       ? `Click to toggle ${c.kind} · Shift+click to solo — at least one ${c.worst}`
                       : `Click to toggle ${c.kind} · Shift+click to solo`
                   }
+                  // The visible chip is a compact abbreviation + count ("SA42"), which a screen reader
+                  // would announce as a cryptic string. Give it a real accessible NAME (the full kind +
+                  // count + any trouble) so AT reads "ServiceAccount, 42" — the title stays as the
+                  // interaction-hint description, and aria-pressed conveys the toggle state.
+                  aria-label={`${c.kind}, ${c.count}${c.worst ? `, at least one ${c.worst}` : ''}`}
                   aria-pressed={activeKinds()?.has(c.kind) ?? false}
                 >
                   <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
