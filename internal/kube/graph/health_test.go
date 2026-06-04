@@ -468,6 +468,28 @@ func TestContainerImages(t *testing.T) {
 	}
 }
 
+func TestContainerStateString(t *testing.T) {
+	cases := []struct {
+		desc  string
+		state corev1.ContainerState
+		want  string
+	}{
+		{"running", corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}, "Running"},
+		// A reason is the actionable bit (CrashLoopBackOff, ImagePullBackOff) — surface it with the state.
+		{"waiting with reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}, "Waiting: CrashLoopBackOff"},
+		{"waiting no reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}}, "Waiting"},
+		{"terminated with reason", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}, "Terminated: Error"},
+		{"terminated no reason", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}, "Terminated"},
+		// The zero state (no field set) is the brief window before kubelet reports — "Unknown", not a crash.
+		{"empty", corev1.ContainerState{}, "Unknown"},
+	}
+	for _, c := range cases {
+		if got := containerStateString(c.state); got != c.want {
+			t.Errorf("%s: containerStateString = %q, want %q", c.desc, got, c.want)
+		}
+	}
+}
+
 func TestPodRestarts(t *testing.T) {
 	pod := &corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
 		{RestartCount: 3}, {RestartCount: 5}, // sums across containers
