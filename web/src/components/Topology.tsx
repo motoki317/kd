@@ -3,6 +3,7 @@ import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, connGr
 import { edgeKey } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
+import { readPref, writePref } from '../prefs'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -155,14 +156,10 @@ export default function Topology(props: Props) {
   // resource survives reloads (mirrors the kd:* persistence of group-by/relationships). capResource
   // picks which single resource sizes the bars. The bars are always the explicit Req + Use stacked
   // form (the overlay/Use-only mode was retired after live review — the user chose Req+Use).
-  const readPref = <T extends string>(key: string, fallback: T, allowed: T[]): T => {
-    const v = (typeof localStorage !== 'undefined' && localStorage.getItem(key)) as T | null
-    return v && allowed.includes(v) ? v : fallback
-  }
   const [capResource, setCapResourceSig] = createSignal<CapResource>(readPref('kd:capRes', 'cpu', ['cpu', 'memory']))
   const setCapResource = (r: CapResource) => {
     setCapResourceSig(r)
-    try { localStorage.setItem('kd:capRes', r) } catch { /* private mode */ }
+    writePref('kd:capRes', r)
   }
   // Radio refs for the two single-select segmented controls, so arrow-key navigation can move DOM
   // focus to follow the roving tabindex (see the radiogroup onKeyDown handlers in the toolbar).

@@ -3,6 +3,7 @@
 // three-way preference — light / dark / system — is stored in localStorage and resolved to the
 // concrete scheme that paints the page. 'system' still tracks the OS live so the original
 // auto-behavior is the default and remains a first-class choice rather than a fallback.
+import { readPref, writePref } from './prefs'
 
 export type ThemePref = 'system' | 'light' | 'dark'
 
@@ -11,12 +12,13 @@ const STORAGE_KEY = 'kd:theme'
 const ORDER: ThemePref[] = ['system', 'light', 'dark']
 
 export function loadThemePref(): ThemePref {
-  const v = localStorage.getItem(STORAGE_KEY)
-  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system'
+  // Via the private-mode-safe pref helper: reading localStorage throws in some browsers, and this
+  // runs at first paint (initTheme) where an exception would blank the page before render.
+  return readPref(STORAGE_KEY, 'system', ORDER)
 }
 
 export function saveThemePref(pref: ThemePref): void {
-  localStorage.setItem(STORAGE_KEY, pref)
+  writePref(STORAGE_KEY, pref)
 }
 
 export function nextThemePref(pref: ThemePref): ThemePref {

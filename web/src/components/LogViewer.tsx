@@ -1,6 +1,7 @@
 import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
+import { readRawPref, writePref } from '../prefs'
 import { filterLogLines, formatLogTime, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
@@ -51,10 +52,10 @@ export default function LogViewer(props: Props) {
   // structured/columnar logs (or stack traces) often want no-wrap so column alignment survives and one
   // 4 KB line can't push everything else off-screen. Persisted (a display habit, unlike the per-pod
   // filter) so it sticks across selections and reloads, matching the sidebar-collapsed preference.
-  const [wrap, setWrap] = createSignal(localStorage.getItem('kd:logsWrap') !== '0')
+  const [wrap, setWrap] = createSignal(readRawPref('kd:logsWrap') !== '0')
   const toggleWrap = () =>
     setWrap((w) => {
-      localStorage.setItem('kd:logsWrap', w ? '0' : '1')
+      writePref('kd:logsWrap', w ? '0' : '1')
       return !w
     })
   // Per-level filtering (cycle 328): the set of levels to HIDE. The badge classifier (parseLogLevel)

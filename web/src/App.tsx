@@ -9,6 +9,7 @@ import { mostTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
+import { readPref, readRawPref, writePref } from './prefs'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
@@ -45,15 +46,14 @@ export default function App() {
   const [ctx, setCtx] = createSignal<string | null>(params.get('ctx'))
   const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
   const urlGroup = params.get('group') as GroupBy
-  const lsGroup = localStorage.getItem('kd:groupBy') as GroupBy
   const [groupBy, setGroupBy] = createSignal<GroupBy>(
-    GROUP_IDS.includes(urlGroup) ? urlGroup : GROUP_IDS.includes(lsGroup) ? lsGroup : 'relationship',
+    GROUP_IDS.includes(urlGroup) ? urlGroup : readPref('kd:groupBy', 'relationship', GROUP_IDS),
   )
-  createEffect(() => localStorage.setItem('kd:groupBy', groupBy()))
+  createEffect(() => writePref('kd:groupBy', groupBy()))
   const [relFilter, setRelFilter] = createSignal<Set<RelCategory>>(
-    parseRels(params.get('rels')) ?? parseRels(localStorage.getItem('kd:rels')) ?? DEFAULT_RELS(),
+    parseRels(params.get('rels')) ?? parseRels(readRawPref('kd:rels')) ?? DEFAULT_RELS(),
   )
-  createEffect(() => localStorage.setItem('kd:rels', [...relFilter()].sort().join(',')))
+  createEffect(() => writePref('kd:rels', [...relFilter()].sort().join(',')))
   // Toggle a relationship in/out of the filter; Shift "solos" it (exactly this one, clearing the
   // rest), mirroring the kind chips' toggle/solo gesture.
   const toggleRel = (c: RelCategory, solo = false) => {
@@ -152,8 +152,8 @@ export default function App() {
   // Collapsible sidebar (cycle 299): operators with wide ownership graphs sometimes want every
   // pixel for the canvas. Cmd/Ctrl+B toggles; state persists in localStorage so a reload doesn't
   // surprise them with the sidebar re-appearing. Default expanded.
-  const [sidebarHidden, setSidebarHidden] = createSignal(localStorage.getItem('kd:sidebarHidden') === '1')
-  createEffect(() => localStorage.setItem('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
+  const [sidebarHidden, setSidebarHidden] = createSignal(readRawPref('kd:sidebarHidden') === '1')
+  createEffect(() => writePref('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
   // Theme preference (cycle 301): light / dark / system, cycled from a topbar toggle. The effect
   // persists the choice and re-stamps <html data-theme>; index.tsx already applied it pre-render.
   // When the choice is 'system', track OS scheme changes live so the canvas follows a mid-session
