@@ -4,6 +4,7 @@ import (
 	"context"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -39,8 +40,6 @@ func BuildUsage(ctx context.Context, mc metricsversioned.Interface, ns string, c
 		return nil, nil
 	}
 
-	items := map[string]ResourceUsage{}
-
 	podNS := ns
 	if clusterScope {
 		podNS = metav1.NamespaceAll
@@ -49,8 +48,22 @@ func BuildUsage(ctx context.Context, mc metricsversioned.Interface, ns string, c
 	if err != nil {
 		return nil, err
 	}
-	for i := range podList.Items {
-		pm := &podList.Items[i]
+	nodeList, err := mc.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &Usage{Items: joinUsage(podList.Items, nodeList.Items, resolvePod, resolveNode)}, nil
+}
+
+// joinUsage is the pure transform half of BuildUsage (separated so it is testable without a live
+// metrics client, whose fake List reaction does not populate the metrics group): it sums each pod's
+// per-container draw, keys both pods and nodes by their resolved UID, and drops any metric the
+// resolver cannot place (no graph node to attach to).
+func joinUsage(pods []metricsv1beta1.PodMetrics, nodes []metricsv1beta1.NodeMetrics, resolvePod, resolveNode UIDResolver) map[string]ResourceUsage {
+	items := map[string]ResourceUsage{}
+	for i := range pods {
+		pm := &pods[i]
 		uid, ok := resolvePod(pm.Namespace, pm.Name)
 		if !ok {
 			continue
@@ -63,13 +76,8 @@ func BuildUsage(ctx context.Context, mc metricsversioned.Interface, ns string, c
 		}
 		items[uid] = ResourceUsage{CPUMilli: cpu, MemBytes: mem}
 	}
-
-	nodeList, err := mc.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for i := range nodeList.Items {
-		nm := &nodeList.Items[i]
+	for i := range nodes {
+		nm := &nodes[i]
 		uid, ok := resolveNode("", nm.Name)
 		if !ok {
 			continue
@@ -79,6 +87,5 @@ func BuildUsage(ctx context.Context, mc metricsversioned.Interface, ns string, c
 			MemBytes: nm.Usage.Memory().Value(),
 		}
 	}
-
-	return &Usage{Items: items}, nil
+	return items
 }
