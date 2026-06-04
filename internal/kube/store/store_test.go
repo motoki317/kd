@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -371,6 +372,40 @@ func kindCounts(objs []runtime.Object) map[string]int {
 		out[u.GetKind()]++
 	}
 	return out
+}
+
+// recordWatchErr throttles watch-error WARNs to at most one per GVR per hour, and ignores the
+// non-failures (nil, and context.Canceled from a normal shutdown) so a clean teardown stays quiet.
+func TestRecordWatchErr(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	c := &Cache{failedAt: map[schema.GroupVersionResource]time.Time{}}
+
+	c.recordWatchErr(gvr, nil)
+	if _, ok := c.failedAt[gvr]; ok {
+		t.Error("nil error must not be recorded")
+	}
+	c.recordWatchErr(gvr, context.Canceled)
+	if _, ok := c.failedAt[gvr]; ok {
+		t.Error("context.Canceled (shutdown) must not be recorded")
+	}
+
+	c.recordWatchErr(gvr, errors.New("connection refused"))
+	first, ok := c.failedAt[gvr]
+	if !ok {
+		t.Fatal("a real watch error must be recorded")
+	}
+	// A second failure within the hour is throttled — the recorded time does not advance.
+	c.recordWatchErr(gvr, errors.New("connection refused again"))
+	if c.failedAt[gvr] != first {
+		t.Error("a second error within the hour must be throttled (timestamp unchanged)")
+	}
+	// Once the prior failure is older than the window, the next error re-records (re-WARNs).
+	stale := time.Now().Add(-2 * time.Hour)
+	c.failedAt[gvr] = stale
+	c.recordWatchErr(gvr, errors.New("connection refused once more"))
+	if !c.failedAt[gvr].After(stale) {
+		t.Error("an error after the throttle window must re-record")
+	}
 }
 
 var _ dynamic.Interface = (dynamic.Interface)(nil) // keep dynamic import used even if test names change
