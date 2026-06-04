@@ -65,6 +65,20 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    so they need no handling.
 3. **SVG hit-targets.** A rect with `pointer-events:none` is not clickable; a card's empty fill must
    carry pointer-events for the whole card to be a target. Verify with `elementFromPoint` on the empty area.
+4. **A throw inside an EventSource/event listener is swallowed** — it doesn't reach agent-browser's
+   `console` capture (which only catches `console.*`), and it silently aborts the handler. Symptom seen
+   live: namespaces with resources but NO edges hung forever on "connecting…" because the server sent
+   `"edges":null` (a nil Go slice) and the client's `fromSnapshot` did `[...g.edges]` → TypeError, thrown
+   from the SSE `snapshot` listener BEFORE `setConnState('live')` ran. Larger namespaces hid it (they
+   always have edges). **Debugging recipe** for "a feature silently doesn't update": (a) confirm the
+   server sends the data — `fetch(streamURL)` and read the first chunk in-browser, or `curl` the
+   non-stream `/graph`; (b) note `curl` CANNOT read the SSE stream here (the sandbox buffers streaming
+   responses — even a working namespace returns 0 bytes), so use an in-browser `fetch`+ReadableStream or
+   a real `new EventSource` in `eval`; (c) if the event fires but state doesn't change, the handler is
+   throwing — temporarily wrap it in `try/catch`{`console.log(err.stack)`}, rebuild, and read the
+   message. The fix: make the server honor its non-optional wire contract (`[]` not `null`) AND make the
+   client reducer defensive (`?? []`). Always force empty slices to `[]` server-side — a nil Go slice
+   marshals as `null` and the JS consumer rarely expects it.
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
