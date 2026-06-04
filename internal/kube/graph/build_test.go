@@ -2,6 +2,7 @@ package graph
 
 import (
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -53,6 +54,28 @@ func TestKindOfGVKOfFromGoType(t *testing.T) {
 		if av != c.apiVer || k != c.kind {
 			t.Errorf("GVKOf(%T) = (%q, %q), want (%q, %q)", c.obj, av, k, c.apiVer, c.kind)
 		}
+	}
+}
+
+// creationTime renders the RFC3339 UTC age stamp, empty when unset; nodeID prefers the object UID
+// and falls back to a stable synthetic kind/ns/name so an object missing its UID still gets a
+// deterministic id (no collisions, survives across snapshots).
+func TestCreationTimeAndNodeID(t *testing.T) {
+	if got := creationTime(&corev1.Pod{}); got != "" {
+		t.Errorf("creationTime(unset) = %q, want empty", got)
+	}
+	withTime := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.Date(2026, 6, 5, 12, 30, 0, 0, time.UTC)}}
+	if got := creationTime(withTime); got != "2026-06-05T12:30:00Z" {
+		t.Errorf("creationTime = %q, want 2026-06-05T12:30:00Z", got)
+	}
+
+	withUID := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{UID: "abc-123"}}
+	if got := nodeID("Pod", withUID); got != "abc-123" {
+		t.Errorf("nodeID(uid) = %q, want abc-123", got)
+	}
+	noUID := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web"}}
+	if got := nodeID("Pod", noUID); got != "Pod/shop/web" {
+		t.Errorf("nodeID(no uid) = %q, want Pod/shop/web", got)
 	}
 }
 
