@@ -845,6 +845,44 @@ export default function Topology(props: Props) {
     ),
   )
 
+  // Auto-fit to the lit subset when a DISCRETE filter (health legend / kind chips) toggles, so a
+  // triage action — "show me what's Degraded" — frames the matches instead of leaving the operator
+  // staring at faded healthy cards while the few matches sit off-screen ("11 of 336" with nothing
+  // visible). The manual Fit already frames the lit subset (cycle 214); this just does it on the
+  // toggle so the operator doesn't have to also reach for Fit. Deliberately scoped:
+  //   - Search is excluded — it is incremental per-keystroke, so fitting on every character would
+  //     make the viewport jump around while typing; the manual Fit covers it.
+  //   - A selection owns the viewport (its own fit effect), so skip while one is active.
+  //   - CLEARING a filter does not re-fit — leave the operator where they are (Fit/'f' reframe on
+  //     demand), mirroring the deselect branch that preserves pan/zoom.
+  //   - READABILITY GUARD: only fit when the matches cluster tightly enough to frame at a legible
+  //     scale (≥ MIN_FIT_SCALE). When matches are SCATTERED across a tall layout (e.g. 11 degraded
+  //     resources spread down a 142-workflow namespace), their bounding box spans the whole canvas,
+  //     so fitting it zooms to an unreadable speck (~0.04×) — strictly worse than not moving. In
+  //     that case we leave the view untouched; the operator keeps their pan/zoom and can Fit or
+  //     keyboard-navigate. (Found live: the naive fit-to-bbox produced exactly that speck.) The
+  //     manual Fit keeps no floor — an explicit Fit may zoom out to a speck, but an automatic move
+  //     must never make the view worse than it was.
+  // This does not weaken the "preserve pan/zoom on churn" rule: it keys on the filter signature, not
+  // node count, so an SSE add/remove or a collapse expand never triggers it.
+  const filterKey = () =>
+    `${props.healthFilter ?? ''}|${[...(props.kindFilter ?? [])].sort().join(',')}`
+  createEffect(
+    on(filterKey, () => {
+      if (!svg || props.selectedId) return
+      if (!props.healthFilter && !activeKinds()) return // cleared → keep the current view
+      const l = layout()
+      if (l.width === 0) return
+      const lit = l.nodes.filter((n) => !nodeFaded(n))
+      if (lit.length === 0) return // filter matched nothing laid out — don't fly to an empty box
+      const target = fitNodeSet(lit, 1.4)
+      target.scale *= 0.92 // a touch of breathing room, matching the manual Fit
+      if (target.scale < MIN_FIT_SCALE) return // scattered matches → would be a speck; leave the view
+      cancelAnimationFrame(selFitFrame)
+      selFitFrame = requestAnimationFrame(() => animateTo(target))
+    }, { defer: true }),
+  )
+
   // clampTranslate keeps at least a margin of the laid-out graph on-screen, so a pan can't fling the
   // whole canvas into the void (where the only recovery was the Fit button). The graph spans screen
   // x in [tx, tx + width*scale]; we require its far edge to stay ≥ margin inside the viewport on
