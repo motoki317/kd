@@ -63,13 +63,13 @@ export default function LogViewer(props: Props) {
   // scan errors without crafting a regex. Persisted like wrap — a content-agnostic triage habit that
   // should outlive a single pod selection — and kept visible as dimmed chips so the state never hides.
   const [hiddenLevels, setHiddenLevels] = createSignal<Set<LogLevel>>(
-    new Set((localStorage.getItem('kd:logsHideLevels') || '').split(',').filter(Boolean) as LogLevel[]),
+    new Set((readRawPref('kd:logsHideLevels') || '').split(',').filter(Boolean) as LogLevel[]),
   )
   const toggleLevel = (lvl: LogLevel) =>
     setHiddenLevels((prev) => {
       const next = new Set(prev)
       next.has(lvl) ? next.delete(lvl) : next.add(lvl)
-      localStorage.setItem('kd:logsHideLevels', [...next].join(','))
+      writePref('kd:logsHideLevels', [...next].join(','))
       return next
     })
   // Per-pod filtering for aggregated workload streams (cycle 328/R2): an aggregated Deployment/
