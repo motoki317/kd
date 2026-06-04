@@ -303,3 +303,18 @@ supersede the corresponding parts of the original Decision:
   lengths (`trackW` for Req, `useTrackW` for Use) on one shared px-per-unit scale, so a pod's use/req
   segments stay directly comparable; the scale now keys on max capacity. Capacity falls back to
   allocatable when unreported (e.g. Fargate, which reports them equal), collapsing the two tracks.
+- **Expanded pods become full-width cards on the global scale; lap-wrapping retired.** The fixed-length
+  per-pod gauge (`CAP_BULLET_TRACK`) with `capBulletLaps` overshoot-wrapping and `capUseCeiling`/
+  `capReqCeiling` was replaced: each expanded pod is now its own **full-width bordered CARD** whose two
+  bars (Use over Req) are drawn at the **same global px-per-unit scale as the node tracks and start at
+  the same left edge**, so a pod bar reads directly against the node track above it ("feel how big each
+  pod is" — the user's explicit ask that the pod-level bars align with the node-level bars). Both bars
+  fill with actual usage; a reference **tick** marks the limit (Use) / request (Req), and an overshoot
+  simply **extends the bar past the tick** (the part beyond hatched) — a variable-length bar makes the
+  lap-wrapping unnecessary, the overshoot just runs right. Every card in a node shares one width (the
+  node's content width) so they read as a clean aligned stack spanning the node box end-to-end. Because a
+  pod's global-scale bar can be tiny relative to its node, **clicking a card zooms the viewport to fit
+  it** (the whole card is the click target, not just the thin bars) so the bars become readable. And
+  `CAP_TRACK_MAX` was raised to 1080px so a node a few× smaller than the biggest still draws a readable
+  bar. **Collapsing a node now re-fits** to the collapsed row (symmetric with expand) instead of
+  stranding the operator at the zoomed-out scale the expanded row required.
