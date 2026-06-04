@@ -449,6 +449,11 @@ button.conn.conn-retry:focus-visible {
   min-width: 360px;
   max-width: 480px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  /* The full shortcut list (~24 keys) is taller than a laptop viewport; cap to the viewport and scroll
+     internally so the bottom rows stay reachable (place-items:center would otherwise push them off both
+     edges with no way to scroll). */
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 .help-panel h3 {
   margin: 0 0 8px;
