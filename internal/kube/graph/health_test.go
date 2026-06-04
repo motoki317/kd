@@ -354,6 +354,29 @@ func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	if got := health(active); got != HealthHealthy {
 		t.Errorf("health(active CronJob) = %q, want Healthy", got)
 	}
+
+	// A Job's terminal condition drives its health: Complete → Healthy, Failed → Degraded.
+	complete := &batchv1.Job{Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
+		{Type: batchv1.JobComplete, Status: corev1.ConditionTrue},
+	}}}
+	if got := health(complete); got != HealthHealthy {
+		t.Errorf("health(complete Job) = %q, want Healthy", got)
+	}
+	failed := &batchv1.Job{Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
+		{Type: batchv1.JobFailed, Status: corev1.ConditionTrue},
+	}}}
+	if got := health(failed); got != HealthDegraded {
+		t.Errorf("health(failed Job) = %q, want Degraded", got)
+	}
+
+	// A condition that isn't True is ignored (a JobFailed=False is not a failure); with no TRUE
+	// terminal condition and not suspended, a running Job is Progressing.
+	running := &batchv1.Job{Status: batchv1.JobStatus{Active: 1, Conditions: []batchv1.JobCondition{
+		{Type: batchv1.JobFailed, Status: corev1.ConditionFalse},
+	}}}
+	if got := health(running); got != HealthProgressing {
+		t.Errorf("health(running Job) = %q, want Progressing", got)
+	}
 }
 
 func TestContainerStatuses(t *testing.T) {
