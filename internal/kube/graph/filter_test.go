@@ -176,3 +176,49 @@ func TestDescendantPodNames(t *testing.T) {
 		}
 	}
 }
+
+// DescendantIDs (used by the events handler to aggregate a controller's events across its whole
+// subtree) returns the node itself plus every owner-edge-reachable descendant, sorted. Distinct from
+// DescendantPodNames: it yields the controllers/ReplicaSets too, by id, not just leaf pod names.
+func TestDescendantIDs(t *testing.T) {
+	g := Build(decodeFixture(t, ownershipFixture)) // Deployment(dep-uid) -> RS(rs-uid) -> 2 pods
+
+	tests := map[string][]string{
+		"dep-uid":    {"dep-uid", "pod1-uid", "pod2-uid", "rs-uid"}, // whole subtree, sorted
+		"rs-uid":     {"pod1-uid", "pod2-uid", "rs-uid"},            // the ReplicaSet down
+		"pod1-uid":   {"pod1-uid"},                                  // a leaf is just itself
+		"absent-uid": {"absent-uid"},                                // unknown id seeds the walk, owns nothing
+	}
+	for id, want := range tests {
+		if got := g.DescendantIDs(id); !slices.Equal(got, want) {
+			t.Errorf("DescendantIDs(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+// A pathological ownership cycle (real ownerReferences can't form one, but the walk must not loop
+// forever if the graph is ever malformed) terminates and reports each node exactly once.
+func TestDescendantIDsCycleGuard(t *testing.T) {
+	g := &Graph{
+		Nodes: []Node{{ID: "a"}, {ID: "b"}},
+		Edges: []Edge{
+			{From: "a", To: "b", Type: EdgeOwner},
+			{From: "b", To: "a", Type: EdgeOwner},
+		},
+	}
+	if got := g.DescendantIDs("a"); !slices.Equal(got, []string{"a", "b"}) {
+		t.Errorf("DescendantIDs over a cycle = %v, want [a b] once each", got)
+	}
+}
+
+// NodeID resolves an API handler's {kind}/{name} path to a graph node id, matching BOTH kind and
+// name (a Pod and a Service of the same name must not collide), and returns "" when absent.
+func TestNodeID(t *testing.T) {
+	g := Build(decodeFixture(t, ownershipFixture))
+	if got := g.NodeID("Pod", "web-abc-1"); got != "pod1-uid" {
+		t.Errorf("NodeID(Pod, web-abc-1) = %q, want pod1-uid", got)
+	}
+	if got := g.NodeID("Service", "web"); got != "" {
+		t.Errorf("NodeID(Service, web) = %q, want \"\" (kind must match, not just name)", got)
+	}
+}
