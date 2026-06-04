@@ -155,9 +155,18 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
   **Verify live both ways:** focus a drawer button → close → assert `activeElement` is the search; and
   focus OUTSIDE → close → assert focus stayed put. NOTE: focus does NOT auto-move INTO the drawer on
   open — that is intentional (it would break the search Enter-cycle flow), not a bug.
-- Still TODO (future cycles): sweep the drawer back/expand/share buttons and the log-level controls for
-  role/state correctness. (Sidebar list, tabs, segmented controls, copy live-region, and drawer
-  close-focus-restore are done.)
+- **Worded names over glyphs** (avoid icon-only): a button whose visible content is a glyph (the log
+  filter's "Aa" case toggle) has that glyph as its ONLY accessible name unless you add `aria-label` —
+  `title` is a hover tooltip, NOT a reliable name source. Spell it out (`aria-label="Match case"`)
+  while keeping the compact visual. Worded-text buttons (previous/timestamps/wrap) already have a real
+  name and need none.
+- **A11y sweep COMPLETE** (as of 2026-06-05): tabs (tablist/tab/tabpanel + roving), single-selects
+  (radiogroups: Group, Resource, Manifest format), multi-select chips (aria-pressed in toolbars),
+  clearable Health filter (aria-pressed), sidebar (nav + aria-current), copy live-region, drawer
+  focus-restore-on-close, drawer action buttons (close/expand/share aria-labels), and log controls
+  (group label + errjump + case aria-labels + level chips) are all done and verified live. A fresh
+  control still needs the matching pattern, but there is no known a11y GAP left to sweep — re-running
+  the ARIA audit as a "lens" now yields ≈0. Pick a different lens.
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
