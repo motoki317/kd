@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta } from '../layout'
 import { edgeKey } from '../graphState'
+import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -9,7 +10,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import type { Capacity, EdgeType, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
+import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
 
@@ -78,49 +79,10 @@ interface Props {
 // same arrowhead — because "refers to" is semantically just another non-ownership relationship;
 // only the hover tooltip names the specific kind. (Colour/shape distinction was dropped: it
 // cluttered a dense canvas and the categories read the same to operators.)
-const DASHED: Partial<Record<EdgeType, boolean>> = {
-  selects: true,
-  routes: true,
-  mounts: true,
-  usesServiceAccount: true,
-  binds: true,
-  scheduledOn: true,
-  refers: true,
-}
-
-const EDGE_CORNER = 7 // elbow rounding radius for orthogonal edges — soft ArgoCD-style corners
-
 // Floor for the auto-fit scale. Below this, cards shrink past legibility (names fade out at the
 // 0.45 labels-hidden threshold), so a resource-dense view that can't fit at this scale opens
 // zoomed to the floor on its first resources instead of fitting everything into an unreadable speck.
 const MIN_FIT_SCALE = 0.55
-
-// lerpTo returns the point `d` units from `from` toward `to` (clamped to the segment, 0 if coincident).
-function lerpTo(from: Point, to: Point, d: number): Point {
-  const len = Math.hypot(to.x - from.x, to.y - from.y)
-  if (len === 0) return { x: from.x, y: from.y }
-  const t = Math.min(1, d / len)
-  return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
-}
-
-// edgePath renders an orthogonal point list as an SVG path with rounded elbows: each interior vertex
-// becomes a short quadratic-bezier corner, its radius clamped to half the shorter adjacent segment so
-// stubby segments don't overshoot. A 2-point (straight) edge falls through to a plain line — and the
-// final segment stays axis-aligned, so marker-end keeps pointing squarely into the target's edge.
-function edgePath(points: Point[]): string {
-  if (points.length < 3) return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ')
-  let d = `M ${points[0].x},${points[0].y}`
-  for (let i = 1; i < points.length - 1; i++) {
-    const prev = points[i - 1], cur = points[i], next = points[i + 1]
-    const r = Math.min(EDGE_CORNER, Math.hypot(cur.x - prev.x, cur.y - prev.y) / 2, Math.hypot(next.x - cur.x, next.y - cur.y) / 2)
-    const a = lerpTo(cur, prev, r)
-    const b = lerpTo(cur, next, r)
-    d += ` L ${a.x},${a.y} Q ${cur.x},${cur.y} ${b.x},${b.y}`
-  }
-  const last = points[points.length - 1]
-  d += ` L ${last.x},${last.y}`
-  return d
-}
 
 // cardTitle builds the SVG <title> tooltip for a node — the small thing native browsers show on
 // hover after ~700ms. It mirrors the card's visible facts (kind, full name, status) plus the
@@ -135,20 +97,6 @@ function cardTitle(n: KNode, now: Date): string {
   if ((n.restarts ?? 0) > 0) meta.push(`↻ ${n.restarts} restarts`)
   if (meta.length > 0) lines.push(meta.join(' · '))
   return lines.join('\n')
-}
-
-// Human-readable label for an edge type. The dashed style says "non-ownership"; the tooltip says
-// which kind of non-ownership it is (selects, mounts a volume, routes traffic, …), so operators
-// don't need to know the graph package's edge taxonomy by heart.
-const EDGE_LABELS: Record<EdgeType, string> = {
-  ownerReference: 'owns',
-  scheduledOn: 'runs on',
-  selects: 'selects',
-  routes: 'routes to',
-  mounts: 'mounts',
-  usesServiceAccount: 'runs as',
-  binds: 'binds',
-  refers: 'refers to',
 }
 
 // CapBulletBar draws ONE expanded-pod bar at the global capacity scale (the same px-per-unit as the
@@ -203,21 +151,6 @@ function CapBulletBar(props: {
       </text>
     </>
   )
-}
-
-function nodeLabel(n: KNode): string {
-  const ns = n.namespace ? `${n.namespace}/` : ''
-  return `${n.kind} ${ns}${n.name}`
-}
-
-function edgeTitle(e: KEdge, nodes: KNode[]): string {
-  const fromN = nodes.find((n) => n.id === e.from)
-  const toN = nodes.find((n) => n.id === e.to)
-  const fromS = fromN ? nodeLabel(fromN) : e.from
-  // A bundled hub→pill edge points at a synthetic "+N older" pill (not in nodes); read it as the
-  // aggregate it is rather than leaking the sentinel id into the tooltip.
-  const toS = e.to.startsWith(`${COLLAPSE_KIND}:`) ? 'folded resources' : toN ? nodeLabel(toN) : e.to
-  return `${fromS} ${EDGE_LABELS[e.type]} ${toS}`
 }
 
 export default function Topology(props: Props) {
