@@ -30,6 +30,13 @@ spec:
     - name: data
       persistentVolumeClaim:
         claimName: web-data
+    - name: projected
+      projected:
+        sources:
+          - configMap:
+              name: web-projcm
+          - secret:
+              name: web-projsec
   containers:
     - name: app
       image: web:latest
@@ -123,6 +130,20 @@ metadata:
   uid: keysec-uid
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-projcm
+  namespace: shop
+  uid: projcm-uid
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-projsec
+  namespace: shop
+  uid: projsec-uid
+---
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: web-data
@@ -185,6 +206,8 @@ func TestBuildInferredEdges(t *testing.T) {
 		{"pod mounts configmap via envFrom", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-envcm"},
 		{"pod mounts configmap via env valueFrom keyRef", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-keycm"},
 		{"pod mounts secret via env valueFrom keyRef", EdgeMounts, "Pod", "web-1", "Secret", "web-keysec"},
+		{"pod mounts configmap via projected source", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-projcm"},
+		{"pod mounts secret via projected source", EdgeMounts, "Pod", "web-1", "Secret", "web-projsec"},
 		{"pod mounts pvc", EdgeMounts, "Pod", "web-1", "PersistentVolumeClaim", "web-data"},
 		// PVC's volumeName completes the Pod → PVC → PV chain (cycle 235).
 		{"pvc binds to pv", EdgeMounts, "PersistentVolumeClaim", "web-data", "PersistentVolume", "web-pv"},
