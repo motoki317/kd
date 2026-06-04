@@ -9,6 +9,21 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
+**Status (2026-06-05):** A live-dogfooding pass (drive the real UI with agent-browser, not just tests)
+found that the **maturity claim below did not hold for the fresh Nodes-capacity surface, viewport-edge
+behaviour, or empty-data paths** — areas a test suite structurally misses. Nine cycles shipped, several
+high-impact: **(1) namespaces with no edges hung forever on "connecting…"** — `graph.Build` returned a
+nil Edges slice → `"edges":null` → the client's `[...g.edges]` threw inside the SSE listener before
+`connState` went live (every system / standalone-resource namespace was unusable; fixed both ends).
+**(2) SSE capacity flood** — the ~40KB cluster-wide capacity payload was re-sent on every store change
+(Lease heartbeats!), ~280KB/7s on an idle namespace; gated on real graph change. **(3) Nodes expand
+fit** zoomed OUT to 4px cards; **(4) pod-card click** zoomed OUT instead of onto the bars; **(5) help
+overlay** overflowed the viewport with no scroll; **(6) capacity tooltip** clipped off-screen at edges;
+plus a stale sidebar comment. Knowledge persisted to the **`dogfooding-kd-ui.md`** playbook (recipes +
+recurring bug classes: fit-zoom direction, viewport-edge clipping, swallowed EventSource-listener throws,
+nil-Go-slice→`null`). Lesson: a passing test suite is NOT a maturity signal for interaction/edge/empty
+paths — dogfood them. See `git log` for the commits. The earlier (2026-05-29) status follows:
+
 **Status (2026-05-29):** UX surface mature (cycle 339: 16 candidates → 1 low-value). This session
 drained the backlog via the improvement-cycle: the **`Open` queue is empty**. The one Open item (B-001)
 shipped as a 3-button a11y sweep, and one Future item shipped as a correctness fix (CRD-removal ghost
