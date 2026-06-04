@@ -201,8 +201,10 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   the bar/segment/bullet geometry the dedicated `cap-view` render branch draws (the generic card `<For>`
   is skipped for `groupBy==='nodes'`). One toolbar facet persisted to `localStorage` (`kd:capRes`):
   **Resource** (`CapResource` = cpu|memory — a single resource at a time, never both on one length
-  channel). The bars are always the explicit **Req + Use** stacked form, each with a "Req"/"Use" axis
-  label (the overlay/`Use`-only `CapMode` was retired after live review — see the ADR Refinements). Key
+  channel). The bars are always the explicit **Use + Req** stacked form — **Use on top, Req below, BOTH
+  the same height** (`CAP_BAR_H`; the user asked they be equal — they read as one channel, the live
+  number first), each with a "Use"/"Req" axis label (the overlay/`Use`-only `CapMode` was retired after
+  live review — see the ADR Refinements). Key
   behaviours: **collapsed-bar segments draw at EXACT proportional width (`value·scale`, no per-pod
   floor)** so Σwidths = Σvalues and the bar end is the node's true utilization — a per-segment minimum
   (the original "idle pod never vanishes" floor) was the overshoot bug: N near-zero pods each floored to
@@ -217,13 +219,18 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   colour scheme** (req is NOT a lighter shade — `.cap-seg.req` carries the same accent/health fills and
   `.selected` stroke as `.cap-seg.use`), so a pod is the same colour on both bars and selection emphasises both.
   The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
-  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets whose bar LENGTH ∝
-  usage on a PER-NODE zoom scale (`bulletScale` = `CAP_BULLET_TRACK / max(use, request)` — NOT limit, so
-  one slack pod's huge limit can't crush every usage fill to a sliver; a limit tick's reach is capped at
-  the track end, exact value on hover) — variable length, not a fixed track with a fill, with
-  a faint baseline to the furthest req/limit tick; bullets show ONLY the FULL pod name (no
-  prefix-shortening, no inline numbers — those are on hover). Bursting (usage>request) is a hatch
-  overlay (`#cap-burst-hatch`), NOT a recolor. A **cursor-following HTML tooltip** (`capTip`,
+  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet
+  MIRRORS the node-level bars: two stacked sub-bars (Use over Req, each `CAP_BULLET_BAR_H` tall) reusing
+  the SAME `.cap-track`/`.cap-seg use`/`.cap-seg req` classes** — the detail reads as a zoomed-in node
+  row in the same visual language, not a separate one-bar-with-ticks idiom (the old `cap-bullet-fill` +
+  req/limit tick form was replaced). Bar LENGTH ∝ value on a PER-NODE zoom scale (`bulletScale` =
+  `CAP_BULLET_TRACK / max(use, request)` — NOT limit, so one slack pod's huge limit can't crush every
+  fill to a sliver; the limit draws as a tick on the Use bar, its reach capped at the track end, exact
+  value on hover) — variable length, not a fixed track with a fill, with a faint per-bar track to the
+  pod's furthest marker. Each pod's whole two-bar group is ONE hover/click target (same `CapTipData`
+  tooltip as the node-level segments); bullets show ONLY the FULL pod name (no prefix-shortening, no
+  inline numbers — those are on hover). Bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`)
+  on the Use bar, NOT a recolor. A **cursor-following HTML tooltip** (`capTip`,
   `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
   segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
   render. **Hover-to-spotlight** (Grafana-style): hovering a segment/bullet sets `capHover` (a pod id or
@@ -329,7 +336,13 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   resubscribe and NO empty frame, so it must set `freshData=true` and fit the next frame
   immediately — gating it behind the width-0 wait would mean the fit never fires. `pendingFit`
   defers until the layout has geometry. A real context/namespace switch OR a grouping/relationship
-  change re-fits; churn and expand/refold do not. **Top-bar inset**: the full-width control bar
+  change re-fits; churn and expand/refold do not. **One exception (Nodes view):** clicking a node row
+  to EXPAND it (`toggleCapRow`) fits the viewport to that row's box — expanding reveals the per-pod
+  bullets and makes the row much taller, so the operator is zoomed to the pods they just opened (a tall
+  many-pod row fits by zooming OUT, a small row by zooming IN; both are "fit to that node"). The fit
+  reads `capRows()` AFTER the toggle (the memo recomputes synchronously, so the box is already the
+  expanded geometry) and defers the actual fit one rAF for layout/DOM to settle. COLLAPSING does not
+  re-fit (preserves pan/zoom). **Top-bar inset**: the full-width control bar
   overlays the top of the canvas, so `computeFitFor` reads the live `.topology-toolbar` height
   (`toolbarEl` ref) and frames the graph into the area BELOW it — shrinking the usable height and
   pushing the vertical centre down by the bar height — otherwise the topmost cards land hidden

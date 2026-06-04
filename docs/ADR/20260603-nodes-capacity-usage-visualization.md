@@ -259,3 +259,19 @@ supersede the corresponding parts of the original Decision:
   right end (`910m / 940m` by the Req bar, `84m / 940m` by the Use bar; the value emphasized, capacity
   dim). The header keeps only identity + pod count. This applies the proximity principle — the number
   reads with the bar it describes — and makes the reservation-vs-usage gap obvious per bar.
+- **Use bar on top, Req below, equal height.** The bars were a fat Use bar over a thin Req bar
+  (22 vs 12px) with Req on top; they now share ONE height (`CAP_BAR_H`) with **Use on top** (the live
+  number reads first) and Req below. Equal weight + a single height reinforce that the two are the same
+  channel measured two ways, not a primary/secondary pair.
+- **Expanded pod bullets mirror the node bars (two stacked sub-bars).** A per-pod bullet was a single
+  usage bar with request/limit drawn as ticks — a different visual idiom from the node-level
+  Use/Req bars right above it. Each bullet is now **two stacked sub-bars (Use over Req)** reusing the
+  same `.cap-track`/`.cap-seg` classes, so the detail reads as a zoomed-in node row in one consistent
+  language (repetition). Widths still come from the per-node `bulletScale`; the limit remains a tick on
+  the Use bar, bursting a hatch on it. The whole two-bar group is one hover/click target showing the
+  same `CapTipData` tooltip as the node-level segments.
+- **Expanding a node fits the viewport to it.** Expanding reveals the per-pod bullets and makes the row
+  much taller, so the click now fits the viewport to that node's row (`toggleCapRow`) — the operator is
+  zoomed straight to the pods they just opened. A tall many-pod row fits by zooming out, a small row by
+  zooming in; both are "fit to that node". Collapsing does not re-fit (it preserves the current
+  pan/zoom), so folding the detail back never throws the viewport away.
