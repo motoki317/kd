@@ -284,6 +284,48 @@ func TestDeploymentHealth(t *testing.T) {
 	}
 }
 
+func TestDaemonSetHealth(t *testing.T) {
+	// A DaemonSet wanting pods on no nodes (its nodeSelector matches nothing) is deliberately
+	// scheduled nowhere, not unhealthy — desired 0 reads Healthy rather than "0/0" alarm.
+	noTargets := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{DesiredNumberScheduled: 0}}
+	if got := health(noTargets); got != HealthHealthy {
+		t.Errorf("health(no-target DaemonSet) = %q, want Healthy", got)
+	}
+
+	// Every desired pod ready AND updated → fully rolled out, Healthy.
+	ready := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{
+		DesiredNumberScheduled: 3, NumberReady: 3, UpdatedNumberScheduled: 3,
+	}}
+	if got := health(ready); got != HealthHealthy {
+		t.Errorf("health(ready DaemonSet) = %q, want Healthy", got)
+	}
+
+	// Pods wanted but NONE ready (e.g. a crash-looping agent on every node) is Degraded, not merely
+	// Progressing — there is no partial service.
+	down := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{
+		DesiredNumberScheduled: 3, NumberReady: 0, UpdatedNumberScheduled: 0,
+	}}
+	if got := health(down); got != HealthDegraded {
+		t.Errorf("health(all-down DaemonSet) = %q, want Degraded", got)
+	}
+
+	// A rollout in flight — all old pods ready but not all on the new revision — is Progressing.
+	rolling := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{
+		DesiredNumberScheduled: 3, NumberReady: 3, UpdatedNumberScheduled: 1,
+	}}
+	if got := health(rolling); got != HealthProgressing {
+		t.Errorf("health(rolling DaemonSet) = %q, want Progressing", got)
+	}
+
+	// Some-but-not-all ready (partial outage) is also Progressing, not Degraded (some pods serve).
+	partial := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{
+		DesiredNumberScheduled: 3, NumberReady: 2, UpdatedNumberScheduled: 2,
+	}}
+	if got := health(partial); got != HealthProgressing {
+		t.Errorf("health(partial DaemonSet) = %q, want Progressing", got)
+	}
+}
+
 func TestStatusSummaryJobAndCronJob(t *testing.T) {
 	three := int32(3)
 	suspended := true
