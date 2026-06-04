@@ -213,6 +213,39 @@ func TestDescendantIDsCycleGuard(t *testing.T) {
 
 // NodeID resolves an API handler's {kind}/{name} path to a graph node id, matching BOTH kind and
 // name (a Pod and a Service of the same name must not collide), and returns "" when absent.
+// SummarizeCluster is the inverse of the per-namespace rollup: it counts ONLY cluster-scoped
+// objects, so the __cluster__ sidebar entry reflects node/PV health and a namespaced pod's state
+// must NOT leak into it. (TestSummarizeIgnoresClusterScopedNodes pins the other direction.)
+func TestSummarizeCluster(t *testing.T) {
+	objs := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ok
+  namespace: shop
+  uid: ok-uid
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-1
+  uid: node-uid
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+`)
+	// The NotReady cluster-scoped Node sets the cluster health; the healthy namespaced pod is excluded.
+	if got := SummarizeCluster(objs); got.Health != HealthDegraded || got.NonReady != 1 {
+		t.Errorf("SummarizeCluster = %+v, want Degraded/1 (only the cluster-scoped Node counts)", got)
+	}
+}
+
 func TestNodeID(t *testing.T) {
 	g := Build(decodeFixture(t, ownershipFixture))
 	if got := g.NodeID("Pod", "web-abc-1"); got != "pod1-uid" {
