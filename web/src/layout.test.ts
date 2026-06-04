@@ -975,4 +975,23 @@ describe('formatQuantity', () => {
   it('renders undefined as an em dash', () => {
     expect(formatQuantity(undefined, 'cpu')).toBe('—')
   })
+  it('renders an exact zero as a bare "0" (no unit), for both resources', () => {
+    // The dedicated v===0 branch: an idle node/pod reads "0", not "0m" / "0B".
+    expect(formatQuantity(0, 'cpu')).toBe('0')
+    expect(formatQuantity(0, 'memory')).toBe('0')
+  })
+  it('rounds sub-core CPU to whole millicores', () => {
+    // Live usage feeds fractional millicores (e.g. 99.6m); the label must not show decimals of m.
+    expect(formatQuantity(99.6, 'cpu')).toBe('100m')
+    expect(formatQuantity(999, 'cpu')).toBe('999m')
+  })
+  it('keeps up to two decimals of cores, dropping trailing zeros', () => {
+    expect(formatQuantity(1250, 'cpu')).toBe('1.25')
+    expect(formatQuantity(1200, 'cpu')).toBe('1.2')
+  })
+  it('uses the B unit for sub-1Ki memory and keeps one decimal for non-round larger units', () => {
+    expect(formatQuantity(512, 'memory')).toBe('512B')
+    expect(formatQuantity(8.5 * 1024 ** 3, 'memory')).toBe('8.5Gi')
+    expect(formatQuantity(1024 ** 4, 'memory')).toBe('1Ti')
+  })
 })
