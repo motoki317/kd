@@ -8,6 +8,7 @@ import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
+import { nonOwnershipEdgeLabels } from './edgeRender'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
@@ -764,7 +765,7 @@ export default function App() {
                     <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
                     <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
                   </svg>
-                  Non-ownership — refers / selects / routes / mounts / scheduledOn / binds
+                  Non-ownership — {nonOwnershipEdgeLabels().join(' / ')}
                 </li>
               </ul>
             </section>

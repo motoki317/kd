@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DASHED, edgePath, edgeTitle } from './edgeRender'
-import type { KEdge, KNode } from './types'
+import { DASHED, EDGE_LABELS, edgePath, edgeTitle, nonOwnershipEdgeLabels } from './edgeRender'
+import type { EdgeType, KEdge, KNode } from './types'
 
 const node = (id: string, kind: string, name: string, namespace?: string): KNode =>
   ({ id, kind, name, namespace, health: 'Healthy' }) as KNode
@@ -55,5 +55,21 @@ describe('DASHED', () => {
     expect(DASHED.ownerReference).toBeUndefined()
     expect(DASHED.selects).toBe(true)
     expect(DASHED.mounts).toBe(true)
+  })
+})
+
+describe('nonOwnershipEdgeLabels', () => {
+  it('covers EVERY dashed edge type — the help legend had drifted and dropped "runs as"', () => {
+    // The legend must list a verb for each dashed type; a hand-maintained copy silently lost
+    // usesServiceAccount. Deriving from DASHED makes that impossible.
+    const dashedTypes = Object.keys(DASHED) as EdgeType[]
+    const labels = nonOwnershipEdgeLabels()
+    expect(labels).toHaveLength(dashedTypes.length)
+    expect(labels).toContain('runs as') // usesServiceAccount — the one that was missing
+    for (const t of dashedTypes) expect(labels).toContain(EDGE_LABELS[t])
+  })
+
+  it('excludes the solid ownership backbone', () => {
+    expect(nonOwnershipEdgeLabels()).not.toContain('owns')
   })
 })
