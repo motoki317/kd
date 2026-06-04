@@ -31,19 +31,25 @@ export default function CopyButton(props: {
     return props.altText ? `${base} · Shift+click ${props.altTitle ?? 'for alt'}` : base
   }
   return (
-    <button class="copy-btn" classList={{ copied: copied() }} onClick={copy} title={title()}>
-      {copied() ? (
-        <>
-          {/* Tiny check glyph + word — confirms the copy without the button changing width
-              meaningfully (Copy ≈ Copied in pixel-width once a check icon prefixes the text). */}
-          <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">
-            <path d="M 1.5 5.5 L 4 8 L 8.5 2.5" />
-          </svg>
-          Copied
-        </>
-      ) : (
-        'Copy'
-      )}
-    </button>
+    <>
+      {/* Stable aria-label (not the toggling "Copy"/"Copied" text) so the button reads consistently;
+          success is announced via the polite live region below — the reliable way to confirm to a
+          screen reader, since a focused button's own label change isn't auto-announced. */}
+      <button class="copy-btn" classList={{ copied: copied() }} onClick={copy} aria-label={title()} title={title()}>
+        {copied() ? (
+          <>
+            {/* Tiny check glyph + word — confirms the copy without the button changing width
+                meaningfully (Copy ≈ Copied in pixel-width once a check icon prefixes the text). */}
+            <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">
+              <path d="M 1.5 5.5 L 4 8 L 8.5 2.5" />
+            </svg>
+            Copied
+          </>
+        ) : (
+          'Copy'
+        )}
+      </button>
+      <span class="sr-only" role="status">{copied() ? 'Copied to clipboard' : ''}</span>
+    </>
   )
 }

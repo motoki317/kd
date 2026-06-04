@@ -49,4 +49,18 @@ describe('CopyButton', () => {
     const btn = container.querySelector('.copy-btn') as HTMLButtonElement
     expect(btn.getAttribute('title')).toMatch(/Shift\+click for Kind\/name/)
   })
+
+  it('has a stable aria-label and announces the copy via a polite live region', async () => {
+    const { container } = render(() => <CopyButton text={() => 'plain'} title="Copy name" />)
+    const btn = container.querySelector('.copy-btn') as HTMLButtonElement
+    // The accessible name stays the descriptive title, not the toggling "Copy"/"Copied" text.
+    expect(btn.getAttribute('aria-label')).toBe('Copy name')
+    const status = container.querySelector('[role="status"]')!
+    expect(status.classList.contains('sr-only')).toBe(true)
+    expect(status.textContent).toBe('') // nothing announced until a copy happens
+    fireEvent.click(btn)
+    await Promise.resolve()
+    // After a successful copy the live region populates, so a screen reader hears the confirmation.
+    expect(status.textContent).toBe('Copied to clipboard')
+  })
 })
