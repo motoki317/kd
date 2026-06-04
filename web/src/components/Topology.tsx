@@ -5,7 +5,7 @@ import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
-import { cardKindLabel, cardName, cardStatus, kindShortLabel } from '../names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
@@ -83,21 +83,6 @@ interface Props {
 // 0.45 labels-hidden threshold), so a resource-dense view that can't fit at this scale opens
 // zoomed to the floor on its first resources instead of fitting everything into an unreadable speck.
 const MIN_FIT_SCALE = 0.55
-
-// cardTitle builds the SVG <title> tooltip for a node — the small thing native browsers show on
-// hover after ~700ms. It mirrors the card's visible facts (kind, full name, status) plus the
-// detail the card runs out of room for at small zoom (age, host, restarts), so an operator can
-// inspect a node without selecting it.
-function cardTitle(n: KNode, now: Date): string {
-  const lines = [`${n.kind} ${n.name}`]
-  if (n.status) lines.push(n.status)
-  const meta: string[] = []
-  if (n.createdAt) meta.push(`${relativeAge(n.createdAt, now)} old`)
-  if (n.host) meta.push(`on ${n.host}`)
-  if ((n.restarts ?? 0) > 0) meta.push(`↻ ${n.restarts} restarts`)
-  if (meta.length > 0) lines.push(meta.join(' · '))
-  return lines.join('\n')
-}
 
 // CapBulletBar draws ONE expanded-pod bar at the global capacity scale (the same px-per-unit as the
 // node tracks, so a pod's bar is directly comparable to its node's): an axis label ("Use"/"Req"), a

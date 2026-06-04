@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
+import type { KNode } from './types'
 
 describe('relativeName', () => {
   it('strips the owner prefix following the generated-name convention', () => {
@@ -121,5 +122,26 @@ describe('cardStatus', () => {
     expect(out.length).toBeLessThan('Init:CrashLoopBackOff exceeded threshold (15)'.length)
     expect(out.startsWith('Init:Crash')).toBe(true)
     expect(out.endsWith('…')).toBe(true)
+  })
+})
+
+describe('cardTitle', () => {
+  // A fixed clock so relativeAge is deterministic: the node was created 2 hours before `now`.
+  const now = new Date('2026-01-01T12:00:00Z')
+  const twoHoursAgo = '2026-01-01T10:00:00Z'
+
+  it('puts kind+full name first, then status, then the age/host/restarts meta line', () => {
+    const n = { kind: 'Pod', name: 'web-0', status: 'Running', createdAt: twoHoursAgo, host: 'node-1', restarts: 3 } as KNode
+    expect(cardTitle(n, now)).toBe('Pod web-0\nRunning\n2h old · on node-1 · ↻ 3 restarts')
+  })
+
+  it('omits absent facts — no status line, no meta when the node carries none', () => {
+    const n = { kind: 'Service', name: 'api' } as KNode
+    expect(cardTitle(n, now)).toBe('Service api')
+  })
+
+  it('drops the restarts clause when restarts is 0 or missing', () => {
+    const n = { kind: 'Pod', name: 'web-0', createdAt: twoHoursAgo, restarts: 0 } as KNode
+    expect(cardTitle(n, now)).toBe('Pod web-0\n2h old')
   })
 })
