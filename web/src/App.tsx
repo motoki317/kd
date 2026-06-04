@@ -6,7 +6,7 @@ import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphSt
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled } from './ns'
-import type { GroupBy, Health, KNode, RelCategory, Usage } from './types'
+import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
@@ -184,9 +184,11 @@ export default function App() {
   // polled list — keeping the sidebar from briefly flipping a degraded ns to healthy on click
   // just because the current view (e.g. ownership) doesn't include the unhealthy resource.
   const [liveSummary, setLiveSummary] = createSignal<NamespaceSummary | null>(null)
-  // Live resource usage from metrics-server (keyed by object UID), for the capacity/usage view.
-  // Null until the first `usage` event; cleared on resubscribe so it never carries across scopes.
-  const [usage, setUsage] = createSignal<Usage | null>(null)
+  // The cluster-wide capacity feed (all Nodes + Pods across every namespace, with live usage) the
+  // Nodes group-by draws. Independent of the namespace-scoped graph: a node hosts pods from every
+  // namespace, so the view always shows the whole cluster and dims pods outside the selected
+  // namespace. Null until the first `capacity` event; cleared on resubscribe.
+  const [capacity, setCapacity] = createSignal<Capacity | null>(null)
   // Bumped on a programmatic jump to a namespace (first-load auto-pick, Alt+T) so the sidebar can
   // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
   const [nsFlash, setNsFlash] = createSignal(0)
@@ -371,7 +373,7 @@ export default function App() {
     firstSubscribe = false
     setGraph(reconcile(emptyState()))
     setLiveSummary(null) // previous stream's summary belongs to the previous namespace — clear it
-    setUsage(null) // same: the previous stream's usage belongs to the previous scope
+    setCapacity(null) // same: the previous stream's capacity feed belongs to the previous scope
     setConnState('connecting')
     const close = streamGraph(c, ns, {
       snapshot: (g) => {
@@ -386,7 +388,7 @@ export default function App() {
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
       summary: (s) => setLiveSummary(s),
-      usage: (u) => setUsage(u),
+      capacity: (c) => setCapacity(c),
       error: () => setConnState('offline'),
     })
     onCleanup(close)
@@ -394,7 +396,16 @@ export default function App() {
 
   const nodes = createMemo(() => Object.values(graph.nodes))
   const edges = createMemo(() => graph.edges)
-  const selectedNode = createMemo(() => (selectedId() ? graph.nodes[selectedId()!] ?? null : null))
+  // The Nodes view can select a pod that lives only in the cluster-wide capacity feed (another
+  // namespace's pod, or any pod while in cluster scope — the namespace graph holds neither). Fall
+  // back to the capacity feed so the drawer still opens with the pod's details (its YAML/logs are
+  // fetched by namespace/name, which works cross-namespace).
+  const capById = createMemo(() => new Map((capacity()?.nodes ?? []).map((n) => [n.id, n])))
+  const selectedNode = createMemo(() => {
+    const id = selectedId()
+    if (!id) return null
+    return graph.nodes[id] ?? capById().get(id) ?? null
+  })
   // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
   const ownerNodes = createMemo<KNode[]>(() => {
     const n = selectedNode()
@@ -599,7 +610,8 @@ export default function App() {
             relFilter={relFilter()}
             onRelFilter={toggleRel}
             scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
-            usage={usage()}
+            namespace={namespace() ?? ''}
+            capacity={capacity()}
             search={search()}
             onSearch={setSearch}
             searchRef={(el) => (searchEl = el)}

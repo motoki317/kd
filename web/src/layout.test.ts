@@ -742,7 +742,7 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
   const usage = { pa: { cpuMilli: 800 }, pc: { cpuMilli: 100 }, n1: { cpuMilli: 1200 } }
 
   it('sizes node tracks proportional to capacity on one global scale', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!
     const small = l.rows.find((r) => r.host === 'small')!
     expect(big.cap).toBe(8000)
@@ -751,7 +751,7 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
   })
 
   it('totals requests/usage and flags usage overshooting request', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!
     expect(big.reqTotal).toBe(500) // only pa sets a request
     expect(big.useTotal).toBe(800) // pa 800 + pb 0
@@ -759,18 +759,34 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
   })
 
   it('puts only request-bearing pods in the requested bar; every pod gets a usage segment', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!
     expect(big.reqSegs.map((s) => s.node.id)).toEqual(['pa']) // pb has no request
     expect(big.useSegs).toHaveLength(2) // pb still gets a (min-width) segment, never vanishes
     expect(big.useSegs.every((s) => s.width > 0)).toBe(true)
   })
 
-  it('overlay mode emits a Σrequest marker instead of a requested bar', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'overlay')
+  it('cluster scope (empty namespace) marks every pod as own', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!
-    expect(big.reqSegs).toHaveLength(0)
-    expect(big.reqMarkerX!).toBeGreaterThan(0)
+    expect(big.otherCount).toBe(0)
+    expect(big.useSegs.every((s) => s.own)).toBe(true)
+  })
+
+  it('namespace scope dims pods outside the selected namespace, keeping the node total honest', () => {
+    const nsNodes: KNode[] = [
+      { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } },
+      { id: 'mine', kind: 'Pod', name: 'mine', namespace: 'app', health: 'Healthy', host: 'h' },
+      { id: 'theirs', kind: 'Pod', name: 'theirs', namespace: 'kube-system', health: 'Healthy', host: 'h' },
+    ]
+    const u = { mine: { cpuMilli: 300 }, theirs: { cpuMilli: 700 } }
+    const l = layoutGraphByCapacity(nsNodes, u, 'cpu', 'app')
+    const row = l.rows[0]
+    expect(row.otherCount).toBe(1)
+    expect(row.useTotal).toBe(1000) // node total spans both namespaces
+    expect(row.ownUseTotal).toBe(300) // but the bright block is just this namespace
+    // Own pods sort before other-namespace pods (the bright block leads the bar).
+    expect(row.useSegs.map((s) => s.own)).toEqual([true, false])
   })
 
   it('flags overcommit when Σrequest exceeds capacity', () => {
@@ -778,28 +794,32 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
       { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 1000 } },
       { id: 'p', kind: 'Pod', name: 'p', health: 'Healthy', host: 'h', requests: { cpuMilli: 2000 } },
     ]
-    expect(layoutGraphByCapacity(over, {}, 'cpu', 'split').rows[0].overcommit).toBe(true)
+    expect(layoutGraphByCapacity(over, {}, 'cpu', '').rows[0].overcommit).toBe(true)
   })
 
-  it('expands a node into per-pod bullets with their own scale', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split', new Set(['host:big']))
+  it('expands a node into variable-length per-pod bullets on a shared scale', () => {
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '', new Set(['host:big']))
     const big = l.rows.find((r) => r.host === 'big')!
     expect(big.bullets).toHaveLength(2)
     expect(big.bulletScale!).toBeGreaterThan(0)
+    // The bullet's extent ∝ max(use, req, lim) on the shared scale, so a busier pod's bar is longer.
+    const a = big.bullets.find((b) => b.node.id === 'pa')! // use 800, lim 1000
+    const b = big.bullets.find((b) => b.node.id === 'pb')! // idle, no req/lim
+    expect(a.width).toBeGreaterThan(b.width)
   })
 
   it('carries the node total usage as a backdrop value', () => {
-    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', 'split')
+    const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     expect(l.rows.find((r) => r.host === 'big')!.nodeUse).toBe(1200)
   })
 
   it('buckets host-less pods into an Unscheduled row', () => {
-    const l = layoutGraphByCapacity([{ id: 'p', kind: 'Pod', name: 'p', health: 'Healthy' }], {}, 'cpu', 'split')
+    const l = layoutGraphByCapacity([{ id: 'p', kind: 'Pod', name: 'p', health: 'Healthy' }], {}, 'cpu', '')
     expect(l.rows.map((r) => r.label)).toContain('Unscheduled')
   })
 
   it('returns empty geometry for no nodes', () => {
-    const l = layoutGraphByCapacity([], {}, 'cpu', 'split')
+    const l = layoutGraphByCapacity([], {}, 'cpu', '')
     expect(l.rows).toEqual([])
     expect(l.nodes).toEqual([])
   })

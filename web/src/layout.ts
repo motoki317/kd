@@ -351,14 +351,17 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: Read
 // single resource is shown at a time (CPU or memory), so the two metrics never fight for one channel.
 
 export type CapResource = 'cpu' | 'memory'
-export type CapMode = 'split' | 'overlay'
+
+// CLUSTER_SCOPE_NS mirrors api.ts CLUSTER_SCOPE — the sentinel namespace under which the capacity
+// view treats every pod as "own" (no dimming), since a cluster-scoped view spans all namespaces.
+const CLUSTER_SCOPE_NS = '__cluster__'
 
 const CAP_TRACK_MAX = 720 // px length of the largest-capacity node's track; everything scales to this
 const CAP_TRACK_MIN = 130 // a node never narrower than this, so a tiny node stays readable/clickable
-const CAP_ROW_LEFT = 30 // left gutter where every track starts (shared, so bars left-align)
+const CAP_ROW_LEFT = 48 // left gutter where every track starts — also holds the "Req"/"Use" axis labels
 const CAP_LABEL_H = 22 // header line (node name · capacity · Σreq/Σuse) above the bars
 const CAP_BAR_USE = 22 // the usage bar height
-const CAP_BAR_REQ = 12 // the (thinner) requested bar height, split mode only
+const CAP_BAR_REQ = 12 // the (thinner) requested bar height
 const CAP_BAR_GAP = 3 // gap between the req and use sub-bars
 const CAP_ROW_GAP = 26 // gap between node rows
 const CAP_BULLET_H = 20 // a per-pod bullet row height (expanded detail)
@@ -387,21 +390,26 @@ export interface CapSeg {
   lim?: number
   over: boolean // usage exceeds request (and a request exists) — bursting past the reservation
   nearLimit: boolean // usage within 90% of the limit — OOM/throttle risk
+  own: boolean // pod is in the selected namespace (bright) vs another namespace (gray, dimmed)
   x: number
   y: number
   width: number
   height: number
 }
 
-// CapRow is one node: its track (length ∝ capacity), the pod segments composing the usage (and, in
-// split mode, the requested) bar, aggregate totals, and the expanded per-pod bullets.
+// CapRow is one node: its track (length ∝ capacity), the pod segments composing the requested and
+// usage bars, aggregate totals, and the expanded per-pod bullets. Pods from OTHER namespaces are
+// included (gray) so a node's true reservation/usage shows — the row is cluster-wide, the selected
+// namespace's pods just render bright.
 export interface CapRow {
   host: string
   label: string
   node?: KNode // the Node resource; undefined for the synthetic "Unscheduled" bucket
   cap?: number // allocatable for the active resource; undefined when unknown (orphan bucket)
-  reqTotal: number
-  useTotal: number
+  reqTotal: number // Σrequest of ALL pods on the node (own + other namespaces)
+  useTotal: number // Σusage of ALL pods on the node
+  ownUseTotal: number // Σusage of just the selected namespace's pods (the bright block)
+  otherCount: number // # of pods on this node from OTHER namespaces (0 in cluster scope)
   nodeUse?: number // the node's TOTAL usage (all namespaces, from NodeMetrics) — context backdrop
   overcommit: boolean // Σrequest exceeds capacity — the node has promised more than it has
   expanded: boolean
@@ -409,12 +417,11 @@ export interface CapRow {
   y: number
   width: number
   height: number
-  trackY: number // y of the (primary) usage bar top
+  trackY: number // y of the usage bar top
   trackW: number // full track length in px (capacity · scale)
-  reqBarY?: number // y of the requested bar (split mode only)
-  useSegs: CapSeg[] // pods sized by usage, composing the usage bar
-  reqSegs: CapSeg[] // pods with a request, sized by request (split mode only)
-  reqMarkerX?: number // Σrequest marker position on the track (overlay mode only)
+  reqBarY: number // y of the requested bar
+  useSegs: CapSeg[] // pods sized by usage, composing the usage bar (own first, then other-ns)
+  reqSegs: CapSeg[] // pods with a request, sized by request (own first, then other-ns)
   bullets: CapSeg[] // per-pod detail rows, present only when expanded
   bulletScale?: number // px-per-unit for the bullets (per-node, zoomed to the largest pod)
 }
@@ -426,7 +433,6 @@ export interface CapacityLayout extends Layout {
   rows: CapRow[]
   scale: number
   resource: CapResource
-  mode: CapMode
   hasUsage: boolean
 }
 
@@ -434,10 +440,13 @@ export function layoutGraphByCapacity(
   nodes: KNode[],
   usage: Record<string, { cpuMilli?: number; memBytes?: number }> | undefined,
   resource: CapResource,
-  mode: CapMode,
+  // The selected namespace. Pods outside it render gray (dimmed) but still present, so a node's
+  // real utilization shows. '' or the cluster sentinel → every pod is "own" (item: cluster view
+  // shows all pods; namespace view dims other namespaces).
+  currentNamespace: string,
   expanded: ReadonlySet<string> = new Set(),
 ): CapacityLayout {
-  const base: CapacityLayout = { nodes: [], edges: [], width: 0, height: 0, rows: [], scale: 1, resource, mode, hasUsage: false }
+  const base: CapacityLayout = { nodes: [], edges: [], width: 0, height: 0, rows: [], scale: 1, resource, hasUsage: false }
   if (nodes.length === 0) return base
 
   const hasUsage = !!usage && Object.keys(usage).length > 0
@@ -445,6 +454,9 @@ export function layoutGraphByCapacity(
     const u = usage?.[id]
     return (u ? resourceOf(u, resource) : undefined) ?? 0
   }
+
+  const clusterScope = currentNamespace === '' || currentNamespace === CLUSTER_SCOPE_NS
+  const isOwn = (p: KNode) => clusterScope || p.namespace === currentNamespace
 
   const nodeByName = new Map<string, KNode>()
   for (const n of nodes) if (n.kind === 'Node') nodeByName.set(n.name, n)
@@ -478,8 +490,9 @@ export function layoutGraphByCapacity(
   }
   const scale = CAP_TRACK_MAX / (maxCap || maxDemand || 1)
 
-  // Troubled pods first, then natural name — the same order the old host view used, so an operator
-  // scanning a node meets its problem pods at the left of the bar.
+  // Order within a node: the selected namespace's pods FIRST (a contiguous bright block at the left),
+  // then other-namespace pods (gray). Within each group, troubled pods first, then natural name — so
+  // an operator scanning the bright block meets its problem pods at the left.
   const sev = (n: KNode) => (n.health === 'Healthy' ? 0 : 1)
   const order = (a: KNode, b: KNode) => sev(b) - sev(a) || byName(a, b)
 
@@ -491,21 +504,33 @@ export function layoutGraphByCapacity(
   for (const host of hostNames) {
     const nodeCard = nodeByName.get(host)
     const cap = resourceOf(nodeCard?.allocatable, resource)
-    const pods = [...(podsByHost.get(host) ?? [])].sort(order)
+    const all = podsByHost.get(host) ?? []
+    const ownPods = all.filter(isOwn).sort(order)
+    const otherPods = all.filter((p) => !isOwn(p)).sort(order)
+    const pods = [...ownPods, ...otherPods]
 
     const segData = pods.map((p) => {
       const use = useOf(p.id)
       const req = resourceOf(p.requests, resource)
       const lim = resourceOf(p.limits, resource)
-      return { node: p, use, req, lim, over: req !== undefined && use > req, nearLimit: lim !== undefined && lim > 0 && use >= 0.9 * lim }
+      return {
+        node: p,
+        use,
+        req,
+        lim,
+        over: req !== undefined && use > req,
+        nearLimit: lim !== undefined && lim > 0 && use >= 0.9 * lim,
+        own: isOwn(p),
+      }
     })
     const useTotal = segData.reduce((s, d) => s + d.use, 0)
     const reqTotal = segData.reduce((s, d) => s + (d.req ?? 0), 0)
+    const ownUseTotal = segData.reduce((s, d) => s + (d.own ? d.use : 0), 0)
     const trackW = Math.max(CAP_TRACK_MIN, (cap ?? Math.max(useTotal, reqTotal)) * scale)
 
     const headerY = cursorY
-    const reqBarY = mode === 'split' ? headerY + CAP_LABEL_H : undefined
-    const useBarY = mode === 'split' ? reqBarY! + CAP_BAR_REQ + CAP_BAR_GAP : headerY + CAP_LABEL_H
+    const reqBarY = headerY + CAP_LABEL_H
+    const useBarY = reqBarY + CAP_BAR_REQ + CAP_BAR_GAP
 
     // Usage bar: every pod a segment sized by usage (or, when metrics-server is absent, by request —
     // so the view still draws something). Segments tile from the left; the remainder of the track is
@@ -524,32 +549,31 @@ export function layoutGraphByCapacity(
       return seg
     })
 
-    // Requested bar (split mode): only pods that set a request appear, sized by request.
+    // Requested bar: only pods that set a request appear, sized by request, in the same own→other order.
     const reqSegs: CapSeg[] = []
-    let reqMarkerX: number | undefined
-    if (mode === 'split') {
-      let rx = CAP_ROW_LEFT
-      for (const d of segData) {
-        if (d.req === undefined) continue
-        const width = Math.max(CAP_MIN_SEG, d.req * scale)
-        reqSegs.push({ ...d, x: rx, y: reqBarY!, width, height: CAP_BAR_REQ })
-        rx += width
-      }
-    } else {
-      reqMarkerX = CAP_ROW_LEFT + reqTotal * scale
+    let rx = CAP_ROW_LEFT
+    for (const d of segData) {
+      if (d.req === undefined) continue
+      const width = Math.max(CAP_MIN_SEG, d.req * scale)
+      reqSegs.push({ ...d, x: rx, y: reqBarY, width, height: CAP_BAR_REQ })
+      rx += width
     }
 
     let bottom = useBarY + CAP_BAR_USE
     const isExpanded = expanded.has(`host:${host}`)
     const bullets: CapSeg[] = []
     // Per-node bullet scale: zoom to the largest of any pod's usage/request/limit so the smallest
-    // pod's ticks are still legible, while pods stay comparable to each other within the node.
+    // pod's bar/ticks are still legible, while pods stay comparable to each other within the node.
     const bulletMax = segData.reduce((m, d) => Math.max(m, d.use, d.req ?? 0, d.lim ?? 0), 0)
     const bulletScale = CAP_BULLET_TRACK / (bulletMax || 1)
     if (isExpanded && segData.length) {
       let by = bottom + CAP_BULLET_GAP + 2
       for (const d of segData) {
-        bullets.push({ ...d, x: CAP_ROW_LEFT, y: by, width: CAP_BULLET_TRACK, height: CAP_BULLET_H })
+        // Variable-length bullet: each pod's baseline extent ∝ max(use, req, lim) on the shared
+        // per-node scale, so a small pod's row is physically shorter than a large one (the bar
+        // length itself encodes magnitude, not just the fill of a fixed track).
+        const extent = Math.max(CAP_MIN_SEG, Math.max(d.use, d.req ?? 0, d.lim ?? 0) * bulletScale)
+        bullets.push({ ...d, x: CAP_ROW_LEFT, y: by, width: extent, height: CAP_BULLET_H })
         by += CAP_BULLET_H + CAP_BULLET_GAP
       }
       bottom = by - CAP_BULLET_GAP
@@ -569,6 +593,8 @@ export function layoutGraphByCapacity(
       cap,
       reqTotal,
       useTotal,
+      ownUseTotal,
+      otherCount: otherPods.length,
       nodeUse: nodeCard ? useOf(nodeCard.id) || undefined : undefined,
       overcommit: cap !== undefined && reqTotal > cap,
       expanded: isExpanded,
@@ -581,7 +607,6 @@ export function layoutGraphByCapacity(
       reqBarY,
       useSegs,
       reqSegs,
-      reqMarkerX,
       bullets,
       bulletScale,
     })
@@ -596,7 +621,6 @@ export function layoutGraphByCapacity(
     rows,
     scale,
     resource,
-    mode,
     hasUsage,
   }
 }

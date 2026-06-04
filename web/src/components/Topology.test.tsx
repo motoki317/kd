@@ -328,13 +328,36 @@ describe('Topology', () => {
       { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 200 } },
       { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
     ]
-    const usage = { items: { p1: { cpuMilli: 150 }, p2: { cpuMilli: 80 } } }
-    const { container } = render(() => <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" usage={usage} />)
+    // The Nodes view draws from the cluster-wide `capacity` feed, not the namespace graph.
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 150 }, p2: { cpuMilli: 80 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
     // One capacity row for the node, one usage segment per pod.
     expect(container.querySelectorAll('.cap-row').length).toBe(1)
     expect(container.querySelectorAll('.cap-seg.use').length).toBe(2)
+    // Explicit Req/Use axis labels are present (item: explicit over implicit).
+    const axis = [...container.querySelectorAll('.cap-axis-label')].map((e) => e.textContent)
+    expect(axis).toContain('Req')
+    expect(axis).toContain('Use')
     // The capacity view draws no relationship edges (containment carries scheduling).
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
+  })
+
+  it('Nodes view dims other-namespace pods as a distinct gray group', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Healthy', host: 'host-1' },
+      { id: 'p2', kind: 'Pod', name: 'p2', namespace: 'kube-system', health: 'Healthy', host: 'host-1' },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 50 }, p2: { cpuMilli: 90 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" />
+    ))
+    // The kube-system pod renders as a gray "other" segment; the app pod does not.
+    expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
+    // The legend names the other-namespace swatch only when some pods are dimmed.
+    expect(container.querySelector('.cap-swatch.other')).toBeTruthy()
   })
 
   it('clears all filters via onClearFilters (cycle 216)', () => {

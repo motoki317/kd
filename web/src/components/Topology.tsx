@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapMode, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -8,7 +8,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import type { EdgeType, GroupBy, Health, KEdge, KNode, RelCategory, Usage } from '../types'
+import type { Capacity, EdgeType, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
 
@@ -53,10 +53,13 @@ interface Props {
   // context/namespace switch — not when an SSE patch or a collapse expand/refold changes the node
   // set within the same scope (which must preserve the operator's current pan/zoom).
   scope?: string
-  // usage is the live metrics-server resource draw (keyed by object UID) for the capacity/usage
-  // view. Null when metrics-server is unavailable or before the first reading arrives.
-  // TODO(capacity-view): consume usage
-  usage?: Usage | null
+  // capacity is the cluster-wide Node+Pod feed (with live usage) the Nodes group-by draws — every
+  // namespace's pods on each node, so the view is the same in cluster and namespace scope and the
+  // client just dims pods outside `namespace`. Null before the first `capacity` event.
+  capacity?: Capacity | null
+  // namespace is the selected namespace (or the cluster sentinel). The capacity view renders this
+  // namespace's pods bright and dims the rest; the cluster sentinel treats every pod as own.
+  namespace?: string
   search: string
   onSearch: (q: string) => void
   // Lets the app focus the topology search from a global key (Cmd/Ctrl+K) — like Sidebar's
@@ -174,25 +177,23 @@ export default function Topology(props: Props) {
       return next
     })
 
-  // Capacity view (Nodes group-by) controls, persisted to localStorage so the operator's choice of
-  // resource and bar style survives reloads (mirrors the kd:* persistence of group-by/relationships).
-  // capResource: which single resource sizes the bars. capMode: 'split' (separate requested/used
-  // sub-bars) vs 'overlay' (one usage bar + a Σrequest marker) — shipped both so we can pick the
-  // keeper after live review (see the ADR).
+  // Capacity view (Nodes group-by) control, persisted to localStorage so the operator's choice of
+  // resource survives reloads (mirrors the kd:* persistence of group-by/relationships). capResource
+  // picks which single resource sizes the bars. The bars are always the explicit Req + Use stacked
+  // form (the overlay/Use-only mode was retired after live review — the user chose Req+Use).
   const readPref = <T extends string>(key: string, fallback: T, allowed: T[]): T => {
     const v = (typeof localStorage !== 'undefined' && localStorage.getItem(key)) as T | null
     return v && allowed.includes(v) ? v : fallback
   }
   const [capResource, setCapResourceSig] = createSignal<CapResource>(readPref('kd:capRes', 'cpu', ['cpu', 'memory']))
-  const [capMode, setCapModeSig] = createSignal<CapMode>(readPref('kd:capMode', 'split', ['split', 'overlay']))
   const setCapResource = (r: CapResource) => {
     setCapResourceSig(r)
     try { localStorage.setItem('kd:capRes', r) } catch { /* private mode */ }
   }
-  const setCapMode = (m: CapMode) => {
-    setCapModeSig(m)
-    try { localStorage.setItem('kd:capMode', m) } catch { /* private mode */ }
-  }
+  // Rich hover tooltip for the capacity bars (item: Grafana-style panels). Holds the hovered pod
+  // segment + the pointer position; an HTML overlay (not an SVG <title>) follows the cursor so the
+  // pod's name/usage/request/limit read instantly instead of after the browser's ~700ms title delay.
+  const [capTip, setCapTip] = createSignal<{ seg: CapSeg; x: number; y: number } | null>(null)
 
   // Project the full streamed edge set onto the active relationship categories (reversing the
   // referenced-as-parent ones) — the client-side replacement for the old server per-view Filter.
@@ -210,7 +211,7 @@ export default function Topology(props: Props) {
     // pods as usage-sized segments, reserved-vs-actual bars, expandable to per-pod bullets. Driven by
     // the live metrics-server usage feed (props.usage) + the active resource/mode toggles.
     if (props.groupBy === 'nodes')
-      return layoutGraphByCapacity(props.nodes, props.usage?.items, capResource(), capMode(), expandedClusters())
+      return layoutGraphByCapacity(props.capacity?.nodes ?? [], props.capacity?.usage?.items, capResource(), props.namespace ?? '', expandedClusters())
     // Relationship grouping (default): left-to-right depth columns following the displayed
     // relationship edges. A card is far wider than it is tall, so a parent's children read better
     // stacked in a vertical column to the right (LR). Nodes untouched by any displayed edge fall
@@ -226,6 +227,18 @@ export default function Topology(props: Props) {
   // 'nodes' (the dispatch above), and CapacityLayout is a Layout superset.
   const capRows = createMemo<CapRow[]>(() => (props.groupBy === 'nodes' ? (layout() as CapacityLayout).rows : []))
   const capInfo = createMemo(() => layout() as CapacityLayout)
+  // In the Nodes (capacity) view, "frame the selection" means frame the whole node ROW the selected
+  // pod (or node) lives in — not its related() subtree, whose edges come from the namespace graph,
+  // not this cluster-wide feed. Returns the row's box in center convention, or null when the id
+  // isn't on any row. (item: selecting a pod fits to the node it runs on.)
+  const capRowBoxFor = (id: string | null) => {
+    if (props.groupBy !== 'nodes' || !id) return null
+    const row = capRows().find(
+      (r) => r.node?.id === id || r.useSegs.some((s) => s.node.id === id) || r.bullets.some((s) => s.node.id === id),
+    )
+    if (!row) return null
+    return { x: row.x + row.width / 2, y: row.y + row.height / 2, width: row.width, height: row.height }
+  }
   // Relationship grouping has no kind/host container, so a fold's siblings + pill get a dedicated
   // grouping frame. Kind/Nodes already box by kind/host — a second frame there would double-border,
   // so connGroups is empty for those.
@@ -733,6 +746,13 @@ export default function Topology(props: Props) {
         const l = layout()
         if (l.width === 0) return
         if (!id) return
+        // Nodes view: frame the node row the selection sits in (see capRowBoxFor).
+        const capBox = capRowBoxFor(id)
+        if (capBox) {
+          cancelAnimationFrame(selFitFrame)
+          selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
+          return
+        }
         const r = related()
         if (!r) return
         const inSet = l.nodes.filter((n) => r.nodes.has(n.id))
@@ -925,6 +945,12 @@ export default function Topology(props: Props) {
     // away from their selected subtree would lose it on 'f' — they'd have to click the
     // selection again to recover the frame.
     if (props.selectedId) {
+      // Nodes view: 'f' re-frames the selected pod's node row (matching the click-into-selection fit).
+      const capBox = capRowBoxFor(props.selectedId)
+      if (capBox) {
+        animateTo(fitNodeSet([capBox], 1.4))
+        return
+      }
       const r = related()
       const inSet = r ? l.nodes.filter((n) => r.nodes.has(n.id)) : []
       if (inSet.length > 0) {
@@ -1189,9 +1215,10 @@ export default function Topology(props: Props) {
             </div>
           </div>
         </Show>
-        {/* Capacity-view facets — only in the Nodes group-by. Resource picks which single metric
-            sizes the bars (CPU/memory never share one length channel); Bars switches the
-            reserved-vs-actual presentation (two stacked sub-bars vs one usage bar + a Σrequest mark). */}
+        {/* Capacity-view facet — only in the Nodes group-by. Resource picks which single metric
+            sizes the bars (CPU/memory never share one length channel). The bars themselves are the
+            explicit Req + Use stacked form (always), with a legend telling own vs other-namespace
+            pods apart when a namespace is selected. */}
         <Show when={props.groupBy === 'nodes'}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Resource</span>
@@ -1210,22 +1237,13 @@ export default function Topology(props: Props) {
               </For>
             </div>
           </div>
-          <div class="toolbar-facet">
-            <span class="toolbar-label">Bars</span>
-            <div class="group-seg" role="group" aria-label="Bar style">
-              <For each={[{ id: 'split', label: 'Req + Use' }, { id: 'overlay', label: 'Use' }] as const}>
-                {(m) => (
-                  <button
-                    classList={{ active: capMode() === m.id }}
-                    aria-pressed={capMode() === m.id}
-                    onClick={() => setCapMode(m.id)}
-                    title={m.id === 'split' ? 'Two stacked bars: requested and actual usage' : 'One usage bar with a requested marker'}
-                  >
-                    {m.label}
-                  </button>
-                )}
-              </For>
-            </div>
+          {/* Legend (item: explicit over implicit) — what the bar colours mean. The "other
+              namespaces" swatch only appears in a namespace scope, where some pods are dimmed. */}
+          <div class="toolbar-facet cap-legend">
+            <span class="cap-legend-item"><span class="cap-swatch own" /> this namespace</span>
+            <Show when={capRows().some((r) => r.otherCount > 0)}>
+              <span class="cap-legend-item"><span class="cap-swatch other" /> other namespaces</span>
+            </Show>
           </div>
         </Show>
       </div>
@@ -1376,6 +1394,7 @@ export default function Topology(props: Props) {
                   const segClasses = (s: CapSeg) => ({
                     over: s.over,
                     near: s.nearLimit,
+                    other: !s.own,
                     faded: nodeFaded(s.node),
                     selected: s.node.id === props.selectedId,
                     [`h-${s.node.health.toLowerCase()}`]: true,
@@ -1392,37 +1411,40 @@ export default function Topology(props: Props) {
                         <tspan class="cap-row-meta">
                           {row.cap !== undefined ? ` · ${fmt(row.cap)} ${capResource() === 'cpu' ? 'CPU' : 'mem'}` : ''}
                           {` · ${pods} pod${pods === 1 ? '' : 's'}`}
+                          {row.otherCount > 0 ? ` (${row.otherCount} other-ns)` : ''}
                           {pods || row.reqTotal ? ` · use ${fmt(row.useTotal)} · req ${fmt(row.reqTotal)}` : ''}
+                          {row.otherCount > 0 ? ` · this ns ${fmt(row.ownUseTotal)}` : ''}
                         </tspan>
                         <Show when={row.overcommit}>
                           <tspan class="cap-warn"> · overcommit</tspan>
                         </Show>
                       </text>
 
-                      {/* Requested bar (split mode): pods that set a request, sized by request. */}
-                      <Show when={capMode() === 'split' && row.reqBarY !== undefined}>
-                        <rect class="cap-track req" x={row.x} y={row.reqBarY!} width={row.trackW} height={12} rx="2" />
-                        <For each={row.reqSegs}>
-                          {(s) => (
-                            <rect
-                              class="cap-seg req"
-                              classList={{ faded: nodeFaded(s.node), selected: s.node.id === props.selectedId }}
-                              x={s.x}
-                              y={s.y}
-                              width={Math.max(0.5, s.width - 0.5)}
-                              height={s.height}
-                              onClick={() => props.onSelect(s.node.id)}
-                            >
-                              <title>{`${s.node.name} · request ${fmt(s.req)}`}</title>
-                            </rect>
-                          )}
-                        </For>
-                      </Show>
+                      {/* Requested bar: pods that set a request, sized by request. The "Req" axis
+                          label (item: explicit labels) sits in the left gutter beside it. */}
+                      <text class="cap-axis-label" x={row.x - 6} y={row.reqBarY + 9}>Req</text>
+                      <rect class="cap-track req" x={row.x} y={row.reqBarY} width={row.trackW} height={12} rx="2" />
+                      <For each={row.reqSegs}>
+                        {(s) => (
+                          <rect
+                            class="cap-seg req"
+                            classList={{ other: !s.own, faded: nodeFaded(s.node), selected: s.node.id === props.selectedId }}
+                            x={s.x}
+                            y={s.y}
+                            width={Math.max(0.5, s.width - 0.5)}
+                            height={s.height}
+                            onClick={() => props.onSelect(s.node.id)}
+                            onPointerMove={(e) => setCapTip({ seg: s, x: e.clientX, y: e.clientY })}
+                            onPointerLeave={() => setCapTip(null)}
+                          />
+                        )}
+                      </For>
 
                       {/* Usage bar: every pod a segment sized by actual usage. The node's TOTAL usage
-                          (all namespaces) is a faint backdrop, so a namespace's small footprint still
-                          reads against the node's real utilization — the bright segments are THIS
-                          namespace's pods, the faint remainder is other namespaces, the rest headroom. */}
+                          (all namespaces incl. system overhead, from NodeMetrics) is a faint backdrop so
+                          the pod segments read against the node's real utilization. The bright segments
+                          are THIS namespace's pods; gray segments are pods from other namespaces. */}
+                      <text class="cap-axis-label" x={row.x - 6} y={row.trackY + 15}>Use</text>
                       <rect class="cap-track use" x={row.x} y={row.trackY} width={row.trackW} height={22} rx="2" />
                       <Show when={row.nodeUse !== undefined}>
                         <rect
@@ -1436,7 +1458,12 @@ export default function Topology(props: Props) {
                       <For each={row.useSegs}>
                         {(s) => (
                           <Show when={s.width > 0}>
-                            <g class="cap-seg-g" onClick={() => props.onSelect(s.node.id)}>
+                            <g
+                              class="cap-seg-g"
+                              onClick={() => props.onSelect(s.node.id)}
+                              onPointerMove={(e) => setCapTip({ seg: s, x: e.clientX, y: e.clientY })}
+                              onPointerLeave={() => setCapTip(null)}
+                            >
                               <rect
                                 class="cap-seg use"
                                 classList={segClasses(s)}
@@ -1444,11 +1471,7 @@ export default function Topology(props: Props) {
                                 y={s.y}
                                 width={Math.max(0.5, s.width - 0.5)}
                                 height={s.height}
-                              >
-                                <title>
-                                  {`${s.node.name} · use ${fmt(s.use)}${s.req !== undefined ? ` · req ${fmt(s.req)}` : ' · no request'}${s.lim !== undefined ? ` · lim ${fmt(s.lim)}` : ''}${s.over ? ' · bursting over request' : ''}`}
-                                </title>
-                              </rect>
+                              />
                               {/* Bursting (usage > request): hatch overlay, color-independent. */}
                               <Show when={s.over && !nodeFaded(s.node)}>
                                 <rect class="cap-burst-overlay" x={s.x} y={s.y} width={Math.max(0.5, s.width - 0.5)} height={s.height} />
@@ -1457,43 +1480,55 @@ export default function Topology(props: Props) {
                           </Show>
                         )}
                       </For>
-                      {/* Σrequest marker (overlay mode). */}
-                      <Show when={capMode() === 'overlay' && row.reqMarkerX !== undefined}>
-                        <line class="cap-reqmark" x1={row.reqMarkerX} y1={row.trackY - 2} x2={row.reqMarkerX} y2={row.trackY + 24} />
-                        <text class="cap-reqmark-label" x={row.reqMarkerX} y={row.trackY - 4}>req</text>
-                      </Show>
                       {/* Capacity line when requests or usage overflow the track. */}
                       <Show when={row.cap !== undefined && (row.overcommit || row.useTotal > row.cap)}>
                         <line class="cap-capline" x1={row.x + row.trackW} y1={row.trackY - 3} x2={row.x + row.trackW} y2={row.trackY + 25} />
                       </Show>
 
-                      {/* Per-pod bullets (expanded): usage fill + request/limit ticks + overshoot. */}
+                      {/* Per-pod bullets (expanded): the colored bar LENGTH is the usage (variable per
+                          pod, on the shared per-node scale) — not a fixed track with varying fill — so
+                          a small pod's bar is physically shorter. Request/limit draw as ticks; bursting
+                          past request is hatched. The full pod name is shown (item: full names). */}
                       <For each={row.bullets}>
                         {(b) => {
                           const bs = row.bulletScale ?? 1
-                          const usePx = b.use * bs
+                          const usePx = Math.max(1, b.use * bs)
                           const reqPx = b.req !== undefined ? b.req * bs : undefined
                           const limPx = b.lim !== undefined ? b.lim * bs : undefined
                           const withinW = b.over && reqPx !== undefined ? reqPx : usePx
+                          const baseline = b.width // max(use, req, lim) extent — a faint guide under the bar
                           return (
                             <g
                               class="cap-bullet"
-                              classList={{ faded: nodeFaded(b.node), selected: b.node.id === props.selectedId }}
+                              classList={{ other: !b.own, faded: nodeFaded(b.node), selected: b.node.id === props.selectedId }}
                               onClick={() => props.onSelect(b.node.id)}
+                              onPointerMove={(e) => setCapTip({ seg: b, x: e.clientX, y: e.clientY })}
+                              onPointerLeave={() => setCapTip(null)}
                             >
-                              <rect class="cap-bullet-track" x={b.x} y={b.y} width={b.width} height={b.height} rx="2" />
-                              <rect class="cap-bullet-fill" x={b.x} y={b.y} width={Math.max(0, Math.min(withinW, b.width))} height={b.height} />
+                              {/* Faint baseline to the pod's furthest marker, so req/limit ticks beyond
+                                  the usage bar still have something to sit on. */}
+                              <line class="cap-bullet-base" x1={b.x} y1={b.y + b.height / 2} x2={b.x + baseline} y2={b.y + b.height / 2} />
+                              <rect
+                                class="cap-bullet-fill"
+                                classList={{ [`h-${b.node.health.toLowerCase()}`]: true }}
+                                x={b.x}
+                                y={b.y}
+                                width={withinW}
+                                height={b.height}
+                                rx="2"
+                              />
                               <Show when={b.over && reqPx !== undefined}>
-                                <rect class="cap-bullet-over" x={b.x + reqPx!} y={b.y} width={Math.max(0, Math.min(usePx, b.width) - reqPx!)} height={b.height} />
+                                <rect class="cap-bullet-over" x={b.x + reqPx!} y={b.y} width={Math.max(0, usePx - reqPx!)} height={b.height} />
                               </Show>
-                              <Show when={reqPx !== undefined && reqPx! <= b.width + 1}>
+                              <Show when={reqPx !== undefined}>
                                 <line class="cap-tick req" x1={b.x + reqPx!} y1={b.y - 1} x2={b.x + reqPx!} y2={b.y + b.height + 1} />
                               </Show>
-                              <Show when={limPx !== undefined && limPx! <= b.width + 1}>
+                              <Show when={limPx !== undefined}>
                                 <line class="cap-tick lim" x1={b.x + limPx!} y1={b.y - 1} x2={b.x + limPx!} y2={b.y + b.height + 1} />
                               </Show>
-                              <text class="cap-bullet-vals" x={b.x + b.width + 8} y={b.y + 14}>
-                                <tspan class="cap-bullet-name">{label(b.node)}</tspan>
+                              <text class="cap-bullet-vals" x={b.x + baseline + 8} y={b.y + 14}>
+                                <tspan class="cap-bullet-name">{b.node.name}</tspan>
+                                {!b.own && b.node.namespace ? ` (${b.node.namespace})` : ''}
                                 {`  ${fmt(b.use)}${b.req !== undefined ? ` · req ${fmt(b.req)}` : ' · no req'}${b.lim !== undefined ? ` · lim ${fmt(b.lim)}` : ''}`}
                               </text>
                             </g>
@@ -1785,6 +1820,36 @@ export default function Topology(props: Props) {
         </svg>
         Fit
       </button>
+      </Show>
+      {/* Capacity-bar hover tooltip (item: Grafana-style panels). A fixed-position HTML card that
+          follows the cursor while hovering a pod segment/bullet, showing the pod's full identity and
+          its usage vs request vs limit at a glance. Offset from the cursor and pointer-events:none so
+          it never eats the hover. */}
+      <Show when={capTip()}>
+        {(t) => {
+          const s = () => t().seg
+          const fmt = (v: number | undefined) => formatQuantity(v, capResource())
+          return (
+            <div class="cap-tooltip" style={{ left: `${t().x + 14}px`, top: `${t().y + 14}px` }}>
+              <div class="cap-tooltip-name">{s().node.name}</div>
+              <div class="cap-tooltip-sub">
+                Pod{s().node.namespace ? ` · ${s().node.namespace}` : ''}
+                {!s().own ? ' · other namespace' : ''}
+              </div>
+              <div class="cap-tooltip-rows">
+                <div><span>Usage</span><b>{fmt(s().use)}</b></div>
+                <div><span>Request</span><b>{s().req !== undefined ? fmt(s().req) : '—'}</b></div>
+                <div><span>Limit</span><b>{s().lim !== undefined ? fmt(s().lim) : '—'}</b></div>
+              </div>
+              <Show when={s().over || s().nearLimit}>
+                <div class="cap-tooltip-flags">
+                  <Show when={s().over}><span class="cap-flag over">bursting over request</span></Show>
+                  <Show when={s().nearLimit}><span class="cap-flag near">near limit</span></Show>
+                </div>
+              </Show>
+            </div>
+          )
+        }}
       </Show>
     </div>
   )

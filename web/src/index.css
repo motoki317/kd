@@ -783,6 +783,41 @@ button.conn.conn-retry:focus-visible {
   fill: var(--health-degraded);
   font-weight: 600;
 }
+/* "Req" / "Use" axis labels in the left gutter, right-aligned against the bars so each bar reads
+   with an explicit name rather than the operator having to infer which stripe is which. */
+.cap-axis-label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-dim);
+  text-anchor: end;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+/* Legend in the toolbar: small swatches naming what bar colours mean (this namespace vs other). */
+.cap-legend {
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cap-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.cap-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+.cap-swatch.own {
+  background: var(--accent);
+}
+.cap-swatch.other {
+  background: color-mix(in srgb, var(--text-dim) 45%, var(--surface));
+}
 /* Bar tracks: the full-capacity backdrop segments fill against; the remaining length reads as
    headroom, anything past the right edge as overcommit/overuse (the capacity line marks it). */
 .cap-track {
@@ -832,6 +867,16 @@ button.conn.conn-retry:focus-visible {
   stroke: var(--health-degraded);
   stroke-width: 1.4;
 }
+/* Pods from OTHER namespaces render gray regardless of health, so the selected namespace's pods (in
+   the node's full pod set) stand out as the bright block. Placed after the health rules so its
+   equal-specificity fill wins. Still clickable/hoverable — explicitly identified, not hidden. */
+.cap-seg.use.other {
+  fill: color-mix(in srgb, var(--text-dim) 42%, var(--surface));
+  stroke: var(--surface);
+}
+.cap-seg.req.other {
+  fill: color-mix(in srgb, var(--text-dim) 30%, var(--surface));
+}
 /* Burst overlay (usage over request): a hatch on top of the health-colored segment, so it reads as
    "bursting" without colliding with the amber suspended-health hue a recolor would. */
 .cap-burst-overlay {
@@ -851,39 +896,47 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.faded {
   opacity: 0.18;
 }
-.cap-reqmark {
-  stroke: var(--text);
-  stroke-width: 1.5;
-  stroke-dasharray: 2 2;
-  pointer-events: none;
-}
-.cap-reqmark-label {
-  font-size: 9px;
-  fill: var(--text-dim);
-  text-anchor: middle;
-  pointer-events: none;
-}
 .cap-capline {
   stroke: var(--health-degraded);
   stroke-width: 1.6;
   pointer-events: none;
 }
-/* Per-pod bullets (expanded detail). */
+/* Per-pod bullets (expanded detail). The colored fill's WIDTH is the pod's usage (variable per pod
+   on the shared per-node scale) — not a fixed track with varying fill — so a small pod's bar is
+   physically shorter. A faint baseline runs to the pod's furthest marker so req/limit ticks beyond
+   the usage bar still have something to sit on. */
 .cap-bullet {
   cursor: pointer;
 }
-.cap-bullet-track {
-  fill: color-mix(in srgb, var(--text-dim) 10%, var(--surface));
-  stroke: var(--border);
-  stroke-width: 0.8;
+.cap-bullet-base {
+  stroke: color-mix(in srgb, var(--text-dim) 28%, var(--surface));
+  stroke-width: 2;
+  pointer-events: none;
 }
 .cap-bullet-fill {
-  fill: color-mix(in srgb, var(--accent) 80%, var(--surface));
+  fill: var(--accent);
   pointer-events: none;
 }
-.cap-bullet-over {
+.cap-bullet-fill.h-degraded {
+  fill: var(--health-degraded);
+}
+.cap-bullet-fill.h-progressing {
+  fill: var(--health-progressing);
+}
+.cap-bullet-fill.h-suspended {
   fill: var(--health-suspended);
+}
+.cap-bullet-fill.h-unknown {
+  fill: var(--health-unknown);
+}
+/* Bursting past request: a hatch overlay (same pattern as the node bar), color-independent. */
+.cap-bullet-over {
+  fill: url(#cap-burst-hatch);
   pointer-events: none;
+}
+/* Other-namespace bullets read gray, matching their node-bar segments. */
+.cap-bullet.other .cap-bullet-fill {
+  fill: color-mix(in srgb, var(--text-dim) 42%, var(--surface));
 }
 .cap-tick {
   pointer-events: none;
@@ -907,12 +960,74 @@ button.conn.conn-retry:focus-visible {
   fill: var(--text);
   font-weight: 600;
 }
-.cap-bullet.selected .cap-bullet-track {
+.cap-bullet.selected .cap-bullet-fill {
   stroke: var(--accent);
   stroke-width: 1.6;
 }
 .cap-bullet.faded {
   opacity: 0.25;
+}
+/* Capacity-bar hover tooltip — a Grafana-style floating card that follows the cursor. Fixed to the
+   viewport (positioned from clientX/clientY), above everything, and click-through. */
+.cap-tooltip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  min-width: 150px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  color: var(--text);
+}
+.cap-tooltip-name {
+  font-weight: 600;
+  word-break: break-all;
+}
+.cap-tooltip-sub {
+  margin-top: 1px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.cap-tooltip-rows {
+  margin-top: 6px;
+  display: grid;
+  gap: 2px;
+}
+.cap-tooltip-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cap-tooltip-rows span {
+  color: var(--text-dim);
+}
+.cap-tooltip-rows b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.cap-tooltip-flags {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cap-flag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.cap-flag.over {
+  background: color-mix(in srgb, var(--health-suspended) 22%, transparent);
+  color: var(--health-suspended);
+}
+.cap-flag.near {
+  background: color-mix(in srgb, var(--health-degraded) 18%, transparent);
+  color: var(--health-degraded);
 }
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {
