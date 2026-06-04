@@ -177,6 +177,25 @@ func nodeAllocatable(obj runtime.Object) *Resources {
 	return &Resources{CPUMilli: &cpuMilli, MemBytes: &memBytes, Pods: &podCount}
 }
 
+// nodeTotalCapacity returns a Node's TOTAL physical capacity (status.capacity) as structured
+// quantities — the counterpart of nodeAllocatable but BEFORE system/kube-reserved is subtracted.
+// The capacity view's Use bar gauges actual usage against this (a node can use into the reserved
+// region — kubelet, the runtime), while requests still gauge against allocatable (the schedulable
+// pool). Mirrors the zero-guard: a node that hasn't reported cpu+mem yet yields nil.
+func nodeTotalCapacity(obj runtime.Object) *Resources {
+	n, ok := obj.(*corev1.Node)
+	if !ok {
+		return nil
+	}
+	total := n.Status.Capacity
+	cpu, mem, pods := total.Cpu(), total.Memory(), total.Pods()
+	if cpu.IsZero() && mem.IsZero() {
+		return nil
+	}
+	cpuMilli, memBytes, podCount := cpu.MilliValue(), mem.Value(), pods.Value()
+	return &Resources{CPUMilli: &cpuMilli, MemBytes: &memBytes, Pods: &podCount}
+}
+
 // podRequests sums a Pod's per-container resource requests into canonical units (nil for non-pods).
 // CPU and memory are independent: a field stays nil unless at least one container sets it, so "no CPU
 // request" reads distinctly from "0" in the capacity view.

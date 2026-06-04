@@ -77,6 +77,7 @@ type Node struct {
 	// drawer). Each is nil for kinds it doesn't apply to, so the client renders nothing rather than a
 	// misleading zero.
 	Allocatable *Resources `json:"allocatable,omitempty"` // a Node's schedulable capacity (Node kind)
+	CapacityRes *Resources `json:"capacityRes,omitempty"` // a Node's TOTAL physical capacity (Node kind); ≥ Allocatable by the system-reserved overhead
 	Requests    *Resources `json:"requests,omitempty"`    // a Pod's summed container requests (Pod kind)
 	Limits      *Resources `json:"limits,omitempty"`      // a Pod's summed container limits (Pod kind)
 }

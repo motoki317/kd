@@ -50,6 +50,7 @@ func Build(objs []runtime.Object) *Graph {
 			Host:              podHost(obj),
 			Capacity:          nodeCapacity(obj),
 			Allocatable:       nodeAllocatable(obj),
+			CapacityRes:       nodeTotalCapacity(obj),
 			Requests:          podRequests(obj),
 			Limits:            podLimits(obj),
 			ClusterIP:         serviceClusterIP(obj),
