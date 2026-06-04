@@ -81,6 +81,44 @@ describe('layoutGraphByCapacity', () => {
     expect(cluster.otherUseSeg).toBeUndefined()
   })
 
+  // The overshoot bug (AGENTS.md): N near-zero pods must NOT each draw at a per-segment floor, or
+  // their tiled minimums run past the track (a 31-pod node at 8% use drew ~70%). Healthy sub-threshold
+  // pods fold into ONE block sized by their EXACT summed value, so the bar end stays honest.
+  describe('small-pod folding (overshoot guard)', () => {
+    const huge = node('huge', 100_000, 100_000) // scale = 1080/100000 = 0.0108 → 100m draws ~1px (< fold)
+
+    it('folds many tiny healthy pods into one EXACT-sum block, never N tiled minimums', () => {
+      const tinies = Array.from({ length: 5 }, (_, i) => pod(`t${i}`, 'huge', 'shop', { use: 100, req: 100 }))
+      const usage = usageOf(...tinies.map((p) => [p.id, 100] as [string, number]))
+      const row = layoutGraphByCapacity([huge, ...tinies], usage, 'cpu', 'shop').rows.find((r) => r.host === 'huge')!
+
+      expect(row.useSegs).toHaveLength(0) // all five folded, none drawn individually
+      expect(row.smallUseSeg?.count).toBe(5)
+      // Width tracks the EXACT summed value (500·0.0108 ≈ 5.4px), NOT 5 tiled 4px floors (20px).
+      expect(row.smallUseSeg!.width).toBeCloseTo(500 * (1080 / 100_000), 1)
+      expect(row.smallUseSeg!.width).toBeLessThan(5 * 4)
+    })
+
+    it('floors a LONE sub-threshold pod individually rather than folding (fold needs ≥2)', () => {
+      const lone = pod('lone', 'huge', 'shop', { use: 100, req: 100 })
+      const row = layoutGraphByCapacity([huge, lone], usageOf(['lone', 100]), 'cpu', 'shop').rows.find((r) => r.host === 'huge')!
+      expect(row.smallUseSeg).toBeUndefined()
+      expect(row.useSegs).toHaveLength(1)
+      expect(row.useSegs[0].width).toBe(4) // floored to CAP_SEG_FOLD so it stays visible/hittable
+    })
+
+    it('never folds an unhealthy tiny pod — a problem pod stays individually visible', () => {
+      const a = pod('ok-a', 'huge', 'shop', { use: 100, req: 100 })
+      const b = pod('ok-b', 'huge', 'shop', { use: 100, req: 100 })
+      const sick: KNode = { ...pod('sick', 'huge', 'shop', { use: 100, req: 100 }), health: 'Degraded' }
+      const usage = usageOf(['ok-a', 100], ['ok-b', 100], ['sick', 100])
+      const row = layoutGraphByCapacity([huge, a, b, sick], usage, 'cpu', 'shop').rows.find((r) => r.host === 'huge')!
+      // The two healthy tinies fold; the Degraded one is drawn on its own.
+      expect(row.smallUseSeg?.count).toBe(2)
+      expect(row.useSegs.map((s) => s.node.id)).toEqual(['sick'])
+    })
+  })
+
   it('reports hasUsage from the presence of usage data', () => {
     const nodes = [node('n1', 1000, 1000), pod('p', 'n1', 'shop', { use: 10, req: 10 })]
     expect(layoutGraphByCapacity(nodes, undefined, 'cpu', 'shop').hasUsage).toBe(false)
