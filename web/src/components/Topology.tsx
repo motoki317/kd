@@ -1136,6 +1136,29 @@ export default function Topology(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* Relationships-hidden hint (explicit-over-implicit): in the relationship grouping an empty
+          relFilter draws every card with NO edges — visually indistinguishable from "these resources
+          have no connections". Surface that the edges are hidden BY CHOICE, with a one-click restore
+          of the default (ownership). Gated on relationships actually existing (relChips) so a
+          genuinely edge-less namespace doesn't get a misleading "toggle one" prompt. A non-blocking
+          bottom toast — the cards stay the focus and remain interactive (unlike .topology-empty). */}
+      <Show
+        when={
+          props.groupBy === 'relationship' &&
+          props.nodes.length > 0 &&
+          (props.relFilter?.size ?? 0) === 0 &&
+          relChips().length > 0
+        }
+      >
+        <div class="topology-rels-hidden" role="status">
+          <span>Relationships hidden — all categories are off.</span>
+          <Show when={props.onRelFilter}>
+            <button class="topology-clear" onClick={() => props.onRelFilter?.('ownership')}>
+              show ownership
+            </button>
+          </Show>
+        </div>
+      </Show>
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
           {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a

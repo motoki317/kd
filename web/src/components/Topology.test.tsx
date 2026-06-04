@@ -795,4 +795,45 @@ describe('Topology', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '=', metaKey: true }))
     expect(groupScale()).toBeCloseTo(1, 5)
   })
+
+  // Relationships-hidden hint: the relationship grouping with an empty relFilter draws cards with no
+  // edges, which is visually identical to "these resources have no connections" — so surface that the
+  // edges are hidden by choice, with a one-click restore (cluster-scope drawer cycle's sibling case).
+  describe('relationships-hidden hint', () => {
+    const emptyRels = () => new Set<RelCategory>()
+    it('shows when grouping by relationship with no relationships selected and edges exist', () => {
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="relationship" relFilter={emptyRels()} onRelFilter={() => {}} />
+      ))
+      const hint = container.querySelector('.topology-rels-hidden')
+      expect(hint).toBeTruthy()
+      expect(hint!.textContent).toContain('Relationships hidden')
+    })
+    it('hides once a relationship category is selected', () => {
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="relationship" relFilter={new Set<RelCategory>(['ownership'])} />
+      ))
+      expect(container.querySelector('.topology-rels-hidden')).toBeNull()
+    })
+    it('stays hidden when no relationships exist to toggle (the disconnection is real, not filtered)', () => {
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={[]} search="" {...base} groupBy="relationship" relFilter={emptyRels()} onRelFilter={() => {}} />
+      ))
+      expect(container.querySelector('.topology-rels-hidden')).toBeNull()
+    })
+    it('is absent in the kind grouping (edges are never drawn there)', () => {
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" relFilter={emptyRels()} kindFilter={new Set<string>()} onKindFilter={() => {}} />
+      ))
+      expect(container.querySelector('.topology-rels-hidden')).toBeNull()
+    })
+    it('the show-ownership action requests the ownership category', () => {
+      let requested: RelCategory | null = null
+      const { container } = render(() => (
+        <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="relationship" relFilter={emptyRels()} onRelFilter={(c) => (requested = c)} />
+      ))
+      fireEvent.click(container.querySelector('.topology-rels-hidden button')!)
+      expect(requested).toBe('ownership')
+    })
+  })
 })

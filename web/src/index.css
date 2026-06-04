@@ -1173,6 +1173,30 @@ button.conn.conn-retry:focus-visible {
   max-width: 320px;
   text-align: center;
 }
+/* Bottom-center toast for the relationship grouping's "all relationships off" state. Non-blocking
+   (pointer-events only on its button) so the cards underneath stay interactive — distinct from
+   .topology-empty, which centers and implies absence of data. Sits at the bottom edge, clear of the
+   bottom-right Fit button. */
+.topology-rels-hidden {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+}
+.topology-rels-hidden .topology-clear {
+  pointer-events: auto;
+}
 /* The canvas control panel: a translucent surface at top-left that unifies the search, grouping,
    relationship, health, and kind controls into one block (proximity) rather than scattered floating
    chips. The blur lets the topology faintly show through so it doesn't feel like it blankets the
