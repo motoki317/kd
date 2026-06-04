@@ -51,6 +51,34 @@ func TestNodeAllocatable(t *testing.T) {
 	}
 }
 
+// nodeTotalCapacity reads status.capacity (the node's TOTAL physical capacity, ≥ allocatable) — it
+// sets the Use-bar ceiling in the capacity view, distinct from nodeAllocatable's schedulable pool.
+func TestNodeTotalCapacity(t *testing.T) {
+	node := &corev1.Node{Status: corev1.NodeStatus{Capacity: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("16"),
+		corev1.ResourceMemory: resource.MustParse("64Gi"),
+		corev1.ResourcePods:   resource.MustParse("110"),
+	}}}
+	got := nodeTotalCapacity(node)
+	if got == nil {
+		t.Fatal("nodeTotalCapacity = nil, want non-nil")
+	}
+	wantInt64(t, "cpuMilli", got.CPUMilli, 16000)
+	wantInt64(t, "memBytes", got.MemBytes, 64*1024*1024*1024)
+	wantInt64(t, "pods", got.Pods, 110)
+
+	if got := nodeTotalCapacity(&corev1.Pod{}); got != nil {
+		t.Errorf("nodeTotalCapacity(non-node) = %+v, want nil", got)
+	}
+	// No cpu/mem reported (only pods) → nil, so the view falls back to allocatable for the ceiling.
+	onlyPods := &corev1.Node{Status: corev1.NodeStatus{Capacity: corev1.ResourceList{
+		corev1.ResourcePods: resource.MustParse("110"),
+	}}}
+	if got := nodeTotalCapacity(onlyPods); got != nil {
+		t.Errorf("nodeTotalCapacity(no cpu/mem) = %+v, want nil", got)
+	}
+}
+
 func TestPodRequestsAndLimits(t *testing.T) {
 	reqs := func(cpu, mem string) corev1.ResourceList {
 		l := corev1.ResourceList{}
