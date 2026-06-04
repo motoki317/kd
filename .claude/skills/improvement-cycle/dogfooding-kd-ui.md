@@ -151,6 +151,24 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    value forever (cost a false "keyboard toggle is broken" in cycle 45). Always re-`querySelector` the
    element AFTER the action and read attributes off the fresh node. Holding a ref across a toggle is
    only safe for elements Solid mutates in place, not ones it reconciles.
+5. **`requestAnimationFrame` callbacks NEVER fire in the headless agent-browser session — so no
+   pan/zoom/fit/animation can be verified by a viewport measurement.** Proven directly:
+   `requestAnimationFrame(() => { window.__r = 1 })` leaves `__r` unset after 3s, while
+   `document.visibilityState === 'visible'`, `document.hidden === false`, and `setTimeout` fires
+   normally. kd routes EVERY non-initial viewport move through rAF — `animateTo`'s tick loop is rAF, and
+   `fitCapRowExpanded` / `fitCapBox` / the selection-fit / filter-fit effects all do
+   `selFitFrame = requestAnimationFrame(() => animateTo(...))`. So when you dispatch a click via `eval`
+   and then read the canvas `<g transform>`, it will be **pixel-identical before and after** even when
+   the fit logic is perfectly correct — the rAF that would apply it never runs. The ONE move you *can*
+   observe is the very first fit after load, because `firstFit` (Topology.tsx) sets `scale/tx/ty`
+   **directly**, not via `animateTo`. This manufactured a fully convincing "expanding a busy node
+   doesn't bring its pods into view" bug in cycle 78 (`preClickTop == postExpandTop`, ~6/46 cards
+   visible) that does NOT exist in a real browser; a rAF-deferral "fix" to `toggleCapRow` was equally
+   invisible and was reverted. **How to actually verify viewport/animation behaviour:** (a) unit-test the
+   *computed fit target* (the scale/tx/ty math) directly — that's pure and rAF-free; (b) drive the SIGNAL
+   path, not the rendered transform, where possible; (c) for true end-to-end, use a HEADED browser. Never
+   conclude a fit/zoom/pan is broken from an agent-browser transform diff. The tell: `ENTER`-level logs in
+   a handler fire but anything inside its `requestAnimationFrame(...)` is silent.
 
 ## Accessibility patterns established (match these on any new control)
 
