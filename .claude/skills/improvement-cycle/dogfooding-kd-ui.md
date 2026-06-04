@@ -26,6 +26,16 @@ always wrap. Dispatch real events on the element (`el.dispatchEvent(new MouseEve
 real ctx/cluster/namespace/ARN name reach a tracked file** — keep it in the browser session only
 (see AGENTS.md leakage rule). URL-encode an ARN ctx before putting it in the open URL.
 
+**Last verified clean at production scale (2026-06-05):** a real EKS staging cluster (72 nodes / 39
+namespaces) — cluster-scope relationship layout had **0 overlapping node cards** (the `placeColumns`
+depth-column layout holds), cluster- and namespace-scope capacity bars had **0 overshoot rows**
+(Σuse-segments ≤ track width on every row; the namespace fold drew own/`other`/`small` aggregates
+correctly), and a real multi-container pod's drawer rendered init-before-main container cards with no
+width overflow. So these surfaces are mature — the bar to re-dogfood them is "did the layout /
+capacity geometry / drawer-card code change", not "every cycle". Reusable overshoot check:
+`for each .cap-track.use, assert max(.cap-seg.use at same y).right ≤ track.right`. Overlap check:
+pairwise screen-rect intersection of `.node .node-bg` (>4px on both axes = a real overlap).
+
 ## Capacity (Nodes) view — interaction recipes
 
 This view is the hardest to unit-test (geometry + viewport fit + SVG). Recipes:
