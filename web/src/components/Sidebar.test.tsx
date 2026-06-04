@@ -34,6 +34,18 @@ describe('Sidebar', () => {
     expect(counts).toEqual(['1', '3'])
   })
 
+  it('marks the selected namespace with aria-current and names the nav landmark', () => {
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected="mmm" onSelect={noop} loading={false} failed={false} />
+    ))
+    expect(container.querySelector('nav.sidebar')?.getAttribute('aria-label')).toBe('Namespaces')
+    // Exactly the selected row carries aria-current=page; the others don't (so a screen reader
+    // announces which namespace is the current view, not just a visual highlight).
+    const current = [...container.querySelectorAll('.ns-list button[aria-current="page"]')]
+    expect(current.length).toBe(1)
+    expect(current[0].querySelector('.ns-name')?.textContent).toBe('mmm')
+  })
+
   it('shows an always-visible health legend (every dot color + the count meaning), and no divider', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />

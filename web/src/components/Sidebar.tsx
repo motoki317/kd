@@ -96,7 +96,7 @@ export default function Sidebar(props: Props) {
   )
 
   return (
-    <nav class="sidebar">
+    <nav class="sidebar" aria-label="Namespaces">
       <div class="sidebar-title">
         Namespaces
         {/* Total namespace count next to the title — quick "how big is this cluster's RBAC
@@ -183,6 +183,7 @@ export default function Sidebar(props: Props) {
                   <button
                     class="ns-cluster"
                     classList={{ active: c().name === props.selected }}
+                    aria-current={c().name === props.selected ? 'page' : undefined}
                     onClick={() => props.onSelect(c().name)}
                     title={rowTitle(c())}
                   >
@@ -214,6 +215,7 @@ export default function Sidebar(props: Props) {
                 <li>
                   <button
                     classList={{ active: ns.name === props.selected }}
+                    aria-current={ns.name === props.selected ? 'page' : undefined}
                     onClick={() => props.onSelect(ns.name)}
                     title={rowTitle(ns)}
                   >
