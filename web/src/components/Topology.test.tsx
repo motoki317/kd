@@ -354,10 +354,9 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" />
     ))
-    // The kube-system pod renders as a gray "other" segment; the app pod does not.
+    // The app pod is one bright segment; every other namespace folds into a single gray block.
+    expect(container.querySelectorAll('.cap-seg.use:not(.other)').length).toBe(1)
     expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
-    // The legend names the other-namespace swatch only when some pods are dimmed.
-    expect(container.querySelector('.cap-swatch.other')).toBeTruthy()
   })
 
   it('clears all filters via onClearFilters (cycle 216)', () => {

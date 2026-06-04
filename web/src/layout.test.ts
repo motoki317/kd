@@ -766,27 +766,32 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(big.useSegs.every((s) => s.width > 0)).toBe(true)
   })
 
-  it('cluster scope (empty namespace) marks every pod as own', () => {
+  it('cluster scope (empty namespace) makes every pod an individual segment, no aggregate', () => {
     const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!
     expect(big.otherCount).toBe(0)
-    expect(big.useSegs.every((s) => s.own)).toBe(true)
+    expect(big.otherUseSeg).toBeUndefined()
+    expect(big.useSegs).toHaveLength(2) // both of big's pods, individually
   })
 
-  it('namespace scope dims pods outside the selected namespace, keeping the node total honest', () => {
+  it('namespace scope folds other namespaces into one aggregate, keeping the node total honest', () => {
     const nsNodes: KNode[] = [
       { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } },
       { id: 'mine', kind: 'Pod', name: 'mine', namespace: 'app', health: 'Healthy', host: 'h' },
-      { id: 'theirs', kind: 'Pod', name: 'theirs', namespace: 'kube-system', health: 'Healthy', host: 'h' },
+      { id: 't1', kind: 'Pod', name: 't1', namespace: 'kube-system', health: 'Healthy', host: 'h', requests: { cpuMilli: 100 } },
+      { id: 't2', kind: 'Pod', name: 't2', namespace: 'monitoring', health: 'Healthy', host: 'h' },
     ]
-    const u = { mine: { cpuMilli: 300 }, theirs: { cpuMilli: 700 } }
+    const u = { mine: { cpuMilli: 300 }, t1: { cpuMilli: 400 }, t2: { cpuMilli: 300 } }
     const l = layoutGraphByCapacity(nsNodes, u, 'cpu', 'app')
     const row = l.rows[0]
-    expect(row.otherCount).toBe(1)
-    expect(row.useTotal).toBe(1000) // node total spans both namespaces
+    expect(row.otherCount).toBe(2)
+    expect(row.useTotal).toBe(1000) // node total spans every namespace
     expect(row.ownUseTotal).toBe(300) // but the bright block is just this namespace
-    // Own pods sort before other-namespace pods (the bright block leads the bar).
-    expect(row.useSegs.map((s) => s.own)).toEqual([true, false])
+    // Only the selected namespace's pod is an individual segment; the other two fold into one block.
+    expect(row.useSegs.map((s) => s.node.id)).toEqual(['mine'])
+    expect(row.otherUseSeg!.count).toBe(2)
+    expect(row.otherUseSeg!.use).toBe(700)
+    expect(row.otherReqSeg!.req).toBe(100) // only t1 sets a request
   })
 
   it('flags overcommit when Σrequest exceeds capacity', () => {

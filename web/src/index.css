@@ -794,30 +794,6 @@ button.conn.conn-retry:focus-visible {
   letter-spacing: 0.04em;
   pointer-events: none;
 }
-/* Legend in the toolbar: small swatches naming what bar colours mean (this namespace vs other). */
-.cap-legend {
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.cap-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.cap-swatch {
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
-  flex: none;
-}
-.cap-swatch.own {
-  background: var(--accent);
-}
-.cap-swatch.other {
-  background: color-mix(in srgb, var(--text-dim) 45%, var(--surface));
-}
 /* Bar tracks: the full-capacity backdrop segments fill against; the remaining length reads as
    headroom, anything past the right edge as overcommit/overuse (the capacity line marks it). */
 .cap-track {
@@ -950,15 +926,17 @@ button.conn.conn-retry:focus-visible {
   stroke-width: 1.4;
   stroke-dasharray: 2 2;
 }
-.cap-bullet-vals {
-  font-size: 10px;
-  fill: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
+/* The expanded bullet now prints only the pod name (numbers are on hover) — its own text node, so
+   it carries its font sizing directly rather than inheriting from a values row. */
 .cap-bullet-name {
+  font-size: 11px;
   fill: var(--text);
   font-weight: 600;
+  pointer-events: none;
+}
+.cap-bullet.other .cap-bullet-name {
+  fill: var(--text-dim);
+  font-weight: 500;
 }
 .cap-bullet.selected .cap-bullet-fill {
   stroke: var(--accent);
@@ -973,34 +951,35 @@ button.conn.conn-retry:focus-visible {
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  min-width: 150px;
-  max-width: 320px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  min-width: 180px;
+  max-width: 360px;
+  padding: 10px 13px;
+  border-radius: 9px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text);
 }
 .cap-tooltip-name {
+  font-size: 14px;
   font-weight: 600;
   word-break: break-all;
 }
 .cap-tooltip-sub {
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 12px;
 }
 .cap-tooltip-rows {
-  margin-top: 6px;
+  margin-top: 8px;
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
 .cap-tooltip-rows > div {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
 }
 .cap-tooltip-rows span {
   color: var(--text-dim);
@@ -1010,15 +989,15 @@ button.conn.conn-retry:focus-visible {
   font-weight: 600;
 }
 .cap-tooltip-flags {
-  margin-top: 6px;
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
 }
 .cap-flag {
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
 }
 .cap-flag.over {
