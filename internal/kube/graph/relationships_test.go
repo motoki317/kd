@@ -36,6 +36,21 @@ spec:
       envFrom:
         - secretRef:
             name: web-env
+        - configMapRef:
+            name: web-envcm
+      env:
+        - name: PLAIN
+          value: literal # no valueFrom — must be skipped, not crash or edge
+        - name: FROM_CM_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: web-keycm
+              key: k
+        - name: FROM_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: web-keysec
+              key: k
 ---
 apiVersion: v1
 kind: Service
@@ -85,6 +100,27 @@ metadata:
   name: web-env
   namespace: shop
   uid: env-uid
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-envcm
+  namespace: shop
+  uid: envcm-uid
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-keycm
+  namespace: shop
+  uid: keycm-uid
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-keysec
+  namespace: shop
+  uid: keysec-uid
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -146,6 +182,9 @@ func TestBuildInferredEdges(t *testing.T) {
 		{"pod mounts configmap", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-config"},
 		{"pod mounts secret volume", EdgeMounts, "Pod", "web-1", "Secret", "web-secret"},
 		{"pod mounts secret via envFrom", EdgeMounts, "Pod", "web-1", "Secret", "web-env"},
+		{"pod mounts configmap via envFrom", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-envcm"},
+		{"pod mounts configmap via env valueFrom keyRef", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-keycm"},
+		{"pod mounts secret via env valueFrom keyRef", EdgeMounts, "Pod", "web-1", "Secret", "web-keysec"},
 		{"pod mounts pvc", EdgeMounts, "Pod", "web-1", "PersistentVolumeClaim", "web-data"},
 		// PVC's volumeName completes the Pod → PVC → PV chain (cycle 235).
 		{"pvc binds to pv", EdgeMounts, "PersistentVolumeClaim", "web-data", "PersistentVolume", "web-pv"},
