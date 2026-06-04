@@ -330,19 +330,22 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   This replaced an earlier viewport-aspect bin-pack; do **not** reintroduce horizontal placement to
   "use the width." Vertical order is stable via `componentKey` (smallest kind/name, not the random
   node UID), so a tree keeps its row as pods churn.
-- **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster shows its newest
-  `COLLAPSE_VISIBLE` (=3) by `createdAt` and folds the older remainder behind a synthetic "+N older"
-  pill — a `PositionedNode` with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta`
-  (`layout.ts`). The cluster unit is the kind box (All view) or a hub's
+- **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster keeps the **head + tail** of
+  its natural-sorted run — `COLLAPSE_HEAD=1` (lowest ordinal, e.g. `web-0`) + `COLLAPSE_TAIL=2`, so
+  `COLLAPSE_VISIBLE=3` stay visible — and folds the **MIDDLE** behind a synthetic pill (a
+  `PositionedNode` with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta`, `layout.ts`).
+  Keeping a contiguous head+tail of the *same* order the expanded view uses means expanding just
+  fills the middle gap without reshuffling the visible cards (the old "newest-N-by-`createdAt`" fold
+  was deliberately replaced — it swapped the group to name order on expand, which jumped the cards).
+  The cluster unit is the kind box (All view) or a hub's
   degree-1 same-kind siblings (connectivity views, where the hidden leaves' hub edges aggregate into
   one bundled hub→pill edge). Expansion is an ephemeral per-cluster signal in `Topology.tsx` keyed
   `kind:`/`host:`/`sib:`. The pill is a **two-way toggle**: collapsed it reads "+ show N more"
-  (expands); expanded it stays as "− show N fewer" (refolds) with the bundled edge suppressed — the
-  fold is by age but the label deliberately never surfaces "older". Driven by
-  `CollapseMeta.expanded`, which `splitByAge` populates by keeping the would-fold set even when
-  expanded. Pills are excluded from search/nav and folded back into `kindStats` **only while
+  (expands); expanded it stays as "− show N fewer" (refolds) with the bundled edge suppressed. Driven
+  by `CollapseMeta.expanded`, which `splitForFold` populates by keeping the would-fold (middle) set
+  even when expanded. Pills are excluded from search/nav and folded back into `kindStats` **only while
   collapsed** (expanded, the cards are real and counted directly — folding back too would
-  double-count). It only collapses when it hides ≥2. This is a CLIENT-side, reveal-able fold of
+  double-count). It only collapses when the hidden middle has ≥`COLLAPSE_MIN_HIDDEN` (2). This is a CLIENT-side, reveal-able fold of
   *live* resources — distinct from the server-side permanent drop of dead ReplicaSets/Pods in
   `graph/build.go` (`isHistorical`).
 - **Fan-out only (`findHubs`)**: only a hub's degree-1 fan-OUT *children* are wrapped into leaf blocks.
