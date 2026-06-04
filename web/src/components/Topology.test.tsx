@@ -322,6 +322,24 @@ describe('Topology', () => {
     expect(onKindFilter).toHaveBeenCalledWith('Pod', true)
   })
 
+  it('the kind toolbar is a single Tab stop with arrow-key roving (APG toolbar pattern)', () => {
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={vi.fn()} kindFilter={new Set<string>()} />
+    ))
+    const toolbar = container.querySelector('.topology-kinds') as HTMLElement
+    const chips = [...toolbar.querySelectorAll('button')] as HTMLButtonElement[]
+    expect(chips.length).toBeGreaterThan(1)
+    // Exactly one Tab stop (the first chip); the rest are -1 so Tab doesn't walk every chip.
+    expect(chips.filter((c) => c.tabIndex === 0).length).toBe(1)
+    expect(chips[0].tabIndex).toBe(0)
+    // Arrow keys move focus among the chips (jsdom supports focus()/activeElement).
+    chips[0].focus()
+    toolbar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(document.activeElement).toBe(chips[1])
+    toolbar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    expect(document.activeElement).toBe(chips[0])
+  })
+
   it('Nodes view renders a capacity row per node with a usage segment per pod', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000, memBytes: 8 * 1024 ** 3 } },

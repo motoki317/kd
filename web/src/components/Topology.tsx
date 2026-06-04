@@ -165,6 +165,17 @@ export default function Topology(props: Props) {
   // focus to follow the roving tabindex (see the radiogroup onKeyDown handlers in the toolbar).
   const groupSegRefs: Partial<Record<GroupBy, HTMLButtonElement>> = {}
   const capResRefs: Partial<Record<CapResource, HTMLButtonElement>> = {}
+  // Roving keyboard model for the filter-chip toolbars (role=toolbar): the first chip is the single
+  // Tab stop and arrows/Home/End move focus among the rest, so Tab doesn't have to step through all
+  // 11+ kind chips to pass the row. Derives the chip list + current focus from the DOM, so it works
+  // unchanged for the dynamic kind row whose chip count changes per namespace.
+  const onToolbarKey = (e: KeyboardEvent) => {
+    const chips = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button')]
+    const next = nextRovingIndex(e.key, chips.indexOf(document.activeElement as HTMLButtonElement), chips.length)
+    if (next === null) return
+    e.preventDefault()
+    chips[next].focus()
+  }
   // Rich hover tooltip for the capacity bars (item: Grafana-style panels). Holds normalized tooltip
   // data + the pointer position; an HTML overlay (not an SVG <title>) follows the cursor so the bar's
   // name/usage/request/limit read instantly instead of after the browser's ~700ms title delay. The
@@ -1378,11 +1389,12 @@ export default function Topology(props: Props) {
         <Show when={relChips().length > 0 && props.onRelFilter}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Relationships</span>
-            <div class="topology-rels" role="toolbar" aria-label="Relationship filter">
+            <div class="topology-rels" role="toolbar" aria-label="Relationship filter" onKeyDown={onToolbarKey}>
             <For each={relChips()}>
-              {(c) => (
+              {(c, i) => (
                 <button
                   class="rel-chip"
+                  tabindex={i() === 0 ? 0 : -1}
                   classList={{ active: props.relFilter?.has(c.id) ?? false }}
                   aria-pressed={props.relFilter?.has(c.id) ?? false}
                   onClick={(e) => props.onRelFilter?.(c.id, e.shiftKey)}
@@ -1402,11 +1414,12 @@ export default function Topology(props: Props) {
         <Show when={shownHealth().length > 0 && props.onHealthFilter}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Health</span>
-            <div class="topology-health-pills" role="toolbar" aria-label="Health filter">
+            <div class="topology-health-pills" role="toolbar" aria-label="Health filter" onKeyDown={onToolbarKey}>
             <For each={shownHealth()}>
-              {(h) => (
+              {(h, i) => (
                 <button
                   class="legend-item"
+                  tabindex={i() === 0 ? 0 : -1}
                   aria-pressed={props.healthFilter === h}
                   classList={{ active: props.healthFilter === h }}
                   // Active pill borrows the health hue for its border + tint, so the link to
@@ -1442,11 +1455,12 @@ export default function Topology(props: Props) {
           <div class="toolbar-row">
           <div class="toolbar-facet toolbar-facet-grow">
             <span class="toolbar-label">Kinds</span>
-            <div class="topology-kinds" role="toolbar" aria-label="Kind filter">
+            <div class="topology-kinds" role="toolbar" aria-label="Kind filter" onKeyDown={onToolbarKey}>
             <For each={kindChips()}>
-              {(c) => (
+              {(c, i) => (
                 <button
                   class="kind-chip"
+                  tabindex={i() === 0 ? 0 : -1}
                   classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod', troubled: c.worst != null }}
                   onClick={(e) => props.onKindFilter?.(c.kind, e.shiftKey)}
                   title={
