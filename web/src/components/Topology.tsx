@@ -331,7 +331,33 @@ export default function Topology(props: Props) {
     if (!svg) return
     const r = capRows().find((row) => row.host === host)
     if (!r) return
-    fitCapBox({ x: r.x, y: r.y, width: r.width, height: r.height })
+    // Expand and collapse re-fit differently. Collapse → a short row; fitCapBox centres it (zoom back IN
+    // to the node). Expand → a row stacked tall with per-pod cards; centring its full height would crush
+    // the width-proportional bars (see fitCapRowExpanded), so drive that fit from the width and top-anchor.
+    if (expandedClusters().has(`host:${host}`)) fitCapRowExpanded(r)
+    else fitCapBox({ x: r.x, y: r.y, width: r.width, height: r.height })
+  }
+  // Expanding a node reveals its per-pod cards, stacking the row to (potentially) thousands of px tall.
+  // Fitting that whole height (the prior behaviour) crushed the WIDTH-proportional bars — the entire point
+  // of this view — to noise (a 58-pod node drew 4px-tall cards). Instead drive the zoom from the row WIDTH
+  // so the bars read at their true global scale; when the card stack is taller than the viewport, anchor it
+  // to the TOP (cards are ordered largest-usage-first, so the heaviest pods sit up top and the operator
+  // pans down for the long tail) rather than centring an unreadable whole.
+  const fitCapRowExpanded = (r: { x: number; y: number; width: number; height: number }) => {
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
+    const availH = Math.max(1, rect.height - topInset)
+    const padding = 60
+    const scale = Math.max(MIN_FIT_SCALE, Math.min(1.2, (rect.width - padding * 2) / r.width))
+    const cx = r.x + r.width / 2
+    const tx = rect.width / 2 - cx * scale
+    const fits = r.height * scale <= availH - padding * 2
+    const ty = fits
+      ? topInset + availH / 2 - (r.y + r.height / 2) * scale
+      : topInset + padding - r.y * scale
+    cancelAnimationFrame(selFitFrame)
+    selFitFrame = requestAnimationFrame(() => animateTo({ scale, tx, ty }))
   }
   // A pod-card click both SELECTS the pod (opening the drawer) and wants to zoom to that card — but the
   // selection-fit effect, reacting to the same selectedId change, would otherwise re-frame the whole node

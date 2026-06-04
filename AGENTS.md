@@ -370,10 +370,14 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   immediately — gating it behind the width-0 wait would mean the fit never fires. `pendingFit`
   defers until the layout has geometry. A real context/namespace switch OR a grouping/relationship
   change re-fits; churn and expand/refold do not. **Exceptions (Nodes view):** toggling a node row
-  (`toggleCapRow`, expand OR collapse) re-fits the viewport to that row's NEW box — expanding zooms to
-  the pods just opened (a tall many-pod row fits by zooming OUT, a small one by zooming IN); collapsing
-  zooms back IN to the now-short row, so the operator isn't stranded at the zoomed-out scale the expanded
-  row needed (the user's "zoom back to the collapsed node"). And clicking a per-pod CARD fits the
+  (`toggleCapRow`) re-fits the viewport asymmetrically. **Collapse** → `fitCapBox` centres the now-short
+  row (zoom back IN to the node, so the operator isn't stranded at the zoomed-out scale the expanded row
+  needed — the user's "zoom back to the collapsed node"). **Expand** → `fitCapRowExpanded` drives the zoom
+  from the row WIDTH (NOT its height): fitting a tall many-pod stack vertically crushed the
+  width-proportional bars — the whole point of the view — to noise (a 58-pod node drew 4px-tall cards), so
+  the width sets the scale (cap 1.2, floor `MIN_FIT_SCALE`) and a stack taller than the viewport is
+  TOP-anchored (cards are largest-usage-first, so the heaviest pods sit up top and the operator pans down
+  for the tail) instead of centred. A short expansion that fits is still centred. And clicking a per-pod CARD fits the
   viewport to that single card (`fitCapBox`, `selectionMaxScale`) so its global-scale bars are readable.
   Both read `capRows()` AFTER the toggle (the memo recomputes synchronously, so the box is already the
   new geometry) and defer the actual fit one rAF for layout/DOM to settle. **Top-bar inset**: the full-width control bar
