@@ -210,9 +210,11 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   a `CapacityLayout` (a `Layout` superset) whose `nodes` are positioned at each pod's usage segment
   (the selection hit-box) + each Node's header, so selection/search/fit work unchanged; `rows` carries
   the bar/segment/bullet geometry the dedicated `cap-view` render branch draws (the generic card `<For>`
-  is skipped for `groupBy==='nodes'`). One toolbar facet persisted to `localStorage` (`kd:capRes`):
-  **Resource** (`CapResource` = cpu|memory — a single resource at a time, never both on one length
-  channel). The bars are always the explicit **Use + Req** stacked form — **Use on top, Req below, BOTH
+  is skipped for `groupBy==='nodes'`). One toolbar facet, **Resource** (`CapResource` = cpu|memory — a
+  single resource at a time, never both on one length channel), is **owned by App** and round-trips
+  through both `localStorage` (`kd:capRes`) and the URL (`?capRes=`, omitted at the `cpu` default) —
+  same dual persistence as group-by/relationships, so a shared capacity-view link restores the resource
+  (Topology only reads `props.capResource` + calls `props.onCapResource`). The bars are always the explicit **Use + Req** stacked form — **Use on top, Req below, BOTH
   the same height** (`CAP_BAR_H`; the user asked they be equal — they read as one channel, the live
   number first), each with a "Use"/"Req" axis label (the overlay/`Use`-only `CapMode` was retired after
   live review — see the ADR Refinements). Key

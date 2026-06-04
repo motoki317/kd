@@ -4,7 +4,6 @@ import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, format
 import { edgeKey } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
-import { readPref, writePref } from '../prefs'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -52,6 +51,10 @@ interface Props {
   // segmented control that sets it lives in this toolbar (onGroupBy); App owns the signal.
   groupBy?: import('../types').GroupBy
   onGroupBy?: (g: import('../types').GroupBy) => void
+  // Capacity-view resource (cpu|memory). Owned by App so it round-trips through the URL like
+  // groupBy/relFilter (shareable capacity-view links); this component only reads + requests changes.
+  capResource?: CapResource
+  onCapResource?: (r: CapResource) => void
   // relFilter is the set of relationship categories whose edges are drawn (and which therefore
   // drive connectivity). The toolbar's relationship chips toggle it via onRelFilter.
   relFilter?: ReadonlySet<RelCategory>
@@ -158,15 +161,12 @@ export default function Topology(props: Props) {
       return next
     })
 
-  // Capacity view (Nodes group-by) control, persisted to localStorage so the operator's choice of
-  // resource survives reloads (mirrors the kd:* persistence of group-by/relationships). capResource
-  // picks which single resource sizes the bars. The bars are always the explicit Req + Use stacked
-  // form (the overlay/Use-only mode was retired after live review — the user chose Req+Use).
-  const [capResource, setCapResourceSig] = createSignal<CapResource>(readPref('kd:capRes', 'cpu', ['cpu', 'memory']))
-  const setCapResource = (r: CapResource) => {
-    setCapResourceSig(r)
-    writePref('kd:capRes', r)
-  }
+  // Capacity view (Nodes group-by) control: which single resource sizes the bars. App owns the
+  // signal (so it round-trips through the URL + localStorage like group-by/relationships, making the
+  // capacity view shareable); here it's a read accessor + a change request. The bars are always the
+  // explicit Req + Use stacked form (the overlay/Use-only mode was retired after live review).
+  const capResource = (): CapResource => props.capResource ?? 'cpu'
+  const setCapResource = (r: CapResource) => props.onCapResource?.(r)
   // Radio refs for the two single-select segmented controls, so arrow-key navigation can move DOM
   // focus to follow the roving tabindex (see the radiogroup onKeyDown handlers in the toolbar).
   const groupSegRefs: Partial<Record<GroupBy, HTMLButtonElement>> = {}

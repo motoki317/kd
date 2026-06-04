@@ -12,6 +12,7 @@ import { nonOwnershipEdgeLabels } from './edgeRender'
 import { readPref, readRawPref, writePref } from './prefs'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
+import type { CapResource } from './capacityLayout'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
@@ -54,6 +55,14 @@ export default function App() {
     parseRels(params.get('rels')) ?? parseRels(readRawPref('kd:rels')) ?? DEFAULT_RELS(),
   )
   createEffect(() => writePref('kd:rels', [...relFilter()].sort().join(',')))
+  // Capacity-view resource (cpu|memory) — owned here, not in Topology, so it round-trips through the
+  // URL like group/rels (the share button must capture "I'm looking at MEMORY pressure", or a shared
+  // capacity-view link silently reverts the recipient to CPU). Falls back to localStorage then 'cpu'.
+  const urlCapRes = params.get('capRes')
+  const [capResource, setCapResource] = createSignal<CapResource>(
+    urlCapRes === 'cpu' || urlCapRes === 'memory' ? urlCapRes : readPref('kd:capRes', 'cpu', ['cpu', 'memory']),
+  )
+  createEffect(() => writePref('kd:capRes', capResource()))
   // Toggle a relationship in/out of the filter; Shift "solos" it (exactly this one, clearing the
   // rest), mirroring the kind chips' toggle/solo gesture.
   const toggleRel = (c: RelCategory, solo = false) => {
@@ -220,6 +229,9 @@ export default function App() {
     if (groupBy() !== 'relationship') p.set('group', groupBy())
     const rels = [...relFilter()].sort().join(',')
     if (rels !== 'ownership') p.set('rels', rels)
+    // capRes only changes the Nodes view, but mirror group/rels: write it whenever non-default so a
+    // shared capacity-view link restores the resource. Omitted at the 'cpu' default to keep URLs clean.
+    if (capResource() !== 'cpu') p.set('capRes', capResource())
     const id = selectedId()
     const n = id ? graph.nodes[id] : null
     if (n) p.set('sel', `${n.kind}/${n.name}`)
@@ -609,6 +621,8 @@ export default function App() {
             offline={connState() === 'offline'}
             groupBy={groupBy()}
             onGroupBy={setGroupBy}
+            capResource={capResource()}
+            onCapResource={setCapResource}
             relFilter={relFilter()}
             onRelFilter={toggleRel}
             scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
