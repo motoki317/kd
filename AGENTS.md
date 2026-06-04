@@ -142,8 +142,8 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   or per-view tab. Two orthogonal, composable client controls drive the canvas: (1) a **group-by**
   segmented control (`GroupBy` = `relationship` | `nodes` | `kind`, default `relationship`) in the
   Topology toolbar selecting the layout — `relationship` → `layoutGraph` LR (depth-column tree, ArgoCD
-  parent→child fan-left), `nodes` → `layoutGraphByHost` (host containers, scheduledOn implied by
-  containment), `kind` → `layoutGraphByKind`; and (2) **relationship filter** chips
+  parent→child fan-left), `nodes` → `layoutGraphByCapacity` (the capacity & usage visualization, see
+  the dedicated note below), `kind` → `layoutGraphByKind`; and (2) **relationship filter** chips
   (`RelCategory` = ownership/network/volumes/rbac/scheduling, `relationships.ts` maps each to
   EdgeTypes, Topology toolbar) that re-project which edges are drawn. `Topology.displayEdges` =
   `projectEdges(props.edges, relFilter)` (reverses `refers` so the referenced provider is the
@@ -160,6 +160,27 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   height never grows with the kind count — it scrolls horizontally instead. `GROUP_OPTIONS` is
   exported from `Topology.tsx` so App's number-key shortcuts (1–3) + help overlay share one source
   of truth with the segmented control.
+- **Nodes capacity view (`layoutGraphByCapacity`)**: the `nodes` group-by is NOT a card layout — it is
+  a length-encoded bullet visualization (ADR `20260603-nodes-capacity-usage-visualization.md`).
+  Each node is a horizontal track whose length ∝ allocatable capacity on ONE global px-per-unit scale
+  (so node sizes compare across the canvas); pods are segments sized by live usage. The layout returns
+  a `CapacityLayout` (a `Layout` superset) whose `nodes` are positioned at each pod's usage segment
+  (the selection hit-box) + each Node's header, so selection/search/fit work unchanged; `rows` carries
+  the bar/segment/bullet geometry the dedicated `cap-view` render branch draws (the generic card `<For>`
+  is skipped for `groupBy==='nodes'`). Two toolbar facets, both view-local and persisted to
+  `localStorage` (`kd:capRes`, `kd:capMode`): **Resource** (`CapResource` = cpu|memory — a single
+  resource at a time, never both on one length channel) and **Bars** (`CapMode` = split → stacked
+  requested+used sub-bars | overlay → one usage bar + a Σrequest marker; both shipped to choose live).
+  Key behaviours: every pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never vanishes;
+  the node's TOTAL usage (NodeMetrics, all namespaces) draws as a faint backdrop so a namespace's small
+  footprint still reads against real utilization; expanding a node (`host:<name>` in `expandedClusters`,
+  the same signal the old fold used) unfolds per-pod bullets on a PER-NODE zoom scale (`bulletScale`,
+  not the node-capacity scale — a small pod's request/limit ticks would be sub-pixel otherwise);
+  bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`), NOT a recolor, to avoid colliding
+  with the amber suspended-health hue. Usage arrives via the separate `usage` SSE event (`props.usage`,
+  keyed by UID) — it must NOT trigger an auto-fit (the fit effect keys on `scope`+`layoutKey`, not the
+  usage tick, so the ~15s refresh preserves pan/zoom). This view is namespace-scoped by nature: cluster
+  scope (`__cluster__`) has no pods, so it shows node rows with empty bars.
 - **LR depth-column layout (`placeColumns`)**: the LR connectivity views do NOT use Dagre for
   placement — they use strict depth columns. `computeRanks` assigns every node (over the FULL graph,
   not the hub-stripped skeleton) an integer depth = longest path from a source; depth = column, so
@@ -187,7 +208,7 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
 - **Same-kind collapse (`__collapse__`)**: a crowded same-kind cluster shows its newest
   `COLLAPSE_VISIBLE` (=3) by `createdAt` and folds the older remainder behind a synthetic "+N older"
   pill — a `PositionedNode` with `kind === COLLAPSE_KIND` carrying `collapse: CollapseMeta`
-  (`layout.ts`). The cluster unit is the kind box (All view), a host's pods (Nodes view), or a hub's
+  (`layout.ts`). The cluster unit is the kind box (All view) or a hub's
   degree-1 same-kind siblings (connectivity views, where the hidden leaves' hub edges aggregate into
   one bundled hub→pill edge). Expansion is an ephemeral per-cluster signal in `Topology.tsx` keyed
   `kind:`/`host:`/`sib:`. The pill is a **two-way toggle**: collapsed it reads "+ show N more"

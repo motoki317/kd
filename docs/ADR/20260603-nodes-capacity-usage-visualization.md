@@ -1,7 +1,7 @@
 ---
 date: "2026-06-03"
 author: "@motoki317"
-status: "proposed"
+status: "accepted"
 ---
 
 # Context
@@ -163,8 +163,12 @@ To feed it:
 
 # Notes
 
-Status is **proposed** — this records the design decision; implementation follows in phases
-(data → metrics → view). The node-bar A/B toggle is deliberately a *temporary* fork: ship both,
+**Accepted and implemented** (`layoutGraphByCapacity` + the `cap-view` render branch; backend
+`graph.Resources`/`Usage` + the metrics-server `usage` SSE event). Two refinements emerged in live
+dogfooding and are now part of the design: pod segments carry a minimum width so an idle pod never
+vanishes, and the node's TOTAL usage (NodeMetrics) draws as a faint backdrop so a namespace's small
+footprint reads against real node utilization rather than the full empty capacity. The node-bar A/B
+toggle is deliberately a *temporary* fork: ship both,
 choose one after live evaluation, then retire the loser. The encoding ranking was the crux of the
 design discussion and reversed twice as constraints surfaced — optional-requests/overshoot favored
 the bar over the treemap, then DRA's discrete nature favored the grid; the bullet bar wins because it
