@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg } from './capacityTooltips'
-import type { CapAggregate, CapRow, CapSeg } from './layout'
+import type { CapAggregate, CapRow, CapSeg } from './capacityLayout'
 
 const seg = (use: number, req?: number): CapSeg =>
   ({ node: { id: 'p', kind: 'Pod', name: 'web-0', health: 'Healthy' }, use, req, over: false, nearLimit: false, x: 0, y: 0, width: 0, height: 0 }) as CapSeg

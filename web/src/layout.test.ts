@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, connGroups, kindGroups, layoutGraph, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatQuantity, layoutGraphByCapacity } from './capacityLayout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [

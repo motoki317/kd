@@ -19,7 +19,7 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 
 | Concern | File |
 | --- | --- |
-| Add a grouping layout | `web/src/layout.ts` + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
+| Add a grouping layout | `web/src/layout.ts` (relationship/kind) or `web/src/capacityLayout.ts` (the Nodes capacity view) + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
 | Add a kind icon | `web/src/icons.tsx` + extend `icons.test.ts` coverage |
 | Add a short kind label | `web/src/names.ts` (`KIND_SHORT_LABELS`) + alias if not substring |
 | Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + a `web/src/relationships.ts` category |
@@ -409,6 +409,8 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   parent-left semantics, so right-out/left-in would be wrong there; Nodes view draws no edges.
 - **Composing filters**: `nodeFaded` checks selection first (selected node never fades), then
   kind filter, then search ∩ health ∩ related-subtree. Keep that order if you add a new filter.
-- **Conventions for new layouts**: add a `layoutGraphBy<Whatever>` to `layout.ts`, dispatch in
+- **Conventions for new layouts**: add a `layoutGraphBy<Whatever>` to `layout.ts` (or its own file
+  for a large, geometry-heavy view — the Nodes capacity layout lives in `capacityLayout.ts`, which
+  imports only `byName`/`Layout`/`PositionedNode` from `layout.ts`, no cycle), dispatch in
   `Topology.tsx`, and add a `<View>Groups()` memo if your layout has named containers (kind
   groups, host groups). Test against fixture node sets in `layout.test.ts`.

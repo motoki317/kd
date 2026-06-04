@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta } from '../layout'
+import { connGroups, kindGroups, layoutGraph, layoutGraphByKind, type CollapseMeta } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
 import { edgeKey } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
