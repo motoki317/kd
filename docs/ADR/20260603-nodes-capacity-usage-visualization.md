@@ -165,8 +165,9 @@ To feed it:
 
 **Accepted and implemented** (`layoutGraphByCapacity` + the `cap-view` render branch; backend
 `graph.Resources`/`Usage` + the metrics-server `usage` SSE event). Two refinements emerged in live
-dogfooding and are now part of the design: pod segments carry a minimum width so an idle pod never
-vanishes, and the node's TOTAL usage (NodeMetrics) draws as a faint backdrop so a namespace's small
+dogfooding and are now part of the design: tiny pods fold into a "small pods" aggregate so the stacked
+length stays faithful without an idle pod vanishing (see the 2026-06-04 refinement — this superseded an
+earlier per-segment minimum that inflated busy nodes), and the node's TOTAL usage (NodeMetrics) draws as a faint backdrop so a namespace's small
 footprint reads against real node utilization rather than the full empty capacity. The node-bar A/B
 toggle is deliberately a *temporary* fork: ship both,
 choose one after live evaluation, then retire the loser. The encoding ranking was the crux of the
@@ -208,3 +209,53 @@ supersede the corresponding parts of the original Decision:
   bullet numbers.
 - **Selection fit** frames the selected pod's whole node *row*, not its `related()` subtree (whose
   edges belong to the namespace graph, not this feed).
+- **Faithful stacked length — the per-pod minimum was the bug, not the floor.** Live production data
+  (a 940m node running 31 pods, 21 of them at 1m CPU) exposed that a per-segment minimum width is
+  fundamentally incompatible with summed-length fidelity: N near-zero pods each floored to ~4px tile to
+  ≥`N·4`px regardless of their true sum, so an 8%-used node drew a bar filling ~70% of its track — the
+  stacked length stopped meaning anything. The minimum was the very thing introduced in the first round
+  ("an idle pod never vanishes"); reconsidered from the bottom, **collapsed-bar segments now draw at
+  EXACT proportional width (value·scale, no floor)** so Σwidths = Σvalues and the bar end lands at the
+  node's true utilization. To keep tiny pods from *silently* vanishing without re-inflating the bar,
+  healthy pods that would draw under `CAP_SEG_FOLD` fold into ONE **"small pods"** `CapAggregate`
+  (variant `small`) sized by their EXACT summed value — a single block can't N-inflate, and it is
+  hoverable ("N small pods — expand to see each") and click-expands the node. The small block is styled
+  exactly like a normal pod segment (same accent fill, no border — an earlier dashed outline collided
+  with the selected-pod stroke); it is identified by hover + its position after the individual segments.
+  A lone sub-threshold pod is floored instead (≤1 min-width of slack). **Unhealthy pods never fold** — a
+  troubled pod stays individually visible with its health colour even at ~0 usage. Segments are ordered
+  **largest-first by max(use, request)** so the dominant consumers sit at the left, then the small-pods
+  fold, then the other-namespaces block. This is the collapsed/aggregate vs expanded/detail split: the
+  bars compare nodes on one global scale (small stuff folds honestly); expanding reads every pod on the
+  per-node zoom. The Req and Use bars share ONE colour scheme (the req bar is not a lighter shade), so a
+  pod reads as the same colour on both and selecting it emphasises both identically.
+- **Expanded bullets zoom to usage+request, not limit.** The per-node bullet scale that was meant to
+  make small pods legible was itself defeated by limits: one pod limiting 1 CPU but using 1m set
+  `bulletMax`, crushing every usage fill to a sub-pixel sliver. The scale is now `max(use, request)`;
+  a limit still draws as a tick but its reach is **capped at the track end** (the exact value is on
+  hover) so an outlier limit can no longer dominate the visualization.
+- **Hover-to-spotlight (Grafana-style) + aggregate fade fix.** Hovering a pod segment/bullet (not just
+  clicking) spotlights it and fades the rest, for faster reading. A `capHover` key (a pod id, or a
+  `small:<host>`/`other:<host>` aggregate marker) drives the fade; with nothing hovered it falls back to
+  the standard selection/search/filter fade, so a selected pod stays spotlit after the cursor leaves.
+  This also fixed a bug where the bright accent aggregate block stayed lit while every individual
+  segment faded on selection — aggregates now fade whenever a specific pod is in focus (hovered,
+  selected, searched, or filtered), since a block is never the single focused pod.
+- **The whole node row is the expand target (a bordered card).** The tiny ▸/▾ caret was too small to
+  click (and was later removed entirely); each node is a bordered card (`.cap-node-frame`) and clicking
+  anywhere on it that isn't a pod segment toggles expand/collapse (segments/bullets `stopPropagation` so
+  selecting a pod doesn't also toggle the node). The node name is packed into the card's top-left. This
+  improves both the hit target and the visual grouping (each node reads as one unit).
+- **The card border always contains its text.** SVG `<text>` can't reflow, so the card width is grown
+  to fit the header (node name + pod count) and, when expanded, every full pod name — estimated from
+  char count (`CAP_HEADER_CHAR_W` / `CAP_BULLET_CHAR_W`) — instead of letting a long name or pod name
+  spill past the border. Slight over-reserve (a little right padding) is preferred to clipping.
+- **Terminal pods are excluded.** The capacity view shows live utilization, so the server drops
+  Succeeded/Failed pods from the feed (`stoppedPod` filter in `buildCapacity`) — a finished or errored
+  pod holds no reservation and consumes nothing, so it must not pad a node's bars or pod count. (The
+  topology graph still keeps Failed pods, which are actionable there; this filter is capacity-specific.)
+- **Totals sit next to their bar, not the node name (proximity).** Capacity/use/request used to crowd
+  the header beside the node name; each bar now carries its own `value / capacity` label just past its
+  right end (`910m / 940m` by the Req bar, `84m / 940m` by the Use bar; the value emphasized, capacity
+  dim). The header keeps only identity + pod count. This applies the proximity principle — the number
+  reads with the bar it describes — and makes the reservation-vs-usage gap obvious per bar.

@@ -61,21 +61,37 @@ go test ./...                # Go tests only
 - The client is Solid, not React. `createMemo` / `createEffect` (no `useEffect`). Stores via
   `createStore` + `reconcile` for SSE patches.
 
-## Verifying UI changes live
+## Verifying UI changes live (agent-browser)
 
-Tests alone miss real UI bugs (coalesced key events, toolbar overflow, focus escapes). For any
-visible/interactive change, drive the **actual** UI:
+Tests alone miss real UI bugs (coalesced key events, toolbar overflow, focus escapes, a fade that
+never fires, a length-encoding that overshoots on real data). For ANY visible/interactive change,
+drive the **actual** UI with the **`agent-browser`** CLI (the `agent-browser` skill — NOT ad-hoc
+Playwright). Build first; the server embeds the client:
 
 ```bash
-just build                                 # MUST rebuild — the server embeds the client (embed_web)
+just build                                                  # MUST rebuild (embed_web) or you test stale JS
 pkill -f 'kd -dev-user'; ./kd -dev-user dev -addr :8099 &   # poll /healthz before driving it
 ```
-- Playwright via `playwright-core` (scripts in `/tmp/pw`), `chromium.launch({ channel: 'chrome' })`,
-  `goto(url, { waitUntil: 'domcontentloaded' })`, then `waitForTimeout(4500)` for the SSE graph to settle.
-- Dispatch real events and **measure what you changed**: a class applied, the `<g transform>` scale,
-  an element's rect vs the drawer bounds, a line count. Re-test from a narrower viewport for
-  layout/overflow (the compact drawer caps at ~520px).
-- `cd` shifts the persistent shell cwd — run node/playwright from `/tmp/pw`, git/build from repo root.
+Then drive it (run agent-browser from `/tmp` — `cd` shifts the persistent shell cwd; keep git/build at
+the repo root):
+```bash
+agent-browser open "http://localhost:8099/?ctx=<ctx>&ns=<ns>&group=nodes" --wait domcontentloaded
+sleep 6   # let the SSE graph settle; ~15s for a remote EKS context's FIRST informer sync
+agent-browser eval --stdin <<'EOF'        # JS MUST be an IIFE — (() => { ... })() — bare `return` errors
+(() => { /* query DOM, dispatch real events, return JSON.stringify(measurements) */ })()
+EOF
+agent-browser screenshot /tmp/x.png       # then Read the PNG to eyeball layout
+agent-browser close
+```
+- **Measure what you changed**, don't just eyeball it: assert a class applied (`.faded`), a computed
+  `fill`/`strokeDasharray`, an element's rect vs the drawer bounds, a count, a left-to-right order. A
+  screenshot confirms layout; an `eval` measurement confirms behaviour. Re-test from a **narrow
+  viewport** for overflow (the compact drawer caps at ~520px).
+- **Dogfood against real data.** kd's merged kubeconfig exposes every context; pointing `?ctx=<arn>` at
+  a real cluster hits production-scale shapes (dozens of pods/node, near-zero usages, terminal pods)
+  that local `docker-desktop` never reproduces — that is how the capacity-view fidelity/overshoot bugs
+  surfaced. NEVER let a real cluster/namespace/ARN name leak into a tracked file (code/test/doc/commit)
+  — keep it in the browser session only (see the leakage rule under Conventions).
 
 ## Client UI gotchas (Solid / SVG / jsdom)
 
@@ -98,9 +114,25 @@ pkill -f 'kd -dev-user'; ./kd -dev-user dev -addr :8099 &   # poll /healthz befo
 
 ## UI design principles (user-stated)
 
-- Group **related** info into one visual block so it reads at a glance — apply the four design
-  principles (proximity, alignment, repetition, contrast). E.g. each pod container is one card pairing
-  status + image, grouped Init/app with counts — not two disjoint lists.
+Apply the **four design principles** to every visual change — group **related** info so it reads at a
+glance, and make the structure legible without a legend. Each is grounded in a real kd example:
+
+- **Proximity** — related things together, unrelated apart; a number belongs next to what it
+  describes. *kd:* each node bar carries its own `value / capacity` label at its right end (not crammed
+  beside the node name); each pod container is one card pairing status + image, not two disjoint lists.
+- **Alignment** — line elements up on shared edges/baselines so the eye scans one axis. *kd:* every
+  node track starts at the same left gutter; the "Req"/"Use" axis labels right-align against the bars.
+- **Repetition** — reuse ONE visual language per meaning; don't gratuitously differentiate. *kd:* the
+  Req and Use bars share one colour scheme (req is not a lighter shade) so a pod is the same colour on
+  both; the same "+N more" pill folds every crowded group across every view.
+- **Contrast** — make different things look clearly different and pull the eye to what matters. *kd:*
+  the live value is emphasized (`--text`, semibold) while its capacity is dim (`--text-dim`); a
+  selected/hovered element stays bright while the rest fade; "other namespaces" is gray vs bright own.
+
+Also:
+- **Explicit over implicit** — first-time viewers won't know what a bare colour/shape means; prefer a
+  label/text/tooltip over making the operator infer it. *kd:* the "other namespaces" block is a
+  *labelled* bar (not just a gray colour); a folded tail says "N small pods — expand to see each".
 - **Avoid icon-only UI** — users won't reliably know what bare icons mean. Use icons *with* text, a
   text label, or a segmented control; if a control row overflows, compact it or relocate it.
 
@@ -171,25 +203,57 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   **Resource** (`CapResource` = cpu|memory — a single resource at a time, never both on one length
   channel). The bars are always the explicit **Req + Use** stacked form, each with a "Req"/"Use" axis
   label (the overlay/`Use`-only `CapMode` was retired after live review — see the ADR Refinements). Key
-  behaviours: every own-pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never vanishes; the
-  node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
+  behaviours: **collapsed-bar segments draw at EXACT proportional width (`value·scale`, no per-pod
+  floor)** so Σwidths = Σvalues and the bar end is the node's true utilization — a per-segment minimum
+  (the original "idle pod never vanishes" floor) was the overshoot bug: N near-zero pods each floored to
+  `CAP_SEG_FOLD`px tiled past the track (a 940m/31-pod node at 8% use drew ~70%). To keep tiny pods from
+  silently vanishing, **healthy** pods that would draw under `CAP_SEG_FOLD` fold via `buildCapBar` into
+  ONE `smallUseSeg`/`smallReqSeg` `CapAggregate` (variant `small`) sized by their EXACT summed value —
+  one block can't N-inflate; it's hoverable and click-expands the node. The small block is styled like a
+  normal segment (accent fill, no border — a dashed outline collided with the selection stroke). A lone
+  sub-threshold pod is floored instead; **unhealthy pods never fold** (a problem pod stays individually
+  visible with its health colour). Segments are ordered **largest-first by `max(use, request)`**, so a
+  bar reads: biggest own segs → small-own fold → gray other-ns fold. The **Req and Use bars share one
+  colour scheme** (req is NOT a lighter shade — `.cap-seg.req` carries the same accent/health fills and
+  `.selected` stroke as `.cap-seg.use`), so a pod is the same colour on both bars and selection emphasises both.
+  The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
   expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets whose bar LENGTH ∝
-  usage on a PER-NODE zoom scale (`bulletScale`) — variable length, not a fixed track with a fill, with
+  usage on a PER-NODE zoom scale (`bulletScale` = `CAP_BULLET_TRACK / max(use, request)` — NOT limit, so
+  one slack pod's huge limit can't crush every usage fill to a sliver; a limit tick's reach is capped at
+  the track end, exact value on hover) — variable length, not a fixed track with a fill, with
   a faint baseline to the furthest req/limit tick; bullets show ONLY the FULL pod name (no
   prefix-shortening, no inline numbers — those are on hover). Bursting (usage>request) is a hatch
   overlay (`#cap-burst-hatch`), NOT a recolor. A **cursor-following HTML tooltip** (`capTip`,
   `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
   segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
-  render.
+  render. **Hover-to-spotlight** (Grafana-style): hovering a segment/bullet sets `capHover` (a pod id or
+  `small:<host>`/`other:<host>` marker) which spotlights it and fades the rest via `capSegFaded` /
+  `capAggFaded`; with nothing hovered it falls back to `nodeFaded` (selection/search/filter). Aggregates
+  fade whenever a specific pod is in focus (hovered/selected/searched/filtered) — fixing a bug where the
+  bright accent block stayed lit while individual segments faded. **The whole node row is the
+  expand/collapse click target** — a bordered card (`.cap-node-frame`); clicking anywhere that isn't a
+  pod segment toggles it (segs/bullets `stopPropagation` so selecting a pod doesn't also toggle). No
+  caret — the node name is packed into the card's top-left. **The card width grows to contain its text**
+  (SVG `<text>` can't reflow): the header (name + pod count) and every expanded pod name are reserved
+  from char-count estimates (`CAP_HEADER_CHAR_W`/`CAP_BULLET_CHAR_W`, header inset `CAP_HEADER_INSET`)
+  so nothing overflows the border. **Per-bar totals (proximity):** capacity/use/request are NOT in the
+  header — each bar carries a `value / capacity` label (`.cap-bar-value`) just past its right end
+  (`84m / 940m` by Use, `910m / 940m` by Req); the header keeps only node identity + pod count.
+  `CAP_BAR_VALUE_W` reserves the row width for it.
+  - **Terminal pods excluded:** the capacity view shows LIVE utilization, so `buildCapacity` drops
+    Succeeded/Failed pods (`stoppedPod` filter on the snapshot, before `graph.Build` and the usage feed)
+    — a finished/errored pod reserves and uses nothing, so it must not pad a node's bars or pod count.
+    (The topology graph still keeps Failed pods — actionable there; this filter is capacity-specific.)
   - **Cluster-wide by nature (NOT namespace-scoped):** the view draws from a dedicated cluster-wide
     `capacity` SSE event — `{ nodes: KNode[]; usage }` carrying ALL Nodes + ALL Pods (each tagged with
     `namespace`) + per-UID usage — built server-side from `store.SnapshotNodesAndPods()` (the only
     snapshot crossing the per-namespace ride-along boundary). It replaced the old per-namespace `usage`
     event. App holds it in the `capacity` signal (cleared on resubscribe) and passes `capacity` +
     `namespace` to Topology; the layout takes `currentNamespace`. Only the SELECTED namespace's pods
-    become individual `CapSeg`s (bright); every OTHER namespace's pod folds into ONE gray `CapAggregate`
-    ("other namespaces") per bar + one per expanded bullet — `row.otherUseSeg`/`otherReqSeg`/
-    `otherBullet` — hoverable for folded totals but not individually selectable. Cluster scope
+    become individual `CapSeg`s (bright, minus any folded into the small-pods block); every OTHER
+    namespace's pod folds into ONE gray `CapAggregate` ("other namespaces") per bar + one per expanded
+    bullet — `row.otherUseSeg`/`otherReqSeg`/`otherBullet` — hoverable for folded totals but not
+    individually selectable (the `small` and `other` aggregate variants can coexist on one bar). Cluster scope
     (`''`/`__cluster__`) → every pod is own/individual, no aggregate. So cluster scope shows every pod,
     a namespace scope shows its own pods + one folded block, keeping the node total honest. A pod
     selected in cluster scope may not be in the namespace graph, so `App.selectedNode` falls back to

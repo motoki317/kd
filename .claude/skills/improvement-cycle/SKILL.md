@@ -68,14 +68,20 @@ value+effort from the verifier (it saw the real code; the proposer guessed).
 ## 4. IMPLEMENT one cycle
 
 Make the smallest change that delivers the improvement. Match surrounding code style. Comments
-explain WHY (non-obvious), never WHAT — see AGENTS.md conventions.
+explain WHY (non-obvious), never WHAT — see AGENTS.md conventions. For any **visual** change, design
+against the **four design principles** (proximity, alignment, repetition, contrast) + explicit-over-
+implicit — see "UI design principles" in AGENTS.md.
 
 ## 5. VERIFY LIVE
 
-Drive the **actual UI**, not just tests — see "Verifying UI changes live" in AGENTS.md (build →
-run `./kd -dev-user dev -addr :8099` → playwright). Measure the thing you changed (class applied,
-scale value, element in bounds, count). Live verification has repeatedly caught bugs unit tests
-could not (e.g. keyboard-zoom presses coalescing; toolbar overflow).
+Drive the **actual UI** with the **`agent-browser`** CLI (NOT playwright), not just tests — see
+"Verifying UI changes live (agent-browser)" in AGENTS.md (build → run `./kd -dev-user dev -addr :8099`
+→ `agent-browser open/eval/screenshot/close`). **Measure** the thing you changed (class applied,
+computed fill, element in bounds, count, order) — a screenshot shows layout, an `eval` proves
+behaviour. **Dogfood against a real cluster** (`?ctx=<arn>`) for production-scale shapes a local
+cluster can't reproduce — keeping the real name out of tracked files. Live verification has
+repeatedly caught bugs unit tests could not (keyboard-zoom presses coalescing; toolbar overflow; a
+min-segment overshoot that only shows with many tiny pods on one node).
 
 ## 6. TEST
 
