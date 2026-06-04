@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, relativeName, setServerShortNames } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, setServerShortNames } from './names'
 import type { KNode } from './types'
 
 describe('relativeName', () => {
@@ -107,6 +107,40 @@ describe('cardName', () => {
     expect(out).toContain('…')
     expect(out.startsWith('kube')).toBe(true)
     expect(out.endsWith('desktop')).toBe(true)
+  })
+})
+
+describe('prefixParentNames', () => {
+  const n = (id: string, name: string) => ({ id, name, kind: 'Pod', health: 'Healthy' as const })
+  const e = (from: string, to: string, type = 'ownerReference') => ({ from, to, type: type as never })
+
+  it('maps a child to a parent whose name is a "-"-bounded prefix', () => {
+    const m = prefixParentNames([n('rs', 'api-7d9f'), n('po', 'api-7d9f-2xkp')], [e('rs', 'po')])
+    expect(m.get('po')).toBe('api-7d9f')
+  })
+  it('keeps the LONGEST prefix-parent (closest ancestor wins)', () => {
+    // Deployment "api" and ReplicaSet "api-7d9f" both prefix the Pod; the ReplicaSet is closer.
+    const nodes = [n('dep', 'api'), n('rs', 'api-7d9f'), n('po', 'api-7d9f-2xkp')]
+    const m = prefixParentNames(nodes, [e('dep', 'po'), e('rs', 'po')])
+    expect(m.get('po')).toBe('api-7d9f')
+  })
+  it('ignores an edge whose source name is not an ancestor prefix (a Service selecting a Pod)', () => {
+    // "frontend" does not prefix "api-7d9f-2xkp", so no relative stripping.
+    const m = prefixParentNames([n('svc', 'frontend'), n('po', 'api-7d9f-2xkp')], [e('svc', 'po', 'selects')])
+    expect(m.has('po')).toBe(false)
+  })
+  it('requires the hyphen boundary (a bare string prefix without "-" is not a parent)', () => {
+    // "api" prefixes "apiserver" textually but not at a '-' boundary → not a tree parent.
+    const m = prefixParentNames([n('a', 'api'), n('b', 'apiserver')], [e('a', 'b')])
+    expect(m.has('b')).toBe(false)
+  })
+  it('walks any edge type, not just ownerReference (a refers edge shortens a CRD child)', () => {
+    const m = prefixParentNames([n('tmpl', 'build'), n('wf', 'build-abc123')], [e('tmpl', 'wf', 'refers')])
+    expect(m.get('wf')).toBe('build')
+  })
+  it('skips edges whose endpoints are not in the node set', () => {
+    const m = prefixParentNames([n('po', 'api-7d9f-2xkp')], [e('missing', 'po')])
+    expect(m.size).toBe(0)
   })
 })
 

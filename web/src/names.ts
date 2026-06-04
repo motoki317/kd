@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js'
 import { relativeAge } from './time'
-import type { KNode } from './types'
+import type { KEdge, KNode } from './types'
 
 // Display-name helpers for topology cards. A namespace's ownership tree repeats the parent name
 // in every child (Deployment "api" -> ReplicaSet "api-7d9f" -> Pod "api-7d9f-2xkp"), so the
@@ -129,6 +129,27 @@ export function cardName(name: string, ownerName?: string): string {
   const rel = relativeName(name, ownerName)
   if (rel !== name) return PREFIX_MARK + middleTruncate('-' + rel, CARD_NAME_MAX - PREFIX_MARK.length)
   return middleTruncate(name, CARD_NAME_MAX)
+}
+
+// prefixParentNames maps each node id to the name of its longest PREFIX-PARENT — a related node whose
+// name is a '-'-bounded prefix of this node's name (ReplicaSet "api-7d9f" parents Pod "api-7d9f-2xkp").
+// Scans EVERY edge, not just ownerReference, so generated children of any kind shorten the same way
+// (a CRD instance "<template>-<id>" under its template via a refers edge). The prefix test guards
+// against false parents — a Service that merely selects a Pod is not a name ancestor — and the longest
+// match wins so the closest ancestor (ReplicaSet over Deployment) is used. Feeds cardName so a child
+// renders relative to its parent in the tree.
+export function prefixParentNames(nodes: KNode[], edges: KEdge[]): Map<string, string> {
+  const nameById = new Map(nodes.map((n) => [n.id, n.name]))
+  const parents = new Map<string, string>()
+  for (const e of edges) {
+    const parent = nameById.get(e.from)
+    const child = nameById.get(e.to)
+    if (parent === undefined || child === undefined) continue
+    if (child.length <= parent.length + 1 || !child.startsWith(parent + '-')) continue
+    const cur = parents.get(e.to)
+    if (cur === undefined || parent.length > cur.length) parents.set(e.to, parent)
+  }
+  return parents
 }
 
 // cardTitle builds the SVG <title> tooltip for a node — the small thing native browsers show on
