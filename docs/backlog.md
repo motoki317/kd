@@ -74,8 +74,25 @@ should come from real user feedback or a new feature area — don't grind filler
 
 ## Open
 
+- **Surface a degraded resource's status message for faster triage** — *verified live (cycle 44,
+  a remote staging cluster, a busy namespace: a 21-day-old Failed Workflow), needs a scope/format
+  decision.* When an
+  unhealthy resource's Events have aged out (k8s events have a TTL — a 3-week-old failure shows "No
+  recent events."), the only place the failure reason lives is the manifest's `status.message`, which
+  the operator must open the Manifest tab and `⌘F "message"` to find. The card + drawer show the phase
+  ("Failed") but not the *why*. `KNode` carries only `status?: string` (the phase, e.g. from
+  `health_cr.go` `crPhase`); the server never extracts `status.message`. **What it takes:** a new
+  `Node.Reason`/`Message` field populated for degraded resources (server: read `status.message` — present
+  for Argo Workflows/Rollouts and many CRs, absent/irrelevant for Pods which use container statuses),
+  thread through `diff.go` equality + `types.ts`, and show it in `ResourceSummary` for degraded nodes.
+  **Why deferred (not a quick fix):** it's server+client across the user-iterated health pipeline;
+  `status.message` format varies wildly by kind (some are long/multi-line) so it needs a per-kind or
+  truncation policy; and whether the summary *should* carry it vs. keeping the manifest authoritative is
+  a genuine design call (the phase-on-card + detail-in-manifest split may be deliberate). **Reopen:**
+  when the user wants failure reasons in the drawer summary and states the kind/format policy.
+
 - **Capacity bar `value / capacity` labels mix units, hurting at-a-glance comparison** — *verified
-  live (cycle 22, staging-cluster Nodes view), needs a unit-policy decision before implementing.*
+  live (cycle 22, a remote staging cluster Nodes view), needs a unit-policy decision before implementing.*
   `formatQuantity` (`web/src/capacityLayout.ts`, moved there from layout.ts in the cycle-36 split) picks a unit per value by magnitude, independently for the
   numerator and denominator. So a node's Use bar reads `85m / 1` (millicores / cores) while its Req bar
   right below reads `860m / 940m` (both millicores) — the two stacked capacities of ONE node (`1` =
