@@ -501,3 +501,21 @@ func TestPodRestarts(t *testing.T) {
 		t.Errorf("podRestarts(non-pod) = %d, want 0", got)
 	}
 }
+
+// podReady reads the PodReady condition. The absent-condition path must be false (a pod with no
+// conditions yet is NOT ready) — distinct from an explicit Ready=False — so a just-created pod never
+// reads ready before its status is populated.
+func TestPodReady(t *testing.T) {
+	withReady := func(s corev1.ConditionStatus) *corev1.Pod {
+		return &corev1.Pod{Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: s}}}}
+	}
+	if !podReady(withReady(corev1.ConditionTrue)) {
+		t.Error("podReady(Ready=True) = false, want true")
+	}
+	if podReady(withReady(corev1.ConditionFalse)) {
+		t.Error("podReady(Ready=False) = true, want false")
+	}
+	if podReady(&corev1.Pod{}) {
+		t.Error("podReady(no conditions) = true, want false")
+	}
+}
