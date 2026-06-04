@@ -1560,7 +1560,29 @@ export default function Topology(props: Props) {
                   const fw = row.width + 42
                   const fh = row.height + 12
                   return (
-                    <g class="cap-row" onClick={() => expandable && toggleCapRow(row.host)}>
+                    <g
+                      class="cap-row"
+                      onClick={() => expandable && toggleCapRow(row.host)}
+                      // Expand/collapse is a discrete action with no keyboard equivalent elsewhere, so
+                      // (when foldable) the row is a real button: keyboard-focusable, Enter/Space toggles,
+                      // and a screen reader hears "<node>, N pods, collapsed/expanded, button". A
+                      // non-foldable node carries no button semantics. (Pod segments inside select pods by
+                      // mouse — reachable by keyboard via search-cycling — so they stay non-focusable.)
+                      role={expandable ? 'button' : undefined}
+                      tabindex={expandable ? 0 : undefined}
+                      aria-label={expandable ? `${row.label}, ${pods} pod${pods === 1 ? '' : 's'} — ${row.expanded ? 'collapse' : 'expand'} node` : undefined}
+                      aria-expanded={expandable ? row.expanded : undefined}
+                      onKeyDown={
+                        expandable
+                          ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                toggleCapRow(row.host)
+                              }
+                            }
+                          : undefined
+                      }
+                    >
                       <rect
                         class="cap-node-frame"
                         classList={{ clickable: expandable, expanded: row.expanded }}

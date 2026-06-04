@@ -427,6 +427,29 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-bullet .cap-burst-overlay.use').length).toBe(0) // under its limit
   })
 
+  it('Nodes view: an expandable node row is a keyboard-operable button (role/aria-expanded + Enter)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 80 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    const row = container.querySelector('.cap-row') as SVGGElement
+    // Expand/collapse has no other keyboard path, so the row is a real button (the nested pod segments
+    // stay non-focusable — pods are keyboard-reachable via search).
+    expect(row.getAttribute('role')).toBe('button')
+    expect(row.getAttribute('tabindex')).toBe('0')
+    expect(row.getAttribute('aria-label')).toMatch(/host-1, 1 pod — expand node/)
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelectorAll('.cap-bullet').length).toBe(0)
+    // Enter activates it → the node expands (per-pod cards render, state flips).
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect((container.querySelector('.cap-row') as SVGGElement).getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelectorAll('.cap-bullet').length).toBe(1)
+  })
+
   it('Nodes view: clicking an expanded pod card selects that pod', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },

@@ -789,6 +789,15 @@ button.conn.conn-retry:focus-visible {
   fill: color-mix(in srgb, var(--accent) 7%, transparent);
   stroke: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
+/* Keyboard focus ring for the row-button: SVG has no usable default outline, so accent the frame's
+   own stroke. Mouse focus stays quiet via :focus-visible on the focusable <g class="cap-row">. */
+.cap-row:focus {
+  outline: none;
+}
+.cap-row:focus-visible .cap-node-frame {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
 .cap-node-frame.expanded {
   fill: color-mix(in srgb, var(--text-dim) 5%, transparent);
 }
