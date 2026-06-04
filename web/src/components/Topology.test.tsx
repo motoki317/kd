@@ -359,6 +359,23 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
   })
 
+  it('Nodes view folds many tiny pods into one explicit "small pods" block, not a wall of floors', () => {
+    const nodesV: KNode[] = [{ id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 8000 } }]
+    const items: Record<string, { cpuMilli: number }> = { big: { cpuMilli: 600 } }
+    for (let i = 0; i < 12; i++) {
+      nodesV.push({ id: `t${i}`, kind: 'Pod', name: `t${i}`, health: 'Healthy', host: 'host-1' })
+      items[`t${i}`] = { cpuMilli: 1 }
+    }
+    nodesV.push({ id: 'big', kind: 'Pod', name: 'big', health: 'Healthy', host: 'host-1' })
+    const capacity = { nodes: nodesV, usage: { items } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    // Only the big pod draws individually; the 12 tinies collapse into one folded block (not 12 segments).
+    expect(container.querySelectorAll('.cap-seg.use:not(.other):not(.small)').length).toBe(1)
+    expect(container.querySelectorAll('.cap-seg.use.small').length).toBe(1)
+  })
+
   it('clears all filters via onClearFilters (cycle 216)', () => {
     const onClearFilters = vi.fn()
     const { container } = render(() => (

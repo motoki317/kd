@@ -770,14 +770,22 @@ button.conn.conn-retry:focus-visible {
   fill: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
-.cap-caret {
-  fill: var(--text-dim);
-  font-weight: 700;
-  cursor: pointer;
-  pointer-events: auto;
+/* Each node is a bordered card; the entire card is the expand/collapse hit target (a tiny caret was
+   too small to click). A faint accent tint on hover signals the whole row is clickable. */
+.cap-node-frame {
+  fill: transparent;
+  stroke: var(--border);
+  stroke-width: 1;
 }
-.cap-caret:hover {
-  fill: var(--accent);
+.cap-node-frame.clickable {
+  cursor: pointer;
+}
+.cap-node-frame.clickable:hover {
+  fill: color-mix(in srgb, var(--accent) 7%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.cap-node-frame.expanded {
+  fill: color-mix(in srgb, var(--text-dim) 5%, transparent);
 }
 .cap-warn {
   fill: var(--health-degraded);
@@ -793,6 +801,18 @@ button.conn.conn-retry:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   pointer-events: none;
+}
+/* "value / capacity" sat just past each bar (proximity): the live total reads with the bar it
+   describes instead of crammed beside the node name. The current value is emphasized, capacity dim. */
+.cap-bar-value {
+  font-size: 10px;
+  fill: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.cap-bar-value-strong {
+  fill: var(--text);
+  font-weight: 600;
 }
 /* Bar tracks: the full-capacity backdrop segments fill against; the remaining length reads as
    headroom, anything past the right edge as overcommit/overuse (the capacity line marks it). */
@@ -822,21 +842,28 @@ button.conn.conn-retry:focus-visible {
   fill: var(--health-suspended);
   font-weight: 500;
 }
-.cap-seg.use {
+/* Requested and usage segments share ONE colour scheme (the req bar is not a lighter shade): a pod
+   reads as the same colour on both bars, and selecting it emphasises both identically. */
+.cap-seg.use,
+.cap-seg.req {
   fill: var(--accent);
   stroke: var(--surface);
   stroke-width: 0.5;
 }
-.cap-seg.use.h-degraded {
+.cap-seg.use.h-degraded,
+.cap-seg.req.h-degraded {
   fill: var(--health-degraded);
 }
-.cap-seg.use.h-progressing {
+.cap-seg.use.h-progressing,
+.cap-seg.req.h-progressing {
   fill: var(--health-progressing);
 }
-.cap-seg.use.h-suspended {
+.cap-seg.use.h-suspended,
+.cap-seg.req.h-suspended {
   fill: var(--health-suspended);
 }
-.cap-seg.use.h-unknown {
+.cap-seg.use.h-unknown,
+.cap-seg.req.h-unknown {
   fill: var(--health-unknown);
 }
 .cap-seg.use.near {
@@ -853,14 +880,15 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.req.other {
   fill: color-mix(in srgb, var(--text-dim) 30%, var(--surface));
 }
+/* The "small pods" fold (own pods too tiny to draw individually, rolled into one block) is styled
+   exactly like a normal pod segment — same accent fill, no border — so the bar reads uniformly; it is
+   identified by hover ("N small pods") and its position after the individual pods, and click-expands. */
+
 /* Burst overlay (usage over request): a hatch on top of the health-colored segment, so it reads as
    "bursting" without colliding with the amber suspended-health hue a recolor would. */
 .cap-burst-overlay {
   fill: url(#cap-burst-hatch);
   pointer-events: none;
-}
-.cap-seg.req {
-  fill: color-mix(in srgb, var(--accent) 45%, var(--surface));
 }
 .cap-seg:hover {
   filter: brightness(1.08);

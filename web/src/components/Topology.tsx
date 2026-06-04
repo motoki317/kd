@@ -208,14 +208,24 @@ export default function Topology(props: Props) {
     over: s.over,
     near: s.nearLimit,
   })
-  const tipFromOther = (a: CapAggregate): CapTipData => ({
-    title: 'Other namespaces',
-    sub: `${a.count} pod${a.count === 1 ? '' : 's'} outside this namespace`,
-    use: a.use,
-    req: a.req || undefined,
-    over: false,
-    near: false,
-  })
+  const tipFromAgg = (a: CapAggregate): CapTipData =>
+    a.variant === 'small'
+      ? {
+          title: `${a.count} small pod${a.count === 1 ? '' : 's'}`,
+          sub: 'too small to show individually — expand to see each',
+          use: a.use,
+          req: a.req || undefined,
+          over: false,
+          near: false,
+        }
+      : {
+          title: 'Other namespaces',
+          sub: `${a.count} pod${a.count === 1 ? '' : 's'} outside this namespace`,
+          use: a.use,
+          req: a.req || undefined,
+          over: false,
+          near: false,
+        }
   const showTip = (d: CapTipData, e: PointerEvent) => setCapTip({ d, x: e.clientX, y: e.clientY })
 
   // Project the full streamed edge set onto the active relationship categories (reversing the
@@ -256,9 +266,7 @@ export default function Topology(props: Props) {
   // isn't on any row. (item: selecting a pod fits to the node it runs on.)
   const capRowBoxFor = (id: string | null) => {
     if (props.groupBy !== 'nodes' || !id) return null
-    const row = capRows().find(
-      (r) => r.node?.id === id || r.useSegs.some((s) => s.node.id === id) || r.bullets.some((s) => s.node.id === id),
-    )
+    const row = capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
     if (!row) return null
     return { x: row.x + row.width / 2, y: row.y + row.height / 2, width: row.width, height: row.height }
   }
@@ -504,6 +512,25 @@ export default function Topology(props: Props) {
     if (props.healthFilter) return n.health !== props.healthFilter
     const r = related()
     return r ? !r.nodes.has(n.id) : false
+  }
+  // Capacity-view spotlight: hovering a pod segment/bullet (not just clicking it) spotlights it and
+  // fades the rest, like a Grafana panel — faster than click-to-select for reading the bars. capHover
+  // holds the hovered element's key: a pod id, or a `small:<host>` / `other:<host>` aggregate marker.
+  // When something is hovered it wins; with nothing hovered we fall back to the standard
+  // selection/search/filter fade (nodeFaded), so a selected pod stays spotlit after the cursor leaves.
+  const [capHover, setCapHover] = createSignal<string | null>(null)
+  const capSegFaded = (n: { id: string; health: string; kind: string }) => {
+    const h = capHover()
+    if (h) return n.id !== h
+    return nodeFaded(n)
+  }
+  // An aggregate block stands for many pods and is never the single spotlighted pod, so it fades
+  // whenever a specific element is in focus — a hovered sibling, or a selected/searched/filtered pod.
+  // (Fixes the bug where the bright accent block stayed lit while every individual segment faded.)
+  const capAggFaded = (marker: string) => {
+    const h = capHover()
+    if (h) return marker !== h
+    return !!props.selectedId || !!matches() || !!props.healthFilter
   }
   // A collapsed pill counts how many of its hidden nodes the operator is currently searching/filtering
   // for, so the badge ("● N match") signals a fold is hiding a result without revealing it (FR-006/D7).
@@ -1405,30 +1432,43 @@ export default function Topology(props: Props) {
               <For each={capRows()}>
                 {(row) => {
                   const fmt = (v: number | undefined) => formatQuantity(v, capResource())
-                  const pods = row.useSegs.length
+                  const pods = row.ownCount
                   const expandable = pods > 0 || row.otherCount > 0
                   const segClasses = (s: CapSeg) => ({
                     over: s.over,
                     near: s.nearLimit,
-                    faded: nodeFaded(s.node),
+                    faded: capSegFaded(s.node),
                     selected: s.node.id === props.selectedId,
                     [`h-${s.node.health.toLowerCase()}`]: true,
                   })
+                  // The WHOLE node row is one big click target for expand/collapse (a bordered card),
+                  // not a tiny caret: clicking anywhere that isn't a pod segment toggles it. Pod segments
+                  // and bullets stopPropagation so selecting a pod doesn't also toggle the node.
+                  const fx = row.x - 34
+                  const fy = row.y - 6
+                  const fw = row.width + 42
+                  const fh = row.height + 12
                   return (
-                    <g class="cap-row">
-                      <text class="cap-row-label" x={row.x} y={row.y + 14}>
-                        <Show when={expandable}>
-                          <tspan class="cap-caret" onClick={() => toggleCluster(`host:${row.host}`)}>
-                            {row.expanded ? '▾ ' : '▸ '}
-                          </tspan>
-                        </Show>
+                    <g class="cap-row" onClick={() => expandable && toggleCluster(`host:${row.host}`)}>
+                      <rect
+                        class="cap-node-frame"
+                        classList={{ clickable: expandable, expanded: row.expanded }}
+                        x={fx}
+                        y={fy}
+                        width={fw}
+                        height={fh}
+                        rx="8"
+                      />
+                      {/* Node name packed into the card's top-left (no caret); CAP_HEADER_INSET=26 in
+                          layout.ts reserves the matching left offset + card width so it never overflows. */}
+                      <text class="cap-row-label" classList={{ clickable: expandable }} x={row.x - 26} y={row.y + 14}>
                         <tspan class="cap-row-host">{row.label}</tspan>
+                        {/* Node-level totals (capacity, use, req) used to live here, crowding the name;
+                            they now sit next to the Req/Use bars they describe (proximity). The header
+                            keeps only the node's identity + pod count. */}
                         <tspan class="cap-row-meta">
-                          {row.cap !== undefined ? ` · ${fmt(row.cap)} ${capResource() === 'cpu' ? 'CPU' : 'mem'}` : ''}
                           {` · ${pods} pod${pods === 1 ? '' : 's'}`}
                           {row.otherCount > 0 ? ` (+${row.otherCount} other-ns)` : ''}
-                          {pods || row.reqTotal ? ` · use ${fmt(row.useTotal)} · req ${fmt(row.reqTotal)}` : ''}
-                          {row.otherCount > 0 ? ` · this ns ${fmt(row.ownUseTotal)}` : ''}
                         </tspan>
                         <Show when={row.overcommit}>
                           <tspan class="cap-warn"> · overcommit</tspan>
@@ -1443,30 +1483,50 @@ export default function Topology(props: Props) {
                         {(s) => (
                           <rect
                             class="cap-seg req"
-                            classList={{ faded: nodeFaded(s.node), selected: s.node.id === props.selectedId }}
+                            classList={{ faded: capSegFaded(s.node), selected: s.node.id === props.selectedId, [`h-${s.node.health.toLowerCase()}`]: true }}
                             x={s.x}
                             y={s.y}
                             width={Math.max(0.5, s.width - 0.5)}
                             height={s.height}
-                            onClick={() => props.onSelect(s.node.id)}
-                            onPointerMove={(e) => showTip(tipFromSeg(s), e)}
-                            onPointerLeave={() => setCapTip(null)}
+                            onClick={(e) => { e.stopPropagation(); props.onSelect(s.node.id) }}
+                            onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
                       </For>
-                      <Show when={row.otherReqSeg}>
+                      <Show when={row.smallReqSeg}>
                         {(o) => (
                           <rect
-                            class="cap-seg req other"
+                            class="cap-seg req small"
+                            classList={{ faded: capAggFaded(`small:${row.host}`) }}
                             x={o().x}
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => showTip(tipFromOther(o()), e)}
-                            onPointerLeave={() => setCapTip(null)}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
                       </Show>
+                      <Show when={row.otherReqSeg}>
+                        {(o) => (
+                          <rect
+                            class="cap-seg req other"
+                            classList={{ faded: capAggFaded(`other:${row.host}`) }}
+                            x={o().x}
+                            y={o().y}
+                            width={Math.max(0.5, o().width - 0.5)}
+                            height={o().height}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
+                          />
+                        )}
+                      </Show>
+                      {/* Reserved (request) total, sat right after the request bar (proximity): "req / cap". */}
+                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.reqTotal * capInfo().scale) + 8} y={row.reqBarY + 9}>
+                        <tspan class="cap-bar-value-strong">{fmt(row.reqTotal)}</tspan>
+                        {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
+                      </text>
 
                       {/* Usage bar: this namespace's pods sized by actual usage, then the single folded
                           "other namespaces" block. The node's TOTAL usage (all namespaces incl. system
@@ -1488,9 +1548,9 @@ export default function Topology(props: Props) {
                           <Show when={s.width > 0}>
                             <g
                               class="cap-seg-g"
-                              onClick={() => props.onSelect(s.node.id)}
-                              onPointerMove={(e) => showTip(tipFromSeg(s), e)}
-                              onPointerLeave={() => setCapTip(null)}
+                              onClick={(e) => { e.stopPropagation(); props.onSelect(s.node.id) }}
+                              onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s), e) }}
+                              onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               <rect
                                 class="cap-seg use"
@@ -1501,23 +1561,38 @@ export default function Topology(props: Props) {
                                 height={s.height}
                               />
                               {/* Bursting (usage > request): hatch overlay, color-independent. */}
-                              <Show when={s.over && !nodeFaded(s.node)}>
+                              <Show when={s.over && !capSegFaded(s.node)}>
                                 <rect class="cap-burst-overlay" x={s.x} y={s.y} width={Math.max(0.5, s.width - 0.5)} height={s.height} />
                               </Show>
                             </g>
                           </Show>
                         )}
                       </For>
-                      <Show when={row.otherUseSeg}>
+                      <Show when={row.smallUseSeg}>
                         {(o) => (
                           <rect
-                            class="cap-seg use other"
+                            class="cap-seg use small"
+                            classList={{ faded: capAggFaded(`small:${row.host}`) }}
                             x={o().x}
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => showTip(tipFromOther(o()), e)}
-                            onPointerLeave={() => setCapTip(null)}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
+                          />
+                        )}
+                      </Show>
+                      <Show when={row.otherUseSeg}>
+                        {(o) => (
+                          <rect
+                            class="cap-seg use other"
+                            classList={{ faded: capAggFaded(`other:${row.host}`) }}
+                            x={o().x}
+                            y={o().y}
+                            width={Math.max(0.5, o().width - 0.5)}
+                            height={o().height}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
                       </Show>
@@ -1525,6 +1600,11 @@ export default function Topology(props: Props) {
                       <Show when={row.cap !== undefined && (row.overcommit || row.useTotal > row.cap)}>
                         <line class="cap-capline" x1={row.x + row.trackW} y1={row.trackY - 3} x2={row.x + row.trackW} y2={row.trackY + 25} />
                       </Show>
+                      {/* Actual usage total, sat right after the usage bar (proximity): "use / cap". */}
+                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.useTotal * capInfo().scale) + 8} y={row.trackY + 15}>
+                        <tspan class="cap-bar-value-strong">{fmt(row.useTotal)}</tspan>
+                        {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
+                      </text>
 
                       {/* Per-pod bullets (expanded): the colored bar LENGTH is the usage (variable per
                           pod, on the shared per-node scale) — not a fixed track with varying fill — so
@@ -1534,18 +1614,21 @@ export default function Topology(props: Props) {
                       <For each={row.bullets}>
                         {(b) => {
                           const bs = row.bulletScale ?? 1
-                          const usePx = Math.max(1, b.use * bs)
-                          const reqPx = b.req !== undefined ? b.req * bs : undefined
-                          const limPx = b.lim !== undefined ? b.lim * bs : undefined
+                          const baseline = b.width // furthest marker, capped at the per-node track (layout)
+                          // Clamp every marker to the baseline: the scale is zoomed to usage+request, so a
+                          // pod whose limit dwarfs its usage has its limit tick land at the track end (the
+                          // cap) instead of running off-canvas — usage stays legible, the exact limit is on hover.
+                          const usePx = Math.max(1, Math.min(b.use * bs, baseline))
+                          const reqPx = b.req !== undefined ? Math.min(b.req * bs, baseline) : undefined
+                          const limPx = b.lim !== undefined ? Math.min(b.lim * bs, baseline) : undefined
                           const withinW = b.over && reqPx !== undefined ? reqPx : usePx
-                          const baseline = b.width // max(use, req, lim) extent — a faint guide under the bar
                           return (
                             <g
                               class="cap-bullet"
-                              classList={{ faded: nodeFaded(b.node), selected: b.node.id === props.selectedId }}
-                              onClick={() => props.onSelect(b.node.id)}
-                              onPointerMove={(e) => showTip(tipFromSeg(b), e)}
-                              onPointerLeave={() => setCapTip(null)}
+                              classList={{ faded: capSegFaded(b.node), selected: b.node.id === props.selectedId }}
+                              onClick={(e) => { e.stopPropagation(); props.onSelect(b.node.id) }}
+                              onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b), e) }}
+                              onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               {/* Faint baseline to the pod's furthest marker, so req/limit ticks beyond
                                   the usage bar still have something to sit on. */}
@@ -1579,8 +1662,9 @@ export default function Topology(props: Props) {
                         {(o) => (
                           <g
                             class="cap-bullet other"
-                            onPointerMove={(e) => showTip(tipFromOther(o()), e)}
-                            onPointerLeave={() => setCapTip(null)}
+                            classList={{ faded: capAggFaded(`other:${row.host}`) }}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           >
                             <line class="cap-bullet-base" x1={o().x} y1={o().y + o().height / 2} x2={o().x + o().width} y2={o().y + o().height / 2} />
                             <rect class="cap-bullet-fill" x={o().x} y={o().y} width={o().width} height={o().height} rx="2" />
