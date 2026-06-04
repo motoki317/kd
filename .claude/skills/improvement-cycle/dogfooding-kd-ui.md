@@ -97,6 +97,18 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    client reducer defensive (`?? []`). Always force empty slices to `[]` server-side — a nil Go slice
    marshals as `null` and the JS consumer rarely expects it.
 
+6. **Malformed fetch URL from an empty path segment.** A drawer/detail fetch that interpolates a
+   namespace/scope into the URL breaks when that value is empty — `.../namespaces//resources/...` (double
+   slash) gets a 307→404 from Go's ServeMux, so the panel shows a generic "unavailable" / "couldn't
+   load" with no hint of the real cause. Found live: every **cluster-scoped** resource (Node,
+   PriorityClass, ClusterRole) has no namespace, so its drawer sent an empty `{ns}` and both manifest +
+   events failed — invisible unless you dogfood in **cluster scope** (a plain namespace never selects a
+   cluster-scoped resource). **Recipe:** `agent-browser network requests | grep resources` after
+   selecting — a malformed URL (double slash, `undefined`, missing segment) is obvious there even though
+   the rAF-frozen harness hides the *visual* failure. Compare the bad URL against a hand-`curl` of the
+   path you *expect*; the diff is the bug. Fix at the single key/URL-builder, and substitute the scope
+   sentinel (`CLUSTER_SCOPE`) the server already unmaps — don't special-case each fetch call site.
+
 5. **Auto-fit to a bounding box that can be ARBITRARILY LARGE → unreadable speck.** "Frame the
    matches" when a health/kind filter toggles is good UX *when matches cluster*, but matches can be
    sparse and SCATTERED across a tall layout (11 Degraded resources spread down a 142-Workflow

@@ -266,6 +266,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Cluster-scoped resource drawer fetched an empty namespace (live-found, 2026-06-05):** selecting a
+Node / PriorityClass / ClusterRole (any cluster-scoped resource) showed "unavailable" for its manifest
+and "Couldn't load events." — found by dogfooding docker-desktop cluster scope and reading the network
+log, which showed `.../namespaces//resources/PriorityClass/...` (empty `{ns}`, double slash → server
+307→404) while the same path with `__cluster__` returned 200. Such resources carry no namespace, so the
+drawer's `key()` built an empty `ns`; now it substitutes the `CLUSTER_SCOPE` sentinel (the server
+already unmaps it to ""), fixing manifest + events + logs in one place. A namespaced resource selected
+in cluster scope still carries its real namespace. Regression test asserts the fetch URL uses
+`/namespaces/__cluster__/` and never `/namespaces//`. *Lesson: the network request log is the fastest
+way to spot a malformed-URL bug the rAF-frozen headless harness otherwise hides; dogfood the drawer in
+**cluster scope**, not just a namespace.*
+
 Cycles 313–339 plus the two direct user requests (U1: log-toolbar overflow fix; U2: per-container
 drawer cards pairing status+image) all shipped and are committed. The authoritative per-cycle "what +
 why" is the **git log** (`git log --oneline`). Headlines: per-level & per-pod log filters, keyboard
