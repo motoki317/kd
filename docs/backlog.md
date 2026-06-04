@@ -27,8 +27,21 @@ organizing refactors (`prefixParentNames` extracted to `names.ts` with 6 contrac
 on namespace switch; free-text + structured `Kind/name` search incl. edge cases AND capacity-view
 fade integration; capacity view overshoot invariant (Σ Use-segs = true utilization, no floor inflation)
 + 58-card expansion at scale (aligned, equal-width) + per-pod tick semantics (no limit → no tick);
-relationship-filter default (ownership-only) + toggle; help-overlay shortcuts (zero drift vs handlers);
-no console errors in normal operation.
+relationship-filter default (ownership-only) + toggle + composition (network atop ownership);
+help-overlay shortcuts (zero drift vs handlers); no console errors in normal operation. **Added in a
+later pass of the same batch** (also clean, also shipped the **sidebar trouble-badge → jump button**,
+proximity + explicit-over-implicit): theme toggle light↔dark↔system (+ dark-theme contrast eyeballed
+via screenshot); drawer expand-to-fill ↔ restore (520↔1050px); Escape progressive back-out
+(help→blur→deselect→clear transient filters, leaves persisted view-config alone); kind-chip
+multi-select (PO+DEPLOY composes, persists `?kinds=`); in-drawer manifest find (highlight + Enter/Shift
++Enter cycling); log-level filter chips (persistent HIDE-preference — see the do-not-re-propose row);
+**offline→retry resilience** (kill the server → "offline · retry" pill with reconnect title → restart →
+graph reloads). Coverage hardened to graph 94.4% / store 76.4% / api 81.7% / discovery — every
+remaining sub-100% pure fn in graph is now pinned (kindFromType, nodeTotalCapacity, podReady, podEdges,
+ingressBackend, asConventionRef, creationTime, nodeID); only the I/O `BuildUsage` wrapper stays low (its
+pure `joinUsage` core is tested). **Confirmed still user-blocked, do NOT force:** the "status.message in
+drawer" + "capacity-bar unit policy" items both need a user design decision (capacity view is flagged
+"don't reinterpret without the user").
 
 **Status (2026-06-05, batch 4):** A dogfooding + test-hardening batch whose headline is a **harness
 limitation, not a feature**: the headless agent-browser compositor is FROZEN — `requestAnimationFrame`
