@@ -794,6 +794,68 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(row.otherReqSeg!.req).toBe(100) // only t1 sets a request
   })
 
+  it('orders individual segments largest-first by max(use, request)', () => {
+    const nodes: KNode[] = [
+      { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } },
+      { id: 'sm', kind: 'Pod', name: 'sm', health: 'Healthy', host: 'h' },
+      { id: 'lg', kind: 'Pod', name: 'lg', health: 'Healthy', host: 'h' },
+      { id: 'md', kind: 'Pod', name: 'md', health: 'Healthy', host: 'h' },
+    ]
+    const row = layoutGraphByCapacity(nodes, { sm: { cpuMilli: 100 }, lg: { cpuMilli: 900 }, md: { cpuMilli: 400 } }, 'cpu', '').rows[0]
+    expect(row.useSegs.map((s) => s.node.id)).toEqual(['lg', 'md', 'sm'])
+  })
+
+  it('folds many tiny healthy pods into one aggregate so the stacked length stays faithful', () => {
+    // Reproduces the production bug: 20 pods at 1m each on a big node. The old per-pod minimum drew
+    // each as a 4px floor (20·4 = 80px of segments) though they sum to ~2px, inflating an ~idle node
+    // to look heavily used. They must fold into ONE block sized by their true summed usage.
+    const tiny: KNode[] = [{ id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } }]
+    const u: Record<string, { cpuMilli: number }> = { big: { cpuMilli: 500 } }
+    for (let i = 0; i < 20; i++) {
+      tiny.push({ id: `t${i}`, kind: 'Pod', name: `t${i}`, health: 'Healthy', host: 'h' })
+      u[`t${i}`] = { cpuMilli: 1 }
+    }
+    tiny.push({ id: 'big', kind: 'Pod', name: 'big', health: 'Healthy', host: 'h' })
+    const row = layoutGraphByCapacity(tiny, u, 'cpu', '').rows[0]
+    const scale = row.trackW / row.cap! // a full-capacity node maps cap → CAP_TRACK_MAX
+    // Only the big pod draws individually; the 20 tinies fold into one aggregate carrying their totals.
+    expect(row.useSegs.map((s) => s.node.id)).toEqual(['big'])
+    expect(row.smallUseSeg!.count).toBe(20)
+    expect(row.smallUseSeg!.use).toBe(20)
+    expect(row.ownCount).toBe(21)
+    // Faithful: the drawn bar ends at ≈ true Σusage·scale (within one aggregate floor), NOT inflated
+    // toward the 80px the per-pod-floor would have produced from the tiny tail alone.
+    const barStart = row.useSegs[0].x
+    const barEnd = row.smallUseSeg!.x + row.smallUseSeg!.width
+    expect(barEnd - barStart).toBeLessThanOrEqual(row.useTotal * scale + 6)
+    expect(barEnd - barStart).toBeLessThan(60)
+  })
+
+  it('never folds an unhealthy tiny pod — a problem pod stays individually visible', () => {
+    const nodes: KNode[] = [{ id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } }]
+    const u: Record<string, { cpuMilli: number }> = { bad: { cpuMilli: 1 } }
+    for (let i = 0; i < 5; i++) {
+      nodes.push({ id: `t${i}`, kind: 'Pod', name: `t${i}`, health: 'Healthy', host: 'h' })
+      u[`t${i}`] = { cpuMilli: 1 }
+    }
+    nodes.push({ id: 'bad', kind: 'Pod', name: 'bad', health: 'Degraded', host: 'h' })
+    const row = layoutGraphByCapacity(nodes, u, 'cpu', '').rows[0]
+    expect(row.useSegs.map((s) => s.node.id)).toContain('bad') // unhealthy never folds
+    expect(row.smallUseSeg!.count).toBe(5) // only the 5 healthy tinies fold
+  })
+
+  it('does not fold a lone tiny pod (nothing to aggregate) — it is floored and stays an individual segment', () => {
+    const nodes: KNode[] = [
+      { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 8000 } },
+      { id: 'big', kind: 'Pod', name: 'big', health: 'Healthy', host: 'h' },
+      { id: 'tiny', kind: 'Pod', name: 'tiny', health: 'Healthy', host: 'h' },
+    ]
+    const row = layoutGraphByCapacity(nodes, { big: { cpuMilli: 500 }, tiny: { cpuMilli: 1 } }, 'cpu', '').rows[0]
+    expect(row.smallUseSeg).toBeUndefined()
+    expect(row.useSegs.map((s) => s.node.id).sort()).toEqual(['big', 'tiny'])
+    expect(row.useSegs.every((s) => s.width > 0)).toBe(true)
+  })
+
   it('flags overcommit when Σrequest exceeds capacity', () => {
     const over: KNode[] = [
       { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 1000 } },
