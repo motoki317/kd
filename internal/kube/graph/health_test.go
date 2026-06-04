@@ -98,6 +98,26 @@ func TestPodHealthFailingInitContainer(t *testing.T) {
 	}
 }
 
+// isFailureReason is a curated allowlist of terminal container-waiting reasons. The contract that
+// matters: TRANSIENT reasons (a pod still pulling/creating/initializing) must NOT be treated as a
+// failure, or every starting pod would flash Degraded. Pin both the recognized failures and the
+// transient reasons that must stay healthy.
+func TestIsFailureReason(t *testing.T) {
+	for _, r := range []string{
+		"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
+		"CreateContainerError", "CreateContainerConfigError", "RunContainerError",
+	} {
+		if !isFailureReason(r) {
+			t.Errorf("isFailureReason(%q) = false, want true (a real failure)", r)
+		}
+	}
+	for _, r := range []string{"ContainerCreating", "PodInitializing", "", "Completed"} {
+		if isFailureReason(r) {
+			t.Errorf("isFailureReason(%q) = true, want false (transient/normal, not a failure)", r)
+		}
+	}
+}
+
 func TestNodeHealthAndStatus(t *testing.T) {
 	node := func(ready corev1.ConditionStatus, unschedulable bool, extra ...corev1.NodeCondition) *corev1.Node {
 		conds := append([]corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}, extra...)
