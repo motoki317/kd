@@ -169,6 +169,23 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    path, not the rendered transform, where possible; (c) for true end-to-end, use a HEADED browser. Never
    conclude a fit/zoom/pan is broken from an agent-browser transform diff. The tell: `ENTER`-level logs in
    a handler fire but anything inside its `requestAnimationFrame(...)` is silent.
+6. **A just-mounted element with an entry `@keyframes` animation is FROZEN at its `from` frame — so its
+   measured geometry/opacity/visibility is the STARTING offset, not the resting state.** Same frozen
+   compositor as #1 and #5 (time-based animation never advances headless), but a distinct, high-damage
+   symptom: it manufactures fake "off-screen / clipped / overflowing" bugs. The drawer animates in via
+   `@keyframes drawer-in { from { transform: translateX(32px); opacity: 0 } to { translateX(0); opacity: 1 } }`
+   over 0.28s with NO `animation-fill-mode`. Headless freezes it at `from`, so a freshly-opened drawer
+   measures `transform: translateX(32px)` → its right edge sits 32px PAST the viewport and its close
+   button reads as partially clipped (cost a convincing false "drawer overflows / × is unreachable at
+   1280px" in cycle 81). In a real browser the animation completes in 0.28s and the element reverts to its
+   base style (`transform: none`, flush, fully visible) — there is no overflow. **Mitigation: before
+   measuring the geometry/opacity of any element that has an entry animation, force its resting state** —
+   `el.style.animation = 'none'` then re-read `getBoundingClientRect()` (proven: drawer snapped to
+   `right == innerWidth`, close button fully visible), OR load the page with reduced motion
+   (`localStorage`/emulate) so entry animations are suppressed. NEVER conclude "this element overflows /
+   is clipped / is off-screen / is invisible" from a measurement taken right after it mounted with an
+   animation. The tell: a `matrix(1,0,0,1,N,0)` / non-`none` `transform` on a freshly-mounted element whose
+   CSS has an `@keyframes … from { transform: … }`.
 
 ## Accessibility patterns established (match these on any new control)
 
