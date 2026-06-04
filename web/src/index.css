@@ -825,11 +825,12 @@ button.conn.conn-retry:focus-visible {
 .cap-track.req {
   fill: color-mix(in srgb, var(--text-dim) 7%, var(--surface));
 }
-/* The node's total usage across all namespaces — a faint fill so a namespace's own pods (bright
-   segments on top) read against the node's real utilization rather than the full empty capacity. */
+/* The node's total usage across all namespaces. It's REAL usage (non-pod/system overhead), so it reads
+   as a solid mid-gray — visibly "used", not an empty hint — while staying neutral so a namespace's own
+   pods (bright accent segments on top) still win the eye. */
 .cap-track-nodeuse {
-  fill: color-mix(in srgb, var(--text-dim) 22%, var(--surface));
-  cursor: help;
+  fill: color-mix(in srgb, var(--text-dim) 55%, var(--surface));
+  cursor: pointer;
 }
 /* Usage segments — each pod sized by actual usage. Health hue tints non-healthy pods; bursting
    (usage over request) and near-limit get explicit accents so the risk states read at a glance. */
@@ -874,11 +875,11 @@ button.conn.conn-retry:focus-visible {
    the node's full pod set) stand out as the bright block. Placed after the health rules so its
    equal-specificity fill wins. Still clickable/hoverable — explicitly identified, not hidden. */
 .cap-seg.use.other {
-  fill: color-mix(in srgb, var(--text-dim) 42%, var(--surface));
+  fill: color-mix(in srgb, var(--text-dim) 70%, var(--surface));
   stroke: var(--surface);
 }
 .cap-seg.req.other {
-  fill: color-mix(in srgb, var(--text-dim) 30%, var(--surface));
+  fill: color-mix(in srgb, var(--text-dim) 52%, var(--surface));
 }
 /* Overshoot laps (expanded pod gauges only): usage past the pod's ceiling wraps the bar and each
    successive lap is a hotter colour — amber (>100%), orange (>200%), red (>300%). Two-class selectors
@@ -944,7 +945,7 @@ button.conn.conn-retry:focus-visible {
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  min-width: 180px;
+  min-width: 90px;
   max-width: 360px;
   padding: 10px 13px;
   border-radius: 9px;
@@ -964,42 +965,12 @@ button.conn.conn-retry:focus-visible {
   color: var(--text-dim);
   font-size: 12px;
 }
-.cap-tooltip-rows {
-  margin-top: 8px;
-  display: grid;
-  gap: 3px;
-}
-.cap-tooltip-rows > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-}
-.cap-tooltip-rows span {
-  color: var(--text-dim);
-}
-.cap-tooltip-rows b {
+/* The single hovered amount — the headline of the minimal tooltip (the bars carry the totals). */
+.cap-tooltip-value {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.cap-tooltip-flags {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.cap-flag {
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.cap-flag.over {
-  background: color-mix(in srgb, var(--health-suspended) 22%, transparent);
-  color: var(--health-suspended);
-}
-.cap-flag.near {
-  background: color-mix(in srgb, var(--health-degraded) 18%, transparent);
-  color: var(--health-degraded);
 }
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {

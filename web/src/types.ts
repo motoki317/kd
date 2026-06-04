@@ -74,10 +74,13 @@ export interface KNode {
   images?: string[]
   host?: string
   capacity?: string
-  // allocatable is a Node's schedulable capacity (Node kind only) — drives node track length in the
-  // capacity view. requests/limits are a Pod's summed container requests/limits (Pod kind); a field
-  // is absent when no container sets it, so the view can mark unconstrained pods.
+  // allocatable is a Node's schedulable capacity (capacity minus system-reserved) — drives the Req
+  // bar's track + overcommit check. capacityRes is the node's TOTAL physical capacity (≥ allocatable)
+  // — the Use bar gauges actual usage against it, since usage can spill into the reserved region
+  // (kubelet, runtime). requests/limits are a Pod's summed container requests/limits (Pod kind); a
+  // field is absent when no container sets it, so the view can mark unconstrained pods.
   allocatable?: Resources
+  capacityRes?: Resources
   requests?: Resources
   limits?: Resources
   clusterIP?: string

@@ -501,7 +501,8 @@ export interface CapRow {
   host: string
   label: string
   node?: KNode // the Node resource; undefined for the synthetic "Unscheduled" bucket
-  cap?: number // allocatable for the active resource; undefined when unknown (orphan bucket)
+  cap?: number // allocatable for the active resource (Req bar ceiling); undefined when unknown (orphan bucket)
+  useCap?: number // total physical capacity (Use bar ceiling); falls back to allocatable when not reported
   reqTotal: number // Σrequest of ALL pods on the node (own + other namespaces)
   useTotal: number // Σusage of ALL pods on the node
   ownUseTotal: number // Σusage of just the selected namespace's pods (the bright block)
@@ -516,7 +517,8 @@ export interface CapRow {
   width: number
   height: number
   trackY: number // y of the usage bar top
-  trackW: number // full track length in px (capacity · scale)
+  trackW: number // Req bar track length in px (allocatable · scale)
+  useTrackW: number // Use bar track length in px (total capacity · scale); ≥ trackW
   reqBarY: number // y of the requested bar
   useSegs: CapSeg[] // the selected namespace's individually-drawn pods, sized by usage, composing the usage bar
   reqSegs: CapSeg[] // the selected namespace's individually-drawn pods with a request, sized by request
@@ -609,14 +611,16 @@ export function layoutGraphByCapacity(
   const hostNames = [...nodeByName.keys()].sort((a, b) => a.localeCompare(b))
   if (podsByHost.has(ORPHAN)) hostNames.push(ORPHAN)
 
-  // Global scale: the largest node capacity maps to CAP_TRACK_MAX, so every other node's track is
-  // proportional (a 2× node reads 2× as long). When no capacities are known (a pure orphan bucket),
-  // fall back to the largest demand so the bars still fill the canvas.
+  // Global scale: the largest node's TOTAL capacity maps to CAP_TRACK_MAX, so every other node's track
+  // is proportional (a 2× node reads 2× as long). The Use bar gauges against total capacity (the
+  // longest track), so the scale keys on capacity, not allocatable. When no capacities are known (a pure
+  // orphan bucket), fall back to the largest demand so the bars still fill the canvas.
   let maxCap = 0
   let maxDemand = 0
   for (const host of hostNames) {
-    const cap = resourceOf(nodeByName.get(host)?.allocatable, resource)
-    if (cap) maxCap = Math.max(maxCap, cap)
+    const node = nodeByName.get(host)
+    const total = resourceOf(node?.capacityRes, resource) ?? resourceOf(node?.allocatable, resource)
+    if (total) maxCap = Math.max(maxCap, total)
     let use = 0
     let req = 0
     for (const p of podsByHost.get(host) ?? []) {
@@ -634,7 +638,8 @@ export function layoutGraphByCapacity(
 
   for (const host of hostNames) {
     const nodeCard = nodeByName.get(host)
-    const cap = resourceOf(nodeCard?.allocatable, resource)
+    const cap = resourceOf(nodeCard?.allocatable, resource) // schedulable — the Req bar's ceiling + overcommit ref
+    const useCap = resourceOf(nodeCard?.capacityRes, resource) ?? cap // total physical — the Use bar's ceiling
     const all = podsByHost.get(host) ?? []
     // Only the SELECTED namespace's pods become individual segments; everything else folds into one
     // "other namespaces" block, so this namespace's pods are easy to locate at the left of the bar.
@@ -665,7 +670,11 @@ export function layoutGraphByCapacity(
     const ownReqTotal = segData.reduce((s, d) => s + (d.req ?? 0), 0)
     const useTotal = ownUseTotal + otherUse
     const reqTotal = ownReqTotal + otherReq
+    // Two ceilings ⇒ two track lengths on ONE shared scale (so a pod's use/req segments stay comparable):
+    // the Req bar fills to allocatable, the Use bar to total capacity (a touch longer, by the reserved
+    // overhead). Both fall back to demand when the node's size is unknown (orphan bucket).
     const trackW = Math.max(CAP_TRACK_MIN, (cap ?? Math.max(useTotal, reqTotal)) * scale)
+    const useTrackW = Math.max(CAP_TRACK_MIN, (useCap ?? Math.max(useTotal, reqTotal)) * scale)
     const label = host === ORPHAN ? 'Unscheduled' : host
     const overcommit = cap !== undefined && reqTotal > cap
 
@@ -767,11 +776,11 @@ export function layoutGraphByCapacity(
     // so reserve room for it. The card must ALSO contain the header text (node name + pod count) and,
     // when expanded, every pod name — so fold their estimated right extents into the row width, else
     // long text spills past the border (the bug being fixed).
-    const valEnd = Math.max(trackW, useTotal * scale, reqTotal * scale)
+    const valEnd = Math.max(trackW, useTrackW, useTotal * scale, reqTotal * scale)
     const headerChars = label.length + 10 + (otherPods.length ? 15 : 0) + (overcommit ? 13 : 0)
     const headerRight = CAP_ROW_LEFT - CAP_HEADER_INSET + headerChars * CAP_HEADER_CHAR_W
     const rowRight = Math.max(
-      CAP_ROW_LEFT + trackW,
+      CAP_ROW_LEFT + Math.max(trackW, useTrackW),
       barEnd,
       CAP_ROW_LEFT + valEnd + CAP_BAR_VALUE_W,
       headerRight,
@@ -783,6 +792,7 @@ export function layoutGraphByCapacity(
       label,
       node: nodeCard,
       cap,
+      useCap,
       reqTotal,
       useTotal,
       ownUseTotal,
@@ -798,6 +808,7 @@ export function layoutGraphByCapacity(
       height: bottom - headerY,
       trackY: useBarY,
       trackW,
+      useTrackW,
       reqBarY,
       useSegs,
       reqSegs,

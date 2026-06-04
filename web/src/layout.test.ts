@@ -750,6 +750,27 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(big.trackW).toBeCloseTo(small.trackW * 2, 0) // 2× capacity ⇒ 2× track length
   })
 
+  it('gauges the Use bar against TOTAL capacity, the Req bar against allocatable', () => {
+    // Node reports allocatable 4 vCPU but a total capacity of 5 vCPU (1 vCPU system-reserved).
+    const nodes: KNode[] = [
+      { id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 4000 }, capacityRes: { cpuMilli: 5000 } },
+      { id: 'p', kind: 'Pod', name: 'p', health: 'Healthy', host: 'h', requests: { cpuMilli: 1000 } },
+    ]
+    const l = layoutGraphByCapacity(nodes, { n: { cpuMilli: 4500 } }, 'cpu', '')
+    const row = l.rows.find((r) => r.host === 'h')!
+    expect(row.cap).toBe(4000) // Req bar ceiling = allocatable
+    expect(row.useCap).toBe(5000) // Use bar ceiling = total capacity
+    // Same scale, so the Use track is longer than the Req track by the 5000/4000 ratio.
+    expect(row.useTrackW).toBeCloseTo(row.trackW * 1.25, 0)
+  })
+
+  it('falls back to allocatable for the Use ceiling when capacity is unreported', () => {
+    const nodes: KNode[] = [{ id: 'n', kind: 'Node', name: 'h', health: 'Healthy', allocatable: { cpuMilli: 4000 } }]
+    const row = layoutGraphByCapacity(nodes, {}, 'cpu', '').rows.find((r) => r.host === 'h')!
+    expect(row.useCap).toBe(4000)
+    expect(row.useTrackW).toBeCloseTo(row.trackW, 0)
+  })
+
   it('totals requests/usage and flags usage overshooting request', () => {
     const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '')
     const big = l.rows.find((r) => r.host === 'big')!

@@ -406,9 +406,43 @@ describe('Topology', () => {
     ))
     fireEvent.pointerMove(container.querySelector('.cap-track-nodeuse') as Element, { clientX: 50, clientY: 50 })
     const tip = container.querySelector('.cap-tooltip')!
+    // Minimal tooltip: the slice's name + just its amount (the bar's right label already shows totals).
     expect(tip.textContent).toContain('Overhead')
-    expect(tip.textContent).toContain('Node total')
-    expect(tip.textContent).toContain('200m') // overhead = 300m total − 100m pods
+    expect(tip.querySelector('.cap-tooltip-value')?.textContent).toBe('200m') // 300m node total − 100m pods
+  })
+
+  it('Nodes view: hovering a pod segment shows only that part\'s amount (use vs req)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 300 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 120 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    // Use bar → the segment's usage; Req bar → the segment's request. Each tooltip carries one value.
+    fireEvent.pointerMove(container.querySelector('.cap-seg.use') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-value')?.textContent).toBe('120m')
+    fireEvent.pointerMove(container.querySelector('.cap-seg.req') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-value')?.textContent).toBe('300m')
+  })
+
+  it('Nodes view: hovering the overhead backdrop fades every pod segment (spotlight)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { 'node-a': { cpuMilli: 300 }, p1: { cpuMilli: 80 }, p2: { cpuMilli: 80 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    // Nothing hovered → no segment is faded.
+    expect(container.querySelectorAll('.cap-seg.use.faded').length).toBe(0)
+    // Hovering the node-usage backdrop spotlights it and fades every pod segment, like a pod hover does.
+    fireEvent.pointerMove(container.querySelector('.cap-track-nodeuse') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelectorAll('.cap-seg.use:not(.small):not(.other)').length).toBeGreaterThan(0)
+    expect(container.querySelectorAll('.cap-seg.use:not(.small):not(.other):not(.faded)').length).toBe(0)
   })
 
   it('clears all filters via onClearFilters (cycle 216)', () => {
