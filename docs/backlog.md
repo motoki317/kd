@@ -61,17 +61,6 @@ should come from real user feedback or a new feature area — don't grind filler
 
 ## Open
 
-- **An unknown `?ctx=` silently shows another context's data instead of erroring** — *observed
-  (cycle 25), needs a verify pass + decision.* Opening `?ctx=bogus-unreachable-ctx&ns=default` rendered
-  docker-desktop's `default` resources with the stream "live" — the server resolved the unknown context
-  to a fallback rather than surfacing "no such context". Via the ctx switcher this can't happen (it only
-  lists real contexts), so it only bites a hand-edited or stale-bookmarked URL, or a context removed from
-  the kubeconfig — but then the operator believes they're looking at cluster A while seeing cluster B,
-  which is a trust problem. **To do:** confirm what the breadcrumb/switcher shows for the bogus ctx
-  (does it echo the invalid name or the fallback?), trace the server context resolution
-  (`internal/kube/registry` / `kubeconfig`), and decide: reject unknown contexts with a clear error, or
-  at minimum make the UI show that the requested context was not found. **Reopen:** now (small verify
-  first to size it).
 - **Capacity bar `value / capacity` labels mix units, hurting at-a-glance comparison** — *verified
   live (cycle 22, staging-cluster Nodes view), needs a unit-policy decision before implementing.*
   `formatQuantity` (`web/src/layout.ts:834`) picks a unit per value by magnitude, independently for the
@@ -154,6 +143,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 | Candidate | Verdict |
 |---|---|
+| Unknown `?ctx=` "silently shows another cluster's data" (trust problem) | refuted (cycle 26) — App.tsx:96-99 validates ctx against the fetched list and `setCtx(info.default)`; verified live the breadcrumb + URL self-correct to the real fallback context (no "bogus" anywhere), so there is no mislead |
 | Persist substring filter + case-toggle across resource navigation | wrong (misreads Solid reactivity — components remount) |
 | Export / download visible logs as text | low-value |
 | Scroll-position bookmark on context/container switch | wrong |
