@@ -215,3 +215,11 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
   gap but conflicts with the approved expand-on-whole-row; needs a dedicated small target + the user's call.
 - CPU↔Memory toggle doesn't re-fit a selected pod (bars readable in one unit get tiny in the other).
   Minor; re-clicking re-zooms; auto-jumping on every toggle would annoy. Low value.
+- The drawer's **inactive tabpanels lack the `hidden` attribute** — they hide via CSS `display:none`
+  (verified cycle 48: inactive panels have `offsetHeight 0`, computed `display:none`, so they're
+  correctly OUT of the a11y tree; only `aria-selected` flips on the tabs). All three panels stay
+  *mounted* on purpose — the Logs panel keeps its SSE log stream subscribed and the Manifest panel
+  keeps its find-state across tab switches, so switching away and back doesn't re-fetch/re-scroll.
+  Adding the `hidden` attribute (the WAI-ARIA "preferred" form) is redundant with `display:none` for
+  AT and risks the classic `hidden` + `display:block`-override footgun. Don't "fix" the missing
+  attribute — `display:none` already satisfies the contract and the persistence is deliberate.
