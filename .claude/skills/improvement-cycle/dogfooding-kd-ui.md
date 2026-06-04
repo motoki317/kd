@@ -127,6 +127,15 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    `rgb()/rgba()`; for `color()/oklab()` backgrounds, composite the alpha over the parent yourself
    (`0.92·white + 0.08·canvas ≈ #fefefe`) or skip them. Both light and dark themes are AA-compliant —
    don't "fix" a contrast number that came from an `color(srgb …)` bg.
+3. **The DOM lags a synchronous signal by one render tick — count nodes AFTER a tick, not in the same
+   eval.** Solid commits a signal synchronously, but the `<For>`/`<Show>`-driven DOM (e.g. the
+   `.node` count after toggling a collapse pill) re-renders a tick later. Clicking expand then collapse
+   in ONE synchronous `eval` and reading `querySelectorAll('.node').length` measured the cluster as
+   "not re-folding" (37, not back to 33) — a pure timing artifact; with a `sleep` between the second
+   click and the read it correctly showed 33. So: to check a toggle's *effect*, either assert on the
+   signal-driven attribute that commits synchronously (`aria-expanded`), or re-measure DOM counts after
+   `sleep`/a rAF. Don't conclude "the re-fold is broken" from a same-eval count. (Same root cause in
+   jsdom unit tests — assert `aria-expanded`, not the immediate child count.)
 
 ## Accessibility patterns established (match these on any new control)
 
@@ -160,13 +169,23 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
   `title` is a hover tooltip, NOT a reliable name source. Spell it out (`aria-label="Match case"`)
   while keeping the compact visual. Worded-text buttons (previous/timestamps/wrap) already have a real
   name and need none.
-- **A11y sweep COMPLETE** (as of 2026-06-05): tabs (tablist/tab/tabpanel + roving), single-selects
-  (radiogroups: Group, Resource, Manifest format), multi-select chips (aria-pressed in toolbars),
-  clearable Health filter (aria-pressed), sidebar (nav + aria-current), copy live-region, drawer
-  focus-restore-on-close, drawer action buttons (close/expand/share aria-labels), and log controls
-  (group label + errjump + case aria-labels + level chips) are all done and verified live. A fresh
-  control still needs the matching pattern, but there is no known a11y GAP left to sweep — re-running
-  the ARIA audit as a "lens" now yields ≈0. Pick a different lens.
+- **Interactive SVG elements need explicit button semantics** — the "show N more" collapse pill was a
+  bare `<g onClick>` + `<title>` (mouse-only, unnamed: `<title>` on a `<g>` isn't a reliable accessible
+  name). It's the ONLY way to reveal a folded cluster (pills are excluded from search-nav, so unlike a
+  graph node there's no alternative keyboard path), so it needed `role="button"` + `tabindex="0"` +
+  worded `aria-label` + `aria-expanded` + Enter/Space `onKeyDown` + a `:focus-visible` ring (SVG has no
+  default focus outline — style the bg rect's stroke). **Lesson:** "I swept the HTML controls" ≠ a11y
+  complete — SVG-rendered interactive elements (pills, and anything else with an onClick in the canvas)
+  are a SEPARATE class to audit. Graph *nodes* are the deliberate exception (search-cycling is their
+  keyboard path); a discrete *action* with no search equivalent is not.
+- **A11y sweep status** (as of 2026-06-05): HTML controls — tabs (tablist/tab/tabpanel + roving),
+  single-selects (radiogroups: Group, Resource, Manifest format), multi-select chips (aria-pressed),
+  clearable Health filter, sidebar (nav + aria-current), copy live-region, drawer focus-restore +
+  action buttons, log controls — all done + verified live. SVG interactive elements — the collapse
+  pill is now a button; the remaining onClick-bearing SVG (cap-view segments/cards, edge hit targets)
+  are selection/hover affordances whose data is reachable via the drawer/search, so they're lower
+  priority but NOT audited — if you add an SVG element that performs a discrete ACTION, give it button
+  semantics. Re-running the *HTML* ARIA audit yields ≈0; the SVG-action audit is the open edge.
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
