@@ -181,6 +181,19 @@ export default function App() {
   // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
   const [nsFlash, setNsFlash] = createSignal(0)
 
+  // Jump to the most-troubled namespace — shared by the Alt+T shortcut and the sidebar trouble badge
+  // so both land identically (with the flash pulse). No-op when nothing is unhealthy; returns whether
+  // it acted so the keyboard handler only swallows the key when it actually jumped.
+  const jumpToTrouble = (): boolean => {
+    const worst = mostTroubled(namespaceList())
+    if (worst && worst.health !== 'Healthy') {
+      setNamespace(worst.name)
+      setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
+      return true
+    }
+    return false
+  }
+
   // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
   // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
   // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
@@ -279,12 +292,7 @@ export default function App() {
       // cluster is Healthy (nothing to jump to) so the key never yanks you to an arbitrary ns. Same
       // pick as the first-load default selection (cycle 320).
       if (e.altKey && (e.key === 't' || e.key === 'T') && !typing) {
-        const worst = mostTroubled(namespaceList())
-        if (worst && worst.health !== 'Healthy') {
-          e.preventDefault()
-          setNamespace(worst.name)
-          setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
-        }
+        if (jumpToTrouble()) e.preventDefault()
         return
       }
       if (e.key === '?' && !typing) {
@@ -579,6 +587,7 @@ export default function App() {
           filterRef={(el) => (filterEl = el)}
           onRetry={() => refetchNamespaces()}
           flash={nsFlash()}
+          onJumpToTrouble={jumpToTrouble}
         />
         <main class="main">
           <Topology

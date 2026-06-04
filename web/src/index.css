@@ -567,6 +567,21 @@ button.conn.conn-retry:focus-visible {
   font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 20%, transparent);
 }
+/* The trouble badge as an actionable button: reset the native button chrome, keep the .ns-trouble
+   pill look, and add a hover/focus affordance so it reads as "click to jump to the trouble". */
+.ns-trouble-btn {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.ns-trouble-btn:hover {
+  background: color-mix(in srgb, var(--health-degraded) 82%, #000);
+}
+.ns-trouble-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .ns-total {
   /* Quiet "total namespaces" stat: same shape language as .ns-trouble (rounded pill, tabular
      nums) but stripped of color so the eye doesn't read it as an alarm. */

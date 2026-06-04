@@ -17,6 +17,9 @@ interface Props {
   // auto-select). Each change flashes the now-selected row so the eye finds where the jump landed —
   // a plain selection (a click the operator made themselves) doesn't pulse, since they know where it is.
   flash?: number
+  // Jump to the most-troubled namespace (same path as Alt+T). Wired to the trouble badge so the
+  // "N need attention" count is also the one-click way to GET there — not just a passive number.
+  onJumpToTrouble?: () => void
 }
 
 // Sidebar lists the namespaces the caller may see (already RBAC-filtered by the server) in a stable
@@ -108,7 +111,22 @@ export default function Sidebar(props: Props) {
           </span>
         </Show>
         <Show when={troubled() > 0}>
-          <span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>
+          {/* The trouble count is also the jump affordance: clicking it goes to the most-troubled
+              namespace (Alt+T's path), so the operator doesn't have to scan the list or know the
+              shortcut. Falls back to a plain badge when no jump handler is wired. */}
+          <Show
+            when={props.onJumpToTrouble}
+            fallback={<span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>}
+          >
+            <button
+              class="ns-trouble ns-trouble-btn"
+              title={`Jump to the most-troubled namespace — ${troubled()} need attention`}
+              aria-label={`Jump to the most-troubled of ${troubled()} namespaces needing attention`}
+              onClick={() => props.onJumpToTrouble?.()}
+            >
+              {troubled() > 99 ? '99+' : troubled()}
+            </button>
+          </Show>
         </Show>
       </div>
       <div class="sidebar-filter-field">

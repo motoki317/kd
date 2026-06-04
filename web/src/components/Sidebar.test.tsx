@@ -34,6 +34,35 @@ describe('Sidebar', () => {
     expect(counts).toEqual(['1', '3'])
   })
 
+  it('makes the trouble badge a jump button when a handler is wired (a plain span otherwise)', () => {
+    // Without a handler: a passive count.
+    const plain = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    expect(plain.container.querySelector('button.ns-trouble')).toBeNull()
+    expect(plain.container.querySelector('.ns-trouble')?.textContent).toBe('2')
+    cleanup()
+
+    // With a handler: the badge is a button that fires the jump on click.
+    let jumped = 0
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} onJumpToTrouble={() => (jumped += 1)} />
+    ))
+    const btn = container.querySelector('button.ns-trouble') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.getAttribute('aria-label')).toContain('2')
+    fireEvent.click(btn)
+    expect(jumped).toBe(1)
+  })
+
+  it('hides the trouble badge entirely when nothing is troubled (no empty button)', () => {
+    const allHealthy: NamespaceInfo[] = [{ name: 'a', health: 'Healthy' }, { name: 'b', health: 'Healthy' }]
+    const { container } = render(() => (
+      <Sidebar namespaces={allHealthy} selected={null} onSelect={noop} loading={false} failed={false} onJumpToTrouble={noop} />
+    ))
+    expect(container.querySelector('.ns-trouble')).toBeNull()
+  })
+
   it('marks the selected namespace with aria-current and names the nav landmark', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected="mmm" onSelect={noop} loading={false} failed={false} />
