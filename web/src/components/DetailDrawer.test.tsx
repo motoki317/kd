@@ -58,6 +58,41 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Events') // backward
   })
 
+  it('exposes the tabs as a WAI-ARIA tablist with associated panels and roving tabindex', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const list = container.querySelector('.drawer-tabs')!
+    expect(list.getAttribute('role')).toBe('tablist')
+    const tabBtns = [...container.querySelectorAll('.drawer-tabs button')] as HTMLButtonElement[]
+    expect(tabBtns.every((b) => b.getAttribute('role') === 'tab')).toBe(true)
+    // ConfigMap defaults to Manifest. The selected tab is the sole tab stop (tabindex 0); the rest
+    // are -1 so Tab doesn't land on every tab (roving), and aria-selected mirrors the active state.
+    const manifest = tabBtns.find((b) => b.textContent?.trim() === 'Manifest')!
+    const events = tabBtns.find((b) => b.textContent?.trim() === 'Events')!
+    expect(manifest.getAttribute('aria-selected')).toBe('true')
+    expect(events.getAttribute('aria-selected')).toBe('false')
+    expect(manifest.tabIndex).toBe(0)
+    expect(events.tabIndex).toBe(-1)
+    // Each tab points at its panel, and the panel points back — so a screen reader pairs them.
+    const panel = container.querySelector(`#${manifest.getAttribute('aria-controls')}`)!
+    expect(panel.getAttribute('role')).toBe('tabpanel')
+    expect(panel.getAttribute('aria-labelledby')).toBe(manifest.id)
+  })
+
+  it('arrow keys move between tabs within the tablist (APG keyboard model)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const list = container.querySelector('.drawer-tabs')!
+    const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+    expect(active()).toBe('Manifest') // tabs = [Events, Manifest], non-loggable defaults to Manifest
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(active()).toBe('Events') // wraps forward past the end
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    expect(active()).toBe('Manifest') // wraps backward
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    expect(active()).toBe('Events') // first
+    list.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    expect(active()).toBe('Manifest') // last
+  })
+
   it('renders a back button only when canBack is true and routes its click to onBack (cycle 300)', async () => {
     // Without canBack, no back button is rendered.
     const { container, unmount } = render(() => (

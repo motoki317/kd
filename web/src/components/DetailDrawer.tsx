@@ -107,6 +107,27 @@ export default function DetailDrawer(props: Props) {
     window.addEventListener('keydown', onKey)
     onCleanup(() => window.removeEventListener('keydown', onKey))
   })
+
+  // Tab element refs, so the tablist's arrow keys can move DOM focus to follow the roving tabindex.
+  const tabRefs: Partial<Record<Tab, HTMLButtonElement>> = {}
+  // WAI-ARIA tabs keyboard model (scoped to focus inside the tablist, unlike the global [ / ]):
+  // ←/→ move to the previous/next tab (wrapping), Home/End jump to the first/last. Activation
+  // follows focus (the APG "automatic activation" variant) — cheap here since switching just toggles
+  // a hidden class, and it matches the [ / ] shortcut's immediate switch.
+  const onTablistKey = (e: KeyboardEvent) => {
+    const list = tabs()
+    const cur = list.indexOf(tab())
+    if (cur < 0) return
+    let next = cur
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (cur + 1) % list.length
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (cur - 1 + list.length) % list.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = list.length - 1
+    else return
+    e.preventDefault()
+    setTab(list[next])
+    tabRefs[list[next]]?.focus()
+  }
   // On selection change, keep the current tab if the new resource has it — so triaging the same tab
   // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
   // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
@@ -332,12 +353,21 @@ export default function DetailDrawer(props: Props) {
             </div>
           </header>
 
-          <nav class="drawer-tabs">
+          {/* Proper WAI-ARIA tabs (not aria-pressed toggle buttons): a screen reader announces
+              "tab, selected, 2 of 3" and associates each panel with its tab, and roving tabindex +
+              arrow keys give the expected in-widget keyboard model. (The global [ / ] shortcut still
+              cycles tabs from anywhere in the drawer; the arrows work once focus is on the tablist.) */}
+          <nav class="drawer-tabs" role="tablist" aria-label="Resource details" onKeyDown={onTablistKey}>
             <For each={tabs()}>
               {(t) => (
                 <button
+                  ref={(el) => (tabRefs[t] = el)}
+                  role="tab"
+                  id={`drawer-tab-${t}`}
+                  aria-controls={`drawer-tabpanel-${t}`}
+                  aria-selected={tab() === t}
+                  tabindex={tab() === t ? 0 : -1}
                   classList={{ active: tab() === t }}
-                  aria-pressed={tab() === t}
                   onClick={() => setTab(t)}
                 >
                   {TAB_LABELS[t]}
@@ -354,7 +384,13 @@ export default function DetailDrawer(props: Props) {
           <Show when={loggable()}>
             {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
                 visit to another tab. */}
-            <div class="logs-panel" classList={{ hidden: tab() !== 'logs' }}>
+            <div
+              class="logs-panel"
+              classList={{ hidden: tab() !== 'logs' }}
+              role="tabpanel"
+              id="drawer-tabpanel-logs"
+              aria-labelledby="drawer-tab-logs"
+            >
               <LogViewer
                 ctx={props.ctx}
                 namespace={node().namespace ?? ''}
@@ -369,7 +405,14 @@ export default function DetailDrawer(props: Props) {
             </div>
           </Show>
 
-          <div class="events-panel" classList={{ hidden: tab() !== 'events' }} ref={eventsPanelEl}>
+          <div
+            class="events-panel"
+            classList={{ hidden: tab() !== 'events' }}
+            ref={eventsPanelEl}
+            role="tabpanel"
+            id="drawer-tabpanel-events"
+            aria-labelledby="drawer-tab-events"
+          >
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               {/* events() throws if the resource errored, so gate on events.error first — both to show
                   a real error (not a misleading "no events") and to avoid reading the errored signal. */}
@@ -444,7 +487,14 @@ export default function DetailDrawer(props: Props) {
             </Suspense>
           </div>
 
-          <section class="manifest-section" classList={{ hidden: tab() !== 'manifest' }} ref={manifestSectionEl}>
+          <section
+            class="manifest-section"
+            classList={{ hidden: tab() !== 'manifest' }}
+            ref={manifestSectionEl}
+            role="tabpanel"
+            id="drawer-tabpanel-manifest"
+            aria-labelledby="drawer-tab-manifest"
+          >
             <div class="manifest-head">
               <span class="manifest-format">
                 <button classList={{ active: format() === 'yaml' }} onClick={() => setFormat('yaml')}>
