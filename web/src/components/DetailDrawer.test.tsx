@@ -492,6 +492,54 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/1\/2/)
   })
 
+  it('restores focus to the resource search when the drawer closes with focus inside it', async () => {
+    // The focus-restore reaches for the topology search input (the keyboard home base); provide one.
+    const searchWrap = document.createElement('div')
+    searchWrap.className = 'topology-search'
+    const searchInput = document.createElement('input')
+    searchWrap.appendChild(searchInput)
+    document.body.appendChild(searchWrap)
+    try {
+      const [node, setNode] = createSignal<KNode | null>(configMap)
+      const { container } = render(() => (
+        <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      ))
+      // Keyboard focus is inside the drawer (the close button).
+      const closeBtn = container.querySelector('.drawer-close') as HTMLButtonElement
+      closeBtn.focus()
+      expect(container.querySelector('.drawer')!.contains(document.activeElement)).toBe(true)
+      // Closing (node → null) must move focus to the search, not let it fall to <body>.
+      setNode(null)
+      await Promise.resolve()
+      expect(document.activeElement).toBe(searchInput)
+    } finally {
+      searchWrap.remove()
+    }
+  })
+
+  it('does NOT steal focus to the search when the drawer closes with focus outside it', async () => {
+    const searchWrap = document.createElement('div')
+    searchWrap.className = 'topology-search'
+    const searchInput = document.createElement('input')
+    searchWrap.appendChild(searchInput)
+    document.body.appendChild(searchWrap)
+    // A separate element to hold focus (simulating a mouse user who clicked the canvas to deselect).
+    const elsewhere = document.createElement('button')
+    document.body.appendChild(elsewhere)
+    try {
+      const [node, setNode] = createSignal<KNode | null>(configMap)
+      render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+      elsewhere.focus()
+      setNode(null)
+      await Promise.resolve()
+      // Focus was outside the drawer, so it must stay put — not be yanked into the search.
+      expect(document.activeElement).toBe(elsewhere)
+    } finally {
+      searchWrap.remove()
+      elsewhere.remove()
+    }
+  })
+
   it('exposes the manifest YAML/JSON toggle as a radiogroup with roving tabindex', () => {
     // ConfigMap defaults to the Manifest tab, so the format toggle is rendered.
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)

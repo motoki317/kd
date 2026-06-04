@@ -66,6 +66,16 @@ export default function DetailDrawer(props: Props) {
           setDisplayNode(n)
           setExiting(false)
         } else if (displayNode()) {
+          // Focus restoration on close: if keyboard focus is inside the drawer when it closes (the
+          // operator pressed the close button, or Escape while a drawer control was focused), the
+          // panel will unmount and focus would fall to <body> — stranding a keyboard user at the
+          // document top (WCAG 2.4.3). Move focus back to the resource search, the keyboard home
+          // base. Gated on focus actually being inside the drawer, so a mouse user who clicked the
+          // canvas to deselect doesn't get focus yanked into the search. Degrades to a no-op if the
+          // search isn't present (cluster-scope/empty states), which is no worse than today.
+          if (asideEl && asideEl.contains(document.activeElement)) {
+            ;(document.querySelector('.topology-search input') as HTMLElement | null)?.focus()
+          }
           setExiting(true)
           exitTimer = setTimeout(() => {
             setDisplayNode(null)
