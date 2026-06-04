@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLLAPSE_VISIBLE, connGroups, formatQuantity, hostGroups, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByHost, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -543,70 +543,6 @@ describe('layoutGraphByKind', () => {
   })
 })
 
-describe('layoutGraphByHost (Nodes view, cycle 205)', () => {
-  const hostNodes: KNode[] = [
-    { id: 'n1', kind: 'Node', name: 'node-a', health: 'Healthy' },
-    { id: 'n2', kind: 'Node', name: 'node-b', health: 'Healthy' },
-    { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'node-a' },
-    { id: 'p2', kind: 'Pod', name: 'p2', health: 'Degraded', host: 'node-a' },
-    { id: 'p3', kind: 'Pod', name: 'p3', health: 'Healthy', host: 'node-b' },
-    { id: 'p4', kind: 'Pod', name: 'unscheduled', health: 'Progressing', host: '' },
-  ]
-  const hostEdges: KEdge[] = [
-    { from: 'p1', to: 'n1', type: 'scheduledOn' },
-    { from: 'p2', to: 'n1', type: 'scheduledOn' },
-    { from: 'p3', to: 'n2', type: 'scheduledOn' },
-  ]
-
-  it('groups pods under their host (Node card + pods sit in one container)', () => {
-    const l = layoutGraphByHost(hostNodes, hostEdges)
-    expect(l.nodes).toHaveLength(6)
-    // No scheduledOn lines — containment implies the relationship in this view.
-    expect(l.edges).toEqual([])
-    const groups = hostGroups(l)
-    const labels = groups.map((g) => g.label).sort()
-    // Two hosts + an orphan group ("Unscheduled") for the pod with no matching Node card.
-    expect(labels).toEqual(['Unscheduled', 'node-a', 'node-b'])
-  })
-
-  it('places the Node card and its pods inside the same host-group rect', () => {
-    const l = layoutGraphByHost(hostNodes, hostEdges)
-    const groups = hostGroups(l)
-    const a = groups.find((g) => g.label === 'node-a')!
-    const insideA = l.nodes.filter((n) => (n.kind === 'Node' && n.name === 'node-a') || n.host === 'node-a')
-    for (const n of insideA) {
-      expect(n.x - n.width / 2).toBeGreaterThanOrEqual(a.x - 0.001)
-      expect(n.x + n.width / 2).toBeLessThanOrEqual(a.x + a.width + 0.001)
-      expect(n.y - n.height / 2).toBeGreaterThanOrEqual(a.y - 0.001)
-      expect(n.y + n.height / 2).toBeLessThanOrEqual(a.y + a.height + 0.001)
-    }
-  })
-
-  it('handles an empty graph', () => {
-    expect(layoutGraphByHost([], [])).toEqual({ nodes: [], edges: [], width: 0, height: 0 })
-  })
-
-  it('arranges many hosts into a multi-column grid, not one tall column', () => {
-    // Mirrors a real multi-node cluster: several hosts each running a few pods. A single-column
-    // stack wastes the screen's width (the reported bug); the grid must place at least one pair of
-    // host boxes side by side (overlapping y-range at different x).
-    const nodes: KNode[] = []
-    for (let h = 0; h < 7; h++) {
-      const host = `node-${h}`
-      nodes.push({ id: `node-${h}`, kind: 'Node', name: host, health: 'Healthy' })
-      for (let p = 0; p < 3; p++) nodes.push({ id: `p-${h}-${p}`, kind: 'Pod', name: `pod-${h}-${p}`, health: 'Healthy', host })
-    }
-    const l = layoutGraphByHost(nodes, [])
-    const groups = hostGroups(l)
-    expect(groups).toHaveLength(7)
-    const sharesRow = groups.some((a) =>
-      groups.some((b) => a.host !== b.host && a.y < b.y + b.height && b.y < a.y + a.height && a.x !== b.x),
-    )
-    expect(sharesRow).toBe(true)
-    expect(l.width).toBeGreaterThan(NODE_WIDTH * 2)
-  })
-})
-
 describe('same-kind collapse (+N more)', () => {
   // n pods named pod-00 … pod-(n-1); the fold keeps the head + last two of this natural name order.
   const pods = (n: number): KNode[] =>
@@ -793,18 +729,6 @@ describe('same-kind collapse (+N more)', () => {
     expect(pills.map((p) => p.collapse!.hidden.length).sort((a, b) => a - b)).toEqual([9, 12]) // 12→9, 15→12
   })
 
-  it('collapses a host’s pods but never the Node card', () => {
-    const nodeCard: KNode = { id: 'node', kind: 'Node', name: 'node-a', health: 'Healthy' }
-    const hostPods = pods(12).map((p) => ({ ...p, host: 'node-a' }))
-    const l = layoutGraphByHost([nodeCard, ...hostPods], [])
-    expect(l.nodes.find((n) => n.id === 'node')).toBeTruthy() // Node card always shown
-    const pill = l.nodes.find((n) => n.collapse)!
-    expect(pill.collapse!.hidden).toHaveLength(9)
-    expect(pill.collapse!.groupKind).toBe('Pod')
-    // The pill rides in the host container (attributed via its host field).
-    const hg = hostGroups(l).find((g) => g.host === 'node-a')!
-    expect(pill.x + pill.width / 2).toBeLessThanOrEqual(hg.x + hg.width + 0.001)
-  })
 })
 
 describe('layoutGraphByCapacity (Nodes capacity view)', () => {

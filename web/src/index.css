@@ -750,33 +750,6 @@ button.conn.conn-retry:focus-visible {
 
 /* Host group (Nodes view, cycle 205). Mirrors .kind-group but distinct enough that the two
    grouped views don't visually conflate — a slightly warmer fill, no surface-2 shadow. */
-.host-groups text.host-group-label {
-  font-size: 12px;
-  font-weight: 600;
-  fill: var(--text-dim);
-  letter-spacing: 0.4px;
-  /* Host names aren't kind labels; lowercase them with normal casing so the layout label reads
-     as a hostname (which is mixed case) rather than a kind shout. */
-  text-transform: none;
-  pointer-events: none;
-}
-.host-group-bg {
-  fill: var(--surface);
-  stroke: var(--border);
-  stroke-width: 1;
-  pointer-events: none;
-}
-.host-group-icon {
-  color: var(--text-dim);
-  pointer-events: none;
-}
-.host-groups .host-group-count {
-  font-weight: 400;
-  font-size: 11px;
-  fill: var(--text-dim);
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-}
 .kind-groups .kind-group-count {
   font-weight: 400;
   font-size: 11px;

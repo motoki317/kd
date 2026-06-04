@@ -340,74 +340,6 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: Read
   return { ...packed, edges: positionedEdges }
 }
 
-// layoutGraphByHost is the Nodes-view layout: pods are grouped under the Node they run on (their
-// `host`), and each host becomes a labeled container with the Node card pinned at the top-left
-// and its pods grid-wrapped beneath. scheduledOn edges aren't drawn — containment carries the
-// "this pod runs here" relationship more clearly than a fan of identical edges to the Node card
-// at the top would. Pods whose host doesn't appear among the Node cards (cluster-scope read may
-// have surfaced pods without their Node) bucket into a synthetic "Unscheduled / Unknown" group.
-export function layoutGraphByHost(nodes: KNode[], _edges: KEdge[], expanded: ReadonlySet<string> = new Set()): Layout {
-  if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
-
-  // Index Node cards by name so a pod's host string resolves directly to its Node card.
-  const nodeByName = new Map<string, KNode>()
-  for (const n of nodes) if (n.kind === 'Node') nodeByName.set(n.name, n)
-
-  // Bucket pods by host. Pods with no host (Pending) or with a host that didn't surface as a
-  // Node card bucket into the orphan group below — at least the pod still renders somewhere.
-  const podsByHost = new Map<string, KNode[]>()
-  const ORPHAN = '__orphan__'
-  for (const n of nodes) {
-    if (n.kind !== 'Pod') continue
-    const key = n.host && nodeByName.has(n.host) ? n.host : ORPHAN
-    if (!podsByHost.has(key)) podsByHost.set(key, [])
-    podsByHost.get(key)!.push(n)
-  }
-  // Cards inside each host group sort by health-severity (troubled first) then natural name, so an
-  // operator scanning a node sees its problem pods at the top of the host's grid. The fold below keeps
-  // the head+tail of THIS order (not raw name order), so troubled pods stay on top even when collapsed.
-  const sev = (n: KNode) => (n.health === 'Healthy' ? 0 : 1)
-  const bySeverityThenName = (a: KNode, b: KNode) => sev(b) - sev(a) || byName(a, b)
-
-  // Build one component per Node card present in the graph (alphabetical by host name for
-  // stable layout); append the orphan group last if any pods landed there.
-  const hostNames = [...nodeByName.keys()].sort((a, b) => a.localeCompare(b))
-  if (podsByHost.has(ORPHAN)) hostNames.push(ORPHAN)
-
-  const components: Component[] = []
-  for (const host of hostNames) {
-    const pods = podsByHost.get(host) ?? []
-    // The Node card itself takes the top-left slot of the container. Even when a Node has zero
-    // pods (drained, freshly added), the host group still shows so the operator sees "this Node
-    // is here". The orphan group has no Node card; it uses the header for "Unscheduled".
-    const nodeCard = nodeByName.get(host) ?? null
-    // Fold a crowded host's middle pods behind a "+N more" pill — never the Node card, which is the
-    // host anchor, not a same-kind cluster member. The pill carries `host` so hostGroups attributes it.
-    const key = `host:${host}`
-    const isExpanded = expanded.has(key)
-    const { visible, hidden, pillIndex } = splitForFold(pods, isExpanded, bySeverityThenName)
-    const podCells: Array<KNode & { _collapse?: CollapseMeta }> = [...visible]
-    if (hidden.length) podCells.splice(pillIndex, 0, pillCell({ key, groupKind: 'Pod', hidden, expanded: isExpanded }, host))
-    const cells: Array<KNode & { _collapse?: CollapseMeta }> = nodeCard ? [nodeCard, ...podCells] : podCells
-    if (cells.length === 0) continue
-    const grid = gridDims(cells.length)
-    const positioned = placeGridCells(cells, grid)
-    components.push({
-      nodes: positioned,
-      edges: [], // containment carries the relationship; no edges drawn inside a host group
-      width: grid.w,
-      height: KIND_HEADER_HEIGHT + grid.h,
-    })
-  }
-  // Slightly wider gap between host containers than between connectivity components — the host
-  // group bg rects need breathing room. Same constant as layoutGraphByKind for visual rhythm.
-  // Grid-pack so host boxes flow across the width instead of stacking into one tall column.
-  const HOST_BOX_GAP = 64
-  const packed = packComponentsGrid(components, HOST_BOX_GAP)
-  // No edges drawn in this view; scheduledOn is implied by containment.
-  return { ...packed, edges: [] }
-}
-
 // ---- Capacity & usage view (the Nodes group-by) ----
 //
 // A length-encoded "bullet bar" visualization (see docs/ADR/20260603-nodes-capacity-usage-
@@ -687,47 +619,6 @@ export function formatQuantity(v: number | undefined, res: CapResource): string 
     i++
   }
   return `${+n.toFixed(i > 0 ? 1 : 0)}${units[i]}` // "8Gi" not "8.0Gi", "8.5Gi" kept
-}
-
-// hostGroups returns the host-container bounding rects in layout coordinates, so the Topology
-// renderer can draw a host-group background rect + a "host: <name>" header without recomputing
-// the grouping. The header label is the host name (or "Unscheduled" for the orphan bucket).
-export function hostGroups(layout: Layout): { host: string; label: string; x: number; y: number; width: number; height: number }[] {
-  // Discover host membership: a Pod is "in" its host group; a Node card is "in" its own group.
-  // Pods whose host has no matching Node card fall into the orphan bucket — we label that group
-  // "Unscheduled" so it reads as a deliberate bucket, not a layout glitch.
-  const nodeNames = new Set(layout.nodes.filter((n) => n.kind === 'Node').map((n) => n.name))
-  const hostOf = (n: PositionedNode): string => {
-    if (n.kind === 'Node') return n.name
-    if (n.host && nodeNames.has(n.host)) return n.host
-    return '__orphan__'
-  }
-  const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>()
-  for (const n of layout.nodes) {
-    const h = hostOf(n)
-    const left = n.x - n.width / 2
-    const right = n.x + n.width / 2
-    const top = n.y - n.height / 2
-    const bottom = n.y + n.height / 2
-    const cur = groups.get(h)
-    if (!cur) groups.set(h, { minX: left, minY: top, maxX: right, maxY: bottom })
-    else {
-      cur.minX = Math.min(cur.minX, left)
-      cur.minY = Math.min(cur.minY, top)
-      cur.maxX = Math.max(cur.maxX, right)
-      cur.maxY = Math.max(cur.maxY, bottom)
-    }
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([host, r]) => ({
-      host,
-      label: host === '__orphan__' ? 'Unscheduled' : host,
-      x: r.minX,
-      y: r.minY - KIND_HEADER_HEIGHT,
-      width: r.maxX - r.minX,
-      height: r.maxY - r.minY + KIND_HEADER_HEIGHT,
-    }))
 }
 
 // kindGroups returns the kind boxes' bounding rectangles in the layout's coordinate space,
