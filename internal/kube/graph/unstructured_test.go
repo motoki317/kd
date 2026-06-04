@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -71,6 +72,45 @@ func TestPersistentVolumeUnstructuredRoundTrip(t *testing.T) {
 	}
 	if n.Status != "Bound 20Gi" {
 		t.Errorf("PV status = %q, want \"Bound 20Gi\"", n.Status)
+	}
+}
+
+// AsTyped / AsTypedSlice are the exported entry points used by the events/log handlers that walk
+// a snapshot directly (not through Build). Pin their contract head-on: a known unstructured kind
+// converts to its typed struct, an already-typed object and an unknown CR both pass through by
+// identity, nil maps to nil, and the input slice is never mutated.
+func TestAsTypedSlice(t *testing.T) {
+	podU := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Pod",
+		"metadata": map[string]any{"name": "web", "namespace": "shop", "uid": "pod-uid"},
+		"status":   map[string]any{"phase": "Running"},
+	}}
+	crU := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+		"metadata": map[string]any{"name": "wf", "namespace": "shop", "uid": "wf-uid"},
+	}}
+	alreadyTyped := &corev1.Service{}
+	in := []runtime.Object{podU, crU, alreadyTyped}
+
+	out := AsTypedSlice(in)
+	if len(out) != 3 {
+		t.Fatalf("AsTypedSlice len = %d, want 3", len(out))
+	}
+	if _, ok := out[0].(*corev1.Pod); !ok {
+		t.Errorf("known unstructured Pod = %T, want *corev1.Pod", out[0])
+	}
+	if u, ok := out[1].(*unstructured.Unstructured); !ok || u != crU {
+		t.Errorf("unknown CR = %T (want the same *Unstructured passed through)", out[1])
+	}
+	if out[2] != alreadyTyped {
+		t.Error("an already-typed object must pass through by identity")
+	}
+	// The input slice's elements must be untouched (AsTypedSlice returns a new slice).
+	if in[0] != podU {
+		t.Error("AsTypedSlice mutated its input slice")
+	}
+	if AsTypedSlice(nil) != nil {
+		t.Error("AsTypedSlice(nil) must be nil")
 	}
 }
 
