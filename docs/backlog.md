@@ -61,7 +61,20 @@ should come from real user feedback or a new feature area — don't grind filler
 
 ## Open
 
-_(empty — the actionable queue is drained. Remaining work is under **Future / larger work** below, each examined against the real code with a verified rationale + reopen trigger.)_
+- **Capacity bar `value / capacity` labels mix units, hurting at-a-glance comparison** — *verified
+  live (cycle 22, staging-cluster Nodes view), needs a unit-policy decision before implementing.*
+  `formatQuantity` (`web/src/layout.ts:834`) picks a unit per value by magnitude, independently for the
+  numerator and denominator. So a node's Use bar reads `85m / 1` (millicores / cores) while its Req bar
+  right below reads `860m / 940m` (both millicores) — the two stacked capacities of ONE node (`1` =
+  1000m total, `940m` allocatable) render in clashing units and don't visibly read as "both ≈1 core".
+  Memory has the same straddle (`512Mi / 8Gi`). The bar LENGTH already encodes the ratio, so this is a
+  label-readability refinement, not a correctness bug. **Why deferred:** the fix is a `formatPair(value,
+  cap, res)` that formats both parts in the capacity's unit, but the unit policy is a genuine
+  user-judgment call with real tradeoffs — always-millicores (`85m / 1000m`, kubectl-native but verbose
+  `64000m` on big nodes) vs cores-for-≥1 (`0.09 / 1`, concise but lossy small decimals). The capacity
+  view is a heavily-tuned, user-iterated surface (see the extensive CLAUDE.md note, which says don't
+  reinterpret it without the user), so pick the unit policy WITH the user, then ship `formatPair` +
+  tests. **Reopen:** when the user states a preferred unit policy for paired capacity labels.
 
 ## Future / larger work — deferred (examined, not actionable now)
 
