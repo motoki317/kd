@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
+import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, kindShortLabel } from '../names'
@@ -150,10 +151,6 @@ const EDGE_LABELS: Record<EdgeType, string> = {
   refers: 'refers to',
 }
 
-// CapTipData is the normalized hover-tooltip payload for the capacity bars — built from either a
-// single pod segment or the folded "other namespaces" aggregate, so the tooltip renders one shape.
-type CapTipData = { title: string; sub?: string; value: string }
-
 // CapBulletBar draws ONE expanded-pod bar at the global capacity scale (the same px-per-unit as the
 // node tracks, so a pod's bar is directly comparable to its node's): an axis label ("Use"/"Req"), a
 // faint track to the bar's reference extent, the actual usage as a fill, a TICK at the request/limit
@@ -253,29 +250,9 @@ export default function Topology(props: Props) {
   // name/usage/request/limit read instantly instead of after the browser's ~700ms title delay. The
   // bullets/segments no longer print these numbers inline (too cluttered) — the tooltip carries them.
   const [capTip, setCapTip] = createSignal<{ d: CapTipData; x: number; y: number } | null>(null)
-  // The bars already print "use / cap" and "req / cap" at their right end, so the hover tooltip carries
-  // ONLY the single amount of the hovered part (the segment, fold, or overhead slice) — repeating the
-  // full use/req/limit triple here is redundant. Which metric a segment contributes depends on which bar
-  // it sits on (use vs req), so the caller passes it.
-  const capTipValue = (v: number): string => formatQuantity(v, capResource())
-  const tipFromSeg = (s: CapSeg, metric: 'use' | 'req'): CapTipData => ({
-    title: s.node.name,
-    value: capTipValue(metric === 'use' ? s.use : s.req ?? 0),
-  })
-  const tipFromAgg = (a: CapAggregate, metric: 'use' | 'req'): CapTipData => ({
-    title: a.variant === 'small' ? `${a.count} small pod${a.count === 1 ? '' : 's'}` : 'Other namespaces',
-    sub: a.variant === 'other' ? `${a.count} pod${a.count === 1 ? '' : 's'} outside this namespace` : undefined,
-    value: capTipValue(metric === 'use' ? a.use : a.req),
-  })
-  // The faint backdrop on the Use bar is the node's TOTAL usage (NodeMetrics). Overhead subtracts ALL
-  // pods on the node (`useTotal` = own + other namespaces), so what's left is purely NON-POD usage —
-  // kubelet, the container runtime, system daemons — NOT other namespaces' pods (those are already
-  // counted out, and have their own folded "other namespaces" segment).
-  const tipFromNodeUse = (row: CapRow): CapTipData => ({
-    title: 'Overhead',
-    sub: 'non-pod / system (kubelet, runtime)',
-    value: capTipValue(Math.max(0, (row.nodeUse ?? 0) - row.useTotal)),
-  })
+  // The tooltip payload builders (tipFromSeg / tipFromAgg / tipFromNodeUse) are pure and live in
+  // capacityTooltips.ts; here we just thread the active resource and pointer position through. A
+  // segment's contributed metric (use vs req) depends on which bar it sits on, so the caller passes it.
   const showTip = (d: CapTipData, e: PointerEvent) => setCapTip({ d, x: e.clientX, y: e.clientY })
 
   // Project the full streamed edge set onto the active relationship categories (reversing the
@@ -1605,7 +1582,7 @@ export default function Topology(props: Props) {
                             width={Math.max(0.5, s.width - 0.5)}
                             height={s.height}
                             onClick={(e) => { e.stopPropagation(); props.onSelect(s.node.id) }}
-                            onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s, 'req'), e) }}
+                            onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s, 'req', capResource()), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1619,7 +1596,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'req'), e) }}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'req', capResource()), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1633,7 +1610,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'req'), e) }}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'req', capResource()), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1657,7 +1634,7 @@ export default function Topology(props: Props) {
                           y={row.trackY}
                           width={Math.max(0, Math.min(row.nodeUse! * capInfo().scale, row.useTrackW))}
                           height={CAP_BAR_H}
-                          onPointerMove={(e) => { e.stopPropagation(); setCapHover(`overhead:${row.host}`); showTip(tipFromNodeUse(row), e) }}
+                          onPointerMove={(e) => { e.stopPropagation(); setCapHover(`overhead:${row.host}`); showTip(tipFromNodeUse(row, capResource()), e) }}
                           onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                         />
                       </Show>
@@ -1667,7 +1644,7 @@ export default function Topology(props: Props) {
                             <g
                               class="cap-seg-g"
                               onClick={(e) => { e.stopPropagation(); props.onSelect(s.node.id) }}
-                              onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s, 'use'), e) }}
+                              onPointerMove={(e) => { setCapHover(s.node.id); showTip(tipFromSeg(s, 'use', capResource()), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               <rect
@@ -1695,7 +1672,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'use'), e) }}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1709,7 +1686,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use'), e) }}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1750,7 +1727,7 @@ export default function Topology(props: Props) {
                               class="cap-bullet"
                               classList={{ faded: capSegFaded(b.node) }}
                               onClick={(e) => { e.stopPropagation(); capPodFitBox = focusBox; props.onSelect(b.node.id); fitCapBox(focusBox) }}
-                              onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b, 'use'), e) }}
+                              onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b, 'use', capResource()), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               <rect class="cap-bullet-frame" classList={{ selected }} x={box.x} y={box.y} width={box.width} height={box.height} rx="6" />
@@ -1772,7 +1749,7 @@ export default function Topology(props: Props) {
                             <g
                               class="cap-bullet other"
                               classList={{ faded: capAggFaded(`other:${row.host}`) }}
-                              onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use'), e) }}
+                              onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               <rect class="cap-bullet-frame" x={box.x} y={box.y} width={box.width} height={box.height} rx="6" />
