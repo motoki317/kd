@@ -167,20 +167,31 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   a `CapacityLayout` (a `Layout` superset) whose `nodes` are positioned at each pod's usage segment
   (the selection hit-box) + each Node's header, so selection/search/fit work unchanged; `rows` carries
   the bar/segment/bullet geometry the dedicated `cap-view` render branch draws (the generic card `<For>`
-  is skipped for `groupBy==='nodes'`). Two toolbar facets, both view-local and persisted to
-  `localStorage` (`kd:capRes`, `kd:capMode`): **Resource** (`CapResource` = cpu|memory — a single
-  resource at a time, never both on one length channel) and **Bars** (`CapMode` = split → stacked
-  requested+used sub-bars | overlay → one usage bar + a Σrequest marker; both shipped to choose live).
-  Key behaviours: every pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never vanishes;
-  the node's TOTAL usage (NodeMetrics, all namespaces) draws as a faint backdrop so a namespace's small
-  footprint still reads against real utilization; expanding a node (`host:<name>` in `expandedClusters`,
-  the same signal the old fold used) unfolds per-pod bullets on a PER-NODE zoom scale (`bulletScale`,
-  not the node-capacity scale — a small pod's request/limit ticks would be sub-pixel otherwise);
-  bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`), NOT a recolor, to avoid colliding
-  with the amber suspended-health hue. Usage arrives via the separate `usage` SSE event (`props.usage`,
-  keyed by UID) — it must NOT trigger an auto-fit (the fit effect keys on `scope`+`layoutKey`, not the
-  usage tick, so the ~15s refresh preserves pan/zoom). This view is namespace-scoped by nature: cluster
-  scope (`__cluster__`) has no pods, so it shows node rows with empty bars.
+  is skipped for `groupBy==='nodes'`). One toolbar facet persisted to `localStorage` (`kd:capRes`):
+  **Resource** (`CapResource` = cpu|memory — a single resource at a time, never both on one length
+  channel). The bars are always the explicit **Req + Use** stacked form, each with a "Req"/"Use" axis
+  label + a legend (the overlay/`Use`-only `CapMode` was retired after live review — see the ADR
+  Refinements). Key behaviours: every pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never
+  vanishes; the node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead
+  context); expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets whose bar
+  LENGTH ∝ usage on a PER-NODE zoom scale (`bulletScale`) — variable length, not a fixed track with a
+  fill, with a faint baseline to the furthest req/limit tick; bullets show the FULL pod name (no
+  prefix-shortening here). Bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`), NOT a
+  recolor. A **cursor-following HTML tooltip** (`capTip`, `.cap-tooltip`, fixed-position) replaces the
+  native `<title>` on segments/bullets.
+  - **Cluster-wide by nature (NOT namespace-scoped):** the view draws from a dedicated cluster-wide
+    `capacity` SSE event — `{ nodes: KNode[]; usage }` carrying ALL Nodes + ALL Pods (each tagged with
+    `namespace`) + per-UID usage — built server-side from `store.SnapshotNodesAndPods()` (the only
+    snapshot crossing the per-namespace ride-along boundary). It replaced the old per-namespace `usage`
+    event. App holds it in the `capacity` signal (cleared on resubscribe) and passes `capacity` +
+    `namespace` to Topology; the layout takes `currentNamespace` and marks pods own (bright) vs other
+    (gray, `CapSeg.own=false`) — cluster scope (`''`/`__cluster__`) → all own. So cluster scope shows
+    every pod, a namespace scope dims other namespaces but keeps the node total honest. A pod selected
+    from this feed may not be in the namespace graph, so `App.selectedNode` falls back to `capById`
+    (the capacity nodes) for the drawer, and the selection-fit frames the pod's whole node ROW
+    (`capRowBoxFor`), not its `related()` subtree. The `capacity` event is re-sent on connect, on each
+    debounced graph change, and on the ~15s usage tick; it does NOT auto-fit (fit keys on
+    `scope`+`layoutKey`, not the capacity tick).
 - **LR depth-column layout (`placeColumns`)**: the LR connectivity views do NOT use Dagre for
   placement — they use strict depth columns. `computeRanks` assigns every node (over the FULL graph,
   not the hub-stripped skeleton) an integer depth = longest path from a source; depth = column, so

@@ -174,3 +174,33 @@ design discussion and reversed twice as constraints surfaced — optional-reques
 the bar over the treemap, then DRA's discrete nature favored the grid; the bullet bar wins because it
 is the only primitive that is precise (length), continuous (no quantum), carries usage-vs-request-vs-
 limit, *and* degenerates into the grid's discrete-count form where there is no usage.
+
+## Refinements (2026-06-04)
+
+A second round of live dogfooding settled several open points and reshaped the data flow. These
+supersede the corresponding parts of the original Decision:
+
+- **Cluster-wide by nature — the view always shows every pod on a node.** A node hosts pods from
+  every namespace, so its true reservation/utilization cannot be drawn from one namespace's pods.
+  The namespace-scoped `usage` event is replaced by a **cluster-wide `capacity` SSE event** carrying
+  *all* Nodes + *all* Pods (each tagged with its namespace) plus per-UID usage. New store seam
+  `SnapshotNodesAndPods()` (the only snapshot that crosses the per-namespace ride-along boundary).
+  The client renders the selected namespace's pods **bright** and other namespaces' pods **gray** but
+  present — so cluster scope shows the whole node, and a namespace scope still shows the node's real
+  load with its own footprint highlighted. (Note: this serves cluster-wide pod identities to a
+  namespace-scoped client; acceptable for a single-operator infra view, revisit if multi-tenant RBAC
+  must gate it.) A pod selected from the gray set resolves its drawer from the capacity feed (the
+  namespace graph holds neither it nor, in cluster scope, any pod).
+- **Req + Use chosen; overlay retired.** The A/B node-bar fork is resolved in favor of the explicit
+  two-stacked-bar form (`split`); the overlay/`Use`-only mode and its `CapMode` toggle are removed.
+  Each bar carries an explicit **"Req" / "Use"** axis label and a toolbar **legend** (this-namespace
+  vs other-namespaces swatches) — explicit over implicit.
+- **Variable-length expanded bullets.** Per-pod bullets now draw the colored bar's *length* ∝ usage
+  on the shared per-node scale (a faint baseline runs to the pod's furthest req/limit marker), rather
+  than a fixed-length track with a varying fill — so a small pod's bar is physically shorter. Request
+  / limit are ticks; bursting is the hatch overlay.
+- **Full pod names** in the expanded detail (the prefix-shortening used elsewhere is dropped here),
+  and a **Grafana-style hover tooltip** (a cursor-following HTML card naming the pod, its namespace,
+  and usage/request/limit) replaces the native SVG `<title>`.
+- **Selection fit** frames the selected pod's whole node *row*, not its `related()` subtree (whose
+  edges belong to the namespace graph, not this feed).
