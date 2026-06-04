@@ -624,6 +624,31 @@ describe('Topology', () => {
     expect(searched.querySelectorAll('.collapse-pill-match').length).toBeGreaterThan(0)
   })
 
+  it('collapse pill is a keyboard-operable button (role/aria-label/aria-expanded + Enter/Space)', () => {
+    // A crowded same-kind cluster folds; the "+ show N more" pill is the ONLY way to reveal it, so it
+    // must be a real button (a bare <g><title> was mouse-only and unnamed to a screen reader).
+    const owner: KNode = { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const pods: KNode[] = Array.from({ length: 8 }, (_, i) => ({ id: `p-${i}`, kind: 'Pod', name: `web-${i}`, health: 'Healthy' as const }))
+    const owns: KEdge[] = pods.map((p) => ({ from: 'd', to: p.id, type: 'ownerReference' as const }))
+    const { container } = render(() => <Topology nodes={[owner, ...pods]} edges={owns} search="" {...base} />)
+    const pill = container.querySelector('.collapse-pill') as SVGGElement
+    expect(pill).toBeTruthy()
+    expect(pill.getAttribute('role')).toBe('button')
+    expect(pill.getAttribute('tabindex')).toBe('0')
+    expect(pill.getAttribute('aria-label')).toMatch(/^Show \d+ more Pods$/)
+    expect(pill.getAttribute('aria-expanded')).toBe('false')
+    const podCount = () => container.querySelectorAll('.node.kind-pod').length
+    const pillExpanded = () => (container.querySelector('.collapse-pill') as SVGGElement).getAttribute('aria-expanded')
+    const collapsed = podCount()
+    // Enter activates it like a native button → the cluster expands (more pods drawn, state flips).
+    pill.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(podCount()).toBeGreaterThan(collapsed)
+    expect(pillExpanded()).toBe('true')
+    // Space is the other native-button activation key and runs the same toggle → folds back.
+    ;(container.querySelector('.collapse-pill') as SVGGElement).dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    expect(pillExpanded()).toBe('false')
+  })
+
   it('accents only edges directly touching the selected node, not the whole component (cycle 309)', () => {
     // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod should accent only the
     // RS→Pod edge (2→3) that touches it — NOT the Deployment→RS edge (1→2) further up the tree.

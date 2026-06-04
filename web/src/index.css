@@ -1651,8 +1651,19 @@ button.conn.conn-retry:focus-visible {
   stroke-width: 1.4;
   stroke-dasharray: 5 4;
 }
-.collapse-pill:hover .collapse-pill-bg {
+.collapse-pill:hover .collapse-pill-bg,
+.collapse-pill:focus-visible .collapse-pill-bg {
   stroke: var(--accent);
+}
+/* Keyboard focus ring: the pill is a real button now, so a focused pill must be visibly distinct.
+   A solid accent stroke + slightly thicker line reads as "focused here" without the default SVG
+   outline (which clips oddly on a transparent <g>). Mouse focus stays quiet via :focus-visible. */
+.collapse-pill:focus {
+  outline: none;
+}
+.collapse-pill:focus-visible .collapse-pill-bg {
+  stroke-width: 2.4;
+  stroke-dasharray: none;
 }
 .collapse-pill-label {
   fill: var(--text-dim);

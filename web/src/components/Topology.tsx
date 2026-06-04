@@ -1986,7 +1986,26 @@ export default function Topology(props: Props) {
                         expanded: meta().expanded,
                       }}
                       style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
+                      // A real, keyboard-operable button: it's the ONLY way to reveal a folded cluster
+                      // (pills are excluded from search-nav, so unlike a graph node there's no
+                      // alternative keyboard path to the expand action). role+tabindex+aria-label give a
+                      // screen reader a named control; Enter/Space activate it like a native button. A
+                      // bare <g><title> left it mouse-only and unnamed.
+                      role="button"
+                      tabindex="0"
+                      aria-label={
+                        meta().expanded
+                          ? `Show ${meta().hidden.length} fewer ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
+                          : `Show ${meta().hidden.length} more ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
+                      }
+                      aria-expanded={meta().expanded}
                       onClick={() => toggleCluster(meta().key)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleCluster(meta().key)
+                        }
+                      }}
                     >
                       <title>
                         {meta().expanded
