@@ -92,13 +92,41 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    rule: any "fit to subset" needs to consider the worst-case spread of that subset, not just the
    happy clustered case.
 
+## Measurement pitfalls (agent-browser `eval`) — false positives these caused
+
+`getComputedStyle` in headless Chrome plus a naive colour parser each manufactured a convincing
+"bug" that wasted most of a cycle. Check these BEFORE believing a measured-only finding:
+
+1. **Transitioned properties read STALE right after a runtime state toggle.** Elements with
+   `transition: background/color …` (the toolbar chips, legend pills) animate when you flip the theme
+   at runtime (`.theme-btn.click()`), but the headless compositor doesn't advance the transition — so
+   `getComputedStyle(el).backgroundColor` returns the PRE-toggle value indefinitely (e.g. a chip read
+   `#171a21` dark in light theme, even though `--surface` resolved to `#fff` and inline
+   `background:#ff0000 !important` *also* read as the old value — the tell that a transition, not the
+   cascade, owns the value). It is NOT a theming bug. **To verify themed colours, load the page ALREADY
+   in the target theme** (`eval "localStorage.setItem('kd:theme','light')"` then re-`open`) so the
+   colour is settled with no transition — a fresh load read the chip correctly as `#fff`/`#6b7280`.
+   A no-transition probe (a freshly-created `<div style="background:var(--surface)">` in the same
+   container) is a quick cross-check: if it reads the right colour and the real element doesn't, it's
+   the transition artifact.
+2. **A naive rgb parser mis-reads `color(srgb r g b / a)` / `oklab(…)` backgrounds.** Modern
+   translucent backgrounds (the toolbar's `color(srgb 1 1 1 / 0.92)`) serialise as `color(srgb …)`,
+   not `rgb()`. A `match(/[\d.]+/g)` luminance helper then grabs `[1,1,1]` and treats it as
+   `rgb(1,1,1)` ≈ black, fabricating a failing contrast ratio (a real `#6b7280`-on-near-white that
+   passes AA reported ~4.3). When auditing contrast: only trust samples whose resolved bg is a plain
+   `rgb()/rgba()`; for `color()/oklab()` backgrounds, composite the alpha over the parent yourself
+   (`0.92·white + 0.08·canvas ≈ #fefefe`) or skip them. Both light and dark themes are AA-compliant —
+   don't "fix" a contrast number that came from an `color(srgb …)` bg.
+
 ## Accessibility patterns established (match these on any new control)
 
 A11y is a live audit theme (cycles 17–18). The conventions now in the code:
 - **Tabs** (drawer Logs/Events/Manifest): WAI-ARIA `role=tablist` › `role=tab` (`aria-selected`,
   `aria-controls`, roving `tabindex`) › `role=tabpanel` (`aria-labelledby`). NOT aria-pressed buttons.
-- **Single-select segmented controls** (toolbar Group, Resource): `role=radiogroup` › `role=radio`
-  (`aria-checked`, roving `tabindex`). A pick-one control is a radiogroup, never aria-pressed toggles.
+- **Single-select segmented controls** (toolbar Group, Resource; drawer Manifest YAML/JSON):
+  `role=radiogroup` › `role=radio` (`aria-checked`, roving `tabindex`). A pick-one control is a
+  radiogroup, never aria-pressed toggles. (The single-select sweep is now complete — Group, Resource,
+  and the Manifest format toggle all converted; no bare-`.active` pick-one controls remain.)
 - **Multi-select chips** (Relationships, Kinds — compose, several on at once): `aria-pressed` toggle
   buttons in a `role=toolbar` is CORRECT — leave them.
 - **Clearable single filter** (Health legend — one or none): `aria-pressed` is defensible (a radio
@@ -109,8 +137,9 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
   follows selection / APG automatic activation). **Verify live:** focus the active option, dispatch
   `ArrowRight`, assert `aria-checked`/`aria-selected` moved, `document.activeElement` is the new
   option, and (Group) the URL/layout actually changed.
-- Still TODO (future cycles): sweep the sidebar list, the drawer close/back/expand/share buttons, and
-  the log-level controls for the same role/state correctness; check focus-trap + Esc in the drawer.
+- Still TODO (future cycles): sweep the drawer close/back/expand/share buttons and the log-level
+  controls for the same role/state correctness; check focus-trap + Esc in the drawer. (Sidebar list,
+  tabs, segmented controls, and the copy live-region are done.)
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
