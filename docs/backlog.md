@@ -9,6 +9,27 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
+**Status (2026-06-05, batch 5):** A live-dogfooding batch whose headline is a **real bug the frozen
+harness (batch 4) couldn't surface visually but the network log did**: every cluster-scoped resource
+(Node, PriorityClass, ClusterRole) showed "unavailable" + "Couldn't load events" because the drawer
+built its fetch URL with an empty `{ns}` segment (`namespaces//resources/...` → 307→404); fixed by
+substituting the `CLUSTER_SCOPE` sentinel at the `key()` builder (repairs manifest+events+logs at once).
+The technique is the durable takeaway — `agent-browser network requests | grep resources` exposes
+malformed-URL bugs the rAF-frozen compositor hides behind a generic "unavailable" (now bug-class #6 in
+`dogfooding-kd-ui.md`; dogfood the drawer in **cluster scope**, not just a namespace). Also shipped: a
+non-blocking **"relationships hidden"** bottom toast (explicit-over-implicit — an empty relFilter draws
+edgeless cards indistinguishable from "no connections"; one-click "show ownership" restore); two
+organizing refactors (`prefixParentNames` extracted to `names.ts` with 6 contract tests;
+`shortContextName` comment corrected to match its `/`-only trim); GatewayClass status-summary coverage.
+**Validated clean this batch — do NOT redundantly re-verify** (adversarial checks held; one suspected
+"swapped Use/Req capacity ceilings" was DISPROVEN by rigorous y-pairing): drawer manifest/events/logs
+(namespaced + cluster-scoped), deep-link `sel=` restore, owner-chip tree navigation, selection clears
+on namespace switch; free-text + structured `Kind/name` search incl. edge cases AND capacity-view
+fade integration; capacity view overshoot invariant (Σ Use-segs = true utilization, no floor inflation)
++ 58-card expansion at scale (aligned, equal-width) + per-pod tick semantics (no limit → no tick);
+relationship-filter default (ownership-only) + toggle; help-overlay shortcuts (zero drift vs handlers);
+no console errors in normal operation.
+
 **Status (2026-06-05, batch 4):** A dogfooding + test-hardening batch whose headline is a **harness
 limitation, not a feature**: the headless agent-browser compositor is FROZEN — `requestAnimationFrame`
 callbacks never fire and CSS animations/transitions never advance (proven directly). This silently
