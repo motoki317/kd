@@ -12,6 +12,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
+import { boundingBox, fitBox, selectionMaxScale } from '../viewport'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
@@ -650,42 +651,17 @@ export default function Topology(props: Props) {
 
   // computeFitFor: scale + translate that frames the given bounds into the SVG viewport with the
   // given padding. Caps max scale so single-card selections don't zoom in to absurd sizes.
+  // computeFitFor reads the live viewport (the SVG rect + the overlaying toolbar's height) and
+  // delegates the framing geometry to the pure fitBox (viewport.ts), which the unit tests pin.
   function computeFitFor(minX: number, minY: number, maxX: number, maxY: number, maxScale: number) {
     const rect = svg!.getBoundingClientRect()
-    // The control bar overlays the top strip of the canvas, so frame the graph into the area BELOW
-    // it: shrink the usable height by the bar's height and push the vertical centre down by the same,
-    // otherwise the topmost cards land behind the bar (the user's "resources hidden by the panel").
     const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
-    const availH = Math.max(1, rect.height - topInset)
-    const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY)
-    const padding = 60
-    const s = Math.min((rect.width - padding * 2) / w, Math.max(1, availH - padding * 2) / h, maxScale)
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-    return { scale: s, tx: rect.width / 2 - cx * s, ty: topInset + availH / 2 - cy * s }
+    return fitBox({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height, topInset }, maxScale)
   }
 
-  // selectionMaxScale lets a small selection zoom in close while a big subtree stays moderate. The
-  // fixed 1.6 cap (cycle 319 superseded) under-zoomed a lone card — fitting one 220×60 card could
-  // legitimately go to ~4x but capped at 1.6 it stayed small and lost in whitespace. The 1000/√area
-  // curve yields ~2.5 for a single card and tapers to the 1.4 floor as the framed area grows (big
-  // subtrees are viewport-limited below the cap anyway, so the floor never shrinks them).
-  function selectionMaxScale(w: number, h: number): number {
-    return Math.max(1.4, Math.min(2.5, 1000 / Math.sqrt(Math.max(1, w * h))))
-  }
-
-  // boundingBox + fitNodeSet (cycle 336/R9): the "spread every card's x±w/2, y±h/2 and take min/max"
-  // pattern was copy-pasted at four fit sites (selection-fit effect, resetView's selection / lit
-  // branches), and the full computeFitFor(...selectionMaxScale(...)) expression was byte-identical
-  // twice. Extracted so the coordinate math lives once — a future change (e.g. fit padding) is a
-  // one-line edit instead of four. maxScale is a constant for fit-all or selectionMaxScale for a
-  // selection (it needs the box dims, hence the function form).
-  function boundingBox(nodes: { x: number; y: number; width: number; height: number }[]) {
-    const xs = nodes.flatMap((n) => [n.x - n.width / 2, n.x + n.width / 2])
-    const ys = nodes.flatMap((n) => [n.y - n.height / 2, n.y + n.height / 2])
-    const minX = Math.min(...xs), maxX = Math.max(...xs)
-    const minY = Math.min(...ys), maxY = Math.max(...ys)
-    return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
-  }
+  // fitNodeSet (cycle 336/R9): frames a set of cards. boundingBox + selectionMaxScale + fitBox are
+  // pure (viewport.ts); this just threads the live viewport in via computeFitFor. maxScale is a
+  // constant for fit-all or selectionMaxScale for a selection (it needs the box dims, hence the fn form).
   function fitNodeSet(
     nodes: { x: number; y: number; width: number; height: number }[],
     maxScale: number | ((w: number, h: number) => number),
