@@ -12,7 +12,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import { boundingBox, fitBox, selectionMaxScale } from '../viewport'
+import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
@@ -871,12 +871,7 @@ export default function Topology(props: Props) {
     const l = layout()
     if (!svg || l.width === 0) return { tx: txv, ty: tyv }
     const rect = svg.getBoundingClientRect()
-    const margin = 60
-    const w = l.width * scale(), h = l.height * scale()
-    return {
-      tx: Math.min(Math.max(txv, margin - w), rect.width - margin),
-      ty: Math.min(Math.max(tyv, margin - h), rect.height - margin),
-    }
+    return clampPan(txv, tyv, { width: l.width * scale(), height: l.height * scale() }, { width: rect.width, height: rect.height })
   }
 
   // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see

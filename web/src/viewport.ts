@@ -65,3 +65,20 @@ export function fitBox(
   const cy = (box.minY + box.maxY) / 2
   return { scale, tx: view.width / 2 - cx * scale, ty: view.topInset + availH / 2 - cy * scale }
 }
+
+// clampPan keeps at least `margin` px of the laid-out graph on-screen, so a pan can't fling the whole
+// graph off the canvas. `content` is the graph size ALREADY multiplied by the current scale; `view`
+// is the viewport. A graph smaller than the viewport is unaffected (the lower bound `margin - content`
+// is then more negative than any reasonable pan, and the upper bound `view - margin` is past it).
+export function clampPan(
+  tx: number,
+  ty: number,
+  content: { width: number; height: number },
+  view: { width: number; height: number },
+  margin = 60,
+): { tx: number; ty: number } {
+  return {
+    tx: Math.min(Math.max(tx, margin - content.width), view.width - margin),
+    ty: Math.min(Math.max(ty, margin - content.height), view.height - margin),
+  }
+}

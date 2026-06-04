@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { boundingBox, selectionMaxScale, fitBox } from './viewport'
+import { boundingBox, selectionMaxScale, fitBox, clampPan } from './viewport'
 
 describe('boundingBox', () => {
   it('unions cards by their centre ± half-extent', () => {
@@ -57,5 +57,26 @@ describe('fitBox', () => {
     const t = fitBox({ minX: 50, minY: 50, maxX: 50, maxY: 50 }, view, 2)
     expect(Number.isFinite(t.scale)).toBe(true)
     expect(t.scale).toBe(2) // clamped to maxScale, not Infinity
+  })
+})
+
+describe('clampPan', () => {
+  const view = { width: 1000, height: 800 }
+
+  it('keeps a large graph from being flung fully off-screen (≥ margin stays visible)', () => {
+    const content = { width: 4000, height: 3000 } // bigger than the viewport
+    // Panned far left/up: tx clamps to its lower bound margin - content.width; not past it.
+    const far = clampPan(-99999, -99999, content, view)
+    expect(far.tx).toBe(60 - 4000)
+    expect(far.ty).toBe(60 - 3000)
+    // Panned far right/down: clamps to view - margin so a sliver of graph stays on the far edge.
+    const near = clampPan(99999, 99999, content, view)
+    expect(near.tx).toBe(1000 - 60)
+    expect(near.ty).toBe(800 - 60)
+  })
+
+  it('passes a within-bounds pan through unchanged', () => {
+    const content = { width: 4000, height: 3000 }
+    expect(clampPan(-200, -150, content, view)).toEqual({ tx: -200, ty: -150 })
   })
 })
