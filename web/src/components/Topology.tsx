@@ -5,7 +5,8 @@ import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
-import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
+import { HEALTH_ORDER, healthColor } from '../health'
+import { kindStats as computeKindStats } from '../kindStats'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, pluralizeKind, prefixParentNames } from '../names'
 import { nodeMatches } from '../search'
@@ -426,37 +427,9 @@ export default function Topology(props: Props) {
   // The per-kind worst health (cycle 289) drives a small severity dot on the chip so the operator
   // spots WHICH kinds carry trouble without scanning the canvas; preserves the stable order while
   // still surfacing the answer to "where do I look first".
-  const kindStats = createMemo(() => {
-    const stats = new Map<string, { count: number; worst: Health | null }>()
-    const add = (n: { kind: string; health: Health }) => {
-      const s = stats.get(n.kind)
-      if (!s) {
-        stats.set(n.kind, { count: 1, worst: n.health !== 'Healthy' ? n.health : null })
-        return
-      }
-      s.count++
-      if (n.health !== 'Healthy' && (s.worst === null || healthSeverity[n.health] > healthSeverity[s.worst])) {
-        s.worst = n.health
-      }
-    }
-    for (const n of layout().nodes) {
-      // A pill is synthetic. While COLLAPSED, fold the nodes it hides back into the count so the
-      // kind chip reflects the true total (visible + collapsed), not just what's drawn. While
-      // EXPANDED, those nodes are present as real cards and counted below — folding them back too
-      // would double-count — so the expanded pill contributes nothing.
-      if (n.collapse) {
-        if (!n.collapse.expanded) {
-          for (const h of n.collapse.hidden) add(h)
-          // A sibling-subtree fold also hides a different kind (a folded Workflow's Pods); count
-          // those back too so e.g. the Pod chip stays honest while the Workflow group is collapsed.
-          for (const h of n.collapse.hiddenDescendants ?? []) add(h)
-        }
-        continue
-      }
-      add(n)
-    }
-    return stats
-  })
+  // Per-kind count + worst-health, folding a collapsed pill's hidden nodes back so chips stay honest —
+  // see computeKindStats for the fold-back rule.
+  const kindStats = createMemo(() => computeKindStats(layout().nodes))
   const kindChips = createMemo(() =>
     [...kindStats().entries()]
       .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
