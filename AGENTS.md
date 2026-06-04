@@ -170,25 +170,30 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   is skipped for `groupBy==='nodes'`). One toolbar facet persisted to `localStorage` (`kd:capRes`):
   **Resource** (`CapResource` = cpu|memory — a single resource at a time, never both on one length
   channel). The bars are always the explicit **Req + Use** stacked form, each with a "Req"/"Use" axis
-  label + a legend (the overlay/`Use`-only `CapMode` was retired after live review — see the ADR
-  Refinements). Key behaviours: every pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never
-  vanishes; the node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead
-  context); expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets whose bar
-  LENGTH ∝ usage on a PER-NODE zoom scale (`bulletScale`) — variable length, not a fixed track with a
-  fill, with a faint baseline to the furthest req/limit tick; bullets show the FULL pod name (no
-  prefix-shortening here). Bursting (usage>request) is a hatch overlay (`#cap-burst-hatch`), NOT a
-  recolor. A **cursor-following HTML tooltip** (`capTip`, `.cap-tooltip`, fixed-position) replaces the
-  native `<title>` on segments/bullets.
+  label (the overlay/`Use`-only `CapMode` was retired after live review — see the ADR Refinements). Key
+  behaviours: every own-pod segment gets a min width (`CAP_MIN_SEG`) so an idle pod never vanishes; the
+  node's TOTAL usage (NodeMetrics) draws as a faint backdrop (non-pod/system overhead context);
+  expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets whose bar LENGTH ∝
+  usage on a PER-NODE zoom scale (`bulletScale`) — variable length, not a fixed track with a fill, with
+  a faint baseline to the furthest req/limit tick; bullets show ONLY the FULL pod name (no
+  prefix-shortening, no inline numbers — those are on hover). Bursting (usage>request) is a hatch
+  overlay (`#cap-burst-hatch`), NOT a recolor. A **cursor-following HTML tooltip** (`capTip`,
+  `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
+  segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
+  render.
   - **Cluster-wide by nature (NOT namespace-scoped):** the view draws from a dedicated cluster-wide
     `capacity` SSE event — `{ nodes: KNode[]; usage }` carrying ALL Nodes + ALL Pods (each tagged with
     `namespace`) + per-UID usage — built server-side from `store.SnapshotNodesAndPods()` (the only
     snapshot crossing the per-namespace ride-along boundary). It replaced the old per-namespace `usage`
     event. App holds it in the `capacity` signal (cleared on resubscribe) and passes `capacity` +
-    `namespace` to Topology; the layout takes `currentNamespace` and marks pods own (bright) vs other
-    (gray, `CapSeg.own=false`) — cluster scope (`''`/`__cluster__`) → all own. So cluster scope shows
-    every pod, a namespace scope dims other namespaces but keeps the node total honest. A pod selected
-    from this feed may not be in the namespace graph, so `App.selectedNode` falls back to `capById`
-    (the capacity nodes) for the drawer, and the selection-fit frames the pod's whole node ROW
+    `namespace` to Topology; the layout takes `currentNamespace`. Only the SELECTED namespace's pods
+    become individual `CapSeg`s (bright); every OTHER namespace's pod folds into ONE gray `CapAggregate`
+    ("other namespaces") per bar + one per expanded bullet — `row.otherUseSeg`/`otherReqSeg`/
+    `otherBullet` — hoverable for folded totals but not individually selectable. Cluster scope
+    (`''`/`__cluster__`) → every pod is own/individual, no aggregate. So cluster scope shows every pod,
+    a namespace scope shows its own pods + one folded block, keeping the node total honest. A pod
+    selected in cluster scope may not be in the namespace graph, so `App.selectedNode` falls back to
+    `capById` (the capacity nodes) for the drawer, and the selection-fit frames the pod's whole node ROW
     (`capRowBoxFor`), not its `related()` subtree. The `capacity` event is re-sent on connect, on each
     debounced graph change, and on the ~15s usage tick; it does NOT auto-fit (fit keys on
     `scope`+`layoutKey`, not the capacity tick).
