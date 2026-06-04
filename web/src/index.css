@@ -829,8 +829,14 @@ button.conn.conn-retry:focus-visible {
 }
 /* Usage segments — each pod sized by actual usage. Health hue tints non-healthy pods; bursting
    (usage over request) and near-limit get explicit accents so the risk states read at a glance. */
-.cap-seg {
+.cap-seg,
+.cap-seg-g {
   cursor: pointer;
+}
+.cap-hint {
+  font-size: 11px;
+  fill: var(--health-suspended);
+  font-weight: 500;
 }
 .cap-seg.use {
   fill: var(--accent);
@@ -849,12 +855,15 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.use.h-unknown {
   fill: var(--health-unknown);
 }
-.cap-seg.use.over {
-  fill: var(--health-suspended);
-}
 .cap-seg.use.near {
   stroke: var(--health-degraded);
   stroke-width: 1.4;
+}
+/* Burst overlay (usage over request): a hatch on top of the health-colored segment, so it reads as
+   "bursting" without colliding with the amber suspended-health hue a recolor would. */
+.cap-burst-overlay {
+  fill: url(#cap-burst-hatch);
+  pointer-events: none;
 }
 .cap-seg.req {
   fill: color-mix(in srgb, var(--accent) 45%, var(--surface));

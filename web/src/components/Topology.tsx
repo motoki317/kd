@@ -1349,6 +1349,11 @@ export default function Topology(props: Props) {
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--edge-color)" />
           </marker>
+          {/* Diagonal hatch marking a pod bursting past its request, overlaid on the health-colored
+              segment so "over request" reads unambiguously — distinct from the amber suspended hue. */}
+          <pattern id="cap-burst-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="var(--text)" stroke-width="2" opacity="0.55" />
+          </pattern>
         </defs>
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
           {/* Nodes view: the capacity & usage visualization. Each node is a horizontal track
@@ -1357,6 +1362,13 @@ export default function Topology(props: Props) {
               Expanding a node unfolds per-pod bullets with request/limit ticks + overshoot. */}
           <Show when={props.groupBy === 'nodes'}>
             <g class="cap-view">
+              {/* Honesty hint: with no metrics-server, usage is unknown, so bars fall back to
+                  sizing by request — say so rather than implying the requests are usage. */}
+              <Show when={capRows().length > 0 && !capInfo().hasUsage}>
+                <text class="cap-hint" x={30} y={14}>
+                  metrics-server unavailable — bars sized by requests
+                </text>
+              </Show>
               <For each={capRows()}>
                 {(row) => {
                   const fmt = (v: number | undefined) => formatQuantity(v, capResource())
@@ -1424,19 +1436,24 @@ export default function Topology(props: Props) {
                       <For each={row.useSegs}>
                         {(s) => (
                           <Show when={s.width > 0}>
-                            <rect
-                              class="cap-seg use"
-                              classList={segClasses(s)}
-                              x={s.x}
-                              y={s.y}
-                              width={Math.max(0.5, s.width - 0.5)}
-                              height={s.height}
-                              onClick={() => props.onSelect(s.node.id)}
-                            >
-                              <title>
-                                {`${s.node.name} · use ${fmt(s.use)}${s.req !== undefined ? ` · req ${fmt(s.req)}` : ' · no request'}${s.lim !== undefined ? ` · lim ${fmt(s.lim)}` : ''}`}
-                              </title>
-                            </rect>
+                            <g class="cap-seg-g" onClick={() => props.onSelect(s.node.id)}>
+                              <rect
+                                class="cap-seg use"
+                                classList={segClasses(s)}
+                                x={s.x}
+                                y={s.y}
+                                width={Math.max(0.5, s.width - 0.5)}
+                                height={s.height}
+                              >
+                                <title>
+                                  {`${s.node.name} · use ${fmt(s.use)}${s.req !== undefined ? ` · req ${fmt(s.req)}` : ' · no request'}${s.lim !== undefined ? ` · lim ${fmt(s.lim)}` : ''}${s.over ? ' · bursting over request' : ''}`}
+                                </title>
+                              </rect>
+                              {/* Bursting (usage > request): hatch overlay, color-independent. */}
+                              <Show when={s.over && !nodeFaded(s.node)}>
+                                <rect class="cap-burst-overlay" x={s.x} y={s.y} width={Math.max(0.5, s.width - 0.5)} height={s.height} />
+                              </Show>
+                            </g>
                           </Show>
                         )}
                       </For>
