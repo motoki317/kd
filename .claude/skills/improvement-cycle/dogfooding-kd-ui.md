@@ -31,10 +31,17 @@ namespaces) — cluster-scope relationship layout had **0 overlapping node cards
 depth-column layout holds), cluster- and namespace-scope capacity bars had **0 overshoot rows**
 (Σuse-segments ≤ track width on every row; the namespace fold drew own/`other`/`small` aggregates
 correctly), and a real multi-container pod's drawer rendered init-before-main container cards with no
-width overflow. So these surfaces are mature — the bar to re-dogfood them is "did the layout /
-capacity geometry / drawer-card code change", not "every cycle". Reusable overshoot check:
+width overflow. Also re-verified clean the same day: the **Logs viewer** controls all carry correct
+`aria-pressed` (level filters ERR/WRN/INF/DBG = shown→`true`; timestamps/wrap/case/previous = `false`)
+plus `title`/`aria-label` on every button; long **EKS node hostnames**
+(`ip-10-…compute.internal`) don't overflow their `.cap-node-frame` (the char-count width reservation
+holds); and **Kind pluralization** is centralized — `pluralizeKind` is the only Kind-pluralizing path,
+every other `${…}s` pluralizes a regular English noun (pod/line/resource/node). So these surfaces are
+mature — the bar to re-dogfood them is "did the layout / capacity geometry / drawer-card / logs-toolbar
+code change", not "every cycle". Reusable overshoot check:
 `for each .cap-track.use, assert max(.cap-seg.use at same y).right ≤ track.right`. Overlap check:
-pairwise screen-rect intersection of `.node .node-bg` (>4px on both axes = a real overlap).
+pairwise screen-rect intersection of `.node .node-bg` (>4px on both axes = a real overlap). Node-name
+fit check: `getBBox().right` of each `.cap-row text` ≤ its `.cap-node-frame` right edge.
 
 ## Capacity (Nodes) view — interaction recipes
 
