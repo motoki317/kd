@@ -50,8 +50,9 @@ export default function Sidebar(props: Props) {
   // The red "needs attention" badge counts only namespaces that are actively not-OK — Degraded
   // (broken) or Progressing (mid-rollout). Unknown (a CR/resource kd can't classify) and Suspended
   // (intentionally off) are excluded: counting them turned a cluster full of harmless custom
-  // resources into a permanent red alarm (cycle 313, follows up the cycle-308 gray-dot fix). The
-  // troubled-first SORT below still floats every non-Healthy ns up — only the alarm count narrows.
+  // resources into a permanent red alarm (cycle 313, follows up the cycle-308 gray-dot fix). The list
+  // itself stays A→Z (see `shown` above — troubled-first sorting was dropped because it re-shuffled
+  // rows under the cursor); every namespace still shows its own health dot, only the badge COUNT narrows.
   const troubled = createMemo(
     () => props.namespaces.filter((n) => n.name !== CLUSTER_SCOPE && healthSeverity[n.health] >= healthSeverity.Progressing).length,
   )
