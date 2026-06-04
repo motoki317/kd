@@ -185,6 +185,7 @@ func TestIngressRoutes(t *testing.T) {
 			}}}},
 			{Host: "", IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{
 				{Path: "/", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "catch-all", Port: num(80)}}}, // hostless → "*"
+				{Path: "/health", Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "bare-svc"}}}, // no port set → name only (ingressBackend default)
 			}}}},
 		},
 	}}
@@ -193,6 +194,7 @@ func TestIngressRoutes(t *testing.T) {
 		"app.example.com/api → api-svc:8080",
 		"app.example.com/ → web-svc:http",
 		"*/ → catch-all:80",
+		"*/health → bare-svc",
 	}
 	if got := ingressRoutes(ing); !slices.Equal(got, want) {
 		t.Errorf("ingressRoutes =\n%v\nwant\n%v", got, want)
