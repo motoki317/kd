@@ -92,6 +92,26 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    rule: any "fit to subset" needs to consider the worst-case spread of that subset, not just the
    happy clustered case.
 
+## Accessibility patterns established (match these on any new control)
+
+A11y is a live audit theme (cycles 17–18). The conventions now in the code:
+- **Tabs** (drawer Logs/Events/Manifest): WAI-ARIA `role=tablist` › `role=tab` (`aria-selected`,
+  `aria-controls`, roving `tabindex`) › `role=tabpanel` (`aria-labelledby`). NOT aria-pressed buttons.
+- **Single-select segmented controls** (toolbar Group, Resource): `role=radiogroup` › `role=radio`
+  (`aria-checked`, roving `tabindex`). A pick-one control is a radiogroup, never aria-pressed toggles.
+- **Multi-select chips** (Relationships, Kinds — compose, several on at once): `aria-pressed` toggle
+  buttons in a `role=toolbar` is CORRECT — leave them.
+- **Clearable single filter** (Health legend — one or none): `aria-pressed` is defensible (a radio
+  can't deselect to none); leave it.
+- **Roving keyboard model**: `web/src/rovingFocus.ts` `nextRovingIndex(key, cur, len)` is the ONE
+  tested impl of the arrow/Home/End wrap math — reuse it for any new roving widget (tablist or
+  radiogroup), don't re-derive. The handler sets the value AND `ref.focus()`s the new option (focus
+  follows selection / APG automatic activation). **Verify live:** focus the active option, dispatch
+  `ArrowRight`, assert `aria-checked`/`aria-selected` moved, `document.activeElement` is the new
+  option, and (Group) the URL/layout actually changed.
+- Still TODO (future cycles): sweep the sidebar list, the drawer close/back/expand/share buttons, and
+  the log-level controls for the same role/state correctness; check focus-trap + Esc in the drawer.
+
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
 - The Nodes view's pod **Req bar fills with USAGE** (tick at request), while the node Req bar fills
