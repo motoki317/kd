@@ -34,11 +34,19 @@ ADRs ([docs/ADR/](docs/ADR/)) carry decisions; this file is the "where do I look
 just build       # vite build → embed → go build
 just test        # go test + npm test
 just dev         # Go API :9123 + Vite :5173 (proxied)
-cd web && npx vitest run    # web tests only (cwd matters: must be web/)
+cd web && npm test          # web tests only (cwd matters: must be web/)
 go test ./...                # Go tests only
 ```
 
-**CWD gotcha**: `npx tsc`/`npx vitest` need to run from `web/` — a compound
+**Use `npm test` / `./node_modules/.bin/vitest`, NOT bare `npx vitest`**: `npx vitest run` can
+resolve to a DIFFERENT, globally-cached vitest version than the project's pinned one (seen: an
+`_npx`-cached 4.1.8 whose rolldown can't parse the project's JSX/tsconfig and runs without jsdom) —
+producing a wall of phantom `RolldownError: Parse failure` / `localStorage is not defined` failures
+that do NOT reproduce under `npm test`. If a full-suite run suddenly fails ~10 files on parse/env
+errors while single-file runs pass, you hit this — re-run via `npm test` (the package.json script
+resolves the local binary).
+
+**CWD gotcha**: `npx tsc`/`npm test`/`vitest` need to run from `web/` — a compound
 `cd web && npx ...` shifts the parent shell's cwd, which then breaks the next call. Always
 `cd <repo>/web` before web tooling; git ops from the repo root.
 
