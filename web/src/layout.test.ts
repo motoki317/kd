@@ -947,6 +947,18 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(l.rows).toEqual([])
     expect(l.nodes).toEqual([])
   })
+
+  it('falls back to requests for the Use bar when metrics are absent', () => {
+    // A cluster without metrics-server yields no usage feed (server leaves Usage nil → empty here).
+    // hasUsage must be false, and the Use bar must show each pod's REQUEST rather than a blank/zero bar
+    // — the operator still sees what is RESERVED on the node even when live utilization is unavailable.
+    const l = layoutGraphByCapacity(capNodes, {}, 'cpu', '')
+    expect(l.hasUsage).toBe(false)
+    const big = l.rows.find((r) => r.host === 'big')!
+    const useSeg = big.useSegs.find((s) => s.node.id === 'pa')! // pa requests 500m, no usage
+    const reqSeg = big.reqSegs.find((s) => s.node.id === 'pa')!
+    expect(useSeg.width).toBeCloseTo(reqSeg.width, 5) // Use bar mirrors the request when usage is absent
+  })
 })
 
 describe('formatQuantity', () => {
