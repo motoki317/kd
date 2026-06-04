@@ -6,6 +6,59 @@ import (
 	"time"
 )
 
+func TestLoadDefaults(t *testing.T) {
+	// No args, no env: the built-in defaults the deployment relies on.
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatalf("Load(nil) error: %v", err)
+	}
+	if c.Addr != ":9123" || c.UserHeader != DefaultUserHeader || c.DefaultRole != "role:readonly" {
+		t.Errorf("defaults = addr %q, user-header %q, default-role %q", c.Addr, c.UserHeader, c.DefaultRole)
+	}
+	if c.PolicyReloadInterval != 10*time.Second || c.Resync != 10*time.Minute {
+		t.Errorf("default durations = reload %v, resync %v", c.PolicyReloadInterval, c.Resync)
+	}
+}
+
+func TestLoadFlagsOverrideEnv(t *testing.T) {
+	// Env sets a default; an explicit flag must win over it.
+	t.Setenv("KD_ADDR", ":7000")
+	t.Setenv("KD_DEFAULT_ROLE", "role:admin")
+	c, err := Load([]string{"-addr", ":8080", "-dev-user", "alice", "-skip-kinds", "leases, jobs", "-eager-kinds", "pods"})
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if c.Addr != ":8080" {
+		t.Errorf("addr = %q, want :8080 (flag overrides KD_ADDR)", c.Addr)
+	}
+	if c.DefaultRole != "role:admin" {
+		t.Errorf("default-role = %q, want role:admin (from env, no flag given)", c.DefaultRole)
+	}
+	if c.DevUser != "alice" {
+		t.Errorf("dev-user = %q, want alice", c.DevUser)
+	}
+	if len(c.SkipKinds) != 2 || c.SkipKinds[0] != "leases" || c.SkipKinds[1] != "jobs" {
+		t.Errorf("skip-kinds = %v, want [leases jobs] (CSV trimmed)", c.SkipKinds)
+	}
+	if len(c.EagerKinds) != 1 || c.EagerKinds[0] != "pods" {
+		t.Errorf("eager-kinds = %v, want [pods]", c.EagerKinds)
+	}
+}
+
+func TestLoadParsesTrustedProxies(t *testing.T) {
+	c, err := Load([]string{"-trusted-proxies", "10.0.0.0/8,192.168.0.0/16"})
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if len(c.TrustedProxies) != 2 {
+		t.Errorf("trusted proxies = %v, want 2 prefixes", c.TrustedProxies)
+	}
+	// An invalid CIDR is a hard error — kd must not silently start trusting nothing/everything.
+	if _, err := Load([]string{"-trusted-proxies", "not-a-cidr"}); err == nil {
+		t.Error("Load with an invalid trusted-proxies CIDR should error")
+	}
+}
+
 func TestSplitCSV(t *testing.T) {
 	cases := map[string][]string{
 		"a,b,c":        {"a", "b", "c"},
