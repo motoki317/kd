@@ -9,6 +9,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestPodStatusSummary(t *testing.T) {
@@ -447,6 +448,23 @@ func TestContainerImages(t *testing.T) {
 
 	if got := containerImages(&corev1.Service{}); got != nil {
 		t.Errorf("containerImages(non-workload) = %v, want nil", got)
+	}
+
+	// Every workload kind podSpecOf knows must surface its template's image — especially CronJob,
+	// whose spec nests the template one level deeper (JobTemplate.Spec.Template.Spec) and is the
+	// easiest path to get wrong. tmpl is the shared `Spec.Template.Spec` payload.
+	tmpl := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "tmpl:v1"}}}}
+	workloads := map[string]runtime.Object{
+		"ReplicaSet":  &appsv1.ReplicaSet{Spec: appsv1.ReplicaSetSpec{Template: tmpl}},
+		"StatefulSet": &appsv1.StatefulSet{Spec: appsv1.StatefulSetSpec{Template: tmpl}},
+		"DaemonSet":   &appsv1.DaemonSet{Spec: appsv1.DaemonSetSpec{Template: tmpl}},
+		"Job":         &batchv1.Job{Spec: batchv1.JobSpec{Template: tmpl}},
+		"CronJob":     &batchv1.CronJob{Spec: batchv1.CronJobSpec{JobTemplate: batchv1.JobTemplateSpec{Spec: batchv1.JobSpec{Template: tmpl}}}},
+	}
+	for kind, obj := range workloads {
+		if got := containerImages(obj); len(got) != 1 || got[0] != "tmpl:v1" {
+			t.Errorf("containerImages(%s) = %v, want [tmpl:v1]", kind, got)
+		}
 	}
 }
 
