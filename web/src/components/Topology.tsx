@@ -2078,8 +2078,21 @@ export default function Topology(props: Props) {
       <Show when={capTip()}>
         {(t) => {
           const d = () => t().d
+          // Flip the cursor-following tooltip to the cursor's other side near a viewport edge so it never
+          // clips off-screen (hovering a far-right pod card / bottom node row used to push it past the
+          // edge). Threshold uses the CSS max-width (360) + margin as the worst case, so even a wide
+          // tooltip stays fully on-screen; the translate keeps the chosen corner anchored to the cursor.
+          const pos = () => {
+            const flipX = t().x > window.innerWidth - 374
+            const flipY = t().y > window.innerHeight - 110
+            return {
+              left: `${flipX ? t().x - 14 : t().x + 14}px`,
+              top: `${flipY ? t().y - 14 : t().y + 14}px`,
+              transform: flipX || flipY ? `translate(${flipX ? '-100%' : '0'}, ${flipY ? '-100%' : '0'})` : undefined,
+            }
+          }
           return (
-            <div class="cap-tooltip" style={{ left: `${t().x + 14}px`, top: `${t().y + 14}px` }}>
+            <div class="cap-tooltip" style={pos()}>
               <div class="cap-tooltip-name">{d().title}</div>
               <Show when={d().sub}>{(sub) => <div class="cap-tooltip-sub">{sub()}</div>}</Show>
               <div class="cap-tooltip-value">{d().value}</div>
