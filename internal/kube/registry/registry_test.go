@@ -65,6 +65,11 @@ func TestInClusterServesSingleContext(t *testing.T) {
 	// registered. ListNamespaces returns nil in that case — which is fine to assert: the
 	// registry built the cache without error, and routing to the in-cluster context works.
 	_ = cache.ListNamespaces()
+	// List() reflects the lazily-registered sentinel (knownNamesLocked's entries branch, distinct
+	// from kubeconfig mode's up-front context slice): exactly the one accessed in-cluster context.
+	if got := r.List(); len(got) != 1 || got[0].Name != registry.InClusterContext {
+		t.Errorf("List() = %+v, want one entry named %q", got, registry.InClusterContext)
+	}
 	// Unknown context name is rejected, even in in-cluster mode.
 	if _, err := r.Get(ctx, "prod"); !errors.Is(err, registry.ErrUnknownContext) {
 		t.Errorf("Get unknown context error = %v, want ErrUnknownContext", err)
