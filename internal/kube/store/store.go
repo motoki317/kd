@@ -68,6 +68,8 @@ var DefaultSkipKinds = []string{
 var (
 	namespacesGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
 	crdsGVR       = schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	podsGVR       = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	nodesGVR      = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 )
 
 // Options tunes Cache construction. Zero-value Options is valid: defaults eager-load
@@ -520,6 +522,34 @@ func (c *Cache) SnapshotCluster() []runtime.Object {
 			}
 		}
 	}
+	return out
+}
+
+// SnapshotNodesAndPods returns every cached Node and every Pod across all namespaces. The Nodes
+// group-by (capacity view) is inherently cluster-wide — a node hosts pods from every namespace —
+// so it always draws the whole cluster's nodes+pods regardless of the selected namespace, dimming
+// pods outside it on the client. This is the only snapshot that crosses the per-namespace
+// ride-along boundary, deliberately: a node's true utilization can't be shown from one namespace's
+// pods alone.
+func (c *Cache) SnapshotNodesAndPods() []runtime.Object {
+	c.mu.Lock()
+	nodes, hasNodes := c.resources[nodesGVR]
+	pods, hasPods := c.resources[podsGVR]
+	c.mu.Unlock()
+
+	var out []runtime.Object
+	add := func(r Resource, ok bool) {
+		if !ok {
+			return
+		}
+		for _, obj := range r.Informer.GetIndexer().List() {
+			if o, ok := obj.(runtime.Object); ok {
+				out = append(out, o)
+			}
+		}
+	}
+	add(nodes, hasNodes)
+	add(pods, hasPods)
 	return out
 }
 

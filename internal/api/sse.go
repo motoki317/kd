@@ -50,21 +50,23 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 		return full, graph.SummarizeBuilt(full, clusterScope)
 	}
 
-	// buildUsage collects live Pod/Node usage from metrics-server keyed by object UID. The
-	// resolvers bridge metrics-server's name-keyed metrics onto the cache's UID-keyed nodes,
-	// rebuilt each tick from the current snapshot so churn (pods replaced, nodes added) is
-	// tracked. Returns nil when metrics-server is absent (nil client) — a graceful no-op.
-	buildUsage := func() *graph.Usage {
-		mc := store.MetricsClient()
-		if mc == nil {
-			return nil
+	// buildCapacity assembles the Nodes group-by (capacity view) payload: the WHOLE cluster's
+	// Nodes + Pods (not just this namespace's), each with allocatable/requests/limits/health, plus
+	// live per-UID usage from metrics-server. The capacity view is cluster-wide by nature — a node
+	// hosts pods from every namespace — so it always carries all pods and the client dims those
+	// outside the selected namespace. Usage is built with clusterScope=true so every namespace's
+	// pod metrics resolve. metrics-server absence leaves Usage nil (bars fall back to requests).
+	buildCapacity := func() capacityPayload {
+		snap := store.SnapshotNodesAndPods()
+		g := graph.Build(snap)
+		var usage *graph.Usage
+		if mc := store.MetricsClient(); mc != nil {
+			resolvePod, resolveNode := uidResolvers(snap)
+			if u, err := graph.BuildUsage(r.Context(), mc, "", true, resolvePod, resolveNode); err == nil {
+				usage = u
+			}
 		}
-		resolvePod, resolveNode := uidResolvers(store.SnapshotNamespace(ns))
-		usage, err := graph.BuildUsage(r.Context(), mc, ns, clusterScope, resolvePod, resolveNode)
-		if err != nil {
-			return nil
-		}
-		return usage
+		return capacityPayload{Nodes: g.Nodes, Usage: usage}
 	}
 
 	prev, prevSummary := build()
@@ -74,18 +76,16 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	if !writeSSE(w, "summary", prevSummary) {
 		return
 	}
-	// Send one usage reading immediately so the capacity view isn't blank until the first tick.
-	if usage := buildUsage(); usage != nil {
-		if !writeSSE(w, "usage", usage) {
-			return
-		}
+	// Send the capacity payload immediately so the Nodes view isn't blank until the first tick.
+	if !writeSSE(w, "capacity", buildCapacity()) {
+		return
 	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
-	// Usage is polled on its own cadence: metrics-server samples ~every 15s, and a usage push
-	// is independent of graph-change debouncing.
+	// The capacity view is refreshed on its own cadence: metrics-server samples ~every 15s, and a
+	// usage push is independent of graph-change debouncing.
 	usageTick := time.NewTicker(15 * time.Second)
 	defer usageTick.Stop()
 	// Fixed-window debounce: the first change after a quiet period arms the timer; further
@@ -121,13 +121,17 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 				flusher.Flush()
 			}
 			prev, prevSummary = next, nextSummary
-		case <-usageTick.C:
-			if usage := buildUsage(); usage != nil {
-				if !writeSSE(w, "usage", usage) {
-					return
-				}
-				flusher.Flush()
+			// A graph change may have added/removed pods; refresh the capacity view too so the
+			// Nodes group-by tracks pod churn without waiting for the usage tick.
+			if !writeSSE(w, "capacity", buildCapacity()) {
+				return
 			}
+			flusher.Flush()
+		case <-usageTick.C:
+			if !writeSSE(w, "capacity", buildCapacity()) {
+				return
+			}
+			flusher.Flush()
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 				return
@@ -169,6 +173,14 @@ func uidResolvers(snapshot []runtime.Object) (resolvePod, resolveNode graph.UIDR
 		return uid, ok
 	}
 	return resolvePod, resolveNode
+}
+
+// capacityPayload is the SSE `capacity` event: the cluster-wide Node + Pod set the Nodes group-by
+// renders (every namespace's pods on each node) plus live usage keyed by UID. Sent in full each
+// time (no diff) — it's a small, node-and-pod-only graph refreshed on the ~15s metrics cadence.
+type capacityPayload struct {
+	Nodes []graph.Node `json:"nodes"`
+	Usage *graph.Usage `json:"usage,omitempty"`
 }
 
 type logLine struct {

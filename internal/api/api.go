@@ -30,6 +30,9 @@ const ClusterScopeNamespace = store.ClusterScope
 type Store interface {
 	ListNamespaces() []string
 	SnapshotNamespace(namespace string) []runtime.Object
+	// SnapshotNodesAndPods returns all Nodes + all Pods cluster-wide, for the capacity (Nodes)
+	// view, which shows every namespace's pods on each node regardless of the selected namespace.
+	SnapshotNodesAndPods() []runtime.Object
 	Subscribe() (<-chan struct{}, func())
 	Client() kubernetes.Interface
 	// MetricsClient exposes the metrics-server client for the live usage feed; nil when

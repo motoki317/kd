@@ -43,10 +43,21 @@ export interface ResourceUsage {
   memBytes?: number
 }
 
-// Usage is the payload of the `usage` SSE event: live consumption keyed by object UID (both Nodes
-// and Pods). Kept separate from KNode so the ~15s usage refresh never re-diffs the graph store.
+// Usage is live consumption keyed by object UID (both Nodes and Pods). Kept separate from KNode so
+// the ~15s usage refresh never re-diffs the graph store. Delivered inside the `capacity` event.
 export interface Usage {
   items: Record<string, ResourceUsage>
+}
+
+// Capacity is the payload of the `capacity` SSE event — the data behind the Nodes group-by. Unlike
+// the main graph (scoped to the selected namespace), it is ALWAYS cluster-wide: every Node and every
+// Pod across all namespaces, each Pod tagged with its `namespace` so the client shows this-namespace
+// pods bright and dims the rest. A node hosts pods from every namespace, so its true utilization can
+// only be drawn from the whole cluster's pods — hence this separate, cluster-wide feed. `usage` is
+// absent when metrics-server is unavailable (bars then fall back to sizing by request).
+export interface Capacity {
+  nodes: KNode[]
+  usage?: Usage
 }
 
 export interface KNode {
