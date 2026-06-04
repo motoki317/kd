@@ -152,3 +152,14 @@ export function cardStatus(status: string): string {
   if (status.length <= CARD_STATUS_MAX) return status
   return status.slice(0, CARD_STATUS_MAX - 1) + '…'
 }
+
+// pluralizeKind renders a Kubernetes Kind for a count label ("Show 8 more Endpoints"). Naive `+ 's'`
+// doubled an already-plural Kind ("Endpoints" → "Endpointss") and mangled consonant+y
+// ("NetworkPolicy" → "NetworkPolicys"); this handles the cases kd's Kind names actually hit. Not full
+// English inflection — a Kind already ending in 's' is left as-is (Endpoints stays Endpoints; the rare
+// singular "Ingress" reads fine in a tooltip), consonant+y → 'ies', else +'s'. n === 1 → unchanged.
+export function pluralizeKind(kind: string, n: number): string {
+  if (n === 1 || kind.endsWith('s')) return kind
+  if (/[^aeiou]y$/i.test(kind)) return kind.slice(0, -1) + 'ies'
+  return kind + 's'
+}

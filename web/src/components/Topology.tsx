@@ -7,7 +7,7 @@ import { nextRovingIndex } from '../rovingFocus'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel } from '../names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, pluralizeKind } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
@@ -2017,8 +2017,8 @@ export default function Topology(props: Props) {
                       tabindex="0"
                       aria-label={
                         meta().expanded
-                          ? `Show ${meta().hidden.length} fewer ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
-                          : `Show ${meta().hidden.length} more ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
+                          ? `Show ${meta().hidden.length} fewer ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
+                          : `Show ${meta().hidden.length} more ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
                       }
                       aria-expanded={meta().expanded}
                       onClick={() => toggleCluster(meta().key)}
@@ -2031,8 +2031,8 @@ export default function Topology(props: Props) {
                     >
                       <title>
                         {meta().expanded
-                          ? `Show ${meta().hidden.length} fewer ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`
-                          : `Show ${meta().hidden.length} more ${meta().groupKind}${meta().hidden.length === 1 ? '' : 's'}`}
+                          ? `Show ${meta().hidden.length} fewer ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
+                          : `Show ${meta().hidden.length} more ${pluralizeKind(meta().groupKind, meta().hidden.length)}`}
                       </title>
                       <rect class="collapse-pill-bg" width={n.width} height={n.height} rx="9" />
                       <Show

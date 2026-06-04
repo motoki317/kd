@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, relativeName, setServerShortNames } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, relativeName, setServerShortNames } from './names'
 import type { KNode } from './types'
 
 describe('relativeName', () => {
@@ -143,5 +143,22 @@ describe('cardTitle', () => {
   it('drops the restarts clause when restarts is 0 or missing', () => {
     const n = { kind: 'Pod', name: 'web-0', createdAt: twoHoursAgo, restarts: 0 } as KNode
     expect(cardTitle(n, now)).toBe('Pod web-0\n2h old')
+  })
+})
+
+describe('pluralizeKind', () => {
+  it('appends s for the common case', () => {
+    expect(pluralizeKind('Workflow', 3)).toBe('Workflows')
+    expect(pluralizeKind('Pod', 2)).toBe('Pods')
+  })
+  it('leaves an already-plural Kind ending in s unchanged (no "Endpointss")', () => {
+    expect(pluralizeKind('Endpoints', 8)).toBe('Endpoints')
+  })
+  it('turns consonant+y into ies (NetworkPolicy → NetworkPolicies)', () => {
+    expect(pluralizeKind('NetworkPolicy', 4)).toBe('NetworkPolicies')
+  })
+  it('returns the singular Kind unchanged when n === 1', () => {
+    expect(pluralizeKind('Workflow', 1)).toBe('Workflow')
+    expect(pluralizeKind('Endpoints', 1)).toBe('Endpoints')
   })
 })
