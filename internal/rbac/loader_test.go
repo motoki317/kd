@@ -1,9 +1,11 @@
 package rbac
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadFile(t *testing.T) {
@@ -127,5 +129,59 @@ func TestReloadSkipsUnchangedMalformedFile(t *testing.T) {
 	}
 	if !e.Enforce("bob", nil, "default", "pods", "get") {
 		t.Error("expected bob allowed after the fixed policy loaded")
+	}
+}
+
+// WatchFile is the ticker loop around reloadIfChanged: it must apply the file on its first tick,
+// re-apply on a later edit (so an operator's policy change takes effect without a restart), and stop
+// cleanly when the context is cancelled. Timing is generous (a 5ms ticker, 2s waits) to stay robust.
+func TestWatchFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "policy.csv")
+	if err := os.WriteFile(path, []byte("g, alice, role:admin\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := mustEnforcer(t, "", "") // start locked down
+	ctx, cancel := context.WithCancel(context.Background())
+
+	reloads := make(chan error, 4)
+	done := make(chan struct{})
+	go func() {
+		WatchFile(ctx, e, path, "", 5*time.Millisecond, func(err error) { reloads <- err })
+		close(done)
+	}()
+
+	waitReload := func(what string) {
+		t.Helper()
+		select {
+		case err := <-reloads:
+			if err != nil {
+				t.Fatalf("%s: reload error %v", what, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: WatchFile never fired onReload", what)
+		}
+	}
+
+	// First tick applies the initial file → alice is admin.
+	waitReload("initial load")
+	if !e.Enforce("alice", nil, "any", "secrets", "delete") {
+		t.Error("expected alice admin after the watcher loaded the file")
+	}
+
+	// An edit is picked up on a later tick → alice's grant is replaced by bob's.
+	if err := os.WriteFile(path, []byte("g, bob, role:admin\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitReload("after edit")
+	if e.Enforce("alice", nil, "any", "secrets", "delete") {
+		t.Error("expected alice's admin revoked after the policy file changed")
+	}
+
+	// Cancelling the context returns the loop promptly.
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WatchFile did not return after context cancel")
 	}
 }
