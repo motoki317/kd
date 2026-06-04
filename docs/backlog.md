@@ -9,6 +9,21 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
+**Status (2026-06-05, cont.):** A second dogfooding+refactor batch (cycles 12–18) shipped on top of the
+pass below. Theme: the "UX surface mature" claim had a real **accessibility blind spot** — prior surveys
+never audited ARIA roles, yet the drawer tabs were `aria-pressed` toggles (not a tablist) and the
+single-select Group/Resource segmented controls were `role=group`+`aria-pressed` (not radiogroups). Fixed
+both to the proper WAI-ARIA patterns with a tested `rovingFocus` arrow-key helper. Also shipped: **(a)**
+auto-frame matches when a health/kind filter toggles — *with a readability-floor guard* found necessary
+live (the naive fit zoomed scattered matches to a 0.04× speck); **(b)** completed+de-drifted the help edge
+legend (was missing `usesServiceAccount`), derived from the edge taxonomy; **(c)** three pure-logic
+extractions slimming the 2100-line Topology.tsx (`capacityTooltips`, `edgeRender`, `cardTitle`→`names`),
+each now unit-tested. Knowledge persisted to `dogfooding-kd-ui.md` (new bug class: auto-fit-to-scattered →
+speck; a11y control-role conventions). Lesson reinforced: "surveyed mature" ≠ mature — a *new audit lens*
+(here, ARIA) finds real gaps the prior lenses structurally missed. Remaining a11y TODO logged in the
+playbook (sidebar list, drawer action buttons, log controls, drawer focus-on-open). The earlier same-day
+status follows.
+
 **Status (2026-06-05):** A live-dogfooding pass (drive the real UI with agent-browser, not just tests)
 found that the **maturity claim below did not hold for the fresh Nodes-capacity surface, viewport-edge
 behaviour, or empty-data paths** — areas a test suite structurally misses. Nine cycles shipped, several
