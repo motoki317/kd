@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/graph"
@@ -31,6 +32,9 @@ type Store interface {
 	SnapshotNamespace(namespace string) []runtime.Object
 	Subscribe() (<-chan struct{}, func())
 	Client() kubernetes.Interface
+	// MetricsClient exposes the metrics-server client for the live usage feed; nil when
+	// metrics-server is unavailable (the usage feed then degrades to a no-op).
+	MetricsClient() metricsversioned.Interface
 	// GroupForKind returns the GVR group of the first registered resource matching kind,
 	// so the API can authorize a kind-named URL against group-keyed policy.csv rules.
 	// Returns ("", false) when no registered resource has that kind.

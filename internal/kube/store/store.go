@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/motoki317/kd/internal/kube/discovery"
 )
@@ -93,6 +94,7 @@ type Options struct {
 type Cache struct {
 	client    kubernetes.Interface // typed: log streaming + discovery
 	dynClient dynamic.Interface    // dynamic: every cached read
+	metrics   metricsversioned.Interface // metrics-server reads; nil when metrics-server is absent
 	disc      discovery.Discoverer
 	factory   dynamicinformer.DynamicSharedInformerFactory
 	opts      Options
@@ -128,7 +130,8 @@ type Resource struct {
 // New constructs an unstarted Cache. Start must be called before snapshots/subscriptions are
 // served. disc may be nil; New defaults to discovery.FromClient(client.Discovery()) in that
 // case, which is the production wiring. opts.Discoverer takes precedence over disc when set.
-func New(client kubernetes.Interface, dynClient dynamic.Interface, disc discovery.Discoverer, opts Options) *Cache {
+// metrics may be nil when metrics-server is unavailable; the usage feed degrades to a no-op.
+func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metricsversioned.Interface, disc discovery.Discoverer, opts Options) *Cache {
 	if opts.Discoverer != nil {
 		disc = opts.Discoverer
 	}
@@ -144,6 +147,7 @@ func New(client kubernetes.Interface, dynClient dynamic.Interface, disc discover
 	return &Cache{
 		client:    client,
 		dynClient: dynClient,
+		metrics:   metrics,
 		disc:      disc,
 		factory:   dynamicinformer.NewDynamicSharedInformerFactory(dynClient, opts.Resync),
 		opts:      opts,
@@ -388,6 +392,10 @@ func (c *Cache) reconcile(ctx context.Context) {
 // Client exposes the underlying typed clientset for operations that bypass the cache, e.g.
 // log streaming.
 func (c *Cache) Client() kubernetes.Interface { return c.client }
+
+// MetricsClient exposes the metrics-server clientset for the live usage feed. It is nil when
+// metrics-server is unavailable; callers must treat nil as "metrics unavailable" (no-op).
+func (c *Cache) MetricsClient() metricsversioned.Interface { return c.metrics }
 
 // GroupForKind returns the API group of the registered resource whose Kind matches, so the
 // RBAC layer can authorize a kind-named URL against group-keyed policy.csv rules. Returns

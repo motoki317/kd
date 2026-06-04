@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/motoki317/kd/internal/api"
 	"github.com/motoki317/kd/internal/auth"
@@ -125,7 +126,10 @@ func newRegistry(kubeconfigPath string, resync time.Duration, storeOpts store.Op
 			if err != nil {
 				return nil, false, err
 			}
-			return registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, resync, storeOpts), true, nil
+			// Tolerate a missing metrics client (metrics-server may be absent): a nil Metrics
+			// degrades the usage feed to a no-op rather than failing startup.
+			metricsClient, _ := metricsversioned.NewForConfig(cfg)
+			return registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn, Metrics: metricsClient}, resync, storeOpts), true, nil
 		}
 	}
 	loader, err := kubeconfig.Load(kubeconfigPath)

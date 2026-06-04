@@ -89,7 +89,7 @@ func startTestStore(t *testing.T, objs ...runtime.Object) *Cache {
 	t.Helper()
 	// Use the cluster scheme so the dynamic fake knows how to list/watch each GVR.
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
-	c := New(fake.NewSimpleClientset(), dynClient, discovery.Static(fixedResources), Options{})
+	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources), Options{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	if err := c.Start(ctx); err != nil {
@@ -189,7 +189,7 @@ func TestStoreSnapshotClusterSentinel(t *testing.T) {
 
 func TestStoreSubscribeReceivesChange(t *testing.T) {
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, ns("alpha"))
-	c := New(fake.NewSimpleClientset(), dynClient, discovery.Static(fixedResources), Options{})
+	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources), Options{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	if err := c.Start(ctx); err != nil {
@@ -222,7 +222,7 @@ func TestStoreSkipKindsExcludesFromEager(t *testing.T) {
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme,
 		ns("alpha"), deployment("alpha", "web"),
 	)
-	c := New(fake.NewSimpleClientset(), dynClient, discovery.Static(fixedResources),
+	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources),
 		Options{SkipKinds: []string{"deployments"}},
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -245,7 +245,7 @@ func TestStoreSkipKindsExcludesFromEager(t *testing.T) {
 // doesn't know about the synthetic evil.example.com Pod GVR, and the property under test
 // is independent of informer wiring.
 func TestStoreGroupForKindDeterministic(t *testing.T) {
-	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), discovery.Static(nil), Options{})
+	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, discovery.Static(nil), Options{})
 	for _, gvr := range []schema.GroupVersionResource{
 		{Group: "evil.example.com", Version: "v1", Resource: "pods"},
 		{Group: "", Version: "v1", Resource: "pods"},
@@ -267,7 +267,7 @@ func TestStoreGroupForKindDeterministic(t *testing.T) {
 // the lexicographically smallest group like GroupForKind. Populated directly for the same reason
 // as the determinism test — the property is independent of informer wiring.
 func TestStoreKindShortNames(t *testing.T) {
-	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), discovery.Static(nil), Options{})
+	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, discovery.Static(nil), Options{})
 	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] =
 		Resource{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", ShortNames: []string{"cm"}}
 	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}] =

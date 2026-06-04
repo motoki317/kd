@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/motoki317/kd/internal/kube/discovery"
 	"github.com/motoki317/kd/internal/kube/kubeconfig"
@@ -47,10 +48,12 @@ type ContextInfo struct {
 }
 
 // Clients bundles the typed + dynamic Kubernetes clients a Cache needs. The typed client
-// drives discovery and log streaming; the dynamic client backs every cached read.
+// drives discovery and log streaming; the dynamic client backs every cached read. Metrics is
+// the metrics-server client for the live usage feed and may be nil (metrics-server absent).
 type Clients struct {
 	Typed   kubernetes.Interface
 	Dynamic dynamic.Interface
+	Metrics metricsversioned.Interface
 }
 
 // Registry resolves a context name to its *store.Cache, lazily.
@@ -116,7 +119,10 @@ func NewKubeconfig(loader *kubeconfig.Loader, resync time.Duration, storeOpts st
 		if err != nil {
 			return Clients{}, err
 		}
-		return Clients{Typed: typed, Dynamic: dyn}, nil
+		// Tolerate a missing metrics client: metrics-server may not be installed. A nil
+		// Metrics degrades the usage feed to a no-op rather than failing cache construction.
+		metricsClient, _ := metricsversioned.NewForConfig(cfg)
+		return Clients{Typed: typed, Dynamic: dyn, Metrics: metricsClient}, nil
 	})
 }
 
@@ -236,7 +242,7 @@ func (r *Registry) runBuild(name string, e *entry) {
 	}
 	opts := r.storeOpts
 	opts.Resync = r.resync
-	c := store.New(clients.Typed, clients.Dynamic, discovery.FromClient(clients.Typed.Discovery()), opts)
+	c := store.New(clients.Typed, clients.Dynamic, clients.Metrics, discovery.FromClient(clients.Typed.Discovery()), opts)
 	// Cache lifetime is tied to the process — once started, informers run until the kd
 	// process exits. A dedicated context keeps Start() independent of any single HTTP request.
 	startCtx := context.Background()

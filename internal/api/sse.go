@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 
@@ -49,6 +50,23 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 		return full, graph.SummarizeBuilt(full, clusterScope)
 	}
 
+	// buildUsage collects live Pod/Node usage from metrics-server keyed by object UID. The
+	// resolvers bridge metrics-server's name-keyed metrics onto the cache's UID-keyed nodes,
+	// rebuilt each tick from the current snapshot so churn (pods replaced, nodes added) is
+	// tracked. Returns nil when metrics-server is absent (nil client) — a graceful no-op.
+	buildUsage := func() *graph.Usage {
+		mc := store.MetricsClient()
+		if mc == nil {
+			return nil
+		}
+		resolvePod, resolveNode := uidResolvers(store.SnapshotNamespace(ns))
+		usage, err := graph.BuildUsage(r.Context(), mc, ns, clusterScope, resolvePod, resolveNode)
+		if err != nil {
+			return nil
+		}
+		return usage
+	}
+
 	prev, prevSummary := build()
 	if !writeSSE(w, "snapshot", prev) {
 		return
@@ -56,10 +74,20 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	if !writeSSE(w, "summary", prevSummary) {
 		return
 	}
+	// Send one usage reading immediately so the capacity view isn't blank until the first tick.
+	if usage := buildUsage(); usage != nil {
+		if !writeSSE(w, "usage", usage) {
+			return
+		}
+	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
+	// Usage is polled on its own cadence: metrics-server samples ~every 15s, and a usage push
+	// is independent of graph-change debouncing.
+	usageTick := time.NewTicker(15 * time.Second)
+	defer usageTick.Stop()
 	// Fixed-window debounce: the first change after a quiet period arms the timer; further
 	// changes within the window are absorbed, bounding update latency to a.debounce.
 	debounce := time.NewTimer(0)
@@ -93,6 +121,13 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 				flusher.Flush()
 			}
 			prev, prevSummary = next, nextSummary
+		case <-usageTick.C:
+			if usage := buildUsage(); usage != nil {
+				if !writeSSE(w, "usage", usage) {
+					return
+				}
+				flusher.Flush()
+			}
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 				return
@@ -100,6 +135,40 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// uidResolvers builds (namespace, name) → UID lookups over a cache snapshot for the usage feed:
+// one for namespaced Pods and one for cluster-scoped Nodes (whose namespace is ""). metrics-server
+// reports metrics by name, but the graph keys nodes by UID, so usage must be re-keyed via these.
+func uidResolvers(snapshot []runtime.Object) (resolvePod, resolveNode graph.UIDResolver) {
+	type key struct{ ns, name string }
+	pods := map[key]string{}
+	nodes := map[string]string{}
+	for _, obj := range snapshot {
+		u, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			continue
+		}
+		uid := string(u.GetUID())
+		if uid == "" {
+			continue
+		}
+		switch u.GetKind() {
+		case "Pod":
+			pods[key{u.GetNamespace(), u.GetName()}] = uid
+		case "Node":
+			nodes[u.GetName()] = uid
+		}
+	}
+	resolvePod = func(ns, name string) (string, bool) {
+		uid, ok := pods[key{ns, name}]
+		return uid, ok
+	}
+	resolveNode = func(_, name string) (string, bool) {
+		uid, ok := nodes[name]
+		return uid, ok
+	}
+	return resolvePod, resolveNode
 }
 
 type logLine struct {
