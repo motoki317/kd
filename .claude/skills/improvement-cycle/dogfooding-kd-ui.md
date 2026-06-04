@@ -136,6 +136,14 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    signal-driven attribute that commits synchronously (`aria-expanded`), or re-measure DOM counts after
    `sleep`/a rAF. Don't conclude "the re-fold is broken" from a same-eval count. (Same root cause in
    jsdom unit tests — assert `aria-expanded`, not the immediate child count.)
+4. **A held element reference goes stale across a reactive toggle — re-query, don't reuse the ref.**
+   Distinct from #3: this bites even when you assert on `aria-expanded` (which commits synchronously),
+   because Solid's `<For>` reconciliation *replaces* the toggled SVG node with a new element. A `const
+   pill = querySelector('.collapse-pill')` captured BEFORE dispatching Enter becomes detached after the
+   toggle — its attributes never update, so `pill.getAttribute('aria-expanded')` reads the pre-toggle
+   value forever (cost a false "keyboard toggle is broken" in cycle 45). Always re-`querySelector` the
+   element AFTER the action and read attributes off the fresh node. Holding a ref across a toggle is
+   only safe for elements Solid mutates in place, not ones it reconciles.
 
 ## Accessibility patterns established (match these on any new control)
 

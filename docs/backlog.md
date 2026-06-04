@@ -168,11 +168,6 @@ live Playwright verification per AGENTS.md, not the backlog.
 The "+N older" same-kind collapse shipped across all views (commits `189c839` grid views, `d444086`
 connectivity). Two scoped pieces were deliberately left out — each is real but low-value/high-risk today:
 
-- **Keyboard-operable collapse pills** — *deferred (a11y nicety).* The "+N older" pill is mouse-clickable
-  but not in the `nav.ts` Tab/Enter cycle (`orderedForNav` walks `props.nodes`, which has no synthetic
-  pills), so a keyboard-only user can't expand a fold. Low traffic (the data is still reachable by
-  searching, which auto-badges hidden matches). *Reopen when:* a keyboard-nav a11y pass is on the table —
-  then make pills focusable and Enter-toggle them, reusing `toggleCluster`.
 - **Collapse non-leaf same-kind siblings** — *deferred (effectively absent in the model).* Connectivity
   collapse only folds a hub's **degree-1** same-kind leaves (pods, configmaps, PVCs). Same-kind siblings
   that *own subtrees* and number >8 under one parent don't occur in kd's graph (controllers fan out to
@@ -237,6 +232,17 @@ evicts the matching GVR (by group+plural) from `c.resources` so snapshots skip i
 delete event, **not** a discovery diff, because `Discover()` tolerates partial results (a flapping
 aggregated API would otherwise masquerade as a removed resource). The informer goroutine still leaks
 (client-go has no per-informer stop) — bounded at one per removed CRD, documented in code.
+
+**Keyboard-operable collapse pills (cycle 41, was a deferred a11y item):** the "+N older / +N more"
+pill is now a focusable `role="button"` (tabindex 0, `aria-label`, `aria-expanded`) that Enter/Space
+toggles via `toggleCluster` — a keyboard-only user can expand/refold a fold without the mouse. Chosen
+over wiring pills into `nav.ts`'s `orderedForNav` cycle (which walks `props.nodes` and has no synthetic
+pills): an SVG action button with native tabindex + Enter/Space is the standard pattern and avoids
+threading synthetic pill nodes through nav. Live-verified (cycle 45): Enter toggles `aria-expanded`
+true↔false. **Measurement note that cost a re-check:** toggling re-renders the pill into a *new* SVG
+node (Solid `<For>` reconciliation), so a held element reference goes detached — its attributes never
+update and read stale. Re-query `.collapse-pill` by selector after a reactive toggle; never assert on a
+ref captured before it.
 
 **Server-side survey (2026-05-29)** shipped three items found by surveying the never-before-surveyed
 server surface: (1) **rbac** — a malformed `policy.csv` was re-parsed and re-logged every poll (10 s)
