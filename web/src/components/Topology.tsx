@@ -13,6 +13,7 @@ import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
 import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
+import { isNodeFaded } from '../fade'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
@@ -502,15 +503,14 @@ export default function Topology(props: Props) {
   // filter, both must accept the node — so kinds compose rather than overriding. The selected
   // node never fades, even if a filter would exclude it: the operator's focus stays visible
   // instead of ghosting out behind the spotlight (cycle 224).
-  const nodeFaded = (n: { id: string; health: string; kind: string }) => {
-    if (n.id === props.selectedId) return false
-    if (!nodeKindOk(n.kind)) return true
-    const m = matches()
-    if (m) return !m.has(n.id)
-    if (props.healthFilter) return n.health !== props.healthFilter
-    const r = related()
-    return r ? !r.nodes.has(n.id) : false
-  }
+  const nodeFaded = (n: { id: string; health: string; kind: string }) =>
+    isNodeFaded(n, {
+      selectedId: props.selectedId,
+      kindOk: nodeKindOk,
+      matchIds: matches(),
+      healthFilter: props.healthFilter,
+      relatedIds: related()?.nodes ?? null,
+    })
   // Capacity-view spotlight: hovering a pod segment/bullet (not just clicking it) spotlights it and
   // fades the rest, like a Grafana panel — faster than click-to-select for reading the bars. capHover
   // holds the hovered element's key: a pod id, a `small:<host>` / `other:<host>` aggregate marker, or

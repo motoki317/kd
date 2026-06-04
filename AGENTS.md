@@ -46,8 +46,15 @@ that do NOT reproduce under `npm test`. If a full-suite run suddenly fails ~10 f
 errors while single-file runs pass, you hit this — re-run via `npm test` (the package.json script
 resolves the local binary).
 
-**CWD gotcha**: `npx tsc`/`npm test`/`vitest` need to run from `web/` — a compound
-`cd web && npx ...` shifts the parent shell's cwd, which then breaks the next call. Always
+**Typecheck with `npm run typecheck`, NOT bare `tsc --noEmit`**: the build runs `tsc -b` (project
+references — `tsconfig.app.json` carries the strict app settings). Bare `tsc --noEmit` /
+`./node_modules/.bin/tsc --noEmit` use the ROOT `tsconfig.json`, which doesn't pull in the app sources
+under strict mode, so they pass on errors the build then fails on (e.g. a `string | null` passed where
+`string | undefined` is expected). `npm run typecheck` is `tsc -b --noEmit` — the same check the build
+does. When in doubt, `just build` is the authority.
+
+**CWD gotcha**: web tooling (`npm test`, `npm run typecheck`, `vitest`) must run from `web/` — a
+compound `cd web && npx ...` shifts the parent shell's cwd, which then breaks the next call. Always
 `cd <repo>/web` before web tooling; git ops from the repo root.
 
 ## Conventions
