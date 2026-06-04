@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMou
 import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta } from '../layout'
 import { edgeKey } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
+import { nextRovingIndex } from '../rovingFocus'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -163,6 +164,10 @@ export default function Topology(props: Props) {
     setCapResourceSig(r)
     try { localStorage.setItem('kd:capRes', r) } catch { /* private mode */ }
   }
+  // Radio refs for the two single-select segmented controls, so arrow-key navigation can move DOM
+  // focus to follow the roving tabindex (see the radiogroup onKeyDown handlers in the toolbar).
+  const groupSegRefs: Partial<Record<GroupBy, HTMLButtonElement>> = {}
+  const capResRefs: Partial<Record<CapResource, HTMLButtonElement>> = {}
   // Rich hover tooltip for the capacity bars (item: Grafana-style panels). Holds normalized tooltip
   // data + the pointer position; an HTML overlay (not an SVG <title>) follows the cursor so the bar's
   // name/usage/request/limit read instantly instead of after the browser's ~700ms title delay. The
@@ -1294,12 +1299,30 @@ export default function Topology(props: Props) {
         <Show when={props.onGroupBy}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Group</span>
-            <div class="group-seg" role="group" aria-label="Group resources by">
+            {/* Single-select → a radiogroup (not aria-pressed toggle buttons): a screen reader hears
+                "radio group, Relationship selected, 1 of 3" and arrow keys move between options, the
+                expected segmented-control model. */}
+            <div
+              class="group-seg"
+              role="radiogroup"
+              aria-label="Group resources by"
+              onKeyDown={(e) => {
+                const ids = GROUP_OPTIONS.map((g) => g.id)
+                const i = nextRovingIndex(e.key, ids.indexOf(props.groupBy ?? 'relationship'), ids.length)
+                if (i === null) return
+                e.preventDefault()
+                props.onGroupBy?.(ids[i])
+                groupSegRefs[ids[i]]?.focus()
+              }}
+            >
               <For each={GROUP_OPTIONS}>
                 {(g) => (
                   <button
+                    ref={(el) => (groupSegRefs[g.id] = el)}
+                    role="radio"
+                    aria-checked={(props.groupBy ?? 'relationship') === g.id}
+                    tabindex={(props.groupBy ?? 'relationship') === g.id ? 0 : -1}
                     classList={{ active: (props.groupBy ?? 'relationship') === g.id }}
-                    aria-pressed={(props.groupBy ?? 'relationship') === g.id}
                     onClick={() => props.onGroupBy?.(g.id)}
                     title={g.hint}
                   >
@@ -1317,12 +1340,27 @@ export default function Topology(props: Props) {
         <Show when={props.groupBy === 'nodes'}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Resource</span>
-            <div class="group-seg" role="group" aria-label="Size bars by resource">
+            <div
+              class="group-seg"
+              role="radiogroup"
+              aria-label="Size bars by resource"
+              onKeyDown={(e) => {
+                const ids: CapResource[] = ['cpu', 'memory']
+                const i = nextRovingIndex(e.key, ids.indexOf(capResource()), ids.length)
+                if (i === null) return
+                e.preventDefault()
+                setCapResource(ids[i])
+                capResRefs[ids[i]]?.focus()
+              }}
+            >
               <For each={[{ id: 'cpu', label: 'CPU' }, { id: 'memory', label: 'Memory' }] as const}>
                 {(r) => (
                   <button
+                    ref={(el) => (capResRefs[r.id] = el)}
+                    role="radio"
+                    aria-checked={capResource() === r.id}
+                    tabindex={capResource() === r.id ? 0 : -1}
                     classList={{ active: capResource() === r.id }}
-                    aria-pressed={capResource() === r.id}
                     onClick={() => setCapResource(r.id)}
                     title={`Size node tracks and pod segments by ${r.label}`}
                   >

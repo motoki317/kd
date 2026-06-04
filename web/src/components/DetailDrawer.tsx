@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
+import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
 import type { KNode } from '../types'
@@ -116,14 +117,8 @@ export default function DetailDrawer(props: Props) {
   // a hidden class, and it matches the [ / ] shortcut's immediate switch.
   const onTablistKey = (e: KeyboardEvent) => {
     const list = tabs()
-    const cur = list.indexOf(tab())
-    if (cur < 0) return
-    let next = cur
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (cur + 1) % list.length
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (cur - 1 + list.length) % list.length
-    else if (e.key === 'Home') next = 0
-    else if (e.key === 'End') next = list.length - 1
-    else return
+    const next = nextRovingIndex(e.key, list.indexOf(tab()), list.length)
+    if (next === null) return
     e.preventDefault()
     setTab(list[next])
     tabRefs[list[next]]?.focus()
