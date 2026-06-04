@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, capBulletLaps, capReqCeiling, capUseCeiling, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -153,6 +153,57 @@ const EDGE_LABELS: Record<EdgeType, string> = {
 // CapTipData is the normalized hover-tooltip payload for the capacity bars — built from either a
 // single pod segment or the folded "other namespaces" aggregate, so the tooltip renders one shape.
 type CapTipData = { title: string; sub: string; use: number; req?: number; lim?: number; over: boolean; near: boolean }
+
+// CapGauge draws ONE expanded-pod bar as a gauge against the pod's ceiling: an axis label ("Use"/"Req")
+// in the left gutter, a faint full-length track (= the ceiling at 100%), the value as a fill, and a
+// "value / limit" label past the track — mirroring a node-level bar. When the value exceeds the ceiling
+// it WRAPS: capBulletLaps yields successive full-width laps painted left-to-right in escalating colours
+// (lap 1 normal, 2 amber, 3 orange, 4 red), so an overshoot stays inside the fixed width and the lap
+// count reads as "N× over". Both bars of a pod pass the SAME ceiling, so use/limit and req/limit compare.
+function CapGauge(props: {
+  x: number
+  y: number
+  value: number
+  ceiling: number
+  trackLen: number
+  axis: string
+  barClass: string // 'use' | 'req' — picks the matching node-bar track/segment styling
+  valueStr: string
+  ceilStr?: string
+  hClass?: string
+  selected?: boolean
+  other?: boolean
+}) {
+  const laps = createMemo(() => capBulletLaps(props.value, props.ceiling, props.trackLen))
+  return (
+    <>
+      <text class="cap-axis-label" x={props.x - 6} y={props.y + 9}>{props.axis}</text>
+      <rect class={`cap-track ${props.barClass}`} x={props.x} y={props.y} width={props.trackLen} height={CAP_BULLET_BAR_H} rx="2" />
+      <For each={laps()}>
+        {(lap) => (
+          <rect
+            class={`cap-seg ${props.barClass}`}
+            classList={{
+              [props.hClass ?? 'h-healthy']: lap.lap === 1,
+              [`lap-${lap.lap}`]: lap.lap > 1,
+              other: !!props.other,
+              selected: !!props.selected,
+            }}
+            x={props.x}
+            y={props.y}
+            width={Math.max(1, lap.width)}
+            height={CAP_BULLET_BAR_H}
+            rx="2"
+          />
+        )}
+      </For>
+      <text class="cap-bar-value" x={props.x + props.trackLen + 8} y={props.y + 9}>
+        <tspan class="cap-bar-value-strong">{props.valueStr}</tspan>
+        {props.ceilStr ? ` / ${props.ceilStr}` : ''}
+      </text>
+    </>
+  )
+}
 
 function nodeLabel(n: KNode): string {
   const ns = n.namespace ? `${n.namespace}/` : ''
@@ -1622,27 +1673,23 @@ export default function Topology(props: Props) {
                         {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
                       </text>
 
-                      {/* Per-pod bullets (expanded): each pod mirrors the node-level bars — two stacked
-                          sub-bars, Use over Req, in the SAME visual language (same accent/health fills,
-                          same faint track behind, Use bar carries the burst hatch + limit tick) — so the
-                          detail reads as a zoomed-in version of the node row, not a separate idiom. Bars
-                          scale on the shared per-node bulletScale; the full pod NAME is printed, numbers
-                          on hover. The whole pod (both bars) is one hover/click target. */}
+                      {/* Per-pod bullets (expanded): each pod is two stacked gauges that BOTH fill with
+                          actual USAGE, differing only in their reference ceiling — the Use bar against the
+                          limit (how close to throttle/OOM), the Req bar against the request (how much of
+                          the reservation is used; the bar WRAPS in escalating lap colours when usage
+                          bursts past the request). Pod name as a header above, a "usage / ceiling" label
+                          past each bar, mirroring a node row. Whole pod = one hover/click target with the
+                          same tooltip as the node-level segments. */}
                       <For each={row.bullets}>
                         {(b) => {
-                          const bs = row.bulletScale ?? 1
-                          const baseline = b.width // furthest marker, capped at the per-node track (layout)
-                          // Clamp every marker to the baseline: the scale is zoomed to usage+request, so a
-                          // pod whose limit dwarfs its usage has its limit tick land at the track end (the
-                          // cap) instead of running off-canvas — usage stays legible, the exact limit is on hover.
-                          const usePx = Math.max(1, Math.min(b.use * bs, baseline))
-                          const reqPx = b.req !== undefined ? Math.max(1, Math.min(b.req * bs, baseline)) : undefined
-                          const limPx = b.lim !== undefined ? Math.min(b.lim * bs, baseline) : undefined
-                          const withinW = b.over && reqPx !== undefined ? reqPx : usePx
-                          const useY = b.y
+                          const useStr = fmt(b.use)
                           const reqY = b.y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
                           const hClass = `h-${b.node.health.toLowerCase()}`
                           const selected = b.node.id === props.selectedId
+                          // Denominators: the Use bar reads usage / limit (fall back to request), the Req
+                          // bar reads usage / request (fall back to limit); show whichever bound exists.
+                          const useCeilStr = b.lim !== undefined ? fmt(b.lim) : b.req !== undefined ? fmt(b.req) : undefined
+                          const reqCeilStr = b.req !== undefined ? fmt(b.req) : b.lim !== undefined ? fmt(b.lim) : undefined
                           return (
                             <g
                               class="cap-bullet"
@@ -1651,35 +1698,19 @@ export default function Topology(props: Props) {
                               onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
-                              {/* Use sub-bar (top): faint track to the pod's extent, then the usage fill,
-                                  the burst hatch past request, and the limit tick. */}
-                              <rect class="cap-track use" x={b.x} y={useY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
-                              <rect class="cap-seg use" classList={{ [hClass]: true, selected }} x={b.x} y={useY} width={withinW} height={CAP_BULLET_BAR_H} rx="2" />
-                              <Show when={b.over && reqPx !== undefined}>
-                                <rect class="cap-burst-overlay" x={b.x + reqPx!} y={useY} width={Math.max(0, usePx - reqPx!)} height={CAP_BULLET_BAR_H} />
-                              </Show>
-                              <Show when={limPx !== undefined}>
-                                <line class="cap-tick lim" x1={b.x + limPx!} y1={useY - 1} x2={b.x + limPx!} y2={useY + CAP_BULLET_BAR_H + 1} />
-                              </Show>
-                              {/* Req sub-bar (below): faint track + the request fill, same colour as Use. */}
-                              <rect class="cap-track req" x={b.x} y={reqY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
-                              <Show when={reqPx !== undefined}>
-                                <rect class="cap-seg req" classList={{ [hClass]: true, selected }} x={b.x} y={reqY} width={reqPx!} height={CAP_BULLET_BAR_H} rx="2" />
-                              </Show>
-                              <text class="cap-bullet-name" x={b.x + baseline + 8} y={b.y + b.height / 2 + 4}>{b.node.name}</text>
+                              <text class="cap-bullet-name" x={b.x} y={b.y - 4}>{b.node.name}</text>
+                              <CapGauge x={b.x} y={b.y} value={b.use} ceiling={capUseCeiling(b)} trackLen={b.width} axis="Use" barClass="use" valueStr={useStr} ceilStr={useCeilStr} hClass={hClass} selected={selected} />
+                              <CapGauge x={b.x} y={reqY} value={b.use} ceiling={capReqCeiling(b)} trackLen={b.width} axis="Req" barClass="req" valueStr={useStr} ceilStr={reqCeilStr} hClass={hClass} selected={selected} />
                             </g>
                           )
                         }}
                       </For>
-                      {/* Folded "other namespaces" bullet — one gray pod-shaped row (Use over Req) standing
-                          in for every pod outside this namespace, hoverable for its totals, not selectable. */}
+                      {/* Folded "other namespaces" bullet — one gray gauge pair standing in for every pod
+                          outside this namespace. Like the per-pod gauges, BOTH bars fill with Σ usage: the
+                          Use bar against the busier of Σ usage / request, the Req bar against Σ request.
+                          Hoverable for its totals, not selectable. */}
                       <Show when={row.otherBullet}>
                         {(o) => {
-                          const bs = row.bulletScale ?? 1
-                          const baseline = o().width
-                          const usePx = Math.max(1, Math.min(o().use * bs, baseline))
-                          const reqPx = Math.max(1, Math.min(o().req * bs, baseline))
-                          const useY = o().y
                           const reqY = o().y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
                           return (
                             <g
@@ -1688,13 +1719,11 @@ export default function Topology(props: Props) {
                               onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
-                              <rect class="cap-track use" x={o().x} y={useY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
-                              <rect class="cap-seg use other" x={o().x} y={useY} width={usePx} height={CAP_BULLET_BAR_H} rx="2" />
-                              <rect class="cap-track req" x={o().x} y={reqY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
-                              <rect class="cap-seg req other" x={o().x} y={reqY} width={reqPx} height={CAP_BULLET_BAR_H} rx="2" />
-                              <text class="cap-bullet-name" x={o().x + baseline + 8} y={o().y + o().height / 2 + 4}>
+                              <text class="cap-bullet-name" x={o().x} y={o().y - 4}>
                                 other namespaces · {o().count} pod{o().count === 1 ? '' : 's'}
                               </text>
+                              <CapGauge x={o().x} y={o().y} value={o().use} ceiling={Math.max(o().use, o().req, 1)} trackLen={o().width} axis="Use" barClass="use" valueStr={fmt(o().use)} other />
+                              <CapGauge x={o().x} y={reqY} value={o().use} ceiling={Math.max(o().req, 1)} trackLen={o().width} axis="Req" barClass="req" valueStr={fmt(o().use)} ceilStr={fmt(o().req)} other />
                             </g>
                           )
                         }}

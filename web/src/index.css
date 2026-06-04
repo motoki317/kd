@@ -880,6 +880,18 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.req.other {
   fill: color-mix(in srgb, var(--text-dim) 30%, var(--surface));
 }
+/* Overshoot laps (expanded pod gauges only): usage past the pod's ceiling wraps the bar and each
+   successive lap is a hotter colour — amber (>100%), orange (>200%), red (>300%). Two-class selectors
+   placed AFTER the health rules so the lap colour wins over the lap-1 health hue for the wrapped bands. */
+.cap-seg.lap-2 {
+  fill: var(--health-suspended);
+}
+.cap-seg.lap-3 {
+  fill: color-mix(in srgb, var(--health-suspended) 45%, var(--health-degraded));
+}
+.cap-seg.lap-4 {
+  fill: var(--health-degraded);
+}
 /* The "small pods" fold (own pods too tiny to draw individually, rolled into one block) is styled
    exactly like a normal pod segment — same accent fill, no border — so the bar reads uniformly; it is
    identified by hover ("N small pods") and its position after the individual pods, and click-expands. */
@@ -905,25 +917,14 @@ button.conn.conn-retry:focus-visible {
   stroke-width: 1.6;
   pointer-events: none;
 }
-/* Per-pod bullets (expanded detail). Each pod mirrors the node-level bars — two stacked sub-bars
-   (Use over Req) reusing the SAME .cap-track / .cap-seg classes (same accent/health fills, same faint
-   track behind) — so the detail reads as a zoomed-in node row rather than a separate one-bar idiom.
-   The Use bar carries the burst hatch (.cap-burst-overlay) and limit tick; widths come from the
-   shared per-node bulletScale, so a small pod's bars are physically shorter. */
+/* Per-pod bullets (expanded detail). Each pod is a GAUGE against its own ceiling: two stacked bars
+   (Use over Req via CapGauge) reusing the SAME .cap-track / .cap-seg classes, each filling to
+   value/ceiling, with the pod name as a header above and a "value / limit" label past each bar — so the
+   detail reads as a zoomed-in node row. Overshoot past the ceiling wraps in lap colours (.lap-2..4). */
 .cap-bullet {
   cursor: pointer;
 }
-/* Only the limit tick survives on the Use bar (request is now its own bar, not a tick). */
-.cap-tick {
-  pointer-events: none;
-}
-.cap-tick.lim {
-  stroke: var(--health-degraded);
-  stroke-width: 1.4;
-  stroke-dasharray: 2 2;
-}
-/* The expanded bullet prints only the pod name (numbers are on hover) — its own text node, so it
-   carries its font sizing directly rather than inheriting from a values row. */
+/* The expanded bullet pod-name header — its own text node, left-anchored above the two gauge bars. */
 .cap-bullet-name {
   font-size: 11px;
   fill: var(--text);

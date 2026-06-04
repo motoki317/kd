@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_TRACK, CAP_MAX_LAPS, capBulletLaps, capReqCeiling, capUseCeiling, COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -872,18 +872,40 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(big.reqSegs.every((s) => s.height === CAP_BAR_H)).toBe(true)
   })
 
-  it('expands a node into variable-length per-pod bullets on a shared scale', () => {
+  it('expands a node into fixed-length per-pod gauge bars (two stacked bars per pod)', () => {
     const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '', new Set(['host:big']))
     const big = l.rows.find((r) => r.host === 'big')!
     expect(big.bullets).toHaveLength(2)
-    expect(big.bulletScale!).toBeGreaterThan(0)
-    // The bullet's extent ∝ max(use, req, lim) on the shared scale, so a busier pod's bar is longer.
-    const a = big.bullets.find((b) => b.node.id === 'pa')! // use 800, lim 1000
+    // Every pod's track is a fixed gauge length (the ceiling at 100%) — magnitude/fraction is the FILL,
+    // computed in the renderer, so the layout tracks are equal regardless of how busy the pod is.
+    const a = big.bullets.find((b) => b.node.id === 'pa')! // use 800, req 500, lim 1000
     const b = big.bullets.find((b) => b.node.id === 'pb')! // idle, no req/lim
-    expect(a.width).toBeGreaterThan(b.width)
-    // Each pod row is tall enough for two stacked sub-bars (Use over Req) — the detail mirrors the
-    // node bars rather than a single bar-with-ticks.
+    expect(a.width).toBe(CAP_BULLET_TRACK)
+    expect(b.width).toBe(CAP_BULLET_TRACK)
+    // Each pod block is tall enough for two stacked bars (Use over Req).
     expect(a.height).toBe(CAP_BULLET_BAR_H * 2 + CAP_BULLET_BAR_GAP)
+  })
+
+  it('capUseCeiling/capReqCeiling pick the limit / request reference (with fallbacks)', () => {
+    const s = { use: 5, req: 50, lim: 100 }
+    expect(capUseCeiling(s)).toBe(100) // Use bar gauges usage against the limit
+    expect(capReqCeiling(s)).toBe(50) // Req bar gauges usage against the request
+    expect(capUseCeiling({ use: 5, req: 50 })).toBe(50) // no limit → fall back to request
+    expect(capReqCeiling({ use: 5, lim: 100 })).toBe(100) // no request → fall back to limit
+    expect(capUseCeiling({ use: 5 })).toBe(5) // neither → usage (bar reads full)
+  })
+
+  it('capBulletLaps fills within the ceiling and wraps past it in escalating laps', () => {
+    const L = 100
+    // Within the ceiling: one partial lap, the request bar is NOT forced full (64 of 128 → half).
+    expect(capBulletLaps(64, 128, L)).toEqual([{ lap: 1, width: 50 }])
+    // 150% of the ceiling: lap 1 full, lap 2 half — the overshoot wraps instead of running off.
+    expect(capBulletLaps(150, 100, L)).toEqual([{ lap: 1, width: 100 }, { lap: 2, width: 50 }])
+    // Far over: capped at CAP_MAX_LAPS, all earlier laps full (the last is the red lap).
+    const deep = capBulletLaps(1000, 100, L)
+    expect(deep).toHaveLength(CAP_MAX_LAPS)
+    expect(deep.every((lp) => lp.width === L)).toBe(true)
+    expect(capBulletLaps(0, 100, L)).toEqual([]) // nothing to draw
   })
 
   it('carries the node total usage as a backdrop value', () => {

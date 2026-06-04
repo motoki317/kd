@@ -376,6 +376,23 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use.small').length).toBe(1)
   })
 
+  it('Nodes view: both expanded bars fill with usage; Req wraps when usage bursts past request', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 }, limits: { cpuMilli: 200 } },
+    ]
+    // p1 uses 150m: under its 200m limit (Use bar 75%, no wrap) but OVER its 100m request (Req bar
+    // 150% → wraps into a lap-2 band). Both bars fill with the same usage, against different ceilings.
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 150 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    // Expand the node row (clicking its card) so the per-pod gauges render.
+    fireEvent.click(container.querySelector('.cap-node-frame') as Element)
+    expect(container.querySelectorAll('.cap-bullet .cap-seg.req.lap-2').length).toBe(1) // burst past request
+    expect(container.querySelectorAll('.cap-bullet .cap-seg.use.lap-2').length).toBe(0) // under the limit
+  })
+
   it('clears all filters via onClearFilters (cycle 216)', () => {
     const onClearFilters = vi.fn()
     const { container } = render(() => (

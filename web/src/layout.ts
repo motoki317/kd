@@ -390,10 +390,16 @@ const CAP_BAR_VALUE_W = 120 // trailing space reserved past each bar for its "va
 const CAP_HEADER_INSET = 26 // node-name header starts this far left of the bar gutter (packed into the card top-left)
 const CAP_HEADER_CHAR_W = 6.6 // ~px/char of the 12px header font (name + " · N pods")
 const CAP_BULLET_CHAR_W = 6.2 // ~px/char of the 11px expanded-bullet pod-name font
-// Expanded bullets use their OWN per-node scale (not the node-capacity scale): a pod's usage,
-// request and limit are tiny against a big node, so at node scale the ticks would be unreadable.
-// Bullets share one scale across a node's pods (so pods stay comparable) zoomed to the largest pod.
-const CAP_BULLET_TRACK = 300
+// Each expanded pod is a GAUGE against its own ceiling (limit, else request, else usage): its two bars
+// (Use over Req) share one fixed-length track whose full length = that ceiling, so the FILL reads as a
+// "fraction of limit". This fixes the request bar reading as always-full (it was the track's own length
+// when request was the largest value): it now fills to req/ceiling, mirroring how the node bars gauge a
+// pod's request/usage against node capacity. Usage past the ceiling WRAPS around the fixed track in
+// escalating lap colours (capBulletLaps) so an overshoot stays inside the width instead of running off.
+export const CAP_BULLET_TRACK = 300 // fixed gauge length (the pod's ceiling drawn at 100%)
+const CAP_BULLET_NAME_H = 14 // pod-name header line above its two gauge bars (mirrors the node header)
+const CAP_BULLET_VALUE_W = 96 // trailing space past each gauge for its "value / limit" label
+export const CAP_MAX_LAPS = 4 // usage past CAP_MAX_LAPS× the ceiling all draws as the final (red) lap
 
 // resourceOf reads the active resource's quantity (CPU millicores or memory bytes) off a Resources
 // object, returning undefined when that resource is unset (the absent-request case the view marks).
@@ -520,7 +526,41 @@ export interface CapRow {
   otherReqSeg?: CapAggregate // the "other namespaces" block on the requested bar
   bullets: CapSeg[] // per-pod detail rows for the selected namespace's pods, present only when expanded
   otherBullet?: CapAggregate // the "other namespaces" bullet row (expanded), folding the rest
-  bulletScale?: number // px-per-unit for the bullets (per-node, zoomed to the largest own pod)
+}
+
+// Both expanded-pod bars fill with the SAME value — actual USAGE — and differ only in their reference
+// ceiling, so each reads as "how much of X am I using": the Use bar against the hard limit (am I near
+// being throttled/OOM-killed?), the Req bar against the request (am I using my reservation — and the
+// bar WRAPS past 100% when usage bursts beyond the request). Each falls back to the other bound, then
+// to usage itself, so a pod missing a limit or request still gauges against whatever it has.
+export const capUseCeiling = (s: { use: number; req?: number; lim?: number }): number =>
+  Math.max(1, s.lim ?? s.req ?? s.use ?? 0)
+export const capReqCeiling = (s: { use: number; req?: number; lim?: number }): number =>
+  Math.max(1, s.req ?? s.lim ?? s.use ?? 0)
+
+// CapLap is one drawn band of an expanded pod's gauge. A value within the ceiling is a single lap
+// (the fill). A value PAST the ceiling wraps: each successive ceiling-multiple is another full-width
+// lap, drawn left-to-right in escalating colours, so an overshoot stays inside the fixed track instead
+// of running off-canvas. `lap` (1-based) picks the colour: 1 = normal, 2 = amber, 3 = orange, 4 = red.
+export interface CapLap {
+  lap: number
+  width: number
+}
+
+// capBulletLaps splits `value` into the lap bands to draw over a fixed-length gauge track. Laps are
+// returned bottom-up (lap 1 first); the renderer paints them in order so each hotter lap overlays the
+// cooler one from the left — the visible band beyond the top lap is the previous (cooler) lap, reading
+// as "wrapped N times, partway into lap N+1". Capped at CAP_MAX_LAPS so a runaway value stays bounded.
+export function capBulletLaps(value: number, ceiling: number, trackLen: number): CapLap[] {
+  if (value <= 0 || ceiling <= 0) return []
+  const f = value / ceiling
+  const n = Math.min(Math.ceil(f), CAP_MAX_LAPS)
+  const laps: CapLap[] = []
+  for (let k = 1; k <= n; k++) {
+    const frac = Math.min(1, Math.max(0, f - (k - 1)))
+    laps.push({ lap: k, width: frac * trackLen })
+  }
+  return laps
 }
 
 // CapacityLayout is a Layout (so selection/search/fit operate on `nodes` as usual) plus the per-node
@@ -680,39 +720,36 @@ export function layoutGraphByCapacity(
     const isExpanded = expanded.has(`host:${host}`)
     const bullets: CapSeg[] = []
     let otherBullet: CapAggregate | undefined
-    let bulletNameRight = 0 // rightmost extent of any expanded pod name, so the card grows to contain it
-    // Per-node bullet scale: zoom to the largest own pod's usage/request/limit so the smallest pod's
-    // bar/ticks are still legible, while own pods stay comparable to each other within the node.
-    // The scale is zoomed to max(use, request) — NOT limit. A limit is often orders of magnitude above
-    // actual usage (a pod limiting 1 CPU but using 1m), so including it let one slack pod set the scale
-    // and crush every usage fill to a sub-pixel sliver (the exact failure the per-node zoom exists to
-    // avoid). Limits still draw as ticks, but their reach is capped at the track end so an outlier limit
-    // can't dominate the visualization — the hover tooltip carries the exact value.
-    const bulletMax = segData.reduce((m, d) => Math.max(m, d.use, d.req ?? 0), 0)
-    const bulletScale = CAP_BULLET_TRACK / (bulletMax || 1)
+    let bulletNameRight = 0 // rightmost extent of any expanded pod text, so the card grows to contain it
+    // Each pod is a fixed-length GAUGE (CAP_BULLET_TRACK = its ceiling at 100%): bar `y` is the Use bar
+    // top, `width` is the track length, `height` spans both stacked bars. The pod NAME sits in a header
+    // line ABOVE the bars (CAP_BULLET_NAME_H), like the node name above the node bars, and each bar's
+    // "value / limit" label sits to its right (CAP_BULLET_VALUE_W). Fill fractions + overshoot laps are
+    // computed in the renderer from the raw use/req/lim via capBulletLaps — the layout is pure geometry.
+    const reserveText = (name: string) => {
+      bulletNameRight = Math.max(
+        bulletNameRight,
+        CAP_ROW_LEFT + name.length * CAP_BULLET_CHAR_W, // header name (above the track, from the gutter)
+        CAP_ROW_LEFT + CAP_BULLET_TRACK + 8 + CAP_BULLET_VALUE_W, // "value / limit" label past the track
+      )
+    }
     if (isExpanded && (segData.length || otherPods.length)) {
       let by = bottom + CAP_BULLET_GAP + 2
       for (const d of segData) {
-        // Variable-length bullet: each pod's baseline extent ∝ max(use, req, lim) on the shared
-        // per-node scale, so a small pod's row is physically shorter than a large one (the bar
-        // length itself encodes magnitude, not just the fill of a fixed track). Capped at the track so
-        // an outlier limit extends the faint baseline to the end rather than off-canvas.
-        const extent = Math.min(CAP_BULLET_TRACK, Math.max(CAP_MIN_SEG, Math.max(d.use, d.req ?? 0, d.lim ?? 0) * bulletScale))
-        bullets.push({ ...d, x: CAP_ROW_LEFT, y: by, width: extent, height: CAP_BULLET_H })
-        // Name renders at (x + extent + 8); reserve its width so the full pod name stays inside the card.
-        bulletNameRight = Math.max(bulletNameRight, CAP_ROW_LEFT + extent + 8 + d.node.name.length * CAP_BULLET_CHAR_W)
-        by += CAP_BULLET_H + CAP_BULLET_GAP
+        const useBarY = by + CAP_BULLET_NAME_H
+        bullets.push({ ...d, x: CAP_ROW_LEFT, y: useBarY, width: CAP_BULLET_TRACK, height: CAP_BULLET_H })
+        reserveText(d.node.name)
+        by = useBarY + CAP_BULLET_H + CAP_BULLET_GAP + 4
       }
       if (otherPods.length) {
-        // One folded "other namespaces" bullet, sized by the larger of Σ other usage / request (so both
-        // its sub-bars fit) but clamped so a busy cluster doesn't run it off-canvas (it stands for many
-        // pods, exact proportionality matters less).
-        const extent = Math.min(CAP_BULLET_TRACK, Math.max(CAP_MIN_SEG, Math.max(otherUse, otherReq) * bulletScale))
-        otherBullet = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: CAP_ROW_LEFT, y: by, width: extent, height: CAP_BULLET_H }
-        bulletNameRight = Math.max(bulletNameRight, CAP_ROW_LEFT + extent + 8 + `other namespaces · ${otherPods.length} pods`.length * CAP_BULLET_CHAR_W)
-        by += CAP_BULLET_H + CAP_BULLET_GAP
+        // One folded "other namespaces" gauge, normalised to the larger of its Σ usage / request so both
+        // its bars fit; it stands for many pods, so it never wraps (no single ceiling to overshoot).
+        const useBarY = by + CAP_BULLET_NAME_H
+        otherBullet = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: CAP_ROW_LEFT, y: useBarY, width: CAP_BULLET_TRACK, height: CAP_BULLET_H }
+        reserveText(`other namespaces · ${otherPods.length} pods`)
+        by = useBarY + CAP_BULLET_H + CAP_BULLET_GAP + 4
       }
-      bottom = by - CAP_BULLET_GAP
+      bottom = by - CAP_BULLET_GAP - 4
     }
 
     // The Node resource itself is selectable via its header label region.
@@ -770,7 +807,6 @@ export function layoutGraphByCapacity(
       otherReqSeg,
       bullets,
       otherBullet,
-      bulletScale,
     })
     cursorY = bottom + CAP_ROW_GAP
   }
