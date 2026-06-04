@@ -76,7 +76,7 @@ should come from real user feedback or a new feature area — don't grind filler
 
 - **Capacity bar `value / capacity` labels mix units, hurting at-a-glance comparison** — *verified
   live (cycle 22, staging-cluster Nodes view), needs a unit-policy decision before implementing.*
-  `formatQuantity` (`web/src/layout.ts:834`) picks a unit per value by magnitude, independently for the
+  `formatQuantity` (`web/src/capacityLayout.ts`, moved there from layout.ts in the cycle-36 split) picks a unit per value by magnitude, independently for the
   numerator and denominator. So a node's Use bar reads `85m / 1` (millicores / cores) while its Req bar
   right below reads `860m / 940m` (both millicores) — the two stacked capacities of ONE node (`1` =
   1000m total, `940m` allocatable) render in clashing units and don't visibly read as "both ≈1 core".
@@ -88,6 +88,20 @@ should come from real user feedback or a new feature area — don't grind filler
   view is a heavily-tuned, user-iterated surface (see the extensive CLAUDE.md note, which says don't
   reinterpret it without the user), so pick the unit policy WITH the user, then ship `formatPair` +
   tests. **Reopen:** when the user states a preferred unit policy for paired capacity labels.
+
+- **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
+  kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
+  (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
+  (`Topology.tsx`, cycle 294 resize handler + cycle 316 clamp), but for a graph **wider than the
+  viewport** the clamp's upper bound (`rect.width - margin`) permits a large empty gutter: a graph
+  fit-centred for 1050px stayed at `tx≈284` in a 470px viewport, leaving ~280px of empty canvas on the
+  left while the graph overflowed the right. The clamp guarantees only "≥60px of graph visible", not
+  "viewport covered when the graph is larger than it". **Why deferred:** the fix (for `w ≥ rect.width`,
+  clamp so the viewport stays covered — no gutter) also changes how a *large* graph pans, and pan/zoom
+  feel is user-iterated territory (many cycles). Impact is low (window resizes mid-session are rare;
+  the dominant resize — drawer open — is owned by selection-fit). **Reopen when:** the user wants the
+  graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
+  split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
 ## Future / larger work — deferred (examined, not actionable now)
 
