@@ -64,6 +64,82 @@ func TestEventsForResource(t *testing.T) {
 	}
 }
 
+// At an equal last-seen time, a Warning must sort ahead of a Normal (typeRank tie-break) so
+// problems sit at the top of the drawer's Events list even when they coincide with routine events.
+func TestEventsForTieBreaksWarningFirst(t *testing.T) {
+	at := metav1.NewTime(time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC))
+	mk := func(reason, typ string) *corev1.Event {
+		return &corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Name: reason, Namespace: "shop"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-1", UID: types.UID("pod-uid")},
+			Reason:         reason, Type: typ, Count: 1, LastTimestamp: at,
+		}
+	}
+	// Input order puts the Normal first to prove the sort, not the input order, decides it.
+	objs := []runtime.Object{mk("Pulled", corev1.EventTypeNormal), mk("BackOff", corev1.EventTypeWarning)}
+	got := eventsFor(objs, map[string]bool{"pod-uid": true}, "Pod", "web-1")
+	if len(got) != 2 || got[0].Reason != "BackOff" {
+		t.Errorf("tie-break order = %v, want the Warning (BackOff) first", reasons(got))
+	}
+}
+
+// lastSeen walks a fallback chain when the legacy LastTimestamp is absent: Series.LastObservedTime,
+// then EventTime, then CreationTimestamp. The drawer needs a real timestamp from modern
+// (series/eventTime) events too, not an empty "last".
+func TestEventsForTimeFallbackChain(t *testing.T) {
+	ts := time.Date(2026, 5, 27, 9, 30, 0, 0, time.UTC)
+	want := ts.UTC().Format(time.RFC3339)
+	base := func(reason string) corev1.Event {
+		return corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Name: reason, Namespace: "shop"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-1", UID: types.UID("pod-uid")},
+			Reason:         reason, Type: corev1.EventTypeNormal, Count: 1,
+		}
+	}
+	series := base("FromSeries")
+	series.Series = &corev1.EventSeries{LastObservedTime: metav1.NewMicroTime(ts)}
+	eventTime := base("FromEventTime")
+	eventTime.EventTime = metav1.NewMicroTime(ts)
+	creation := base("FromCreation")
+	creation.CreationTimestamp = metav1.NewTime(ts)
+
+	for _, tc := range []struct {
+		name string
+		ev   corev1.Event
+	}{
+		{"series", series},
+		{"eventTime", eventTime},
+		{"creation", creation},
+	} {
+		ev := tc.ev
+		got := eventsFor([]runtime.Object{&ev}, map[string]bool{"pod-uid": true}, "Pod", "web-1")
+		if len(got) != 1 || got[0].Last != want {
+			t.Errorf("%s fallback: Last = %q, want %q", tc.name, lastOf(got), want)
+		}
+	}
+}
+
+// A zero Count clamps to 1 — every event happened at least once; a literal 0 would read as "never".
+func TestEventsForCountClampsToOne(t *testing.T) {
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "Killing", Namespace: "shop"},
+		InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-1", UID: types.UID("pod-uid")},
+		Reason:         "Killing", Type: corev1.EventTypeNormal, Count: 0,
+		LastTimestamp: metav1.NewTime(time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)),
+	}
+	got := eventsFor([]runtime.Object{ev}, map[string]bool{"pod-uid": true}, "Pod", "web-1")
+	if len(got) != 1 || got[0].Count != 1 {
+		t.Errorf("Count = %d, want 1 (a zero count clamps up)", got[0].Count)
+	}
+}
+
+func lastOf(es []eventEntry) string {
+	if len(es) == 0 {
+		return ""
+	}
+	return es[0].Last
+}
+
 func sourceFor(es []eventEntry, reason string) string {
 	for _, e := range es {
 		if e.Reason == reason {
