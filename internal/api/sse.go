@@ -83,7 +83,15 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	if !writeSSE(w, "summary", prevSummary) {
 		return
 	}
-	// Send the capacity payload immediately so the Nodes view isn't blank until the first tick.
+	// Flush the topology snapshot+summary NOW — it's the primary payload and must not wait on the
+	// capacity build below. buildCapacity snapshots the whole cluster's nodes/pods and calls
+	// metrics-server; when that is slow (or hangs), gating the flush behind it left small-snapshot
+	// namespaces (few resources, so the write stays under the HTTP buffer and never auto-flushes)
+	// stuck on "connecting…" indefinitely, while large namespaces happened to auto-flush and looked
+	// fine. Decoupling the flush makes the graph appear immediately for every namespace; capacity
+	// follows when ready (and the Nodes view falls back to requests until then).
+	flusher.Flush()
+	// Send the capacity payload so the Nodes view isn't blank until the first tick.
 	if !writeSSE(w, "capacity", buildCapacity()) {
 		return
 	}
@@ -115,11 +123,13 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 		case <-debounce.C:
 			armed = false
 			next, nextSummary := build()
+			graphChanged := false
 			if patch := graph.Diff(prev, next); !patch.Empty() {
 				if !writeSSE(w, "patch", patch) {
 					return
 				}
 				flusher.Flush()
+				graphChanged = true
 			}
 			if nextSummary != prevSummary {
 				if !writeSSE(w, "summary", nextSummary) {
@@ -128,12 +138,20 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 				flusher.Flush()
 			}
 			prev, prevSummary = next, nextSummary
-			// A graph change may have added/removed pods; refresh the capacity view too so the
-			// Nodes group-by tracks pod churn without waiting for the usage tick.
-			if !writeSSE(w, "capacity", buildCapacity()) {
-				return
+			// Re-send the capacity payload only when THIS namespace's graph actually changed (pods
+			// added/removed). The store's change signal is cluster-wide and fires on unrelated churn —
+			// notably Lease heartbeats, which renew every few seconds in EVERY cluster — so the old
+			// unconditional re-send pushed the ~40KB cluster-wide capacity payload on every debounce
+			// tick. On an idle namespace that flooded the stream (hundreds of KB/s of redundant data)
+			// and could swamp the client before it rendered. Cross-namespace pod changes that don't
+			// touch this graph still refresh on the 15s usageTick below (metrics sample at ~that rate
+			// anyway), so the Nodes view stays current without the flood.
+			if graphChanged {
+				if !writeSSE(w, "capacity", buildCapacity()) {
+					return
+				}
+				flusher.Flush()
 			}
-			flusher.Flush()
 		case <-usageTick.C:
 			if !writeSSE(w, "capacity", buildCapacity()) {
 				return
