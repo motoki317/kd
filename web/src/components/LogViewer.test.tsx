@@ -132,6 +132,21 @@ describe('LogViewer', () => {
     expect(container.querySelector('.logs-waiting')?.textContent).toBe('no lines match the active filters')
   })
 
+  it('gives the "Aa" case toggle a worded accessible name (not just the glyph)', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { line: 'hello' }) // the case toggle only renders once there are lines
+    await findByText('hello', { exact: false })
+    const caseBtn = container.querySelector('.logs-case') as HTMLButtonElement
+    expect(caseBtn).toBeTruthy()
+    expect(caseBtn.textContent).toBe('Aa') // visual stays the compact glyph
+    // ...but a screen reader hears a real name, not "Aa", matching the worded sibling chips.
+    expect(caseBtn.getAttribute('aria-label')).toBe('Match case')
+    expect(caseBtn.getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('Latest button advertises unseen line count while scrolled up (cycle 266)', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

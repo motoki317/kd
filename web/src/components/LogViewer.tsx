@@ -324,6 +324,10 @@ export default function LogViewer(props: Props) {
             classList={{ active: caseSensitive() }}
             aria-pressed={caseSensitive()}
             onClick={() => setCaseSensitive((c) => !c)}
+            // The visible "Aa" glyph is its only accessible name otherwise — cryptic to a screen
+            // reader (the sibling chips spell out "previous"/"timestamps"/"wrap"); title isn't a
+            // reliable name source. Give it a worded label so it announces "Match case, toggle button".
+            aria-label="Match case"
             title="Match case"
           >
             Aa
