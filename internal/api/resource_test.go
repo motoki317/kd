@@ -8,7 +8,72 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/motoki317/kd/internal/kube/graph"
 )
+
+// resourceClasses authorizes access: a kind maps to its legacy class plus (for a non-core group) the
+// GVR group, and the enforcer allows if EITHER matches. Getting this wrong is a security issue —
+// either locking out a legitimately-granted operator or widening access. Pin the contract.
+func TestResourceClasses(t *testing.T) {
+	eq := func(got, want []string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				return false
+			}
+		}
+		return true
+	}
+	cases := []struct {
+		kind, group string
+		want        []string
+	}{
+		{"Pod", "", []string{"pods"}},                                        // core group adds NO group class
+		{"Node", "", []string{"nodes"}},                                      // (a "" group rule would mean "any")
+		{"Deployment", "apps", []string{"workloads", "apps"}},                // legacy class + group
+		{"Workflow", "argoproj.io", []string{"workloads", "argoproj.io"}},    // a CR: workloads fallback + its group
+		{"Role", "rbac.authorization.k8s.io", []string{"rbac", "rbac.authorization.k8s.io"}},
+	}
+	for _, c := range cases {
+		if got := resourceClasses(c.kind, c.group); !eq(got, c.want) {
+			t.Errorf("resourceClasses(%q, %q) = %v, want %v", c.kind, c.group, got, c.want)
+		}
+	}
+}
+
+func TestLegacyClass(t *testing.T) {
+	cases := map[string]string{
+		"Pod": "pods", "Node": "nodes", "Event": "events", "Namespace": "namespaces",
+		"Role": "rbac", "RoleBinding": "rbac", "ClusterRole": "rbac",
+		"ClusterRoleBinding": "rbac", "ServiceAccount": "rbac",
+		"Deployment": "workloads", "Secret": "workloads", "Workflow": "workloads", // default bucket
+	}
+	for kind, want := range cases {
+		if got := legacyClass(kind); got != want {
+			t.Errorf("legacyClass(%q) = %q, want %q", kind, got, want)
+		}
+	}
+}
+
+func TestFindResource(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "shop"}},
+		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "shop"}}, // same name, different kind
+	}
+	// Kind AND name must both match — a Pod and a Service named "web" must not collide.
+	if obj, ok := findResource(objs, "Service", "web"); !ok {
+		t.Error("findResource(Service, web) should find the Service")
+	} else if graph.KindOf(obj) != "Service" {
+		t.Errorf("findResource returned a %s, want Service", graph.KindOf(obj))
+	}
+	if _, ok := findResource(objs, "Pod", "absent"); ok {
+		t.Error("findResource(Pod, absent) should be (_, false)")
+	}
+}
 
 func TestPresentableStripsBookkeepingAndSecrets(t *testing.T) {
 	pod := &corev1.Pod{
