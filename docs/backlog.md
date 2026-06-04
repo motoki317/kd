@@ -9,6 +9,24 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
+**Status (2026-06-05, batch 4):** A dogfooding + test-hardening batch whose headline is a **harness
+limitation, not a feature**: the headless agent-browser compositor is FROZEN — `requestAnimationFrame`
+callbacks never fire and CSS animations/transitions never advance (proven directly). This silently
+manufactures a whole class of false positives, and it cost two fully-convincing fake bugs here before
+root-cause: (1) "expanding a busy node doesn't bring its pods into view" (every non-initial viewport
+move is rAF-driven, so an eval-dispatched expand can't move the canvas — only the direct-set `firstFit`
+ever lands); (2) "the drawer overflows / its × is clipped at 1280px" (the drawer's entry `@keyframes`
+freezes at its `translateX(32px)` from-frame, so it measures 32px off-screen — `animation:none` snaps it
+flush). Both were retracted, NOT "fixed" — fixing either would have broken real behaviour. The rule going
+forward: **never conclude a fit/zoom/overflow/clip/off-screen bug from an agent-browser geometry
+measurement of an animated element** — unit-test the computed target, or force the resting state
+(`el.style.animation='none'`) before measuring. Persisted as pitfalls #5 (rAF) and #6 (frozen entry
+animation) in `dogfooding-kd-ui.md`, and as two do-not-re-propose rows. The rest of the batch hardened
+Go coverage on previously-0% pure logic the capacity view + handlers depend on (joinUsage/uidResolvers
+usage join, event tie-break/time-fallback/count-clamp, AsTyped passthrough, KindOf/GVKOf, config
+CSV/CIDR/env parsing) — each isolating the testable transform from untestable I/O where needed
+(joinUsage split out of BuildUsage). The earlier same-day status follows.
+
 **Status (2026-06-05, batch 3):** Continued a11y + dogfooding sweep. Shipped: copy-success live region
 (`role=status`) so screen readers hear the CopyButton confirm; **completed the single-select a11y sweep**
 by converting the drawer's Manifest YAML/JSON toggle to a `role=radiogroup` (the last bare-`.active`
