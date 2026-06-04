@@ -58,6 +58,12 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Events') // backward
   })
 
+  it('names the complementary landmark by the resource so it is identifiable in a landmark list', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const aside = container.querySelector('aside.drawer')!
+    expect(aside.getAttribute('aria-label')).toBe('ConfigMap settings details')
+  })
+
   it('exposes the tabs as a WAI-ARIA tablist with associated panels and roving tabindex', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const list = container.querySelector('.drawer-tabs')!

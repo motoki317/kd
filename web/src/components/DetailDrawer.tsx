@@ -255,6 +255,9 @@ export default function DetailDrawer(props: Props) {
           class="drawer"
           classList={{ exiting: exiting(), expanded: expanded() }}
           onKeyDown={onDrawerKeyDown}
+          // Name the complementary landmark by the resource it describes, so a screen reader's
+          // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
+          aria-label={`${node().kind} ${node().name} details`}
         >
           <header class="drawer-header">
             <ResourceSummary
