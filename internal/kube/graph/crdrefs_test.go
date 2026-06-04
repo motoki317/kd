@@ -182,3 +182,38 @@ func nodeByID(g *Graph, id string) *Node {
 	}
 	return nil
 }
+
+// TestAsConventionRef pins the heuristic that decides whether an arbitrary nested map is a
+// cross-resource reference (name + optional kind/group/namespace) vs a structural block or a plain
+// name/value parameter. The edge tests exercise it end-to-end; this covers the guard branches
+// directly so each rejection reason is independently anchored.
+func TestAsConventionRef(t *testing.T) {
+	if _, ok := asConventionRef(map[string]any{}); ok {
+		t.Error("a map without a name is not a ref")
+	}
+	// Any structural key disqualifies it — those maps are the resource's own body, not a reference.
+	for _, blocker := range []string{"spec", "status", "metadata", "data"} {
+		if _, ok := asConventionRef(map[string]any{"name": "x", blocker: map[string]any{}}); ok {
+			t.Errorf("a map carrying %q is a body, not a ref", blocker)
+		}
+	}
+	// Bare name is a valid ref (kind resolved later from context).
+	if ref, ok := asConventionRef(map[string]any{"name": "db"}); !ok || ref.name != "db" {
+		t.Errorf("bare name = (%+v, %v), want a ref named db", ref, ok)
+	}
+	// apiGroup wins; group is the fallback spelling.
+	if ref, _ := asConventionRef(map[string]any{"name": "db", "kind": "Secret", "apiGroup": "v1", "namespace": "ns"}); ref.apiGroup != "v1" || ref.kind != "Secret" || ref.namespace != "ns" {
+		t.Errorf("full ref = %+v, want apiGroup/kind/namespace populated", ref)
+	}
+	if ref, _ := asConventionRef(map[string]any{"name": "db", "group": "apps"}); ref.apiGroup != "apps" {
+		t.Errorf("group fallback = %+v, want apiGroup=apps", ref)
+	}
+	// A name+value pair with no kind is a parameter (e.g. a Workflow argument), not a ref.
+	if _, ok := asConventionRef(map[string]any{"name": "p", "value": "literal"}); ok {
+		t.Error("name+value without kind is a parameter, not a ref")
+	}
+	// But a name+value that ALSO names a kind is still a ref (the kind disambiguates).
+	if ref, ok := asConventionRef(map[string]any{"name": "p", "value": "x", "kind": "Thing"}); !ok || ref.kind != "Thing" {
+		t.Errorf("name+value+kind = (%+v, %v), want a ref of kind Thing", ref, ok)
+	}
+}
