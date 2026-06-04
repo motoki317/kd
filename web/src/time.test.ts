@@ -11,6 +11,9 @@ describe('relativeAge', () => {
     expect(relativeAge(ago(50 * 60), now)).toBe('50m')
     expect(relativeAge(ago(3 * 3600), now)).toBe('3h')
     expect(relativeAge(ago(2 * 86400), now)).toBe('2d')
+    expect(relativeAge(ago(364 * 86400), now)).toBe('364d') // still days just under a year
+    expect(relativeAge(ago(365 * 86400), now)).toBe('1y')
+    expect(relativeAge(ago(900 * 86400), now)).toBe('2y') // floors: 900/365 = 2.4 → "2y"
   })
 
   it('clamps the present and future to 0s, and rejects bad input', () => {
