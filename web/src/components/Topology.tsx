@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -269,6 +269,22 @@ export default function Topology(props: Props) {
     const row = capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
     if (!row) return null
     return { x: row.x + row.width / 2, y: row.y + row.height / 2, width: row.width, height: row.height }
+  }
+  // Expanding a node row reveals its per-pod bullets, which makes the row much taller; fit the
+  // viewport to that row so the operator immediately sees the pods they just opened (item: zoom to the
+  // node on expand). Collapsing does NOT re-fit — it just folds the detail back, keeping the operator's
+  // pan/zoom. capRows() is read AFTER toggling: the memo recomputes synchronously, so the row's box
+  // already reflects the expanded (taller) geometry; the rAF lets the layout/DOM settle before fitting.
+  const toggleCapRow = (host: string) => {
+    const key = `host:${host}`
+    const willExpand = !expandedClusters().has(key)
+    toggleCluster(key)
+    if (!willExpand || !svg) return
+    const r = capRows().find((row) => row.host === host)
+    if (!r) return
+    const box = { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width, height: r.height }
+    cancelAnimationFrame(selFitFrame)
+    selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([box], 1.4)))
   }
   // Relationship grouping has no kind/host container, so a fold's siblings + pill get a dedicated
   // grouping frame. Kind/Nodes already box by kind/host — a second frame there would double-border,
@@ -1449,7 +1465,7 @@ export default function Topology(props: Props) {
                   const fw = row.width + 42
                   const fh = row.height + 12
                   return (
-                    <g class="cap-row" onClick={() => expandable && toggleCluster(`host:${row.host}`)}>
+                    <g class="cap-row" onClick={() => expandable && toggleCapRow(row.host)}>
                       <rect
                         class="cap-node-frame"
                         classList={{ clickable: expandable, expanded: row.expanded }}
@@ -1477,8 +1493,8 @@ export default function Topology(props: Props) {
 
                       {/* Requested bar: this namespace's pods sized by request, then the single folded
                           "other namespaces" block. The "Req" axis label sits in the left gutter. */}
-                      <text class="cap-axis-label" x={row.x - 6} y={row.reqBarY + 9}>Req</text>
-                      <rect class="cap-track req" x={row.x} y={row.reqBarY} width={row.trackW} height={12} rx="2" />
+                      <text class="cap-axis-label" x={row.x - 6} y={row.reqBarY + 12}>Req</text>
+                      <rect class="cap-track req" x={row.x} y={row.reqBarY} width={row.trackW} height={CAP_BAR_H} rx="2" />
                       <For each={row.reqSegs}>
                         {(s) => (
                           <rect
@@ -1523,7 +1539,7 @@ export default function Topology(props: Props) {
                         )}
                       </Show>
                       {/* Reserved (request) total, sat right after the request bar (proximity): "req / cap". */}
-                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.reqTotal * capInfo().scale) + 8} y={row.reqBarY + 9}>
+                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.reqTotal * capInfo().scale) + 8} y={row.reqBarY + 12}>
                         <tspan class="cap-bar-value-strong">{fmt(row.reqTotal)}</tspan>
                         {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
                       </text>
@@ -1532,15 +1548,15 @@ export default function Topology(props: Props) {
                           "other namespaces" block. The node's TOTAL usage (all namespaces incl. system
                           overhead, from NodeMetrics) is a faint backdrop so the segments read against
                           the node's real utilization. */}
-                      <text class="cap-axis-label" x={row.x - 6} y={row.trackY + 15}>Use</text>
-                      <rect class="cap-track use" x={row.x} y={row.trackY} width={row.trackW} height={22} rx="2" />
+                      <text class="cap-axis-label" x={row.x - 6} y={row.trackY + 12}>Use</text>
+                      <rect class="cap-track use" x={row.x} y={row.trackY} width={row.trackW} height={CAP_BAR_H} rx="2" />
                       <Show when={row.nodeUse !== undefined}>
                         <rect
                           class="cap-track-nodeuse"
                           x={row.x}
                           y={row.trackY}
                           width={Math.max(0, Math.min(row.nodeUse! * capInfo().scale, row.trackW))}
-                          height={22}
+                          height={CAP_BAR_H}
                         />
                       </Show>
                       <For each={row.useSegs}>
@@ -1598,19 +1614,20 @@ export default function Topology(props: Props) {
                       </Show>
                       {/* Capacity line when requests or usage overflow the track. */}
                       <Show when={row.cap !== undefined && (row.overcommit || row.useTotal > row.cap)}>
-                        <line class="cap-capline" x1={row.x + row.trackW} y1={row.trackY - 3} x2={row.x + row.trackW} y2={row.trackY + 25} />
+                        <line class="cap-capline" x1={row.x + row.trackW} y1={row.trackY - 3} x2={row.x + row.trackW} y2={row.reqBarY + CAP_BAR_H + 3} />
                       </Show>
                       {/* Actual usage total, sat right after the usage bar (proximity): "use / cap". */}
-                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.useTotal * capInfo().scale) + 8} y={row.trackY + 15}>
+                      <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.useTotal * capInfo().scale) + 8} y={row.trackY + 12}>
                         <tspan class="cap-bar-value-strong">{fmt(row.useTotal)}</tspan>
                         {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
                       </text>
 
-                      {/* Per-pod bullets (expanded): the colored bar LENGTH is the usage (variable per
-                          pod, on the shared per-node scale) — not a fixed track with varying fill — so
-                          a small pod's bar is physically shorter. Request/limit draw as ticks; bursting
-                          past request is hatched. Only the full pod NAME is printed — the numbers are
-                          on hover (item: declutter), and only this namespace's pods get a row. */}
+                      {/* Per-pod bullets (expanded): each pod mirrors the node-level bars — two stacked
+                          sub-bars, Use over Req, in the SAME visual language (same accent/health fills,
+                          same faint track behind, Use bar carries the burst hatch + limit tick) — so the
+                          detail reads as a zoomed-in version of the node row, not a separate idiom. Bars
+                          scale on the shared per-node bulletScale; the full pod NAME is printed, numbers
+                          on hover. The whole pod (both bars) is one hover/click target. */}
                       <For each={row.bullets}>
                         {(b) => {
                           const bs = row.bulletScale ?? 1
@@ -1619,60 +1636,68 @@ export default function Topology(props: Props) {
                           // pod whose limit dwarfs its usage has its limit tick land at the track end (the
                           // cap) instead of running off-canvas — usage stays legible, the exact limit is on hover.
                           const usePx = Math.max(1, Math.min(b.use * bs, baseline))
-                          const reqPx = b.req !== undefined ? Math.min(b.req * bs, baseline) : undefined
+                          const reqPx = b.req !== undefined ? Math.max(1, Math.min(b.req * bs, baseline)) : undefined
                           const limPx = b.lim !== undefined ? Math.min(b.lim * bs, baseline) : undefined
                           const withinW = b.over && reqPx !== undefined ? reqPx : usePx
+                          const useY = b.y
+                          const reqY = b.y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
+                          const hClass = `h-${b.node.health.toLowerCase()}`
+                          const selected = b.node.id === props.selectedId
                           return (
                             <g
                               class="cap-bullet"
-                              classList={{ faded: capSegFaded(b.node), selected: b.node.id === props.selectedId }}
+                              classList={{ faded: capSegFaded(b.node) }}
                               onClick={(e) => { e.stopPropagation(); props.onSelect(b.node.id) }}
                               onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
-                              {/* Faint baseline to the pod's furthest marker, so req/limit ticks beyond
-                                  the usage bar still have something to sit on. */}
-                              <line class="cap-bullet-base" x1={b.x} y1={b.y + b.height / 2} x2={b.x + baseline} y2={b.y + b.height / 2} />
-                              <rect
-                                class="cap-bullet-fill"
-                                classList={{ [`h-${b.node.health.toLowerCase()}`]: true }}
-                                x={b.x}
-                                y={b.y}
-                                width={withinW}
-                                height={b.height}
-                                rx="2"
-                              />
+                              {/* Use sub-bar (top): faint track to the pod's extent, then the usage fill,
+                                  the burst hatch past request, and the limit tick. */}
+                              <rect class="cap-track use" x={b.x} y={useY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
+                              <rect class="cap-seg use" classList={{ [hClass]: true, selected }} x={b.x} y={useY} width={withinW} height={CAP_BULLET_BAR_H} rx="2" />
                               <Show when={b.over && reqPx !== undefined}>
-                                <rect class="cap-bullet-over" x={b.x + reqPx!} y={b.y} width={Math.max(0, usePx - reqPx!)} height={b.height} />
-                              </Show>
-                              <Show when={reqPx !== undefined}>
-                                <line class="cap-tick req" x1={b.x + reqPx!} y1={b.y - 1} x2={b.x + reqPx!} y2={b.y + b.height + 1} />
+                                <rect class="cap-burst-overlay" x={b.x + reqPx!} y={useY} width={Math.max(0, usePx - reqPx!)} height={CAP_BULLET_BAR_H} />
                               </Show>
                               <Show when={limPx !== undefined}>
-                                <line class="cap-tick lim" x1={b.x + limPx!} y1={b.y - 1} x2={b.x + limPx!} y2={b.y + b.height + 1} />
+                                <line class="cap-tick lim" x1={b.x + limPx!} y1={useY - 1} x2={b.x + limPx!} y2={useY + CAP_BULLET_BAR_H + 1} />
                               </Show>
-                              <text class="cap-bullet-name" x={b.x + baseline + 8} y={b.y + 14}>{b.node.name}</text>
+                              {/* Req sub-bar (below): faint track + the request fill, same colour as Use. */}
+                              <rect class="cap-track req" x={b.x} y={reqY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
+                              <Show when={reqPx !== undefined}>
+                                <rect class="cap-seg req" classList={{ [hClass]: true, selected }} x={b.x} y={reqY} width={reqPx!} height={CAP_BULLET_BAR_H} rx="2" />
+                              </Show>
+                              <text class="cap-bullet-name" x={b.x + baseline + 8} y={b.y + b.height / 2 + 4}>{b.node.name}</text>
                             </g>
                           )
                         }}
                       </For>
-                      {/* Folded "other namespaces" bullet — one gray row standing in for every pod
-                          outside this namespace, hoverable for its totals, not individually selectable. */}
+                      {/* Folded "other namespaces" bullet — one gray pod-shaped row (Use over Req) standing
+                          in for every pod outside this namespace, hoverable for its totals, not selectable. */}
                       <Show when={row.otherBullet}>
-                        {(o) => (
-                          <g
-                            class="cap-bullet other"
-                            classList={{ faded: capAggFaded(`other:${row.host}`) }}
-                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
-                            onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
-                          >
-                            <line class="cap-bullet-base" x1={o().x} y1={o().y + o().height / 2} x2={o().x + o().width} y2={o().y + o().height / 2} />
-                            <rect class="cap-bullet-fill" x={o().x} y={o().y} width={o().width} height={o().height} rx="2" />
-                            <text class="cap-bullet-name" x={o().x + o().width + 8} y={o().y + 14}>
-                              other namespaces · {o().count} pod{o().count === 1 ? '' : 's'}
-                            </text>
-                          </g>
-                        )}
+                        {(o) => {
+                          const bs = row.bulletScale ?? 1
+                          const baseline = o().width
+                          const usePx = Math.max(1, Math.min(o().use * bs, baseline))
+                          const reqPx = Math.max(1, Math.min(o().req * bs, baseline))
+                          const useY = o().y
+                          const reqY = o().y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
+                          return (
+                            <g
+                              class="cap-bullet other"
+                              classList={{ faded: capAggFaded(`other:${row.host}`) }}
+                              onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o()), e) }}
+                              onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
+                            >
+                              <rect class="cap-track use" x={o().x} y={useY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
+                              <rect class="cap-seg use other" x={o().x} y={useY} width={usePx} height={CAP_BULLET_BAR_H} rx="2" />
+                              <rect class="cap-track req" x={o().x} y={reqY} width={baseline} height={CAP_BULLET_BAR_H} rx="2" />
+                              <rect class="cap-seg req other" x={o().x} y={reqY} width={reqPx} height={CAP_BULLET_BAR_H} rx="2" />
+                              <text class="cap-bullet-name" x={o().x + baseline + 8} y={o().y + o().height / 2 + 4}>
+                                other namespaces · {o().count} pod{o().count === 1 ? '' : 's'}
+                              </text>
+                            </g>
+                          )
+                        }}
                       </Show>
                     </g>
                   )

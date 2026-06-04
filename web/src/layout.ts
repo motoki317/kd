@@ -359,12 +359,18 @@ const CLUSTER_SCOPE_NS = '__cluster__'
 const CAP_TRACK_MAX = 720 // px length of the largest-capacity node's track; everything scales to this
 const CAP_TRACK_MIN = 130 // a node never narrower than this, so a tiny node stays readable/clickable
 const CAP_ROW_LEFT = 48 // left gutter where every track starts — also holds the "Req"/"Use" axis labels
-const CAP_LABEL_H = 22 // header line (node name · capacity · Σreq/Σuse) above the bars
-const CAP_BAR_USE = 22 // the usage bar height
-const CAP_BAR_REQ = 12 // the (thinner) requested bar height
-const CAP_BAR_GAP = 3 // gap between the req and use sub-bars
+const CAP_LABEL_H = 22 // header line (node name · pod count) above the bars
+// Use and Req bars share ONE height (the user asked they be equal). They read as the same channel,
+// just stacked — Use on top (the live number first), Req below — rather than a fat bar over a thin one.
+export const CAP_BAR_H = 18
+const CAP_BAR_GAP = 3 // gap between the use and req sub-bars
 const CAP_ROW_GAP = 26 // gap between node rows
-const CAP_BULLET_H = 20 // a per-pod bullet row height (expanded detail)
+// A per-pod expanded row mirrors the node bars: two stacked sub-bars (use over req), each
+// CAP_BULLET_BAR_H tall, so the detail reads in the SAME visual language as the node-level bars
+// instead of a separate one-bar-with-ticks idiom.
+export const CAP_BULLET_BAR_H = 11
+export const CAP_BULLET_BAR_GAP = 2
+const CAP_BULLET_H = CAP_BULLET_BAR_H * 2 + CAP_BULLET_BAR_GAP // full per-pod row height (two stacked bars)
 const CAP_BULLET_GAP = 4
 // CAP_SEG_FOLD doubles as the fold threshold and the floor: a collapsed-bar segment that would draw
 // narrower than this is not individually distinguishable, so it folds into the "small pods" aggregate
@@ -624,8 +630,21 @@ export function layoutGraphByCapacity(
     const overcommit = cap !== undefined && reqTotal > cap
 
     const headerY = cursorY
-    const reqBarY = headerY + CAP_LABEL_H
-    const useBarY = reqBarY + CAP_BAR_REQ + CAP_BAR_GAP
+    // Use bar sits ON TOP (the live number reads first), Req below it — both the same height now.
+    const useBarY = headerY + CAP_LABEL_H
+    const reqBarY = useBarY + CAP_BAR_H + CAP_BAR_GAP
+
+    // Usage bar: own pods sized by actual usage (or by request when metrics-server is absent), drawn
+    // at exact width; the small ones fold; then the "other namespaces" block. The faint node-total
+    // backdrop (NodeMetrics) is drawn by the renderer behind these.
+    const useBar = buildCapBar(segData, (d) => (hasUsage ? d.use : d.req ?? 0), scale, CAP_ROW_LEFT, useBarY, CAP_BAR_H)
+    const useSegs = useBar.segs
+    const smallUseSeg = useBar.small
+    let otherUseSeg: CapAggregate | undefined
+    if (otherPods.length) {
+      const width = Math.max(CAP_MIN_SEG, (hasUsage ? otherUse : otherReq) * scale)
+      otherUseSeg = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: useBar.endX, y: useBarY, width, height: CAP_BAR_H }
+    }
 
     // Requested bar: own pods with a request, drawn at exact width; the small ones fold; then the
     // single "other namespaces" block. buildCapBar keeps the stacked length faithful (no per-pod floor).
@@ -635,41 +654,29 @@ export function layoutGraphByCapacity(
       scale,
       CAP_ROW_LEFT,
       reqBarY,
-      CAP_BAR_REQ,
+      CAP_BAR_H,
     )
     const reqSegs = reqBar.segs
     const smallReqSeg = reqBar.small
     let otherReqSeg: CapAggregate | undefined
     if (otherPods.length && otherReq > 0) {
       const width = Math.max(CAP_MIN_SEG, otherReq * scale)
-      otherReqSeg = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: reqBar.endX, y: reqBarY, width, height: CAP_BAR_REQ }
-    }
-
-    // Usage bar: own pods sized by actual usage (or by request when metrics-server is absent), drawn
-    // at exact width; the small ones fold; then the "other namespaces" block. The faint node-total
-    // backdrop (NodeMetrics) is drawn by the renderer behind these.
-    const useBar = buildCapBar(segData, (d) => (hasUsage ? d.use : d.req ?? 0), scale, CAP_ROW_LEFT, useBarY, CAP_BAR_USE)
-    const useSegs = useBar.segs
-    const smallUseSeg = useBar.small
-    let otherUseSeg: CapAggregate | undefined
-    if (otherPods.length) {
-      const width = Math.max(CAP_MIN_SEG, (hasUsage ? otherUse : otherReq) * scale)
-      otherUseSeg = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: useBar.endX, y: useBarY, width, height: CAP_BAR_USE }
+      otherReqSeg = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: reqBar.endX, y: reqBarY, width, height: CAP_BAR_H }
     }
 
     // Selection/search anchors: one posNode per own pod, positioned on the usage bar. An individually
     // drawn pod anchors at its segment center; a folded small pod anchors at the small aggregate, so
     // search and selection still resolve it (drawer via capById, fit frames the whole row).
     for (const s of useSegs) {
-      posNodes.push({ ...s.node, x: s.x + s.width / 2, y: useBarY + CAP_BAR_USE / 2, width: s.width, height: CAP_BAR_USE })
+      posNodes.push({ ...s.node, x: s.x + s.width / 2, y: useBarY + CAP_BAR_H / 2, width: s.width, height: CAP_BAR_H })
     }
     if (smallUseSeg) {
       for (const n of useBar.folded) {
-        posNodes.push({ ...n, x: smallUseSeg.x + smallUseSeg.width / 2, y: useBarY + CAP_BAR_USE / 2, width: smallUseSeg.width, height: CAP_BAR_USE })
+        posNodes.push({ ...n, x: smallUseSeg.x + smallUseSeg.width / 2, y: useBarY + CAP_BAR_H / 2, width: smallUseSeg.width, height: CAP_BAR_H })
       }
     }
 
-    let bottom = useBarY + CAP_BAR_USE
+    let bottom = reqBarY + CAP_BAR_H // req is the lower of the two bars now
     const isExpanded = expanded.has(`host:${host}`)
     const bullets: CapSeg[] = []
     let otherBullet: CapAggregate | undefined
@@ -697,9 +704,10 @@ export function layoutGraphByCapacity(
         by += CAP_BULLET_H + CAP_BULLET_GAP
       }
       if (otherPods.length) {
-        // One folded "other namespaces" bullet, sized by Σ other usage but clamped so a busy cluster
-        // doesn't run it off-canvas (it stands for many pods, exact proportionality matters less).
-        const extent = Math.min(CAP_BULLET_TRACK, Math.max(CAP_MIN_SEG, otherUse * bulletScale))
+        // One folded "other namespaces" bullet, sized by the larger of Σ other usage / request (so both
+        // its sub-bars fit) but clamped so a busy cluster doesn't run it off-canvas (it stands for many
+        // pods, exact proportionality matters less).
+        const extent = Math.min(CAP_BULLET_TRACK, Math.max(CAP_MIN_SEG, Math.max(otherUse, otherReq) * bulletScale))
         otherBullet = { variant: 'other', count: otherPods.length, use: otherUse, req: otherReq, x: CAP_ROW_LEFT, y: by, width: extent, height: CAP_BULLET_H }
         bulletNameRight = Math.max(bulletNameRight, CAP_ROW_LEFT + extent + 8 + `other namespaces · ${otherPods.length} pods`.length * CAP_BULLET_CHAR_W)
         by += CAP_BULLET_H + CAP_BULLET_GAP

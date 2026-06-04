@@ -905,57 +905,25 @@ button.conn.conn-retry:focus-visible {
   stroke-width: 1.6;
   pointer-events: none;
 }
-/* Per-pod bullets (expanded detail). The colored fill's WIDTH is the pod's usage (variable per pod
-   on the shared per-node scale) — not a fixed track with varying fill — so a small pod's bar is
-   physically shorter. A faint baseline runs to the pod's furthest marker so req/limit ticks beyond
-   the usage bar still have something to sit on. */
+/* Per-pod bullets (expanded detail). Each pod mirrors the node-level bars — two stacked sub-bars
+   (Use over Req) reusing the SAME .cap-track / .cap-seg classes (same accent/health fills, same faint
+   track behind) — so the detail reads as a zoomed-in node row rather than a separate one-bar idiom.
+   The Use bar carries the burst hatch (.cap-burst-overlay) and limit tick; widths come from the
+   shared per-node bulletScale, so a small pod's bars are physically shorter. */
 .cap-bullet {
   cursor: pointer;
 }
-.cap-bullet-base {
-  stroke: color-mix(in srgb, var(--text-dim) 28%, var(--surface));
-  stroke-width: 2;
-  pointer-events: none;
-}
-.cap-bullet-fill {
-  fill: var(--accent);
-  pointer-events: none;
-}
-.cap-bullet-fill.h-degraded {
-  fill: var(--health-degraded);
-}
-.cap-bullet-fill.h-progressing {
-  fill: var(--health-progressing);
-}
-.cap-bullet-fill.h-suspended {
-  fill: var(--health-suspended);
-}
-.cap-bullet-fill.h-unknown {
-  fill: var(--health-unknown);
-}
-/* Bursting past request: a hatch overlay (same pattern as the node bar), color-independent. */
-.cap-bullet-over {
-  fill: url(#cap-burst-hatch);
-  pointer-events: none;
-}
-/* Other-namespace bullets read gray, matching their node-bar segments. */
-.cap-bullet.other .cap-bullet-fill {
-  fill: color-mix(in srgb, var(--text-dim) 42%, var(--surface));
-}
+/* Only the limit tick survives on the Use bar (request is now its own bar, not a tick). */
 .cap-tick {
   pointer-events: none;
-}
-.cap-tick.req {
-  stroke: var(--text);
-  stroke-width: 1.4;
 }
 .cap-tick.lim {
   stroke: var(--health-degraded);
   stroke-width: 1.4;
   stroke-dasharray: 2 2;
 }
-/* The expanded bullet now prints only the pod name (numbers are on hover) — its own text node, so
-   it carries its font sizing directly rather than inheriting from a values row. */
+/* The expanded bullet prints only the pod name (numbers are on hover) — its own text node, so it
+   carries its font sizing directly rather than inheriting from a values row. */
 .cap-bullet-name {
   font-size: 11px;
   fill: var(--text);
@@ -965,10 +933,6 @@ button.conn.conn-retry:focus-visible {
 .cap-bullet.other .cap-bullet-name {
   fill: var(--text-dim);
   font-weight: 500;
-}
-.cap-bullet.selected .cap-bullet-fill {
-  stroke: var(--accent);
-  stroke-width: 1.6;
 }
 .cap-bullet.faded {
   opacity: 0.25;

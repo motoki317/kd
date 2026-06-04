@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, COLLAPSE_VISIBLE, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import type { KEdge, KNode } from './types'
 
 const nodes: KNode[] = [
@@ -864,6 +864,14 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     expect(layoutGraphByCapacity(over, {}, 'cpu', '').rows[0].overcommit).toBe(true)
   })
 
+  it('stacks the Use bar above the Req bar, both the same height', () => {
+    const big = layoutGraphByCapacity(capNodes, usage, 'cpu', '').rows.find((r) => r.host === 'big')!
+    expect(big.trackY).toBeLessThan(big.reqBarY) // Use (trackY) reads first, Req below it
+    // Both bars are CAP_BAR_H tall; the usage segments expose that height directly.
+    expect(big.useSegs.every((s) => s.height === CAP_BAR_H)).toBe(true)
+    expect(big.reqSegs.every((s) => s.height === CAP_BAR_H)).toBe(true)
+  })
+
   it('expands a node into variable-length per-pod bullets on a shared scale', () => {
     const l = layoutGraphByCapacity(capNodes, usage, 'cpu', '', new Set(['host:big']))
     const big = l.rows.find((r) => r.host === 'big')!
@@ -873,6 +881,9 @@ describe('layoutGraphByCapacity (Nodes capacity view)', () => {
     const a = big.bullets.find((b) => b.node.id === 'pa')! // use 800, lim 1000
     const b = big.bullets.find((b) => b.node.id === 'pb')! // idle, no req/lim
     expect(a.width).toBeGreaterThan(b.width)
+    // Each pod row is tall enough for two stacked sub-bars (Use over Req) — the detail mirrors the
+    // node bars rather than a single bar-with-ticks.
+    expect(a.height).toBe(CAP_BULLET_BAR_H * 2 + CAP_BULLET_BAR_GAP)
   })
 
   it('carries the node total usage as a backdrop value', () => {
