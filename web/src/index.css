@@ -881,18 +881,6 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.req.other {
   fill: color-mix(in srgb, var(--text-dim) 52%, var(--surface));
 }
-/* Overshoot laps (expanded pod gauges only): usage past the pod's ceiling wraps the bar and each
-   successive lap is a hotter colour — amber (>100%), orange (>200%), red (>300%). Two-class selectors
-   placed AFTER the health rules so the lap colour wins over the lap-1 health hue for the wrapped bands. */
-.cap-seg.lap-2 {
-  fill: var(--health-suspended);
-}
-.cap-seg.lap-3 {
-  fill: color-mix(in srgb, var(--health-suspended) 45%, var(--health-degraded));
-}
-.cap-seg.lap-4 {
-  fill: var(--health-degraded);
-}
 /* The "small pods" fold (own pods too tiny to draw individually, rolled into one block) is styled
    exactly like a normal pod segment — same accent fill, no border — so the bar reads uniformly; it is
    identified by hover ("N small pods") and its position after the individual pods, and click-expands. */
@@ -918,12 +906,35 @@ button.conn.conn-retry:focus-visible {
   stroke-width: 1.6;
   pointer-events: none;
 }
-/* Per-pod bullets (expanded detail). Each pod is a GAUGE against its own ceiling: two stacked bars
-   (Use over Req via CapGauge) reusing the SAME .cap-track / .cap-seg classes, each filling to
-   value/ceiling, with the pod name as a header above and a "value / limit" label past each bar — so the
-   detail reads as a zoomed-in node row. Overshoot past the ceiling wraps in lap colours (.lap-2..4). */
+/* Per-pod bullets (expanded detail). Each pod is its own bordered CARD: two stacked bars (Use over Req
+   via CapBulletBar) reusing the SAME .cap-track / .cap-seg classes, drawn at the global capacity scale so
+   a pod's bar is comparable to its node's track. A tick (.cap-bullet-tick) marks the request/limit and
+   usage past it extends + hatches. Clicking the card zooms to it. */
 .cap-bullet {
   cursor: pointer;
+}
+/* The bordered card framing one expanded pod. A faint fill + border lifts it off the canvas as a
+   distinct click target — the WHOLE card is clickable (the user clicks it to zoom in), so it must
+   receive pointer events on its fill, not just the thin bars inside it. The selected pod's border
+   turns accent. */
+.cap-bullet-frame {
+  fill: color-mix(in srgb, var(--text-dim) 5%, var(--surface));
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.cap-bullet-frame:hover {
+  fill: color-mix(in srgb, var(--text-dim) 10%, var(--surface));
+}
+.cap-bullet-frame.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+/* Reference tick on an expanded pod bar: a thin upright mark at the request (Req bar) / limit (Use bar)
+   so the usage fill reads as "under" or "over" its reservation at a glance. */
+.cap-bullet-tick {
+  stroke: var(--text-dim);
+  stroke-width: 1.4;
+  pointer-events: none;
 }
 /* The expanded bullet pod-name header — its own text node, left-anchored above the two gauge bars. */
 .cap-bullet-name {

@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, capBulletLaps, capReqCeiling, capUseCeiling, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, COLLAPSE_KIND, connGroups, formatQuantity, kindGroups, layoutGraph, layoutGraphByCapacity, layoutGraphByKind, type CapAggregate, type CapResource, type CapRow, type CapSeg, type CapacityLayout, type CollapseMeta, type Point } from '../layout'
 import { edgeKey } from '../graphState'
 import { HEALTH_ORDER, healthColor, healthSeverity } from '../health'
 import { orderedForNav } from '../nav'
@@ -154,52 +154,55 @@ const EDGE_LABELS: Record<EdgeType, string> = {
 // single pod segment or the folded "other namespaces" aggregate, so the tooltip renders one shape.
 type CapTipData = { title: string; sub?: string; value: string }
 
-// CapGauge draws ONE expanded-pod bar as a gauge against the pod's ceiling: an axis label ("Use"/"Req")
-// in the left gutter, a faint full-length track (= the ceiling at 100%), the value as a fill, and a
-// "value / limit" label past the track — mirroring a node-level bar. When the value exceeds the ceiling
-// it WRAPS: capBulletLaps yields successive full-width laps painted left-to-right in escalating colours
-// (lap 1 normal, 2 amber, 3 orange, 4 red), so an overshoot stays inside the fixed width and the lap
-// count reads as "N× over". Both bars of a pod pass the SAME ceiling, so use/limit and req/limit compare.
-function CapGauge(props: {
+// CapBulletBar draws ONE expanded-pod bar at the global capacity scale (the same px-per-unit as the
+// node tracks, so a pod's bar is directly comparable to its node's): an axis label ("Use"/"Req"), a
+// faint track to the bar's reference extent, the actual usage as a fill, a TICK at the request/limit
+// reference, and a "value / ref" label. When usage exceeds the reference the fill EXTENDS past the tick
+// and the overshoot is hatched — so "over its request/limit" reads as a bar running past its marker
+// rather than wrapping in lap colours. `ref` is the request (Req bar) / limit (Use bar); undefined (the
+// folded other-namespaces card) draws no tick.
+function CapBulletBar(props: {
   x: number
   y: number
   value: number
-  ceiling: number
-  trackLen: number
+  refVal?: number // request (Req bar) / limit (Use bar) — NOT named `ref` (Solid reserves that for element refs)
+  scale: number
   axis: string
   barClass: string // 'use' | 'req' — picks the matching node-bar track/segment styling
   valueStr: string
-  ceilStr?: string
+  refStr?: string
   hClass?: string
   selected?: boolean
   other?: boolean
 }) {
-  const laps = createMemo(() => capBulletLaps(props.value, props.ceiling, props.trackLen))
+  const fill = createMemo(() => Math.max(1, props.value * props.scale))
+  const refLen = createMemo(() => (props.refVal !== undefined ? Math.max(1, props.refVal * props.scale) : 0))
+  const extent = createMemo(() => Math.max(fill(), refLen()))
+  const over = createMemo(() => props.refVal !== undefined && fill() > refLen() + 0.5)
   return (
     <>
       <text class="cap-axis-label" x={props.x - 6} y={props.y + 9}>{props.axis}</text>
-      <rect class={`cap-track ${props.barClass}`} x={props.x} y={props.y} width={props.trackLen} height={CAP_BULLET_BAR_H} rx="2" />
-      <For each={laps()}>
-        {(lap) => (
-          <rect
-            class={`cap-seg ${props.barClass}`}
-            classList={{
-              [props.hClass ?? 'h-healthy']: lap.lap === 1,
-              [`lap-${lap.lap}`]: lap.lap > 1,
-              other: !!props.other,
-              selected: !!props.selected,
-            }}
-            x={props.x}
-            y={props.y}
-            width={Math.max(1, lap.width)}
-            height={CAP_BULLET_BAR_H}
-            rx="2"
-          />
-        )}
-      </For>
-      <text class="cap-bar-value" x={props.x + props.trackLen + 8} y={props.y + 9}>
+      <rect class={`cap-track ${props.barClass}`} x={props.x} y={props.y} width={extent()} height={CAP_BULLET_BAR_H} rx="2" />
+      <rect
+        class={`cap-seg ${props.barClass}`}
+        classList={{ [props.hClass ?? 'h-healthy']: !props.other, other: !!props.other, selected: !!props.selected }}
+        x={props.x}
+        y={props.y}
+        width={fill()}
+        height={CAP_BULLET_BAR_H}
+        rx="2"
+      />
+      {/* Overshoot past the request/limit: hatch the portion beyond the tick (colour-independent). */}
+      <Show when={over()}>
+        <rect class={`cap-burst-overlay ${props.barClass}`} x={props.x + refLen()} y={props.y} width={Math.max(1, fill() - refLen())} height={CAP_BULLET_BAR_H} />
+      </Show>
+      {/* Reference tick: where the request (Req bar) / limit (Use bar) sits, so an overshoot is legible. */}
+      <Show when={props.refVal !== undefined}>
+        <line class="cap-bullet-tick" x1={props.x + refLen()} y1={props.y - 1} x2={props.x + refLen()} y2={props.y + CAP_BULLET_BAR_H + 1} />
+      </Show>
+      <text class="cap-bar-value" x={props.x + extent() + 8} y={props.y + 9}>
         <tspan class="cap-bar-value-strong">{props.valueStr}</tspan>
-        {props.ceilStr ? ` / ${props.ceilStr}` : ''}
+        {props.refStr ? ` / ${props.refStr}` : ''}
       </text>
     </>
   )
@@ -317,21 +320,31 @@ export default function Topology(props: Props) {
     if (!row) return null
     return { x: row.x + row.width / 2, y: row.y + row.height / 2, width: row.width, height: row.height }
   }
-  // Expanding a node row reveals its per-pod bullets, which makes the row much taller; fit the
-  // viewport to that row so the operator immediately sees the pods they just opened (item: zoom to the
-  // node on expand). Collapsing does NOT re-fit — it just folds the detail back, keeping the operator's
-  // pan/zoom. capRows() is read AFTER toggling: the memo recomputes synchronously, so the row's box
-  // already reflects the expanded (taller) geometry; the rAF lets the layout/DOM settle before fitting.
+  // Expanding a node row reveals its per-pod bullets (much taller); collapsing folds them back (much
+  // shorter). EITHER way, re-fit the viewport to that row's new box: on expand the operator sees the
+  // pods they just opened, and on collapse they zoom back IN to the node instead of being stranded at
+  // the zoomed-out scale the expanded row needed (the user's "zoom back to the collapsed node"). capRows()
+  // is read AFTER toggling — the memo recomputes synchronously, so the box already reflects the new
+  // (expanded or collapsed) geometry; the rAF lets the layout/DOM settle before fitting.
   const toggleCapRow = (host: string) => {
-    const key = `host:${host}`
-    const willExpand = !expandedClusters().has(key)
-    toggleCluster(key)
-    if (!willExpand || !svg) return
+    toggleCluster(`host:${host}`)
+    if (!svg) return
     const r = capRows().find((row) => row.host === host)
     if (!r) return
-    const box = { x: r.x + r.width / 2, y: r.y + r.height / 2, width: r.width, height: r.height }
+    fitCapBox({ x: r.x, y: r.y, width: r.width, height: r.height })
+  }
+  // A pod-card click both SELECTS the pod (opening the drawer) and wants to zoom to that card — but the
+  // selection-fit effect, reacting to the same selectedId change, would otherwise re-frame the whole node
+  // row. Setting this ref before onSelect tells that effect to frame the pod card instead, just this once.
+  let capPodFitBox: { x: number; y: number; width: number; height: number } | null = null
+  // fitCapBox animates the viewport to frame a capacity-view box (a node row, or a single expanded pod
+  // card). Takes a top-left box; selectionMaxScale lets a small pod card zoom in close while a tall
+  // expanded node row stays moderate. Deferred a frame so a just-toggled layout has settled first.
+  const fitCapBox = (b: { x: number; y: number; width: number; height: number }) => {
+    if (!svg) return
+    const center = { x: b.x + b.width / 2, y: b.y + b.height / 2, width: b.width, height: b.height }
     cancelAnimationFrame(selFitFrame)
-    selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([box], 1.4)))
+    selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([center], selectionMaxScale)))
   }
   // Relationship grouping has no kind/host container, so a fold's siblings + pill get a dedicated
   // grouping frame. Kind/Nodes already box by kind/host — a second frame there would double-border,
@@ -860,11 +873,20 @@ export default function Topology(props: Props) {
         const l = layout()
         if (l.width === 0) return
         if (!id) return
-        // Nodes view: frame the node row the selection sits in (see capRowBoxFor).
+        // Nodes view: frame the node row the selection sits in (see capRowBoxFor) — UNLESS the selection
+        // came from clicking an expanded pod card, in which case zoom to that card (the user's "click a
+        // pod box to read its bars"). capPodFitBox is consumed once so a later keyboard/search selection
+        // of the same kind still frames the whole row.
         const capBox = capRowBoxFor(id)
         if (capBox) {
-          cancelAnimationFrame(selFitFrame)
-          selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
+          const podBox = capPodFitBox
+          capPodFitBox = null
+          if (podBox) {
+            fitCapBox(podBox)
+          } else {
+            cancelAnimationFrame(selFitFrame)
+            selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
+          }
           return
         }
         const r = related()
@@ -1680,45 +1702,41 @@ export default function Topology(props: Props) {
                         {row.useCap !== undefined ? ` / ${fmt(row.useCap)}` : ''}
                       </text>
 
-                      {/* Per-pod bullets (expanded): each pod is two stacked gauges that BOTH fill with
-                          actual USAGE, differing only in their reference ceiling — the Use bar against the
-                          limit (how close to throttle/OOM), the Req bar against the request (how much of
-                          the reservation is used; the bar WRAPS in escalating lap colours when usage
-                          bursts past the request). Pod name as a header above, a "usage / ceiling" label
-                          past each bar, mirroring a node row. Whole pod = one hover/click target with the
-                          same tooltip as the node-level segments. */}
+                      {/* Per-pod bullets (expanded): each pod is its own bordered CARD — name header, then
+                          two stacked bars (Use over Req) BOTH filling with actual USAGE at the global scale
+                          (so the bar is comparable to the node track above). A tick marks the limit (Use) /
+                          request (Req); usage past it extends + hatches. Clicking the card zooms the
+                          viewport to it so the bars read clearly even when the global scale draws them small. */}
                       <For each={row.bullets}>
                         {(b) => {
                           const useStr = fmt(b.use)
                           const reqY = b.y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
                           const hClass = `h-${b.node.health.toLowerCase()}`
                           const selected = b.node.id === props.selectedId
-                          // Denominators: the Use bar reads usage / limit (fall back to request), the Req
-                          // bar reads usage / request (fall back to limit); show whichever bound exists.
-                          const useCeilStr = b.lim !== undefined ? fmt(b.lim) : b.req !== undefined ? fmt(b.req) : undefined
-                          const reqCeilStr = b.req !== undefined ? fmt(b.req) : b.lim !== undefined ? fmt(b.lim) : undefined
+                          const box = b.box!
                           return (
                             <g
                               class="cap-bullet"
                               classList={{ faded: capSegFaded(b.node) }}
-                              onClick={(e) => { e.stopPropagation(); props.onSelect(b.node.id) }}
+                              onClick={(e) => { e.stopPropagation(); capPodFitBox = box; props.onSelect(b.node.id); fitCapBox(box) }}
                               onPointerMove={(e) => { setCapHover(b.node.id); showTip(tipFromSeg(b, 'use'), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
-                              <text class="cap-bullet-name" x={b.x} y={b.y - 4}>{b.node.name}</text>
-                              <CapGauge x={b.x} y={b.y} value={b.use} ceiling={capUseCeiling(b)} trackLen={b.width} axis="Use" barClass="use" valueStr={useStr} ceilStr={useCeilStr} hClass={hClass} selected={selected} />
-                              <CapGauge x={b.x} y={reqY} value={b.use} ceiling={capReqCeiling(b)} trackLen={b.width} axis="Req" barClass="req" valueStr={useStr} ceilStr={reqCeilStr} hClass={hClass} selected={selected} />
+                              <rect class="cap-bullet-frame" classList={{ selected }} x={box.x} y={box.y} width={box.width} height={box.height} rx="6" />
+                              <text class="cap-bullet-name" x={box.x + 8} y={box.y + CAP_BULLET_PAD + 10}>{b.node.name}</text>
+                              <CapBulletBar x={b.x} y={b.y} value={b.use} refVal={b.lim} scale={capInfo().scale} axis="Use" barClass="use" valueStr={useStr} refStr={b.lim !== undefined ? fmt(b.lim) : undefined} hClass={hClass} selected={selected} />
+                              <CapBulletBar x={b.x} y={reqY} value={b.use} refVal={b.req} scale={capInfo().scale} axis="Req" barClass="req" valueStr={useStr} refStr={b.req !== undefined ? fmt(b.req) : undefined} hClass={hClass} selected={selected} />
                             </g>
                           )
                         }}
                       </For>
-                      {/* Folded "other namespaces" bullet — one gray gauge pair standing in for every pod
-                          outside this namespace. Like the per-pod gauges, BOTH bars fill with Σ usage: the
-                          Use bar against the busier of Σ usage / request, the Req bar against Σ request.
+                      {/* Folded "other namespaces" card — one gray bar pair standing in for every pod outside
+                          this namespace: the Use bar = Σ usage, the Req bar = Σ request, at the global scale.
                           Hoverable for its totals, not selectable. */}
                       <Show when={row.otherBullet}>
                         {(o) => {
                           const reqY = o().y + CAP_BULLET_BAR_H + CAP_BULLET_BAR_GAP
+                          const box = o().box!
                           return (
                             <g
                               class="cap-bullet other"
@@ -1726,11 +1744,12 @@ export default function Topology(props: Props) {
                               onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use'), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
-                              <text class="cap-bullet-name" x={o().x} y={o().y - 4}>
+                              <rect class="cap-bullet-frame" x={box.x} y={box.y} width={box.width} height={box.height} rx="6" />
+                              <text class="cap-bullet-name" x={box.x + 8} y={box.y + CAP_BULLET_PAD + 10}>
                                 other namespaces · {o().count} pod{o().count === 1 ? '' : 's'}
                               </text>
-                              <CapGauge x={o().x} y={o().y} value={o().use} ceiling={Math.max(o().use, o().req, 1)} trackLen={o().width} axis="Use" barClass="use" valueStr={fmt(o().use)} other />
-                              <CapGauge x={o().x} y={reqY} value={o().use} ceiling={Math.max(o().req, 1)} trackLen={o().width} axis="Req" barClass="req" valueStr={fmt(o().use)} ceilStr={fmt(o().req)} other />
+                              <CapBulletBar x={o().x} y={o().y} value={o().use} scale={capInfo().scale} axis="Use" barClass="use" valueStr={fmt(o().use)} other />
+                              <CapBulletBar x={o().x} y={reqY} value={o().req} scale={capInfo().scale} axis="Req" barClass="req" valueStr={fmt(o().req)} other />
                             </g>
                           )
                         }}
