@@ -10,13 +10,14 @@ interface Props {
 }
 
 // shortContextName trims structured cluster identifiers down to the human-meaningful tail so the
-// switcher dropdown stays readable. EKS contexts kubeconfigs typically use a full ARN
-// ("arn:aws:eks:us-west-2:111122223333:cluster/prod-cluster"); the operator thinks of the
-// cluster by its trailing name. GKE/OpenShift use similarly long names — best effort to extract
-// the trailing identifier after the last "/" or ":" (whichever is further right). The full
-// original is preserved in the option's title (hover) so the ARN stays discoverable.
+// switcher dropdown stays readable. EKS kubeconfigs typically name the context by a full ARN
+// ("arn:aws:eks:us-west-2:111122223333:cluster/prod-cluster"), but the operator thinks of the
+// cluster by its trailing name. We extract the component after the LAST "/" — the cluster id sits
+// there in every "/"-terminated form (the EKS ".../cluster/<name>" suffix, generic resource paths).
+// Colon-delimited prefixes are deliberately NOT split: the ARN's meaningful tail is already past its
+// final "/", and a name with no "/" (docker-desktop, an underscore-joined GKE id) has no safe split
+// point, so it passes through whole. The full original is kept in the option's title (hover).
 export function shortContextName(full: string): string {
-  // The terminal slash component is the most useful for AWS/GCP-style ARNs and resource paths.
   const slashIdx = full.lastIndexOf('/')
   if (slashIdx >= 0 && slashIdx < full.length - 1) return full.slice(slashIdx + 1)
   return full
