@@ -606,6 +606,7 @@ export default function App() {
               setKindFilter(new Set<string>())
             }}
             connected={connected()}
+            offline={connState() === 'offline'}
             groupBy={groupBy()}
             onGroupBy={setGroupBy}
             relFilter={relFilter()}

@@ -41,6 +41,11 @@ interface Props {
   // control sits in one block beside the search and kind chips.
   onHealthFilter?: (h: Health | null) => void
   connected: boolean
+  // True when the SSE stream has errored (distinct from the pre-snapshot 'connecting' state). With an
+  // empty graph this drives the empty-state message: a failed connection must NOT show the
+  // "Connecting…" spinner (which implies active progress) — it shows a static "can't reach" message
+  // pointing at the retry control, so the operator knows to act rather than wait.
+  offline?: boolean
   // groupBy selects the layout strategy: 'kind' → per-kind boxes, 'nodes' → host containers,
   // 'relationship' (default) → relationship depth-column tree. Replaces the old viewId. The
   // segmented control that sets it lives in this toolbar (onGroupBy); App owns the signal.
@@ -1198,12 +1203,19 @@ export default function Topology(props: Props) {
           </svg>
           <div class="topology-empty-text">
             <Show when={props.connected} fallback={
-              <>
-                {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
-                    than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
-                <span class="topology-empty-spinner" aria-hidden="true" />
-                Connecting…
-              </>
+              <Show when={props.offline} fallback={
+                <>
+                  {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
+                      than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
+                  <span class="topology-empty-spinner" aria-hidden="true" />
+                  Connecting…
+                </>
+              }>
+                {/* Offline with no data (e.g. an unreachable context): a static message, NOT the
+                    spinner — the connection failed, so point at the retry control rather than
+                    implying progress. */}
+                Can't reach the cluster — use “offline · retry” above to reconnect.
+              </Show>
             }>
               Nothing to show in this namespace.
             </Show>

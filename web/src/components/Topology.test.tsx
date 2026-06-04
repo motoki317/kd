@@ -30,6 +30,19 @@ describe('Topology', () => {
     expect(faded(container)).toBe(0)
   })
 
+  it('empty-state distinguishes connecting (spinner) from offline (static, points at retry)', () => {
+    // Connecting: an empty graph with connected=false and not offline → spinner + "Connecting…".
+    const connecting = render(() => <Topology nodes={[]} edges={[]} search="" {...base} connected={false} />)
+    expect(connecting.container.querySelector('.topology-empty-spinner')).toBeTruthy()
+    expect(connecting.container.querySelector('.topology-empty-text')?.textContent).toContain('Connecting')
+    connecting.unmount()
+    // Offline: the connection FAILED, so no spinner (which would imply progress) — a static message
+    // that points the operator at the retry control instead of implying it's still working.
+    const offline = render(() => <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} />)
+    expect(offline.container.querySelector('.topology-empty-spinner')).toBeFalsy()
+    expect(offline.container.querySelector('.topology-empty-text')?.textContent).toContain("Can't reach the cluster")
+  })
+
   it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     // Only the two Pods carry the kind-pod class; the Deployment doesn't.
