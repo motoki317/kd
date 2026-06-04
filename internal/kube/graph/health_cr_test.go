@@ -268,8 +268,14 @@ func TestGatewayClassHealth(t *testing.T) {
 	if got := health(gc("True")); got != HealthHealthy {
 		t.Errorf("GatewayClass Accepted=True = %q, want Healthy", got)
 	}
+	if got := statusSummary(gc("True")); got != "Accepted" {
+		t.Errorf("GatewayClass Accepted=True status = %q, want Accepted", got)
+	}
 	if got := health(gc("False")); got != HealthDegraded {
 		t.Errorf("GatewayClass Accepted=False = %q, want Degraded", got)
+	}
+	if got := statusSummary(gc("False")); got != "Rejected" {
+		t.Errorf("GatewayClass Accepted=False status = %q, want Rejected", got)
 	}
 	if got := health(gc("")); got != HealthUnknown {
 		t.Errorf("GatewayClass no condition = %q, want Unknown", got)
