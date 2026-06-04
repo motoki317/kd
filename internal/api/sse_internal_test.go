@@ -172,6 +172,51 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	}
 }
 
+func TestUIDResolvers(t *testing.T) {
+	obj := func(kind, ns, name, uid string) *unstructured.Unstructured {
+		md := map[string]any{"name": name}
+		if ns != "" {
+			md["namespace"] = ns
+		}
+		if uid != "" {
+			md["uid"] = uid
+		}
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": kind, "metadata": md,
+		}}
+	}
+	snapshot := []runtime.Object{
+		obj("Pod", "shop", "web", "pod-uid"),
+		obj("Node", "", "worker-1", "node-uid"),
+		obj("Pod", "shop", "ghost", ""),          // no UID → not indexed
+		obj("Service", "shop", "web", "svc-uid"), // non-Pod/Node → ignored
+		&corev1.Pod{},                            // non-unstructured → skipped, must not panic
+	}
+	resolvePod, resolveNode := uidResolvers(snapshot)
+
+	if uid, ok := resolvePod("shop", "web"); !ok || uid != "pod-uid" {
+		t.Errorf("resolvePod(shop/web) = (%q, %v), want (pod-uid, true)", uid, ok)
+	}
+	// Namespace is part of the key: a same-named pod in another namespace must not match.
+	if _, ok := resolvePod("other", "web"); ok {
+		t.Error("resolvePod must key on namespace too, not name alone")
+	}
+	// A pod without a UID is skipped entirely (no graph node to attach usage to).
+	if _, ok := resolvePod("shop", "ghost"); ok {
+		t.Error("resolvePod should not resolve a UID-less pod")
+	}
+	// A Service named "web" must not leak into the pod resolver despite sharing the pod's name.
+	if uid, _ := resolvePod("shop", "web"); uid == "svc-uid" {
+		t.Error("a non-Pod must not populate the pod resolver")
+	}
+	if uid, ok := resolveNode("", "worker-1"); !ok || uid != "node-uid" {
+		t.Errorf("resolveNode(worker-1) = (%q, %v), want (node-uid, true)", uid, ok)
+	}
+	if _, ok := resolveNode("", "absent"); ok {
+		t.Error("resolveNode(absent) should be (_, false)")
+	}
+}
+
 func TestStoppedPod(t *testing.T) {
 	pod := func(phase string) *unstructured.Unstructured {
 		return &unstructured.Unstructured{Object: map[string]any{
