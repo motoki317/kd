@@ -72,6 +72,22 @@ type Node struct {
 	// and selectorless Services (which define their endpoints manually/externally), so the UI can tell
 	// "no backends" apart from "not selector-based".
 	Endpoints *Endpoints `json:"endpoints,omitempty"`
+	// Allocatable, Requests, Limits carry structured (canonical-unit) resource quantities for the
+	// capacity view, kept separate from the human-readable Capacity string (which still feeds the
+	// drawer). Each is nil for kinds it doesn't apply to, so the client renders nothing rather than a
+	// misleading zero.
+	Allocatable *Resources `json:"allocatable,omitempty"` // a Node's schedulable capacity (Node kind)
+	Requests    *Resources `json:"requests,omitempty"`    // a Pod's summed container requests (Pod kind)
+	Limits      *Resources `json:"limits,omitempty"`      // a Pod's summed container limits (Pod kind)
+}
+
+// Resources holds canonical-unit resource quantities: CPU millicores, memory bytes, and a pod
+// count (allocatable only). Pointer fields so "no CPU request set" stays distinct from "0" — a pod
+// commonly sets memory but not CPU, and that absence is itself a signal the capacity view renders.
+type Resources struct {
+	CPUMilli *int64 `json:"cpuMilli,omitempty"`
+	MemBytes *int64 `json:"memBytes,omitempty"`
+	Pods     *int64 `json:"pods,omitempty"`
 }
 
 // Endpoints summarizes how many of a Service's selected pods are Ready out of the total it selects.

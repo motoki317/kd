@@ -29,6 +29,107 @@ func TestNodeCapacity(t *testing.T) {
 	}
 }
 
+func TestNodeAllocatable(t *testing.T) {
+	node := &corev1.Node{Status: corev1.NodeStatus{Allocatable: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("2"),
+		corev1.ResourceMemory: resource.MustParse("8Gi"),
+		corev1.ResourcePods:   resource.MustParse("110"),
+	}}}
+	got := nodeAllocatable(node)
+	if got == nil {
+		t.Fatal("nodeAllocatable = nil, want non-nil")
+	}
+	wantInt64(t, "cpuMilli", got.CPUMilli, 2000)
+	wantInt64(t, "memBytes", got.MemBytes, 8*1024*1024*1024)
+	wantInt64(t, "pods", got.Pods, 110)
+
+	if got := nodeAllocatable(&corev1.Pod{}); got != nil {
+		t.Errorf("nodeAllocatable(non-node) = %+v, want nil", got)
+	}
+	if got := nodeAllocatable(&corev1.Node{}); got != nil {
+		t.Errorf("nodeAllocatable(no allocatable) = %+v, want nil", got)
+	}
+}
+
+func TestPodRequestsAndLimits(t *testing.T) {
+	reqs := func(cpu, mem string) corev1.ResourceList {
+		l := corev1.ResourceList{}
+		if cpu != "" {
+			l[corev1.ResourceCPU] = resource.MustParse(cpu)
+		}
+		if mem != "" {
+			l[corev1.ResourceMemory] = resource.MustParse(mem)
+		}
+		return l
+	}
+	ctr := func(req corev1.ResourceList) corev1.Container {
+		return corev1.Container{Resources: corev1.ResourceRequirements{Requests: req}}
+	}
+
+	// Two containers each setting cpu+mem → summed.
+	summed := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{
+		ctr(reqs("100m", "128Mi")),
+		ctr(reqs("250m", "256Mi")),
+	}}}
+	got := podRequests(summed)
+	if got == nil {
+		t.Fatal("podRequests(summed) = nil, want non-nil")
+	}
+	wantInt64(t, "cpuMilli", got.CPUMilli, 350)
+	wantInt64(t, "memBytes", got.MemBytes, (128+256)*1024*1024)
+	if got.Pods != nil {
+		t.Errorf("podRequests Pods = %v, want nil (never set for pods)", *got.Pods)
+	}
+
+	// The critical case: only memory set, no container sets CPU → MemBytes set, CPUMilli nil.
+	memOnly := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{ctr(reqs("", "512Mi"))}}}
+	got = podRequests(memOnly)
+	if got == nil {
+		t.Fatal("podRequests(memOnly) = nil, want non-nil")
+	}
+	if got.CPUMilli != nil {
+		t.Errorf("podRequests memOnly CPUMilli = %v, want nil", *got.CPUMilli)
+	}
+	wantInt64(t, "memBytes", got.MemBytes, 512*1024*1024)
+
+	// No requests at all → nil.
+	none := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{ctr(reqs("", ""))}}}
+	if got := podRequests(none); got != nil {
+		t.Errorf("podRequests(no requests) = %+v, want nil", got)
+	}
+
+	// Init containers are excluded from the sum (limits mirror requests).
+	withInit := &corev1.Pod{Spec: corev1.PodSpec{
+		InitContainers: []corev1.Container{{Resources: corev1.ResourceRequirements{Limits: reqs("4", "4Gi")}}},
+		Containers:     []corev1.Container{{Resources: corev1.ResourceRequirements{Limits: reqs("500m", "512Mi")}}},
+	}}
+	got = podLimits(withInit)
+	if got == nil {
+		t.Fatal("podLimits(withInit) = nil, want non-nil")
+	}
+	wantInt64(t, "cpuMilli", got.CPUMilli, 500)
+	wantInt64(t, "memBytes", got.MemBytes, 512*1024*1024)
+
+	// Non-pod → nil for both extractors.
+	if got := podRequests(&corev1.Node{}); got != nil {
+		t.Errorf("podRequests(non-pod) = %+v, want nil", got)
+	}
+	if got := podLimits(&corev1.Node{}); got != nil {
+		t.Errorf("podLimits(non-pod) = %+v, want nil", got)
+	}
+}
+
+func wantInt64(t *testing.T, name string, got *int64, want int64) {
+	t.Helper()
+	if got == nil {
+		t.Errorf("%s = nil, want %d", name, want)
+		return
+	}
+	if *got != want {
+		t.Errorf("%s = %d, want %d", name, *got, want)
+	}
+}
+
 func TestServicePorts(t *testing.T) {
 	svc := &corev1.Service{Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{
 		{Name: "https", Port: 443, TargetPort: intstr.FromInt32(8443), Protocol: corev1.ProtocolTCP},

@@ -160,6 +160,75 @@ func nodeCapacity(obj runtime.Object) string {
 	return strings.Join(parts, " · ")
 }
 
+// nodeAllocatable returns a Node's schedulable capacity as structured canonical-unit quantities (nil
+// for non-nodes), the machine-readable counterpart of nodeCapacity that the capacity view does math
+// on. Mirrors nodeCapacity's zero-guard: a node that hasn't reported cpu+mem yet yields nil.
+func nodeAllocatable(obj runtime.Object) *Resources {
+	n, ok := obj.(*corev1.Node)
+	if !ok {
+		return nil
+	}
+	alloc := n.Status.Allocatable
+	cpu, mem, pods := alloc.Cpu(), alloc.Memory(), alloc.Pods()
+	if cpu.IsZero() && mem.IsZero() {
+		return nil // capacity not reported yet
+	}
+	cpuMilli, memBytes, podCount := cpu.MilliValue(), mem.Value(), pods.Value()
+	return &Resources{CPUMilli: &cpuMilli, MemBytes: &memBytes, Pods: &podCount}
+}
+
+// podRequests sums a Pod's per-container resource requests into canonical units (nil for non-pods).
+// CPU and memory are independent: a field stays nil unless at least one container sets it, so "no CPU
+// request" reads distinctly from "0" in the capacity view.
+func podRequests(obj runtime.Object) *Resources {
+	return podResources(obj, func(c corev1.Container) corev1.ResourceList { return c.Resources.Requests })
+}
+
+// podLimits sums a Pod's per-container resource limits, with the same nil-vs-set semantics as
+// podRequests.
+func podLimits(obj runtime.Object) *Resources {
+	return podResources(obj, func(c corev1.Container) corev1.ResourceList { return c.Resources.Limits })
+}
+
+func podResources(obj runtime.Object, which func(corev1.Container) corev1.ResourceList) *Resources {
+	p, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil
+	}
+	// Init containers are excluded: the effective request is max(initmax, sum(app)), but for a
+	// "feel the size" capacity view summing the app containers is the right first cut.
+	cpuMilli, memBytes := sumContainerResource(p.Spec.Containers, which)
+	if cpuMilli == nil && memBytes == nil {
+		return nil
+	}
+	return &Resources{CPUMilli: cpuMilli, MemBytes: memBytes}
+}
+
+// sumContainerResource totals one resource kind (cpu, mem) across containers, returning a nil pointer
+// for a resource no container sets so the caller can keep "unset" distinct from "0".
+func sumContainerResource(containers []corev1.Container, which func(corev1.Container) corev1.ResourceList) (cpuMilli, memBytes *int64) {
+	for _, c := range containers {
+		list := which(c)
+		if q, ok := list[corev1.ResourceCPU]; ok {
+			v := q.MilliValue()
+			cpuMilli = addInt64(cpuMilli, v)
+		}
+		if q, ok := list[corev1.ResourceMemory]; ok {
+			v := q.Value()
+			memBytes = addInt64(memBytes, v)
+		}
+	}
+	return cpuMilli, memBytes
+}
+
+func addInt64(acc *int64, v int64) *int64 {
+	if acc == nil {
+		return &v
+	}
+	sum := *acc + v
+	return &sum
+}
+
 // humanizeBytes renders a byte count as a binary-unit string (Ki/Mi/Gi/Ti), matching how Kubernetes
 // reports memory, so a Node's RAM reads as "16Gi" rather than a raw byte count.
 func humanizeBytes(b int64) string {
