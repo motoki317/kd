@@ -480,7 +480,13 @@ export default function LogViewer(props: Props) {
           )}
         </For>
         {visibleLines().length === 0 && !error() && (
-          <div class="logs-waiting">{filter() ? 'no lines match the filter' : 'waiting for log output…'}</div>
+          // Distinguish "logs exist but every line is hidden by a filter" from "no logs yet". The
+          // old check looked only at the text filter, so toggling off all level chips (or all pod
+          // chips) left 25 streaming lines reading "waiting for log output…" — falsely implying the
+          // pod was silent. Keying on the raw buffer covers every filter (level, pod, text).
+          <div class="logs-waiting">
+            {lines().length > 0 ? 'no lines match the active filters' : 'waiting for log output…'}
+          </div>
         )}
       </pre>
       <Show when={!pinned()}>

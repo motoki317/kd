@@ -28,6 +28,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  // LogViewer persists triage prefs (kd:logsWrap, kd:logsHideLevels); clear so a test that toggles
+  // them (e.g. hiding every level) can't leak that state into the next test's filtered line set.
+  localStorage.clear()
 })
 
 const base = { namespace: 'shop', kind: 'Pod', name: 'web-1' }
@@ -106,6 +109,27 @@ describe('LogViewer', () => {
     ))
     eventSources[0].onerror?.()
     await findByText('stream interrupted')
+  })
+
+  it('says "no lines match" (not "waiting for output") when a filter hides every line', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    // Before any line arrives: genuinely waiting.
+    expect(container.querySelector('.logs-waiting')?.textContent).toBe('waiting for log output…')
+    // Two klog INFO lines (parse as INF) stream in.
+    const es = eventSources[0]
+    es.emit('log', { line: 'I0521 12:00:00.000000 1 main.go:1] starting' })
+    es.emit('log', { line: 'I0521 12:00:01.000000 1 main.go:2] ready' })
+    await findByText('starting', { exact: false })
+    // Toggle off every level chip → all lines hidden by the LEVEL filter (no text filter active).
+    const levelBtns = [...container.querySelectorAll('.logs-levels button')] as HTMLButtonElement[]
+    levelBtns.forEach((b) => {
+      if (b.getAttribute('aria-pressed') === 'true') b.click()
+    })
+    // The bug was here: with no text filter, the empty-state said "waiting for log output…",
+    // implying the pod was silent — even though 2 lines were streaming, just level-hidden.
+    expect(container.querySelector('.logs-waiting')?.textContent).toBe('no lines match the active filters')
   })
 
   it('Latest button advertises unseen line count while scrolled up (cycle 266)', async () => {
