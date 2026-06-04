@@ -256,3 +256,33 @@ p, alice, default, pods, get, allow
 		t.Error("expected alice to be allowed after parsing comments/blanks")
 	}
 }
+
+// globMatch backs every policy wildcard (namespace/resource/action). A wrong match here silently
+// grants or denies access, so pin all the wildcard positions directly — the enforcer tests only
+// exercise a couple of them.
+func TestGlobMatch(t *testing.T) {
+	cases := []struct {
+		pattern, value string
+		want           bool
+	}{
+		{"*", "anything", true},
+		{"*", "", true},
+		{"prod", "prod", true},       // exact, no wildcard
+		{"prod", "prod-web", false},  // no wildcard, not equal
+		{"prod-*", "prod-web", true}, // prefix
+		{"prod-*", "dev-web", false},
+		{"*-prod", "web-prod", true}, // suffix
+		{"*-prod", "web-dev", false},
+		{"a*c", "abc", true},    // single middle segment
+		{"a*c", "axxxxc", true}, // greedy middle
+		{"a*c", "abd", false},
+		{"a*b*c", "axbyc", true}, // two wildcards, ordered middle segments
+		{"a*b*c", "axbyd", false},
+		{"a*b*c", "acb", false}, // segments out of order
+	}
+	for _, c := range cases {
+		if got := globMatch(c.pattern, c.value); got != c.want {
+			t.Errorf("globMatch(%q, %q) = %v, want %v", c.pattern, c.value, got, c.want)
+		}
+	}
+}
