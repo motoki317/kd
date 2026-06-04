@@ -289,3 +289,17 @@ supersede the corresponding parts of the original Decision:
   `CAP_MAX_LAPS`) so an overshoot stays inside the fixed width and the lap count reads as "N× over" —
   rather than a bar running off-canvas or being silently clamped. The per-node `bulletScale` (and its
   variable-length bullets, request/limit ticks, and burst hatch) were retired with this change.
+- **Node-level tooltips minimised; Use bar gauges against total capacity, not allocatable.** The bars
+  already print "use / cap" and "req / cap" at their right end, so the node-bar hover tooltip was
+  reduced to the single amount of the hovered part — a Use segment → its usage, a Req segment → its
+  request, a fold → its Σ, the node-usage backdrop → just the **non-pod/system overhead**
+  (`max(0, nodeUse − useTotal)`; `useTotal` already nets out other-namespace pods, so the remainder is
+  kubelet/runtime, NOT other namespaces). Hovering the backdrop also spotlights it (fades every other
+  part, like a pod hover). The gray "other namespaces"/overhead fills were brightened to a solid
+  mid-gray (they're real usage, not an empty hint). Finally, the **Use bar's ceiling is the node's TOTAL
+  physical capacity** (`status.capacity` → structured `KNode.capacityRes`), while the **Req bar keeps
+  allocatable**: usage can legitimately spill into the system-reserved region (the overhead the backdrop
+  shows), so gauging it against allocatable would falsely read as overflow. Two ceilings ⇒ two track
+  lengths (`trackW` for Req, `useTrackW` for Use) on one shared px-per-unit scale, so a pod's use/req
+  segments stay directly comparable; the scale now keys on max capacity. Capacity falls back to
+  allocatable when unreported (e.g. Fargate, which reports them equal), collapsing the two tracks.

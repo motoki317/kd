@@ -194,8 +194,16 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   of truth with the segmented control.
 - **Nodes capacity view (`layoutGraphByCapacity`)**: the `nodes` group-by is NOT a card layout — it is
   a length-encoded bullet visualization (ADR `20260603-nodes-capacity-usage-visualization.md`).
-  Each node is a horizontal track whose length ∝ allocatable capacity on ONE global px-per-unit scale
-  (so node sizes compare across the canvas); pods are segments sized by live usage. The layout returns
+  Each node is a horizontal track whose length ∝ its capacity on ONE global px-per-unit scale (so node
+  sizes compare across the canvas); pods are segments sized by live usage. **Two ceilings, two track
+  lengths on the shared scale**: the **Req** bar fills to **allocatable** (`row.cap`/`row.trackW`, the
+  schedulable pool + overcommit ref), the **Use** bar to **total physical capacity**
+  (`row.useCap`/`row.useTrackW`, ≥ allocatable) — usage gauges against capacity because it can spill
+  into the system-reserved region (kubelet, runtime); requests can't. Capacity comes from a structured
+  `KNode.capacityRes` (server `nodeTotalCapacity` reads `status.capacity`; falls back to allocatable when
+  unreported, so the two tracks coincide). The global `scale` keys on max capacity (the longest Use
+  track → `CAP_TRACK_MAX`). The allocatable-boundary capline now sits mid-Use-bar, reading as "schedulable
+  ends here". The layout returns
   a `CapacityLayout` (a `Layout` superset) whose `nodes` are positioned at each pod's usage segment
   (the selection hit-box) + each Node's header, so selection/search/fit work unchanged; `rows` carries
   the bar/segment/bullet geometry the dedicated `cap-view` render branch draws (the generic card `<For>`
@@ -219,11 +227,17 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   colour scheme** (req is NOT a lighter shade — `.cap-seg.req` carries the same accent/health fills and
   `.selected` stroke as `.cap-seg.use`), so a pod is the same colour on both bars and selection emphasises both.
   The node's TOTAL usage (NodeMetrics) draws as a faint backdrop (`.cap-track-nodeuse`) on the Use bar —
-  the bright pod segments only sum to the selected namespace's pods, so the gray beyond them is the rest
-  (other namespaces + system/kubelet overhead). It is hoverable (`tipFromNodeUse`): the tooltip breaks it
-  down as Node total / All pods (`row.useTotal`) / Overhead (= total − pod sum), so the unlabelled bar is
-  accountable. (The tooltip payload `CapTipData` carries optional `rows` for this custom breakdown;
-  without them it renders the default Usage/Request/Limit triple.)
+  the bright pod segments only sum to the selected namespace's pods (other namespaces fold into the gray
+  `otherUseSeg`). It is hoverable (`tipFromNodeUse`) and shows just the Overhead amount
+  (`max(0, nodeUse − useTotal)`), which is purely NON-POD/system usage (kubelet, runtime) — `useTotal`
+  is ALL pods (own + other ns), so the other-namespace pods are subtracted out, NOT part of "overhead". The Use bar's RIGHT label is the node's REAL usage
+  `max(useTotal, nodeUse)` — the own-namespace pod sum undercounts when other namespaces + overhead also
+  run on the node, so the headline figure tracks NodeMetrics, not the bright segments. **All capacity
+  tooltips are minimal** (`CapTipData` = `{title, sub?, value}`): the bars already print "use / cap" and
+  "req / cap" at their right end, so a hover shows ONLY the hovered part's single amount — a Use segment
+  → its usage, a Req segment → its request (`tipFromSeg(s, metric)`), a fold → its Σ (`tipFromAgg`), the
+  backdrop → the overhead. (Burst/near-limit is conveyed visually — the hatch overlay on a bursting
+  segment, lap-wrap colours on a bullet — not as tooltip flags.)
   Expanding a node (`host:<name>` in `expandedClusters`) unfolds per-pod bullets. **Each pod bullet is
   TWO stacked GAUGES (Use over Req, each `CAP_BULLET_BAR_H` tall, via the module-level `CapGauge`
   component) that BOTH fill with the same value — actual USAGE — and differ only in their reference
@@ -243,8 +257,10 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
   hover). A **cursor-following HTML tooltip** (`capTip`,
   `.cap-tooltip`, fixed-position, enlarged) replaces the native `<title>` and the inline numbers on
   segments/bullets; its payload is normalized (`CapTipData`) so a pod seg and the aggregate share one
-  render. **Hover-to-spotlight** (Grafana-style): hovering a segment/bullet sets `capHover` (a pod id or
-  `small:<host>`/`other:<host>` marker) which spotlights it and fades the rest via `capSegFaded` /
+  render. **Hover-to-spotlight** (Grafana-style): hovering a segment/bullet/backdrop sets `capHover` (a
+  pod id, a `small:<host>`/`other:<host>` aggregate marker, or `overhead:<host>` for the node-usage
+  backdrop — no segment matches it, so the whole rest fades) which spotlights it and fades the rest via
+  `capSegFaded` /
   `capAggFaded`; with nothing hovered it falls back to `nodeFaded` (selection/search/filter). Aggregates
   fade whenever a specific pod is in focus (hovered/selected/searched/filtered) — fixing a bug where the
   bright accent block stayed lit while individual segments faded. **The whole node row is the
