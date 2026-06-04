@@ -181,11 +181,14 @@ A11y is a live audit theme (cycles 17–18). The conventions now in the code:
 - **A11y sweep status** (as of 2026-06-05): HTML controls — tabs (tablist/tab/tabpanel + roving),
   single-selects (radiogroups: Group, Resource, Manifest format), multi-select chips (aria-pressed),
   clearable Health filter, sidebar (nav + aria-current), copy live-region, drawer focus-restore +
-  action buttons, log controls — all done + verified live. SVG interactive elements — the collapse
-  pill is now a button; the remaining onClick-bearing SVG (cap-view segments/cards, edge hit targets)
-  are selection/hover affordances whose data is reachable via the drawer/search, so they're lower
-  priority but NOT audited — if you add an SVG element that performs a discrete ACTION, give it button
-  semantics. Re-running the *HTML* ARIA audit yields ≈0; the SVG-action audit is the open edge.
+  action buttons, log controls — all done + verified live. SVG **discrete-action** elements — the
+  collapse pill AND the Nodes-view node row (`cap-row`) are now keyboard buttons
+  (role/tabindex/aria-label/aria-expanded/Enter+Space + `:focus-visible` frame stroke). The remaining
+  onClick-bearing SVG (cap-view pod segments/cards, edge hit targets) are *selection/hover* affordances
+  whose data is reachable via the drawer/search — deliberately NOT focusable (same rationale as graph
+  nodes: avoid canvas tab-order noise). **Rule for new canvas elements:** a discrete ACTION (expand,
+  toggle, dismiss) with no search/drawer equivalent → button semantics; a SELECTION/hover affordance →
+  leave non-focusable, ensure search reaches its data. Both the HTML and SVG-action audits now yield ≈0.
 
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
