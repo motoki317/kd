@@ -119,6 +119,61 @@ describe('layoutGraphByCapacity', () => {
     })
   })
 
+  it('flags overcommit when summed requests exceed allocatable', () => {
+    const over = [
+      node('n1', 1000, 1000),
+      pod('a', 'n1', 'shop', { use: 10, req: 600 }),
+      pod('b', 'n1', 'shop', { use: 10, req: 600 }), // 1200 req > 1000 allocatable
+    ]
+    const under = [
+      node('n2', 1000, 1000),
+      pod('c', 'n2', 'shop', { use: 10, req: 300 }),
+      pod('d', 'n2', 'shop', { use: 10, req: 300 }), // 600 req < 1000
+    ]
+    const rowOf = (nodes: KNode[], host: string) =>
+      layoutGraphByCapacity(nodes, undefined, 'cpu', 'shop').rows.find((r) => r.host === host)!
+    expect(rowOf(over, 'n1').overcommit).toBe(true)
+    expect(rowOf(under, 'n2').overcommit).toBe(false)
+  })
+
+  it('buckets pods on an unknown host into a trailing "Unscheduled" row', () => {
+    const nodes = [
+      node('n1', 1000, 1000),
+      pod('scheduled', 'n1', 'shop', { use: 10, req: 10 }),
+      pod('orphan', 'ghost-node', 'shop', { use: 10, req: 10 }), // host isn't a known Node
+    ]
+    const l = layoutGraphByCapacity(nodes, usageOf(['scheduled', 10], ['orphan', 10]), 'cpu', 'shop')
+    const last = l.rows[l.rows.length - 1]
+    expect(last.label).toBe('Unscheduled') // the orphan bucket sorts last
+    expect(last.node).toBeUndefined() // no backing Node resource
+    expect(last.useSegs.map((s) => s.node.id)).toContain('orphan')
+  })
+
+  it('lays out the memory resource off memBytes just like cpu', () => {
+    const memNode: KNode = {
+      id: 'node-m', kind: 'Node', name: 'm', health: 'Healthy',
+      allocatable: { memBytes: 8e9 }, capacityRes: { memBytes: 8e9 },
+    }
+    const memPod: KNode = {
+      id: 'mp', kind: 'Pod', name: 'mp', namespace: 'shop', host: 'm', health: 'Healthy',
+      requests: { memBytes: 2e9 },
+    }
+    const l = layoutGraphByCapacity([memNode, memPod], { mp: { memBytes: 1e9 } }, 'memory', 'shop')
+    const row = l.rows.find((r) => r.host === 'm')!
+    expect(l.resource).toBe('memory')
+    expect(row.useTotal).toBe(1e9) // read from memBytes usage
+    expect(row.reqTotal).toBe(2e9) // read from memBytes request
+    expect(row.useSegs).toHaveLength(1)
+  })
+
+  it('sizes the usage bar by request when metrics are absent (no usage feed)', () => {
+    const nodes = [node('n1', 1000, 1000), pod('p', 'n1', 'shop', { use: 0, req: 400 })]
+    const row = layoutGraphByCapacity(nodes, undefined, 'cpu', 'shop').rows.find((r) => r.host === 'n1')!
+    // hasUsage is false → the usage bar falls back to drawing the pod's request, so it isn't empty.
+    expect(row.useSegs).toHaveLength(1)
+    expect(row.useSegs[0].width).toBeGreaterThan(4)
+  })
+
   it('reports hasUsage from the presence of usage data', () => {
     const nodes = [node('n1', 1000, 1000), pod('p', 'n1', 'shop', { use: 10, req: 10 })]
     expect(layoutGraphByCapacity(nodes, undefined, 'cpu', 'shop').hasUsage).toBe(false)
