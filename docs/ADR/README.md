@@ -35,3 +35,6 @@ authoritative timeline; the filename date is a convenience for sorting.
 | 2026-05-27 | [Frontend stack](./20260527-frontend-stack.md) | Solid.js + Vite + TypeScript, Dagre layout, SVG topology |
 | 2026-05-28 | [Kubeconfig context switcher](./20260528-kubeconfig-context-switcher.md) | Parallel per-context informer caches in kubeconfig mode; hidden in-cluster |
 | 2026-05-28 | [Dynamic informers + cluster scope](./20260528-dynamic-informers-and-cluster-scope.md) | One dynamic informer per discovered GVR (incl. CRDs); `[cluster]` pseudo-namespace; CR health/edges heuristics |
+| 2026-06-03 | [Nodes capacity & usage visualization](./20260603-nodes-capacity-usage-visualization.md) | The `nodes` group-by as a length-encoded capacity/usage bullet view (two ceilings, exact-proportional segments, small-pod fold) |
+| 2026-06-03 | [Unified view: relationship filter + grouping](./20260603-unified-view-relationship-filter-grouping.md) | Replace fixed views with two composable client controls (group-by + rel-filter); server streams the full graph |
+| 2026-06-05 | [Testing view math vs headless animation](./20260605-testing-view-math-vs-headless-animation.md) | Headless agent-browser freezes rAF/animation; extract pure fit math to `viewport.ts` and unit-test the target, not the live transform |
