@@ -80,6 +80,18 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    client reducer defensive (`?? []`). Always force empty slices to `[]` server-side — a nil Go slice
    marshals as `null` and the JS consumer rarely expects it.
 
+5. **Auto-fit to a bounding box that can be ARBITRARILY LARGE → unreadable speck.** "Frame the
+   matches" when a health/kind filter toggles is good UX *when matches cluster*, but matches can be
+   sparse and SCATTERED across a tall layout (11 Degraded resources spread down a 142-Workflow
+   namespace → bbox spans the whole canvas → fit zooms to ~0.04×, every match a tiny speck). Found
+   live: the naive `fitNodeSet(lit)` made the view strictly *worse* than not moving. Lesson: an
+   **automatic** viewport move must never degrade legibility — guard it with a readability floor
+   (`if (target.scale < MIN_FIT_SCALE) return`, leave the pan/zoom). An **operator-initiated** move
+   (the Fit button) may zoom to a speck; an automatic one may not. **Measure the post-fit `scale` AND
+   count how many lit cards land inside the viewport rect — assert the scale stays legible.** General
+   rule: any "fit to subset" needs to consider the worst-case spread of that subset, not just the
+   happy clustered case.
+
 ## What NOT to "fix" (verified risky/deferred — re-deriving wastes a cycle)
 
 - The Nodes view's pod **Req bar fills with USAGE** (tick at request), while the node Req bar fills
