@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
-import { fetchEvents, fetchResource, type ManifestFormat } from '../api'
+import { CLUSTER_SCOPE, fetchEvents, fetchResource, type ManifestFormat } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
@@ -164,8 +164,14 @@ export default function DetailDrawer(props: Props) {
     ),
   )
 
+  // A cluster-scoped resource (Node, PriorityClass, ClusterRole…) carries no namespace, but the
+  // resource/events/log routes require a non-empty {ns} segment — an empty one collapses to a
+  // double slash the server 404s. Map it to the cluster sentinel, which the server unmaps to ""
+  // server-side. (A namespaced resource selected in cluster scope still carries its real namespace.)
   const key = () =>
-    displayNode() ? { ctx: props.ctx, ns: displayNode()!.namespace ?? '', kind: displayNode()!.kind, name: displayNode()!.name } : null
+    displayNode()
+      ? { ctx: props.ctx, ns: displayNode()!.namespace || CLUSTER_SCOPE, kind: displayNode()!.kind, name: displayNode()!.name }
+      : null
 
   // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
   // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events

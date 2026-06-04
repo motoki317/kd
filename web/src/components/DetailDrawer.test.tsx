@@ -345,6 +345,26 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer')).toBeTruthy()
   })
 
+  it('requests a cluster-scoped resource under the __cluster__ namespace, not an empty one', async () => {
+    // A Node/PriorityClass/ClusterRole carries no namespace; an empty {ns} segment collapses to a
+    // double slash the server 404s (manifest + events both showed "unavailable"). The drawer must
+    // substitute the cluster sentinel the server unmaps to "".
+    const urls: string[] = []
+    vi.stubGlobal('fetch', (url: string) => {
+      urls.push(url)
+      return Promise.resolve(
+        url.includes('/events')
+          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
+          : new Response('kind: Node\n', { status: 200 }),
+      )
+    })
+    const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', namespace: '', health: 'Healthy' }
+    render(() => <DetailDrawer ctx="test-ctx" node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    await vi.waitFor(() => expect(urls.some((u) => u.includes('/resources/Node/worker-1'))).toBe(true))
+    expect(urls.every((u) => !u.includes('/namespaces//'))).toBe(true)
+    expect(urls.some((u) => u.includes('/namespaces/__cluster__/resources/Node/worker-1'))).toBe(true)
+  })
+
   it('keeps the active tab across selections when the new resource has it', () => {
     const podA: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
     const podB: KNode = { id: 'pb', kind: 'Pod', name: 'pod-b', namespace: 'shop', health: 'Healthy' }
