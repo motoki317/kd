@@ -74,6 +74,25 @@ should come from real user feedback or a new feature area — don't grind filler
 
 ## Open
 
+- **Keyboard nav (`j`/`k`) can select a node folded behind a collapse pill, with no on-canvas
+  cue** — *verified live (cycle 74, a remote staging cluster, a busy namespace: 132 nodes / 16
+  collapse pills folding ~70 Failed Workflows), needs a design decision.* `orderedForNav` walks the
+  FULL `props.nodes` (folded nodes included), and `j`/`k` step "troubled first" — but in a namespace
+  whose troubled resources are mostly *folded* (team-a's Failed Workflows), `j` lands selection on
+  a hidden node: the drawer opens (full info) and the spotlight fades the rest, but the selected node
+  has **no `.selected` marker** because it isn't rendered (it's behind a "+N more" pill). Measured: a
+  visible nav target → 1 on-canvas selection marker; a folded target → 0. The operator pressing `j`
+  to reach the next problem gets a drawer but can't see *where* the resource is. Search already solves
+  the analogous case (it **badges the pill** with its hidden-match count — `meta.hidden`
+  matchesInside, `Topology.tsx`); nav has no equivalent reveal. **Fix options (a design call):** (a)
+  badge/outline the pill that contains the nav-selected folded node (most consistent with search,
+  least jarring); (b) auto-expand the containing fold on selection (clearer but un-folds without being
+  asked); (c) skip folded nodes in nav — **rejected**, since most troubled nodes ARE folded, so this
+  guts troubled-first nav. **Why deferred:** nav + collapse + selection is heavily user-iterated
+  territory; which reveal behavior is right is the user's call, not a unilateral change. **Reopen
+  when:** the user picks a reveal behavior — then wire it where `selectedId` changes (App) to find the
+  containing pill via `meta.hidden` and badge/expand it.
+
 - **Surface a degraded resource's status message for faster triage** — *verified live (cycle 44,
   a remote staging cluster, a busy namespace: a 21-day-old Failed Workflow), needs a scope/format
   decision.* When an
