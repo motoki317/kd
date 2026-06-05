@@ -2,7 +2,7 @@ import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Sh
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
-import { filterLogLines, formatLogTime, parseJsonLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
+import { filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -462,9 +462,10 @@ export default function LogViewer(props: Props) {
       <pre ref={pre} class="logs-body" classList={{ 'no-wrap': !wrap() }} onScroll={onScroll} tabindex="0">
         <For each={visibleLines()}>
           {(l) => {
-            // A JSON-object line (ES/zap/logrus/…) renders message-first instead of as a raw blob.
-            // Skip the parse for ANSI lines (they carry their own colouring and are rarely JSON).
-            const json = hasAnsi(l.line) ? null : parseJsonLog(l.line)
+            // A structured line — JSON ({…}) or logfmt (key=value) — renders message-first instead of
+            // as a raw blob, so time=/level= metadata doesn't bury the message. Skip the parse for ANSI
+            // lines (they carry their own colouring and are rarely structured).
+            const structured = hasAnsi(l.line) ? null : parseJsonLog(l.line) ?? parseLogfmtLog(l.line)
             return (
             <div
               class="log-line"
@@ -504,14 +505,15 @@ export default function LogViewer(props: Props) {
                 {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
                 <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>
               </Show>
-              {/* A JSON-object line leads with its `message` (bright) and trails the remaining fields
-                  dimmed — the operator reads the message without scanning past @timestamp/level noise,
+              {/* A structured line (JSON or logfmt) leads with its `message` (bright) and trails the
+                  remaining fields dimmed — the operator reads the message without scanning past time/level
+                  noise,
                   and with no-wrap the message sits at the visible left while the extras scroll off.
                   Nothing is lost: the raw line still backs copy/grep, and `extras` keeps every field the
                   badge/time column don't already show. Highlighting runs on the displayed text so a
                   filter still marks hits in either part. */}
               <Show
-                when={json}
+                when={structured}
                 fallback={
                   // Plain lines (the common case) skip the ANSI parser to keep allocations down — ANSI
                   // segmentation only kicks in for lines that actually contain a CSI escape. Both

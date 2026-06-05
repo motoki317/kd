@@ -71,6 +71,34 @@ export function parseJsonLog(line: string): { message: string; extras: string } 
   return { message: rec[msgKey] as string, extras }
 }
 
+// parseLogfmtLog does for logfmt (`key=value key="quoted value" …`) what parseJsonLog does for JSON:
+// the Go ecosystem (argocd, prometheus, controller-runtime, logrus' text formatter) emits lines whose
+// left edge is `time="…" level=info` metadata, burying the `msg="…"` an operator actually reads. This
+// splits out the message so the viewer leads with it and dims the rest, reusing the same drop-set so
+// the badge/time column aren't duplicated. CONSERVATIVE: the line must START with a `key=` token AND
+// carry a msg/message field — so a klog line ("I0521 …") or prose with an incidental `foo=bar` is left
+// raw. NON-DESTRUCTIVE: extras keeps every other pair, and the raw line still backs copy/grep.
+const LOGFMT_PAIR = /([A-Za-z0-9_.\-]+)=("(?:[^"\\]|\\.)*"|[^\s"]*)/g
+
+export function parseLogfmtLog(line: string): { message: string; extras: string } | null {
+  const t = line.trimStart()
+  if (!/^[A-Za-z0-9_.\-]+=/.test(t)) return null // must open with a key= token — the logfmt signal
+  const pairs: Array<[string, string]> = []
+  LOGFMT_PAIR.lastIndex = 0
+  for (let m = LOGFMT_PAIR.exec(t); m; m = LOGFMT_PAIR.exec(t)) {
+    let val = m[2]
+    if (val.length >= 2 && val[0] === '"') val = val.slice(1, -1).replace(/\\(.)/g, '$1') // unquote + unescape
+    pairs.push([m[1], val])
+  }
+  const msg = pairs.find(([k]) => (JSON_MSG_KEYS as readonly string[]).includes(k))
+  if (!msg) return null // no human message to lead with — leave the line raw
+  const extras = pairs
+    .filter(([k]) => !JSON_DROP_KEYS.has(k))
+    .map(([k, v]) => `${k}=${v}`)
+    .join(' ')
+  return { message: msg[1], extras }
+}
+
 // formatLogTime compacts a kubectl --timestamps RFC3339Nano stamp (2026-05-29T05:40:51.832381Z) to
 // HH:MM:SS.mmm for the timestamp column. It slices the time substring out directly rather than
 // parsing into a Date, so the value stays in the source's UTC (lining up with kubectl --timestamps)

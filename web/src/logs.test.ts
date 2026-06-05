@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines, formatLogTime, parseJsonLog, parseLogLevel, splitByMatch } from './logs'
+import { filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch } from './logs'
 import type { LogEntry } from './api'
 
 const lines: LogEntry[] = [
@@ -105,6 +105,28 @@ describe('parseJsonLog', () => {
   })
   it('yields empty extras when the only fields are the message and dropped keys', () => {
     expect(parseJsonLog('{"level":"warn","message":"lonely"}')).toEqual({ message: 'lonely', extras: '' })
+  })
+})
+
+describe('parseLogfmtLog', () => {
+  it('leads with the message and drops time/level metadata that dominates a logfmt left edge', () => {
+    // The real argocd-dex shape dogfooded on staging — time/level eat the scannable left, msg is buried.
+    const line = 'time="2026-06-05T08:26:36Z" level=info msg="ArgoCD Dex Server is starting" built="2026-05-28T11:30"'
+    expect(parseLogfmtLog(line)).toEqual({ message: 'ArgoCD Dex Server is starting', extras: 'built=2026-05-28T11:30' })
+  })
+  it('keeps a quoted value containing spaces and inner = signs intact', () => {
+    expect(parseLogfmtLog('level=warn msg="connect failed: addr=10.0.0.1 down" component=db')).toEqual({
+      message: 'connect failed: addr=10.0.0.1 down',
+      extras: 'component=db',
+    })
+  })
+  it('accepts an unquoted single-word message and yields empty extras when only dropped keys remain', () => {
+    expect(parseLogfmtLog('ts=2026 level=info msg=ready')).toEqual({ message: 'ready', extras: '' })
+  })
+  it('leaves non-logfmt lines raw — klog, prose, and pairs without a msg field', () => {
+    expect(parseLogfmtLog('E0521 12:00:00 main.go:42] boom')).toBeNull() // klog: no leading key=
+    expect(parseLogfmtLog('starting server on port 8080')).toBeNull() // prose
+    expect(parseLogfmtLog('level=info component=db connected')).toBeNull() // structured but no message to lead with
   })
 })
 
