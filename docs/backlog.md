@@ -274,6 +274,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Error/warn log lines get a faint left-edge severity accent (2026-06-06):** dogfooding a real pod
+streaming OTEL exporter errors ("Name does not resolve", 15 err in 200 lines): each line carries a
+colour-coded level badge (red ERR / amber WRN), but the line *body* is uniform, so with the eye on the
+message column the errors blend into the INFO stream — the only signal was the 3-char badge in the left
+gutter. Extended that severity signal across the whole row with a faint left-edge accent in the badge's
+hue (contrast; the affordance Grafana/Kibana/Datadog provide). Inset `box-shadow` (not a border) via
+`.log-line:has(> .log-level-error)` so the dense pre-wrap lines don't shift (verified: error/info badge
+left edges identical at 777px); only error/warn get it so the accent means "look here", not "everywhere".
+A LogViewer test locks the per-line `.log-level-error` class the accent hooks. (2a3dee4)
+
 **Health stripe floors its segments so trouble can't vanish at scale (2026-06-06):** the top-of-canvas
 health-distribution stripe (the first at-a-glance "is this namespace OK?" read) sized each state's segment
 by pure `flex` proportion. Measured live on staging: a 1-of-354 Unknown segment was 3px, and a lone
