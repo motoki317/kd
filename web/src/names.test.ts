@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, setServerShortNames } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, setServerShortNames, shortNodeName } from './names'
 import type { KNode } from './types'
 
 describe('relativeName', () => {
@@ -13,6 +13,21 @@ describe('relativeName', () => {
   })
   it('does not strip when it would leave an empty string', () => {
     expect(relativeName('api', 'api')).toBe('api')
+  })
+})
+
+describe('shortNodeName', () => {
+  it('drops the DNS domain from cloud node names, keeping the distinguishing hostname', () => {
+    expect(shortNodeName('ip-10-8-77-146.us-west-2.compute.internal')).toBe('ip-10-8-77-146')
+    expect(shortNodeName('fargate-ip-10-8-69-217.us-west-2.compute.internal')).toBe('fargate-ip-10-8-69-217')
+    expect(shortNodeName('worker-1.cluster.local')).toBe('worker-1')
+  })
+  it('leaves dotless names unchanged (docker-desktop, GKE pool nodes)', () => {
+    expect(shortNodeName('docker-desktop')).toBe('docker-desktop')
+    expect(shortNodeName('gke-prod-default-pool-abc12345-xy3z')).toBe('gke-prod-default-pool-abc12345-xy3z')
+  })
+  it('does not strip a leading-dot edge case into an empty string', () => {
+    expect(shortNodeName('.hidden')).toBe('.hidden') // indexOf('.')===0, not >0 → unchanged
   })
 })
 

@@ -1,6 +1,7 @@
 import { createMemo, For, Show } from 'solid-js'
 import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
+import { shortNodeName } from '../names'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -206,10 +207,10 @@ export default function ResourceSummary(props: Props) {
               title={`Go to Node ${props.node.host}`}
               onClick={() => props.onNavigateRef!(`Node/${props.node.host}`)}
             >
-              on {props.node.host}
+              on {shortNodeName(props.node.host!)}
             </button>
           ) : (
-            <span class="drawer-age">on {props.node.host}</span>
+            <span class="drawer-age" title={props.node.host}>on {shortNodeName(props.node.host!)}</span>
           )}
         </Show>
         <Show when={props.node.capacity}>

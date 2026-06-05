@@ -16,6 +16,17 @@ export function relativeName(name: string, ownerName?: string): string {
   return name
 }
 
+// shortNodeName drops the DNS domain from a cloud node name for display — EKS/GKE/on-prem nodes are
+// `<hostname>.<domain>` (ip-10-8-77-146.us-west-2.compute.internal), and that domain repeats
+// identically on every node, so it's pure noise that pushes the distinguishing hostname + the pod
+// count off to the right. The hostname (the private IP for EKS) is unique per node within a cluster,
+// so dropping the domain doesn't collide; callers keep the full name in a title/tooltip. Names with
+// no dot (docker-desktop, gke-default-pool-abc-xy) are returned unchanged.
+export function shortNodeName(name: string): string {
+  const dot = name.indexOf('.')
+  return dot > 0 ? name.slice(0, dot) : name
+}
+
 // Compact labels for verbose kinds in the dense topology header, where the full kind would collide
 // with the right-aligned status (e.g. PERSISTENTVOLUMECLAIM over "Bound 10Gi"). The drawer still
 // shows the full kind; these are kubectl's well-known abbreviations.

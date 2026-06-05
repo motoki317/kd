@@ -4,6 +4,7 @@
 // length-encoded bullet-bar geometry, its CAP_* constants, and the CapSeg/CapAggregate/CapRow shapes.
 import type { KNode } from './types'
 import { byName, type Layout, type PositionedNode } from './layout'
+import { shortNodeName } from './names'
 
 // A length-encoded "bullet bar" visualization (see docs/ADR/20260603-nodes-capacity-usage-
 // visualization.md): each node is a horizontal TRACK whose length ∝ its allocatable capacity (on a
@@ -325,7 +326,10 @@ export function layoutGraphByCapacity(
     // overhead). Both fall back to demand when the node's size is unknown (orphan bucket).
     const trackW = Math.max(CAP_TRACK_MIN, (cap ?? Math.max(useTotal, reqTotal)) * scale)
     const useTrackW = Math.max(CAP_TRACK_MIN, (useCap ?? Math.max(useTotal, reqTotal)) * scale)
-    const label = host === ORPHAN ? 'Unscheduled' : host
+    // Display the short hostname (drops the repeated DNS domain); `host` stays the full name for the
+    // toggle key, the tooltip, and Node navigation. Card width is sized from this label, so small
+    // nodes also stop being inflated by a 47-char FQDN.
+    const label = host === ORPHAN ? 'Unscheduled' : shortNodeName(host)
     const overcommit = cap !== undefined && reqTotal > cap
 
     const headerY = cursorY

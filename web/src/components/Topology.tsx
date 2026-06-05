@@ -1646,6 +1646,10 @@ export default function Topology(props: Props) {
                       {/* Node name packed into the card's top-left (no caret); CAP_HEADER_INSET=26 in
                           layout.ts reserves the matching left offset + card width so it never overflows. */}
                       <text class="cap-row-label" classList={{ clickable: expandable }} x={row.x - 26} y={row.y + 14}>
+                        {/* Full node name (the display label drops the repeated DNS domain) on hover. */}
+                        <Show when={row.host !== row.label}>
+                          <title>{row.host}</title>
+                        </Show>
                         <tspan class="cap-row-host">{row.label}</tspan>
                         {/* Node-level totals (capacity, use, req) used to live here, crowding the name;
                             they now sit next to the Req/Use bars they describe (proximity). The header
