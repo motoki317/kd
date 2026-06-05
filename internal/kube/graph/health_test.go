@@ -478,7 +478,11 @@ func TestContainerStateString(t *testing.T) {
 		// A reason is the actionable bit (CrashLoopBackOff, ImagePullBackOff) — surface it with the state.
 		{"waiting with reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}, "Waiting: CrashLoopBackOff"},
 		{"waiting no reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}}, "Waiting"},
-		{"terminated with reason", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}, "Terminated: Error"},
+		{"terminated with reason (clean exit, no code)", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}, "Terminated: Error"},
+		// A non-zero exit code is appended — exit 1 vs 137 (OOM/SIGKILL) is the actionable difference.
+		{"terminated with reason and exit code", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}}, "Terminated: Error (exit 1)"},
+		{"terminated OOMKilled with exit code", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "OOMKilled", ExitCode: 137}}, "Terminated: OOMKilled (exit 137)"},
+		{"terminated exit code only, no reason", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 2}}, "Terminated: exit 2"},
 		{"terminated no reason", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}, "Terminated"},
 		// The zero state (no field set) is the brief window before kubelet reports — "Unknown", not a crash.
 		{"empty", corev1.ContainerState{}, "Unknown"},

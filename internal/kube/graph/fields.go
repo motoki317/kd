@@ -67,13 +67,12 @@ func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
 	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: lastTerminatedString(cs.LastTerminationState)}
 }
 
-// lastTerminatedString renders the PREVIOUS termination of a restarted container — "OOMKilled (exit
-// 137)", "Error (exit 1)", or a bare "exit 137" when the runtime gave no reason. Returns "" when the
-// container never terminated before (lastState empty) or terminated cleanly with no reason and a zero
-// exit (nothing actionable to surface). The exit code is included only when non-zero: "Completed"
-// alone reads cleaner than "Completed (exit 0)".
-func lastTerminatedString(s corev1.ContainerState) string {
-	t := s.Terminated
+// terminatedDetail formats how a container exited: "OOMKilled (exit 137)", a bare reason on a clean
+// exit ("Completed"), "exit 137" when the runtime gave no reason, or "" when there is nothing to say
+// (no reason and a zero exit). The exit code is appended only when non-zero — "Completed" reads cleaner
+// than "Completed (exit 0)". Shared by the current-state and last-state renderers so a container's
+// termination reads the SAME way whether it is its live state or the previous one it restarted from.
+func terminatedDetail(t *corev1.ContainerStateTerminated) string {
 	if t == nil || (t.Reason == "" && t.ExitCode == 0) {
 		return ""
 	}
@@ -87,8 +86,15 @@ func lastTerminatedString(s corev1.ContainerState) string {
 	}
 }
 
+// lastTerminatedString renders the PREVIOUS termination of a restarted container (lastState), empty
+// when the container never terminated before — answers "why did this now-Running container restart".
+func lastTerminatedString(s corev1.ContainerState) string {
+	return terminatedDetail(s.Terminated)
+}
+
 // containerStateString renders a container's current state as "Running", "Waiting: <reason>", or
-// "Terminated: <reason>" — the reason is the actionable part (CrashLoopBackOff, OOMKilled, ...).
+// "Terminated: <reason> (exit <code>)" — the reason + exit code are the actionable part
+// (CrashLoopBackOff, OOMKilled, a non-zero exit). A clean "Terminated: Completed" omits the exit code.
 func containerStateString(s corev1.ContainerState) string {
 	switch {
 	case s.Running != nil:
@@ -99,8 +105,8 @@ func containerStateString(s corev1.ContainerState) string {
 		}
 		return "Waiting"
 	case s.Terminated != nil:
-		if s.Terminated.Reason != "" {
-			return "Terminated: " + s.Terminated.Reason
+		if d := terminatedDetail(s.Terminated); d != "" {
+			return "Terminated: " + d
 		}
 		return "Terminated"
 	default:
