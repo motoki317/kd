@@ -198,6 +198,20 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
    is clipped / is off-screen / is invisible" from a measurement taken right after it mounted with an
    animation. The tell: a `matrix(1,0,0,1,N,0)` / non-`none` `transform` on a freshly-mounted element whose
    CSS has an `@keyframes … from { transform: … }`.
+7. **A test that opts into a NON-DEFAULT config to make a feature work can be papering over a
+   default-config bug.** The Events tab was empty for every resource in production for a week: `"events"`
+   is in `store.DefaultSkipKinds`, so the informer snapshot never holds events, yet the handler read them
+   from that snapshot → `{"events":null}` always. The handler test PASSED the whole time because it set
+   `EagerKinds:["events"]` to force events into the cache — a config no real deploy uses. Found by
+   dogfooding a reproducible failing pod (an ImagePullBackOff pod via a bogus image, or a crashloop via
+   `command:["false"]`) on docker-desktop and seeing "No recent events." despite live kubelet events,
+   then confirming `{"events":null}` straight from the API with `curl`. **Recipe:** to verify a feature
+   that depends on backend data, reproduce the data condition for REAL (a probe pod with an impossible CPU
+   request → Unschedulable; a bad image → ImagePullBackOff; `["sh","-c","exit 1"]` → CrashLoopBackOff;
+   delete after), then `curl` the relevant `/api/...` endpoint directly — the JSON exposes an empty/null
+   payload the rAF-frozen UI hides behind a generic empty state. When you spot a test using `EagerKinds` /
+   a non-default flag / an injected fixture that the production path can't supply, suspect the default path
+   is broken and test THAT.
 
 ## Accessibility patterns established (match these on any new control)
 

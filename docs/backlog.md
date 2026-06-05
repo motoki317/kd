@@ -328,6 +328,22 @@ failure, sitting next to the ↻ count it explains. *Lesson: a now-Running conta
 single most useful triage fact (its last crash reason) one level down in lastState — surface it inline,
 don't make the operator read YAML.*
 
+**The Events tab was empty for EVERY resource in production (live-found, 2026-06-05):** the single
+biggest find of the campaign. Since the dynamic-informer refactor (f80bab1, May 28), `"events"` lived
+in `DefaultSkipKinds` (correctly — high-cardinality, short-lived) with a comment that they'd be
+"queried on-demand", but the `/events` handler kept reading them from the informer snapshot, which now
+never holds them — so the drawer Events tab showed "No recent events." for everything and `/events`
+returned `{"events":null}`, no matter how many events a resource had. **The handler test masked it
+completely** by force-eager-loading events into the cache (`EagerKinds:["events"]`) — the one config a
+real deployment never uses. Found by reproducing an ImagePullBackOff pod on docker-desktop, seeing
+"No recent events" despite 6 live kubelet events, and confirming `{"events":null}` from the API. Fix:
+fetch events live from the API server (kubectl-describe style) via `CoreV1().Events(ns).List()`; the
+snapshot still supplies the UID + owned subtree for aggregation. Dropped the `EagerKinds` workaround so
+the test now exercises the real production path. Verified live: the Events tab shows the 6 events incl.
+"Failed to pull image … no such host" and gains its event-count badge. *Lesson: a test that opts into a
+NON-DEFAULT config (here `EagerKinds`) to make a feature work is a red flag — it can be papering over a
+default-config bug. Test the production default. Persisted as an AGENTS.md "Common surprises" entry.*
+
 **Buried container/scheduling triage info surfaced (live-found, 2026-06-05):** a theme of three
 fixes, each lifting the single most actionable fact out of the raw manifest into the visible UI.
 (1) A restarted-but-now-Running container's last crash reason (see the lastState entry above).

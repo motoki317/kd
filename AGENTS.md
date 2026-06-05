@@ -182,6 +182,15 @@ generating when a strict re-survey yields ≈0 high-value items (the UX surface 
 
 - **`embed_web` build tag**: the default `go build` does NOT embed the client (placeholder
   page). `just build` sets the tag.
+- **Events are queried LIVE, not from the cache**: `"events"` is in `store.DefaultSkipKinds`
+  (high-cardinality, short-lived), so the informer snapshot NEVER contains Events. The
+  `/events` handler (`internal/api/events.go`) builds the graph from the snapshot (for the
+  resource UID + owned subtree) but fetches the events themselves via
+  `store.Client().CoreV1().Events(ns).List()` at request time (`NamespaceAll` for the
+  `__cluster__` sentinel). Do NOT "read events from `SnapshotNamespace`" — they aren't there, and
+  the Events tab silently goes empty (the f80bab1→42ee8a2 regression). The handler test must run
+  WITHOUT `EagerKinds:["events"]`: eager-loading events into the cache is a config real deploys
+  never use, and it masks exactly this bug — let the test read events live from the typed fake.
 - **SSE `summary` event** (cycle 201): server emits a per-stream `summary` computed on the
   UNFILTERED graph; the client overrides the sidebar entry with that. Never roll up filtered
   nodes on the client — the bug fix is the whole reason `rollupHealth` was deleted.
