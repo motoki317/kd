@@ -70,6 +70,8 @@ type Node struct {
 	LastRun     string           `json:"lastRun,omitempty"`     // a CronJob's last schedule time (RFC3339) — "did it actually fire?"
 	Active      int32            `json:"active,omitempty"`      // a Job/CronJob's currently-running pods/jobs ("is one running now?")
 	Failed      int32            `json:"failed,omitempty"`      // a Job's failed pod count — burning retries the "succeeded/total" status hides
+	ScaleReplicas string         `json:"scaleReplicas,omitempty"` // an HPA's replica state, "current[ → desired]" (mid-scale shows the arrow)
+	ScaleRange  string           `json:"scaleRange,omitempty"`  // an HPA's min–max replica bounds ("2–10") — is it at the ceiling?
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

@@ -457,6 +457,44 @@ func cronLastRun(obj runtime.Object) string {
 	return ""
 }
 
+// hpaScale extracts a HorizontalPodAutoscaler's replica state — "current" when stable, "current → desired"
+// mid-scale — answering "how many is it running, and is it actively scaling?". Empty for non-HPAs. An HPA
+// has no typed factory here, so it arrives unstructured and is navigated by field path (the autoscaling
+// v1/v2 schemas share these status field names).
+func hpaScale(obj runtime.Object) string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u.GetKind() != "HorizontalPodAutoscaler" {
+		return ""
+	}
+	cur, hasCur, _ := unstructured.NestedInt64(u.Object, "status", "currentReplicas")
+	des, hasDes, _ := unstructured.NestedInt64(u.Object, "status", "desiredReplicas")
+	if !hasCur && !hasDes {
+		return "" // status not populated yet (freshly created) — nothing to show
+	}
+	if hasDes && des != cur {
+		return fmt.Sprintf("%d → %d", cur, des)
+	}
+	return fmt.Sprintf("%d", cur)
+}
+
+// hpaRange extracts an HPA's min–max replica bounds ("2–10"); minReplicas defaults to 1 when unset
+// (matching the API default). Empty for non-HPAs or when maxReplicas is unset.
+func hpaRange(obj runtime.Object) string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u.GetKind() != "HorizontalPodAutoscaler" {
+		return ""
+	}
+	maxR, hasMax, _ := unstructured.NestedInt64(u.Object, "spec", "maxReplicas")
+	if !hasMax {
+		return ""
+	}
+	minR, hasMin, _ := unstructured.NestedInt64(u.Object, "spec", "minReplicas")
+	if !hasMin {
+		minR = 1
+	}
+	return fmt.Sprintf("%d–%d", minR, maxR)
+}
+
 // secretType returns a Secret's type as a display string (empty for non-Secrets). An empty type
 // defaults to Opaque, mirroring Kubernetes.
 func secretType(obj runtime.Object) string {

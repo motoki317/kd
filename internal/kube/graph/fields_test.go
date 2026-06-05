@@ -407,6 +407,46 @@ func TestBatchInfo(t *testing.T) {
 	}
 }
 
+func TestHPAScaleAndRange(t *testing.T) {
+	hpa := func(min, max, cur, des int64, hasMin, hasDes bool) *unstructured.Unstructured {
+		spec := map[string]any{"maxReplicas": max}
+		if hasMin {
+			spec["minReplicas"] = min
+		}
+		status := map[string]any{"currentReplicas": cur}
+		if hasDes {
+			status["desiredReplicas"] = des
+		}
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler",
+			"spec": spec, "status": status,
+		}}
+	}
+	// mid-scale: current != desired shows the arrow
+	if got := hpaScale(hpa(2, 10, 3, 5, true, true)); got != "3 → 5" {
+		t.Errorf("hpaScale(mid-scale) = %q, want \"3 → 5\"", got)
+	}
+	// stable: current == desired shows just the number
+	if got := hpaScale(hpa(2, 10, 5, 5, true, true)); got != "5" {
+		t.Errorf("hpaScale(stable) = %q, want \"5\"", got)
+	}
+	if got := hpaRange(hpa(2, 10, 5, 5, true, true)); got != "2–10" {
+		t.Errorf("hpaRange = %q, want \"2–10\"", got)
+	}
+	// minReplicas unset defaults to 1
+	if got := hpaRange(hpa(0, 8, 1, 1, false, true)); got != "1–8" {
+		t.Errorf("hpaRange(no min) = %q, want \"1–8\"", got)
+	}
+	// a fresh HPA with no status yet, and non-HPA kinds, yield empty
+	bare := &unstructured.Unstructured{Object: map[string]any{"kind": "HorizontalPodAutoscaler", "spec": map[string]any{"maxReplicas": int64(4)}}}
+	if got := hpaScale(bare); got != "" {
+		t.Errorf("hpaScale(no status) = %q, want empty", got)
+	}
+	if got := hpaScale(&corev1.Pod{}); got != "" {
+		t.Errorf("hpaScale(Pod) = %q, want empty", got)
+	}
+}
+
 func TestRoleRules(t *testing.T) {
 	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},

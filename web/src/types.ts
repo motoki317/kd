@@ -98,6 +98,8 @@ export interface KNode {
   lastRun?: string // a CronJob's last schedule time (RFC3339)
   active?: number // a Job/CronJob's currently-running pods/jobs
   failed?: number // a Job's failed pod count
+  scaleReplicas?: string // an HPA's replica state, "current[ → desired]"
+  scaleRange?: string // an HPA's min–max replica bounds ("2–10")
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

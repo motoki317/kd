@@ -113,6 +113,16 @@ Recent batches (newest first; `git log` has the commits):
   topology-level answer — already lands. Build it if a cluster here adopts GRPCRoute: add a
   `grpcRouteMatches` branch to `routes()` mirroring `httpRoutePaths`, fixture-tested.
 
+- **HPA: target metric + drop the "unknown state" status** — *follow-ups to the 2026-06-06 HPA chips;
+  medium/low value.* (1) The drawer now shows replicas + bounds but not the metric driving the decision
+  (e.g. `cpu 72% / 80%`). It needs parsing `spec.metrics[]` against `status.currentMetrics[]` — several
+  metric types (Resource/Pods/Object/External/ContainerResource); start with the common Resource-CPU/mem
+  `averageUtilization` case and render `cpu cur%/target%`. (2) An HPA falls to the generic CR status
+  ("unknown state" — see crStatusSummary) which is misleading for a functioning autoscaler; either
+  suppress it when `scaleReplicas` is set, or add an HPA rule keying on the `ScalingActive`/`AbleToScale`
+  conditions. Needs a metrics-server-backed cluster to dogfood current-metric rendering (docker-desktop
+  has none — the chips verified there but `cpu <unknown>`).
+
 ## Future / larger work — deferred (examined, not actionable now)
 
 Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
@@ -221,6 +231,15 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**HPA drawer shows replica state + min/max bounds (live-found, 2026-06-06):** a HorizontalPodAutoscaler
+(an unstructured CR here — no typed factory) already linked to its scale target, but showed no
+autoscaling essence: how many replicas it runs, whether it's mid-scale, and the min–max bounds it works
+within ("is it pinned at the ceiling?"). Added `scaleReplicas` ("current" stable / "current → desired"
+mid-scale) and `scaleRange` ("2–10", min defaulting to 1) via unstructured field-path helpers (keeping
+the CR edge/health path untouched), rendered as labelled chips. Verified live on docker-desktop:
+`replicas 3 · range 2–10`. diff.go repaints when the HPA scales. **Two follow-ups noted below**
+(metrics target; the "unknown state" status wart).
 
 **Job/CronJob drawer shows last-run, active, and failed counts (live-found, 2026-06-06):** the status
 line gave a Job "succeeded/total" and a CronJob its schedule expression — but omitted the runtime

@@ -71,6 +71,8 @@ func Build(objs []runtime.Object) *Graph {
 			LastRun:           cronLastRun(obj),
 			Active:            batchActive(obj),
 			Failed:            batchFailed(obj),
+			ScaleReplicas:     hpaScale(obj),
+			ScaleRange:        hpaRange(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

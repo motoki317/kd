@@ -273,6 +273,25 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* An HPA's scale state: how many replicas it's running (with a → arrow mid-scale) and the
+          min–max bounds it works within — "is it at the ceiling?". Labelled chips beside the status,
+          reusing the address-row idiom. The HPA→target edge already shows what it scales. */}
+      <Show when={props.node.scaleReplicas || props.node.scaleRange}>
+        <div class="drawer-ports">
+          <Show when={props.node.scaleReplicas}>
+            <span class="port-addr" title="Current replicas (→ desired while scaling)">
+              <span class="addr-label">replicas</span>
+              <code>{props.node.scaleReplicas}</code>
+            </span>
+          </Show>
+          <Show when={props.node.scaleRange}>
+            <span class="port-addr" title="Min–max replica bounds">
+              <span class="addr-label">range</span>
+              <code>{props.node.scaleRange}</code>
+            </span>
+          </Show>
+        </div>
+      </Show>
       {/* An Ingress/HTTPRoute/IngressRoute routing table (match → backend) — the network view's entry
           point, so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>

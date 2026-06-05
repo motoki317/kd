@@ -64,6 +64,21 @@ describe('ResourceSummary batch', () => {
   })
 })
 
+describe('ResourceSummary HPA', () => {
+  it('shows replica state and bounds as labelled chips', () => {
+    const node: KNode = {
+      id: 'hpa', kind: 'HorizontalPodAutoscaler', name: 'web', health: 'Healthy',
+      scaleReplicas: '3 → 5', scaleRange: '2–10',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const labels = [...container.querySelectorAll('.port-addr .addr-label')].map((e) => e.textContent)
+    expect(labels).toEqual(expect.arrayContaining(['replicas', 'range']))
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('3 → 5')
+    expect(text).toContain('2–10')
+  })
+})
+
 describe('ResourceSummary storage', () => {
   it('shows a PVC\'s access modes and storage class as labelled chips', () => {
     const node: KNode = {
