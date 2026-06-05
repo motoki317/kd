@@ -111,17 +111,26 @@ export default function Sidebar(props: Props) {
           </span>
         </Show>
         <Show when={troubled() > 0}>
-          {/* The trouble count is also the jump affordance: clicking it goes to the most-troubled
-              namespace (Alt+T's path), so the operator doesn't have to scan the list or know the
-              shortcut. Falls back to a plain badge when no jump handler is wired. */}
+          {/* The trouble count is also the jump affordance: clicking it steps to the next troubled
+              namespace (Alt+T's path), worst-first and cycling, so the operator can triage all of them
+              with repeated clicks without scanning the list or knowing the shortcut. Falls back to a
+              plain badge when no jump handler is wired. */}
           <Show
             when={props.onJumpToTrouble}
             fallback={<span class="ns-trouble" title={`${troubled()} need attention`}>{troubled() > 99 ? '99+' : troubled()}</span>}
           >
             <button
               class="ns-trouble ns-trouble-btn"
-              title={`Jump to the most-troubled namespace — ${troubled()} need attention`}
-              aria-label={`Jump to the most-troubled of ${troubled()} namespaces needing attention`}
+              title={
+                troubled() > 1
+                  ? `Step through the ${troubled()} namespaces needing attention (worst first) — click again for the next`
+                  : 'Jump to the namespace needing attention'
+              }
+              aria-label={
+                troubled() > 1
+                  ? `Step to the next of ${troubled()} namespaces needing attention`
+                  : 'Jump to the namespace needing attention'
+              }
               onClick={() => props.onJumpToTrouble?.()}
             >
               {troubled() > 99 ? '99+' : troubled()}

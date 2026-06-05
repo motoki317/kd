@@ -5,7 +5,7 @@ import { setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
-import { mostTroubled } from './ns'
+import { mostTroubled, nextTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
@@ -181,13 +181,15 @@ export default function App() {
   // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
   const [nsFlash, setNsFlash] = createSignal(0)
 
-  // Jump to the most-troubled namespace — shared by the Alt+T shortcut and the sidebar trouble badge
-  // so both land identically (with the flash pulse). No-op when nothing is unhealthy; returns whether
-  // it acted so the keyboard handler only swallows the key when it actually jumped.
+  // Step to the next troubled namespace — shared by the Alt+T shortcut and the sidebar trouble badge
+  // so both land identically (with the flash pulse). Cycles from the current selection (worst first,
+  // then next-worst, wrapping) so repeated presses triage every troubled namespace rather than
+  // re-landing on the single worst. No-op when nothing is troubled; returns whether it acted so the
+  // keyboard handler only swallows the key when it actually jumped.
   const jumpToTrouble = (): boolean => {
-    const worst = mostTroubled(namespaceList())
-    if (worst && worst.health !== 'Healthy') {
-      setNamespace(worst.name)
+    const next = nextTroubled(namespaceList(), namespace())
+    if (next) {
+      setNamespace(next.name)
       setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
       return true
     }
@@ -288,9 +290,10 @@ export default function App() {
         if (goBackSelection()) e.preventDefault()
         return
       }
-      // Alt+T jumps to the most-troubled namespace — "take me to the problem". No-op when the whole
-      // cluster is Healthy (nothing to jump to) so the key never yanks you to an arbitrary ns. Same
-      // pick as the first-load default selection (cycle 320).
+      // Alt+T steps to the next troubled namespace — "take me to the problem", and again for the next
+      // one (cycles worst-first, wrapping). No-op when the whole cluster is Healthy (nothing to jump
+      // to) so the key never yanks you to an arbitrary ns. First landing matches the first-load
+      // default selection (cycle 320); repeats walk the rest of the troubled set.
       if (e.altKey && (e.key === 't' || e.key === 'T') && !typing) {
         if (jumpToTrouble()) e.preventDefault()
         return

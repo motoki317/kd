@@ -196,6 +196,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Trouble badge / Alt+T now CYCLE through troubled namespaces (live-found, 2026-06-06):** the sidebar
+badge ("N need attention") and Alt+T both jumped to the single most-troubled namespace and re-landed
+there on every repeat — so on a real cluster with 6 troubled namespaces among 38 A→Z rows, reaching the
+other 5 meant scanning the column for colored dots. Made the jump a triage cycle: `nextTroubled` steps
+worst-first from the current selection and wraps, so repeated badge clicks / Alt+T presses visit every
+troubled namespace (the badge flash marks each landing). Mirrors the topology Enter-cycle and `j`/`k`
+troubled-first nav (Repetition). The cycle set uses the SAME Degraded/Progressing threshold the badge
+counts, so count and jump set never disagree. Verified live: 6 clicks visited 6 distinct troubled
+namespaces and the 7th wrapped to the first; title/aria updated to "Step through the N…". Unit-tested
+worst-first order, wrap, and the Unknown/Suspended/cluster exclusions.
+
 **Log line-count readout now covers level + pod filters, not just text (live-found, 2026-06-06):**
 dogfooding a real pod's logs, dimming the INFO/DEBUG level chips subset the buffer (e.g. 150 of 200
 lines) but showed NO "shown/total" count — the readout was gated on the text filter alone, while the

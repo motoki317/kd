@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareNamespaces, mostTroubled } from './ns'
+import { compareNamespaces, mostTroubled, nextTroubled, troubledNamespaces } from './ns'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 
 const list: NamespaceInfo[] = [
@@ -33,5 +33,34 @@ describe('mostTroubled', () => {
       { name: 'beta', health: 'Progressing', nonReady: 1 },
     ]
     expect(mostTroubled(withCluster)?.name).toBe('beta')
+  })
+})
+
+describe('troubledNamespaces', () => {
+  it('returns only Degraded/Progressing, worst-first (the badge-count set)', () => {
+    // Healthy excluded; Unknown/Suspended are non-actionable and must not appear (matches the badge).
+    const withNoise: NamespaceInfo[] = [
+      ...list,
+      { name: 'eps', health: 'Unknown', nonReady: 9 },
+      { name: 'zid', health: 'Suspended' },
+      { name: CLUSTER_SCOPE, health: 'Degraded', nonReady: 99 },
+    ]
+    expect(troubledNamespaces(withNoise).map((n) => n.name)).toEqual(['gamma', 'beta', 'delta'])
+  })
+})
+
+describe('nextTroubled', () => {
+  it('first step (current not troubled / unselected) lands on the worst', () => {
+    expect(nextTroubled(list, null)?.name).toBe('gamma')
+    expect(nextTroubled(list, 'alpha')?.name).toBe('gamma') // currently on a healthy ns
+  })
+  it('repeated steps advance worst→next-worst and wrap, so all troubled get visited', () => {
+    expect(nextTroubled(list, 'gamma')?.name).toBe('beta')
+    expect(nextTroubled(list, 'beta')?.name).toBe('delta')
+    expect(nextTroubled(list, 'delta')?.name).toBe('gamma') // wraps at the end
+  })
+  it('returns undefined when nothing is troubled', () => {
+    expect(nextTroubled([{ name: 'a', health: 'Healthy' }], null)).toBeUndefined()
+    expect(nextTroubled([], null)).toBeUndefined()
   })
 })
