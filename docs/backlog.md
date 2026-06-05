@@ -126,6 +126,20 @@ should come from real user feedback or a new feature area — don't grind filler
 
 ## Open
 
+- **A pressured-but-Ready Node reads "Ready" while its health dot is Degraded** — *found in code while
+  surfacing pod triage info (2026-06-05); NOT yet verified live (couldn't safely induce node pressure /
+  NotReady on docker-desktop — filling a disk or killing a kubelet is destructive).* `nodeHealth`
+  (`health.go:87`) returns Degraded when `MemoryPressure`/`DiskPressure`/`PIDPressure` is True, but
+  `nodeStatusSummary` (`status.go:138`) only ever returns `Ready`/`NotReady`(+`,SchedulingDisabled`) — so
+  a node with DiskPressure=True but Ready=True shows a red/Degraded dot next to the text "Ready", and the
+  *why* (which pressure, or the NotReady condition's reason like `KubeletNotReady`) is buried in
+  `status.conditions`. Mirror the just-shipped pod fix: have `nodeStatusSummary` append the active
+  pressure (e.g. "Ready · DiskPressure") and/or the NodeReady reason when NotReady, so the status text
+  matches the health colour and explains it. **Before shipping, verify live against a genuinely
+  pressured/NotReady node** (a real cluster that has one, or a kind/minikube node you can safely stress)
+  — a status-string change alone is unit-testable, but the directive wants the real unhealthy-node render
+  confirmed. Keep health classification unchanged (pressure already → Degraded; don't re-decide it).
+
 - **`j`/`k` nav can select a folded node, which then has no on-canvas cue** — *verified live (cycle
   74, a remote staging cluster, a busy namespace: 132 nodes / 16 collapse pills folding ~70 Failed
   Workflows); the pill-badge omission is DELIBERATE — this is a narrow refinement, not a bug.*
