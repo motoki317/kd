@@ -74,21 +74,6 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
-- **A pressured-but-Ready Node reads "Ready" while its health dot is Degraded** — *found in code while
-  surfacing pod triage info (2026-06-05); NOT yet verified live (couldn't safely induce node pressure /
-  NotReady on docker-desktop — filling a disk or killing a kubelet is destructive).* `nodeHealth`
-  (`health.go:87`) returns Degraded when `MemoryPressure`/`DiskPressure`/`PIDPressure` is True, but
-  `nodeStatusSummary` (`status.go:138`) only ever returns `Ready`/`NotReady`(+`,SchedulingDisabled`) — so
-  a node with DiskPressure=True but Ready=True shows a red/Degraded dot next to the text "Ready", and the
-  *why* (which pressure, or the NotReady condition's reason like `KubeletNotReady`) is buried in
-  `status.conditions`. Mirror the just-shipped pod fix: have `nodeStatusSummary` append the active
-  pressure (e.g. "Ready · DiskPressure") and/or the NodeReady reason when NotReady, so the status text
-  matches the health colour and explains it. **Before shipping, verify live against a genuinely
-  pressured/NotReady node** (a real cluster that has one, or a kind/minikube node you can safely stress)
-  — a status-string change alone is unit-testable, but the directive wants the real unhealthy-node render
-  confirmed. Keep health classification unchanged (pressure already → Degraded; don't re-decide it).
-
-
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
   (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
@@ -231,6 +216,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**Node status text now explains its Degraded dot (was a silent contradiction, 2026-06-06):** a node under
+resource pressure or NotReady got a red dot from `nodeHealth`, but `nodeStatusSummary` only ever returned
+`Ready`/`NotReady`(+`,SchedulingDisabled`) — so a pressured-but-Ready node read a bare "Ready" beside a red
+dot with the cause buried in `status.conditions`. Mirrored the pod-status fix: append the active pressure(s)
+("Ready · DiskPressure") on a Ready node, or the NodeReady reason ("NotReady · KubeletNotReady") when down.
+The long-standing live-verification blocker (couldn't safely induce node pressure) was solved by **injecting
+a DiskPressure=True condition on the disposable docker-desktop node via the status subresource** — the
+kubelet self-reverts within ~10s, so it's non-destructive. Confirmed live: card → `h-degraded`, label
+"Node docker-desktop Ready · DiskPressure", sidebar Degraded tally +1. (e6b9290)
 
 **Nodes capacity view: a node's Use/Req CPU bars no longer clash units (live-found on staging, 2026-06-06):**
 on a real multi-node EKS cluster the same node showed Use `0.06 / 1` (cores) above Req `480m / 940m`

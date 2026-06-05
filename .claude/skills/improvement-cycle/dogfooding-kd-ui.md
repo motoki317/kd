@@ -26,6 +26,30 @@ always wrap. Dispatch real events on the element (`el.dispatchEvent(new MouseEve
 real ctx/cluster/namespace/ARN name reach a tracked file** — keep it in the browser session only
 (see AGENTS.md leakage rule). URL-encode an ARN ctx before putting it in the open URL.
 
+### Safely inducing an unhealthy state to verify its render
+
+Some health/status fixes can't be dogfooded because no resource on a reachable cluster is currently
+unhealthy, and the "honest" way to induce it sounds destructive (fill a disk, kill a kubelet, OOM a
+pod). Don't skip live verification — **inject the condition on the disposable `docker-desktop` cluster
+via the `status` subresource**, which the controller self-reverts within seconds, so it's
+non-destructive:
+
+```bash
+# Make a node read Degraded: flip its DiskPressure condition True (kubelet reverts in ~10s).
+idx=$(kubectl --context docker-desktop get node docker-desktop -o json \
+  | perl -MJSON::PP -0777 -ne '$j=decode_json($_);my@c=@{$j->{status}{conditions}};print$_ for grep{$c[$_]{type}eq"DiskPressure"}0..$#c')
+kubectl --context docker-desktop patch node docker-desktop --subresource=status --type=json \
+  -p "[{\"op\":\"replace\",\"path\":\"/status/conditions/$idx/status\",\"value\":\"True\"}]"
+```
+
+Because the kubelet/controller reverts it, **read the render in the same breath** — query
+`/api/v1/contexts/<ctx>/namespaces/__cluster__/graph` for the server's `status`/`health`, or re-inject
+right before an agent-browser `eval` that reads the card class (`g.node.h-degraded`) + label. This
+solved the long-standing "can't safely test a pressured/NotReady node" blocker (node-status fix
+e6b9290). The same subresource trick induces other rollup states (a Pod phase, a Deployment
+unavailable-replica count) on docker-desktop — prefer it over a destructive real action, and over
+shipping a status-string change on unit tests alone when the directive wants the render confirmed.
+
 **Last verified clean at production scale (2026-06-05):** a real EKS staging cluster (72 nodes / 39
 namespaces) — cluster-scope relationship layout had **0 overlapping node cards** (the `placeColumns`
 depth-column layout holds), cluster- and namespace-scope capacity bars had **0 overshoot rows**
