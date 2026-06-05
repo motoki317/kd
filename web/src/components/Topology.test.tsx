@@ -390,21 +390,28 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
   })
 
-  it('Nodes view hides the Relationships facet (no edges are drawn there)', () => {
+  it('Relationships facet appears only in the relationship grouping (Nodes + Kind draw no edges)', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
       { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1' },
     ]
     const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 50 } } } }
-    // Same ownerReference edge that lights the Relationships facet in the other views.
+    // Same ownerReference edge that lights the Relationships facet — present in every render below,
+    // so a missing facet means the view suppresses it, not that the data is absent.
     const relEdges: KEdge[] = [{ from: 'node-a', to: 'p1', type: 'ownerReference' }]
+    // Nodes view: groups pods by host, draws no edges → no facet.
     const inNodes = render(() => (
       <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" onRelFilter={() => {}} />
     ))
     expect(inNodes.container.querySelector('.topology-rels')).toBeNull()
     cleanup()
-    // Control: in the relationship view the same edge DOES surface the facet, proving the data is
-    // there and only the Nodes view suppresses it.
+    // Kind view: per-kind matrix, draws no edges → no facet either.
+    const inKind = render(() => (
+      <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="kind" onRelFilter={() => {}} />
+    ))
+    expect(inKind.container.querySelector('.topology-rels')).toBeNull()
+    cleanup()
+    // Relationship view: the one grouping the filter drives → facet present.
     const inRel = render(() => (
       <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="relationship" onRelFilter={() => {}} />
     ))
@@ -790,17 +797,20 @@ describe('Topology', () => {
     expect(onSelect).toHaveBeenCalledWith('2') // the web-abc Pod
   })
 
-  it('Kind grouping hides edges until a resource is selected', () => {
-    // No selection: the cross-kind backbone lines are suppressed (they fan across the matrix as
-    // noise). The lone ownerReference edge must not render.
+  it('Kind grouping never renders relationship arrows, even with a resource selected', () => {
+    // The cross-kind backbone fans across the per-kind matrix with no meaningful routing, so the
+    // lines are pure noise — suppressed entirely. Unselected: no edges.
     const none = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" />)
     expect(none.container.querySelectorAll('.edges > g').length).toBe(0)
     cleanup()
-    // With a resource selected, edges come back as the "what connects to this" highlight.
+    // Selected: still no arrows (the selection spotlight lights the related subtree instead). This is
+    // the whole point of the change — arrows stayed tangled across boxes rather than tracing a path.
     const sel = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" selectedId="1" />
     ))
-    expect(sel.container.querySelectorAll('.edges > g').length).toBe(1)
+    expect(sel.container.querySelectorAll('.edges > g').length).toBe(0)
+    // The spotlight still works: selecting the Deployment fades the unrelated api-xyz Pod.
+    expect(sel.container.querySelectorAll('g.node.faded').length).toBeGreaterThan(0)
   })
 
   it('relationship grouping shows edges even with no selection', () => {

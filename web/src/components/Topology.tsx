@@ -531,11 +531,13 @@ export default function Topology(props: Props) {
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
-  // All-view arrows: the cross-kind backbone lines fan across the whole kind matrix and read as
-  // noise when you are just scanning which kinds exist — so hide them until a resource is selected,
-  // when they become the useful "what connects to THIS" highlight. Every other view keeps its edges
-  // always (their layouts route edges meaningfully along the backbone).
-  const renderedEdges = createMemo(() => (props.groupBy === 'kind' && !props.selectedId ? [] : layout().edges))
+  // Kind grouping draws NO arrows at all: the cross-kind backbone fans across the whole matrix with
+  // no meaningful routing (cards sit in per-kind boxes, not along their links), so the lines are pure
+  // noise — even on selection, where they tangled across boxes rather than tracing a path. The
+  // selection spotlight (related(), nodeFaded) still lights the connected subtree, which carries the
+  // "what connects to THIS" answer without the clutter. Every other view keeps its edges (their
+  // layouts route them meaningfully along the backbone).
+  const renderedEdges = createMemo(() => (props.groupBy === 'kind' ? [] : layout().edges))
   // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
   // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
   // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
@@ -1339,15 +1341,17 @@ export default function Topology(props: Props) {
         </Show>
       </div>
         {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. The
-            Nodes (capacity) view draws no relationship edges — it groups pods by host, not by link —
-            so its Relationships facet would be inert; suppress it there (props.groupBy !== 'nodes')
-            and let the row carry the health pills alone. */}
-        <Show when={(props.groupBy !== 'nodes' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
+            Relationships facet only appears in the relationship grouping: it's the one view whose
+            layout AND arrows the relationship filter drives. The Nodes view draws no edges (it groups
+            pods by host) and the Kind view draws no edges either (the cross-kind backbone is pure
+            noise in a per-kind matrix), so the facet would be inert there — suppress it and let the
+            row carry the health pills alone. */}
+        <Show when={(props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
           <div class="toolbar-row">
         {/* Relationships facet — which relationship categories are drawn (and so drive
             connectivity). Composable toggles: several can be active at once. One chip per category
             present in the graph; Shift+click solos. */}
-        <Show when={props.groupBy !== 'nodes' && relChips().length > 0 && props.onRelFilter}>
+        <Show when={props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Relationships</span>
             <div class="topology-rels" role="toolbar" aria-label="Relationship filter" onKeyDown={onToolbarKey}>
