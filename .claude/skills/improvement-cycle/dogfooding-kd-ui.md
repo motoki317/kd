@@ -238,6 +238,21 @@ code, surfaced them. Look for these shapes on any view:
    a non-default flag / an injected fixture that the production path can't supply, suspect the default path
    is broken and test THAT.
 
+8. **Troubled-first nav (`j`/`k`/Enter) keeps selecting VISIBLE nodes, masking a fold-related path you
+   want to exercise.** Both the keyboard step (`orderedForNav`) and the search Enter-cycle order matches
+   *most-troubled first*, and on a real cluster the troubled resources are often the head/tail cards a
+   fold keeps visible — so pressing Enter dozens of times lands selection on visible cards and never on a
+   folded one, even when folded matches plainly exist (the pill badges show them). Cost a stretch of
+   inconclusive evals trying to catch auto-expand-on-select fire: pill count never dropped because no
+   folded node was ever the selection. Also note search like "workflow" matches a Workflow's **Pods** too
+   (via their argo labels), inflating the visible-match population. **To verify a fold-dependent behaviour
+   live, drive it deterministically — don't rely on nav ordering to reach a folded node:** read a known
+   hidden node's exact name (expand a pill, grab a middle card's `<title>`, re-collapse), then select THAT
+   node by typing its exact name + Enter, and assert the folded→rendered transition (`.node.selected` for
+   it appears) fires on the *selection* and NOT on the search alone (search must not unfold). Pill-count
+   bookkeeping is unreliable as the signal on a busy cluster — SSE pod churn re-forms folds tick to tick,
+   so a net-unchanged count doesn't mean no expand happened; assert the specific node's render instead.
+
 ## Accessibility patterns established (match these on any new control)
 
 A11y is a live audit theme (cycles 17–18). The conventions now in the code:
