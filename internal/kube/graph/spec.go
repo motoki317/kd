@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -140,6 +141,119 @@ func ingressBackend(s *networkingv1.IngressServiceBackend) string {
 	default:
 		return s.Name
 	}
+}
+
+// routes returns the human-readable routing table ("host/path → service:port" rows) for the kinds that
+// declare one. Legacy Ingress and Gateway API HTTPRoute solve the same problem (external entry → backend
+// service), so they share one Node.Routes field and render identically; the drawer needn't know which
+// API produced the table.
+func routes(obj runtime.Object) []string {
+	if r := ingressRoutes(obj); r != nil {
+		return r
+	}
+	return httpRouteRoutes(obj)
+}
+
+// httpRouteRoutes formats a Gateway API HTTPRoute's routing table as "host/path → service[:port]" rows
+// (nil for anything else), matching ingressRoutes so the modern entry point reads identically without
+// opening the manifest. Unlike an Ingress, an HTTPRoute's hostnames are route-wide rather than per-rule,
+// so every hostname pairs with every rule's path matches; a route with no hostnames shows "*", a
+// match with no path "/", and a RegularExpression path is prefixed "~" to distinguish it. HTTPRoute is a
+// CRD, so it arrives unstructured (no typed factory) and is navigated by field path.
+func httpRouteRoutes(obj runtime.Object) []string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u.GetKind() != "HTTPRoute" {
+		return nil
+	}
+	hosts, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "hostnames")
+	if len(hosts) == 0 {
+		hosts = []string{"*"}
+	}
+	rules, _, _ := unstructured.NestedSlice(u.Object, "spec", "rules")
+	var out []string
+	for _, ri := range rules {
+		rule, ok := ri.(map[string]any)
+		if !ok {
+			continue
+		}
+		backend := httpRouteBackends(rule)
+		if backend == "" {
+			continue // a rule with no resolvable backend has no node to point at
+		}
+		for _, host := range hosts {
+			for _, path := range httpRoutePaths(rule) {
+				out = append(out, host+path+" → "+backend)
+			}
+		}
+	}
+	return out
+}
+
+// httpRoutePaths returns the path strings of an HTTPRoute rule's matches. A rule with no matches matches
+// everything ("/"); a header/method-only match (no path block) also reads as "/".
+func httpRoutePaths(rule map[string]any) []string {
+	matches, _ := rule["matches"].([]any)
+	if len(matches) == 0 {
+		return []string{"/"}
+	}
+	var paths []string
+	for _, mi := range matches {
+		m, ok := mi.(map[string]any)
+		if !ok {
+			continue
+		}
+		p, ok := m["path"].(map[string]any)
+		if !ok {
+			paths = append(paths, "/")
+			continue
+		}
+		value, _ := p["value"].(string)
+		if value == "" {
+			value = "/"
+		}
+		if t, _ := p["type"].(string); t == "RegularExpression" {
+			value = "~" + value
+		}
+		paths = append(paths, value)
+	}
+	if len(paths) == 0 {
+		return []string{"/"}
+	}
+	return paths
+}
+
+// httpRouteBackends renders an HTTPRoute rule's backendRefs as "name[:port]" joined by ", " (multiple
+// backends are a weighted split). A ref without a name is skipped; an empty result drops the rule.
+func httpRouteBackends(rule map[string]any) string {
+	refs, _ := rule["backendRefs"].([]any)
+	var out []string
+	for _, ri := range refs {
+		r, ok := ri.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := r["name"].(string)
+		if name == "" {
+			continue
+		}
+		if port := httpRoutePort(r); port != "" {
+			name += ":" + port
+		}
+		out = append(out, name)
+	}
+	return strings.Join(out, ", ")
+}
+
+// httpRoutePort reads a backendRef's port, tolerating both numeric shapes unstructured decoding yields
+// (int64 from the dynamic client, float64 from a JSON round-trip).
+func httpRoutePort(ref map[string]any) string {
+	switch p := ref["port"].(type) {
+	case int64:
+		return fmt.Sprintf("%d", p)
+	case float64:
+		return fmt.Sprintf("%d", int64(p))
+	}
+	return ""
 }
 
 // roleRules formats a Role/ClusterRole's policy rules as "resources: verbs" rows (nil otherwise), so

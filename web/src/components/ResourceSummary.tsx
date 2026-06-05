@@ -228,8 +228,8 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
-      {/* An Ingress's routing table (host/path → backend) — the network view's entry point, so
-          it should say where external traffic goes without opening the manifest. */}
+      {/* An Ingress/HTTPRoute routing table (host/path → backend) — the network view's entry point,
+          so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>
         <div class="drawer-routes">
           <For each={props.node.routes}>{(r) => <code class="route-row">{r}</code>}</For>

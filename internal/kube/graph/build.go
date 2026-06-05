@@ -60,7 +60,7 @@ func Build(objs []runtime.Object) *Graph {
 			ClusterIP:         serviceClusterIP(obj),
 			ExternalIP:        serviceExternalAddress(obj),
 			Ports:             servicePorts(obj),
-			Routes:            ingressRoutes(obj),
+			Routes:            routes(obj),
 			Rules:             roleRules(obj),
 			RoleRef:           bindingRoleRef(obj),
 			Subjects:          bindingSubjects(obj),

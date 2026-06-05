@@ -8,6 +8,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -201,6 +202,61 @@ func TestIngressRoutes(t *testing.T) {
 	}
 	if got := ingressRoutes(&corev1.Pod{}); got != nil {
 		t.Errorf("ingressRoutes(non-ingress) = %v, want nil", got)
+	}
+}
+
+func TestHTTPRouteRoutes(t *testing.T) {
+	hr := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata":   map[string]any{"name": "app", "namespace": "shop"},
+		"spec": map[string]any{
+			"hostnames": []any{"app.example.com", "www.example.com"},
+			"rules": []any{
+				// two matches (one PathPrefix, one RegularExpression) + one backend with a port
+				map[string]any{
+					"matches": []any{
+						map[string]any{"path": map[string]any{"type": "PathPrefix", "value": "/api"}},
+						map[string]any{"path": map[string]any{"type": "RegularExpression", "value": "/v[0-9]+"}},
+					},
+					"backendRefs": []any{map[string]any{"name": "api-svc", "port": int64(8080)}},
+				},
+				// no matches → match-all "/"; weighted split across two backends; float64 port (JSON round-trip)
+				map[string]any{
+					"backendRefs": []any{
+						map[string]any{"name": "web-a", "port": float64(80)},
+						map[string]any{"name": "web-b"},
+					},
+				},
+			},
+		},
+	}}
+	want := []string{
+		// host-major: a hostname's paths stay together (one rule, then the next), which reads better
+		// than interleaving hosts.
+		"app.example.com/api → api-svc:8080",
+		"app.example.com~/v[0-9]+ → api-svc:8080",
+		"www.example.com/api → api-svc:8080",
+		"www.example.com~/v[0-9]+ → api-svc:8080",
+		"app.example.com/ → web-a:80, web-b",
+		"www.example.com/ → web-a:80, web-b",
+	}
+	if got := httpRouteRoutes(hr); !slices.Equal(got, want) {
+		t.Errorf("httpRouteRoutes =\n%v\nwant\n%v", got, want)
+	}
+
+	// No hostnames → "*". Exercised through routes() to prove the Ingress/HTTPRoute dispatch.
+	hostless := &unstructured.Unstructured{Object: map[string]any{
+		"kind": "HTTPRoute",
+		"spec": map[string]any{
+			"rules": []any{map[string]any{"backendRefs": []any{map[string]any{"name": "only"}}}},
+		},
+	}}
+	if got, want := routes(hostless), []string{"*/ → only"}; !slices.Equal(got, want) {
+		t.Errorf("routes(hostless HTTPRoute) = %v, want %v", got, want)
+	}
+	if got := httpRouteRoutes(&corev1.Pod{}); got != nil {
+		t.Errorf("httpRouteRoutes(non-httproute) = %v, want nil", got)
 	}
 }
 

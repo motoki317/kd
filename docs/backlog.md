@@ -212,6 +212,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Gateway API HTTPRoute drawer shows its routing table, like Ingress (live-found, 2026-06-06):** a
+legacy `Ingress` drawer parsed its rules into a "host/path → service:port" table (`ingressRoutes`), but
+the modern Gateway API `HTTPRoute` — which kd already health-checks (`health_cr.go`) and is the Ingress
+successor — fell to generic-CR treatment: only labels + raw manifest, no routing table. Added
+`httpRouteRoutes` (unstructured, since HTTPRoute is a CRD) producing the same row format, dispatched
+through a shared `routes(obj)` so the drawer renders both identically (Repetition). HTTPRoute hostnames
+are route-wide (not per-rule), so each hostname pairs with every rule's path matches, host-major; a
+RegularExpression path is prefixed `~`, a match-less rule reads `/`, weighted backends join with `, `.
+Verified live on docker-desktop with a 2-hostname/2-rule HTTPRoute: 6 rows rendered correctly, no
+drawer overflow. Fixture test covers PathPrefix/regex/default paths, multi-backend, int64+float64 ports.
+
 **Logs empty-state names the hidden count + offers a one-click reset (live-found, 2026-06-06):** the
 level filter persists across pods (`kd:logsHideLevels` — a deliberate triage habit), so opening a pod
 whose output is entirely INFO/DEBUG after hiding those levels elsewhere showed an empty pane reading
