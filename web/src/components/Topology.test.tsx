@@ -231,6 +231,29 @@ describe('Topology', () => {
     expect(c2.textContent).toBe('2 matches')
   })
 
+  it('the match count is a button that frames the matches on click (mouse path beside Enter)', () => {
+    // The count is the affordance for reaching off-screen matches: a real <button>, focusable and
+    // clickable, so a mouse operator isn't stranded staring at faded cards after typing a query.
+    // jsdom can't measure the viewport move (getBoundingClientRect → 0), so we lock the DOM contract:
+    // it's a button, enabled with matches, and clicking it runs without throwing.
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="web" {...base} />
+    ))
+    const btn = container.querySelector('.topology-matches') as HTMLButtonElement
+    expect(btn.tagName).toBe('BUTTON')
+    expect(btn.disabled).toBe(false)
+    expect(() => btn.click()).not.toThrow()
+    cleanup()
+
+    // No matches → the button disables (a true no-op, not a clickable dead control).
+    const none = render(() => (
+      <Topology nodes={nodes} edges={edges} search="zzz-nothing-matches" {...base} />
+    ))
+    const noneBtn = none.container.querySelector('.topology-matches') as HTMLButtonElement
+    expect(noneBtn.textContent).toBe('no matches')
+    expect(noneBtn.disabled).toBe(true)
+  })
+
   it('Enter in the topology search selects the most-troubled match (cycle 259)', () => {
     const onSelect = vi.fn()
     // Render with a search query that hits two nodes; the Degraded one ('web-abc') should win

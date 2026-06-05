@@ -1069,6 +1069,24 @@ export default function Topology(props: Props) {
     animateTo(target)
   }
 
+  // Frame the current match set on demand — the click affordance on the "N matches" pill. Search
+  // deliberately does NOT auto-fit while typing (per-keystroke jumps; see the filter auto-fit effect),
+  // so after typing, the matches sit lit but off-screen behind faded cards with no obvious way to
+  // reach them but Enter (keyboard) or Fit (whose match-scoping isn't discoverable from the count).
+  // This makes the count itself the affordance: click it to fly to the matches. Unlike resetView('f')
+  // it ignores any active selection and always frames the lit subset, so the count answers "where are
+  // my matches?" predictably. No scale floor — an explicit gesture, like the manual Fit, may zoom to a
+  // speck when matches are scattered; only the AUTOMATIC filter-fit keeps the floor.
+  function frameMatches() {
+    const l = layout()
+    if (!svg || l.width === 0) return
+    const lit = l.nodes.filter((n) => !nodeFaded(n))
+    if (lit.length === 0) return
+    const target = fitNodeSet(lit, 1.4)
+    target.scale *= 0.92
+    animateTo(target)
+  }
+
   // Keyboard zoom (cycle 329/R3): scale by a factor while keeping the viewport-center world point
   // fixed — same pivot math as the wheel handler, just anchored at the middle instead of the cursor.
   // Gives keyboard/trackpad-less operators (and Vim-style users) fine zoom control to pair with 'f'.
@@ -1283,19 +1301,26 @@ export default function Topology(props: Props) {
           </Show>
         </div>
         <Show when={matches()}>
-          <span
+          {/* The count is also the affordance: clicking it flies to the matches (frameMatches),
+              so a mouse operator who typed a query and sees only faded cards has a discoverable way
+              to reach the results — complementing Enter-cycling for the keyboard. Disabled (a true
+              no-op) when nothing matches. */}
+          <button
+            type="button"
             class="topology-matches"
             classList={{ none: matches()!.size === 0 }}
+            disabled={matches()!.size === 0}
+            onClick={frameMatches}
             // When the current selection is itself a match, prefix the count with its 1-based
             // position in the cycle order — so an operator pressing Enter knows "I'm at 3 of 7"
             // and can predict when the cycle wraps. Falls back to the bare count if the selection
             // is outside the match set (or no selection).
             title={
               matchPos() > 0
-                ? `Match ${matchPos()} of ${matches()!.size}. Press Enter for next, Shift+Enter for previous.`
+                ? `Match ${matchPos()} of ${matches()!.size}. Click to frame all; Enter for next, Shift+Enter for previous.`
                 : matches()!.size === 0
                   ? 'No resources match the current search.'
-                  : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}. Press Enter to jump to one.`
+                  : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}. Click to frame them, or press Enter to step through.`
             }
           >
             <Show
@@ -1306,7 +1331,7 @@ export default function Topology(props: Props) {
             >
               no matches
             </Show>
-          </span>
+          </button>
         </Show>
         {/* Clear-all: surfaces the same operation as Escape, but discoverable without knowing
             the shortcut. Visible only when at least one filter is on, so the toolbar stays

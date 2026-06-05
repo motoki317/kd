@@ -1549,6 +1549,7 @@ button.conn.conn-retry:focus-visible {
   outline-offset: 1px;
 }
 .topology-matches {
+  font-family: inherit;
   font-size: 11px;
   color: var(--text-dim);
   background: var(--surface);
@@ -1556,9 +1557,19 @@ button.conn.conn-retry:focus-visible {
   border-radius: 999px;
   padding: 2px 10px;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.topology-matches:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.topology-matches:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .topology-matches.none {
   color: var(--health-degraded);
+  cursor: default;
 }
 /* Clear-all button: stays inline with the search row but reads as a quiet text link rather than
    a CTA — primary action is the search, this is the "undo" affordance next to it. */
