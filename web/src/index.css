@@ -1300,6 +1300,12 @@ button.conn.conn-retry:focus-visible {
 }
 .topology-stripe > span {
   height: 100%;
+  /* A floor so a present-but-tiny state never renders sub-pixel and vanishes: the stripe is the
+     at-a-glance health read, and pure flex made a lone Degraded resource in a large namespace
+     (1/2000 → <1px) invisible — the stripe would falsely read "all healthy" while trouble exists.
+     Mirrors the capacity bars' min-segment width. Only present states are rendered, so this can't
+     invent a colour that isn't there; the large Healthy segment absorbs the few px. */
+  min-width: 4px;
   transition: flex 0.3s ease;
 }
 /* When the drawer is open .topology shrinks by the drawer width, which would shrink the stripe with

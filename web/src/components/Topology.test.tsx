@@ -89,7 +89,13 @@ describe('Topology', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const stripe = container.querySelector('.topology-stripe')
     expect(stripe).toBeTruthy()
-    expect(stripe!.querySelectorAll('span').length).toBe(2) // Healthy + Degraded
+    const segs = [...stripe!.querySelectorAll('span')]
+    expect(segs.length).toBe(2) // Healthy + Degraded
+    // The lone Degraded resource (1 of 3) MUST get its own segment — a present trouble state can never
+    // be dropped from the stripe. Its on-screen width is floored by CSS (min-width) so it stays visible
+    // even when proportionally sub-pixel in a large namespace; that floor is verified live (jsdom can't
+    // measure layout). Here we lock the data half: the segment exists and is identifiable by title.
+    expect(segs.some((s) => s.getAttribute('title') === 'Degraded: 1')).toBe(true)
   })
 
   it('toggles the health filter when a pill is clicked, and clears it when the active pill is re-clicked', () => {
