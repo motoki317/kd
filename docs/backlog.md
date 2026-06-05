@@ -302,6 +302,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Restarted container hid WHY it restarted (live-found, 2026-06-05):** a pod that the cluster had
+OOMKilled overnight and then restarted showed only "Running ↻1" in the drawer — the actionable reason
+(OOMKilled, exit 137 → raise the memory limit) sat in `status.containerStatuses[].lastState.terminated`,
+visible only by opening and scrolling the raw manifest. Found by dogfooding a real staging pod. Server
+now reads `lastState.terminated` into `ContainerStatus.LastTerminated` ("OOMKilled (exit 137)"; bare
+reason on a clean exit; "exit N" with no reason; empty when never terminated, so a clean container shows
+nothing), and the drawer renders it as an amber (`--health-suspended`) sub-line under the container head —
+a PAST termination is a caution that stands out from the live green "Running" without reading as a current
+failure, sitting next to the ↻ count it explains. *Lesson: a now-Running container can still carry the
+single most useful triage fact (its last crash reason) one level down in lastState — surface it inline,
+don't make the operator read YAML.*
+
 **Cluster-scoped resource drawer fetched an empty namespace (live-found, 2026-06-05):** selecting a
 Node / PriorityClass / ClusterRole (any cluster-scoped resource) showed "unavailable" for its manifest
 and "Couldn't load events." — found by dogfooding docker-desktop cluster scope and reading the network
