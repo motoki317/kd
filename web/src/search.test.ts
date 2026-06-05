@@ -90,6 +90,21 @@ describe('nodeMatches', () => {
       expect(nodeMatches(dep, 'deploy/web')).toBe(true)
     })
 
+    it('"po/" matches Pods by prefix, NOT kinds that merely contain "po" mid-word', () => {
+      // Regression: the kind side was a substring test, so "po/ui" lit Endpoints (end·po·ints) and
+      // NetworkPolicy (network·po·licy) alongside Pods. A prefix match drops those mid-word hits.
+      const ep: KNode = { id: 'e1', kind: 'Endpoints', name: 'ui', health: 'Healthy' }
+      const np: KNode = { id: 'n1', kind: 'NetworkPolicy', name: 'ui', health: 'Healthy' }
+      const uiPod: KNode = { id: 'up1', kind: 'Pod', name: 'ui-x', health: 'Healthy' }
+      expect(nodeMatches(uiPod, 'po/ui')).toBe(true)
+      expect(nodeMatches(ep, 'po/ui')).toBe(false)
+      expect(nodeMatches(np, 'po/ui')).toBe(false)
+      // Known residual: a genuinely "Po"-prefixed kind still matches (would need the server
+      // short-name map to exclude). Far rarer than Pods, and not the egregious mid-word case.
+      const pep: KNode = { id: 'pe1', kind: 'PolicyEndpoint', name: 'ui', health: 'Healthy' }
+      expect(nodeMatches(pep, 'po/ui')).toBe(true)
+    })
+
     it('"Pod/" with empty name half lights up every Pod (mid-edit case)', () => {
       // The empty name half means "don't constrain the name", so the operator partway through
       // typing "Pod/web…" sees all Pods light up until they commit to a name. The alternative

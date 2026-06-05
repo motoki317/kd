@@ -203,6 +203,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Structured search `Kind/name` matches the kind by prefix, not substring (live-found, 2026-06-06):**
+typing `po/ui-a` (the canonical Pod short name) lit Endpoints (end·**po**·ints), NetworkPolicy
+(network·**po**·licy) and PolicyEndpoint alongside Pods, because the kind side of the structured
+predicate was a substring test (`kind.includes("po")`). The documented uses are exact — the `y`-yank
+round-trip pastes a full `Pod/name`, and operators type kubectl shorts like `po/`. Switched the kind
+side (full name, compact label, aliases) to a PREFIX match: a strict subset of substring, so the
+round-trip and short-name paths keep working while mid-word false hits drop out. Verified live: `po/ui-a`
+went 6 → 4 matches, Endpoints and NetworkPolicy gone. Known residual: a genuinely "Po"-prefixed sibling
+(PodDisruptionBudget, PolicyEndpoint) still matches — excluding it would need the server short-name map,
+absent on first paint and in unit tests, so prefix is the right pragmatic scope. Regression-tested.
+
 **Manifest find scrolls to the first match on type (live-found, 2026-06-06):** typing in the drawer's
 "find in manifest" box highlighted matches and showed "1/3", but left the manifest pinned at the top
 with the first hit below the fold (a 2886px manifest in a 395px viewport) — unlike the browser's own

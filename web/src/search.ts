@@ -25,11 +25,19 @@ export function nodeMatches(n: KNode, query: string): boolean {
     const kindQ = q.slice(0, slash)
     const nameQ = q.slice(slash + 1)
     if (!kindQ && !nameQ) return false // bare "/" — nothing to match on
+    // Kind side is matched by PREFIX, not substring: the operator typed a deliberate kind (a pasted
+    // "Pod/…" or a canonical short like "po/…") and means THAT kind. Substring lit every kind merely
+    // CONTAINING the text — "po/" matched Endpoints (end·po·ints), NetworkPolicy (network·po·licy),
+    // PolicyEndpoint… A prefix is a strict subset (it never matches MORE), so the round-trip and the
+    // short-name path keep working ("pod"/"po" still prefix Pod; "deploy" prefixes Deployment) while
+    // the mid-word false hits drop out. (A "Po"-prefixed sibling like PodDisruptionBudget can still
+    // match "po/" — acceptable; fully restricting it would need the server short-name map, absent on
+    // first paint and in unit tests.)
     const kindOk =
       !kindQ ||
-      n.kind.toLowerCase().includes(kindQ) ||
-      kindLabel(n.kind).toLowerCase().includes(kindQ) ||
-      kindAliases(n.kind).some((a) => a.includes(kindQ))
+      n.kind.toLowerCase().startsWith(kindQ) ||
+      kindLabel(n.kind).toLowerCase().startsWith(kindQ) ||
+      kindAliases(n.kind).some((a) => a.startsWith(kindQ))
     const nameOk = !nameQ || n.name.toLowerCase().includes(nameQ)
     if (kindOk && nameOk) return true
     return false
