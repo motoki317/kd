@@ -83,7 +83,14 @@ Recent batches (newest first; `git log` has the commits):
   live; and `ep.Ready` counts only `HealthHealthy` pods, which `podHealth` gates on `podReady`, so the
   count aligns with real Endpoints readiness — a not-Ready surge pod is Progressing, not a ready backend),
   **live rollout rendering** (a `rollout restart` showed the old pod Healthy + the new surge pod
-  Progressing until it passed readiness, then converged — the readiness-gated health rendering live). Also shipped this
+  Progressing until it passed readiness, then converged — the readiness-gated health rendering live),
+  **capacity-view accuracy at production scale** (a 1-vCPU EKS node's "0.94 cores" matches kubectl's
+  `940m` allocatable — not a bug; the Use/Req bars carrying DIFFERENT denominators (`Use 1.1Gi/7.6Gi`
+  over `Req 6Gi/7Gi`) is the intentional capacity-vs-allocatable design, documented `capacityLayout.ts`
+  324-328/499-507; the CPU/Memory toggle is a correct `role=radiogroup`/`radio`+`aria-checked`+roving-
+  tabindex, so its null `aria-pressed` is right, not missing), **relationship + kind-chip legibility at
+  scale** (341-resource namespace lays out in readable columns, no overlap crisis; the `.topology-kinds`
+  row is a purpose-built single-line `overflow-x:auto` scroller — no clipping at a 1180px viewport). Also shipped this
   campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for the
   drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2),
   **aggregated Logs for any pod-owning resource** incl. Argo Workflows (f34bee8), **DescendantPodNames
