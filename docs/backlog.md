@@ -57,7 +57,15 @@ Recent batches (newest first; `git log` has the commits):
   `sr-only` live region, and the query + highlights persist across a YAML↔JSON format toggle), **aggregated
   log per-pod chips** (`.logs-pods` `flex-wrap:wrap` — a multi-step workflow's many source-pod chips wrap,
   never clip; each `aria-pressed` + colour-dot), **Events aggregate the owned subtree generically**
-  (`events.go` `DescendantIDs`, the consistency the Workflow-Logs fix matched). Also shipped this
+  (`events.go` `DescendantIDs`, the consistency the Workflow-Logs fix matched), **sidebar namespace
+  filter + keyboard nav** (`/` focuses, type filters, `↑↓` highlights, `Enter` selects; `[cluster]` stays
+  pinned), **kind-view selection contrast** (selected card opacity 1, the other 39/42 fade to 0.2),
+  **Service endpoint health is false-positive-free** (selector-less ExternalName/manual services are
+  EXCLUDED from annotation `edges.go:195` so a 0-endpoint provisioner svc reads `h-healthy`, verified
+  live; and `ep.Ready` counts only `HealthHealthy` pods, which `podHealth` gates on `podReady`, so the
+  count aligns with real Endpoints readiness — a not-Ready surge pod is Progressing, not a ready backend),
+  **live rollout rendering** (a `rollout restart` showed the old pod Healthy + the new surge pod
+  Progressing until it passed readiness, then converged — the readiness-gated health rendering live). Also shipped this
   campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for the
   drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2),
   **aggregated Logs for any pod-owning resource** incl. Argo Workflows (f34bee8), **DescendantPodNames
