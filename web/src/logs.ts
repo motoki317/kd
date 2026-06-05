@@ -24,8 +24,14 @@ export function parseLogLevel(line: string): LogLevel | null {
     const c = head[0]
     return c === 'E' || c === 'F' ? 'error' : c === 'W' ? 'warn' : 'info'
   }
-  const kv = /\b(?:lvl|level|severity)"?\s*[:=]\s*"?(error|err|fatal|panic|warn|warning|info|debug|trace)\b/i.exec(head)
+  // Structured field (level=warn, "log.level":"INFO"). For a JSON line the level can sit AFTER a long
+  // message (pino/bunyan and message-first loggers), so scan the whole line — the kv pattern demands a
+  // `level:value` shape, so it stays safe from prose. Non-JSON lines keep the cheap 64-char head scan.
+  const kvScope = line.charCodeAt(0) === 123 /* { */ ? line : head
+  const kv = /\b(?:lvl|level|severity)"?\s*[:=]\s*"?(error|err|fatal|panic|warn|warning|info|debug|trace)\b/i.exec(kvScope)
   if (kv) return classifyLevel(kv[1])
+  // Bare uppercase token ("<ts> ERROR …", "[WARN]") — head-only: a stray ERROR deep in an
+  // unstructured line is usually prose, not the line's own severity.
   const tok = /(?:^|[\s[(])(ERROR|ERR|FATAL|PANIC|WARN|WARNING|INFO|DEBUG|TRACE)(?:[\s\])]|:)/.exec(head)
   if (tok) return classifyLevel(tok[1])
   return null

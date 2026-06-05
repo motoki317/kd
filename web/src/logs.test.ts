@@ -120,6 +120,16 @@ describe('parseLogLevel', () => {
     expect(parseLogLevel('{"level":"error","msg":"oops"}')).toBe('error')
     expect(parseLogLevel('severity=DEBUG trace data')).toBe('debug')
   })
+  it('finds the level in a JSON line even when it sits after a long leading message', () => {
+    // pino/bunyan and other message-first loggers put `level` past the first 64 chars; the badge/
+    // level-filter/jump-to-error must still classify it (the head-only scan missed it).
+    expect(parseLogLevel('{"message":"this message is intentionally quite long to push things","level":"error"}')).toBe('error')
+    expect(parseLogLevel('{"msg":"a fairly verbose human-readable line that runs well past sixty chars","log.level":"WARN"}')).toBe('warn')
+    // The whole-line scan is gated to JSON: a stray "level=" deep in an UNSTRUCTURED line (past the
+    // 64-char head) stays unbadged, so prose can't hijack the badge. The prefix here runs well past
+    // 64 chars before "level=" appears.
+    expect(parseLogLevel('plain unstructured prose that rambles on at considerable length before mentioning level=error')).toBeNull()
+  })
   it('detects an uppercase level token after a timestamp or in brackets', () => {
     expect(parseLogLevel('2026-05-21T12:00:00Z ERROR failed to connect')).toBe('error')
     expect(parseLogLevel('[WARN] retrying')).toBe('warn')
