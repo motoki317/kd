@@ -5,6 +5,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,7 @@ var typedFactories = map[string]func() runtime.Object{
 	"apps/v1/DaemonSet":                 func() runtime.Object { return &appsv1.DaemonSet{} },
 	"batch/v1/Job":                      func() runtime.Object { return &batchv1.Job{} },
 	"batch/v1/CronJob":                  func() runtime.Object { return &batchv1.CronJob{} },
+	"policy/v1/PodDisruptionBudget":     func() runtime.Object { return &policyv1.PodDisruptionBudget{} },
 	"networking.k8s.io/v1/Ingress":      func() runtime.Object { return &networkingv1.Ingress{} },
 	"rbac.authorization.k8s.io/v1/Role": func() runtime.Object { return &rbacv1.Role{} },
 	"rbac.authorization.k8s.io/v1/RoleBinding":        func() runtime.Object { return &rbacv1.RoleBinding{} },

@@ -7,6 +7,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -36,6 +37,8 @@ func statusSummary(obj runtime.Object) string {
 		return pvcStatus(o)
 	case *corev1.PersistentVolume:
 		return pvStatus(o)
+	case *policyv1.PodDisruptionBudget:
+		return pdbStatus(o)
 	case *batchv1.Job:
 		if o.Spec.Suspend != nil && *o.Spec.Suspend {
 			return "Suspended"
@@ -167,6 +170,17 @@ func ingressStatus(ing *networkingv1.Ingress) string {
 	default:
 		return fmt.Sprintf("%s +%d", hosts[0], len(hosts)-1)
 	}
+}
+
+// pdbStatus shows currentHealthy over the desiredHealthy floor, mirroring the replica "ready/desired"
+// form operators know: "10/8" reads "10 healthy, floor 8" (satisfied); "6/8" shows the deficit. When
+// the floor is 0 (e.g. a maxUnavailable PDB over a single replica) the "/0" denominator is noise, so
+// drop it and show just the count.
+func pdbStatus(p *policyv1.PodDisruptionBudget) string {
+	if p.Status.DesiredHealthy == 0 {
+		return fmt.Sprintf("%d healthy", p.Status.CurrentHealthy)
+	}
+	return fmt.Sprintf("%d/%d healthy", p.Status.CurrentHealthy, p.Status.DesiredHealthy)
 }
 
 // pvcStatus shows the claim phase plus the bound capacity when known (e.g. "Bound 10Gi"), the

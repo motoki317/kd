@@ -4,6 +4,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -36,6 +37,8 @@ func health(obj runtime.Object) Health {
 		return pvcHealth(o)
 	case *corev1.PersistentVolume:
 		return pvHealth(o)
+	case *policyv1.PodDisruptionBudget:
+		return pdbHealth(o)
 	case *unstructured.Unstructured:
 		return crHealth(o)
 	default:
@@ -72,6 +75,20 @@ func pvcHealth(p *corev1.PersistentVolumeClaim) Health {
 	default:
 		return HealthUnknown
 	}
+}
+
+// pdbHealth keys on whether the protected workload meets the budget's floor: currentHealthy below
+// desiredHealthy means the app is under its required minimum (and voluntary disruptions are blocked) —
+// Degraded; at or above the floor it's Healthy. We deliberately do NOT key on disruptionsAllowed / the
+// DisruptionAllowed condition: that goes False for benign reasons too (a PDB targeting pods whose
+// controller lacks the scale subresource reports SyncFailed though the workload itself is fine), so it
+// would false-alarm. Before this rule PDBs fell through to the CR heuristic and read "Unknown" — noise
+// in the health tally that also hid genuinely-violated budgets.
+func pdbHealth(p *policyv1.PodDisruptionBudget) Health {
+	if p.Status.CurrentHealthy < p.Status.DesiredHealthy {
+		return HealthDegraded
+	}
+	return HealthHealthy
 }
 
 // nodeHealth reads a Node's conditions: Ready=False (or missing) is Degraded, as is any resource

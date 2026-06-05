@@ -7,6 +7,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -256,6 +257,55 @@ func TestPVCHealthAndStatus(t *testing.T) {
 				t.Errorf("statusSummary(PVC %s) = %q, want %q", tc.name, got, tc.wantStatus)
 			}
 		})
+	}
+}
+
+func TestPDBHealthAndStatus(t *testing.T) {
+	pdb := func(current, desired int32) *policyv1.PodDisruptionBudget {
+		return &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
+			CurrentHealthy: current, DesiredHealthy: desired,
+		}}
+	}
+	tests := []struct {
+		name       string
+		pdb        *policyv1.PodDisruptionBudget
+		wantHealth Health
+		wantStatus string
+	}{
+		// At the floor → Healthy (no longer the old "Unknown" noise).
+		{"meets floor exactly", pdb(8, 8), HealthHealthy, "8/8 healthy"},
+		// Above the floor (current can exceed the minimum) → still Healthy.
+		{"above floor", pdb(10, 8), HealthHealthy, "10/8 healthy"},
+		// Below the floor → the protected workload is under its minimum → Degraded.
+		{"below floor", pdb(6, 8), HealthDegraded, "6/8 healthy"},
+		// A zero floor (e.g. a maxUnavailable PDB over one replica) drops the noisy "/0" denominator.
+		{"zero floor with a healthy pod", pdb(1, 0), HealthHealthy, "1 healthy"},
+		// A PDB matching no pods (zero floor, zero healthy) is satisfied, not alarmed.
+		{"no pods", pdb(0, 0), HealthHealthy, "0 healthy"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := health(tc.pdb); got != tc.wantHealth {
+				t.Errorf("health(PDB %s) = %q, want %q", tc.name, got, tc.wantHealth)
+			}
+			if got := statusSummary(tc.pdb); got != tc.wantStatus {
+				t.Errorf("statusSummary(PDB %s) = %q, want %q", tc.name, got, tc.wantStatus)
+			}
+		})
+	}
+}
+
+// A real PDB whose DisruptionAllowed condition is False for a benign reason (its workload's controller
+// lacks the scale subresource → SyncFailed) but whose currentHealthy still meets the floor must read
+// Healthy, NOT Degraded — health keys on the floor, not the disruption condition. This is the exact
+// shape seen live (a PDB over Argo-Workflow pods) that motivated the rule.
+func TestPDBHealthIgnoresBenignDisruptionBlocked(t *testing.T) {
+	p := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
+		CurrentHealthy: 10, DesiredHealthy: 8, DisruptionsAllowed: 0,
+		Conditions: []metav1.Condition{{Type: "DisruptionAllowed", Status: metav1.ConditionFalse, Reason: "SyncFailed"}},
+	}}
+	if got := health(p); got != HealthHealthy {
+		t.Errorf("health(budget-met PDB with SyncFailed) = %q, want Healthy", got)
 	}
 }
 

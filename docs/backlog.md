@@ -240,6 +240,20 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**PodDisruptionBudgets read "Unknown" health — noise that hid violated budgets (live-found,
+2026-06-06):** asking "what are the Unknown 3?" on `team-a` showed all three were PDBs with no
+health rule, so they fell through the CR-conditions heuristic to Unknown (a PDB's condition is
+`DisruptionAllowed`, not `Ready`/`Available`). That both polluted the health tally (Unknown reads as
+"something's off") and hid the real signal: a PDB whose `currentHealthy < desiredHealthy` is below its
+floor and blocks drains/rollouts. Added a typed `policy/v1` health+status rule keyed on the floor
+(`currentHealthy >= desiredHealthy` → Healthy, below → Degraded), status `"10/8 healthy"` (drops the
+`/0` when the floor is 0). Deliberately ignores `disruptionsAllowed`/the `DisruptionAllowed` condition —
+verified live it goes False for a benign reason (a PDB over Argo-Workflow pods whose controller lacks
+the scale subresource → SyncFailed) though the workload is fine. Verified live: the three PDBs flipped
+to Healthy with real status; the namespace's Unknown pill disappeared (Healthy 120, Progressing 1).
+*Lesson: a built-in kind landing in the CR catch-all is a smell — "Unknown" health is both noise and a
+missed signal. Adding a typed rule (not reinterpreting a tuned one) is a safe, invited extension.*
+
 **Drawer dropped the status string the card showed (live-found, 2026-06-06):** dogfooding the triage
 flow — spotlight a Progressing resource, click it to ask "why" — showed the drawer header reduced the
 card's status ("Ready · yellow", "Unschedulable", "1/1", "Running") to a bare health-tinted icon. For
