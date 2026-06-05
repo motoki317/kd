@@ -43,9 +43,19 @@ Recent batches (newest first; `git log` has the commits):
   edges lit, the rest `faded`/`owner faded` by class — verified 18/136 nodes + 17/88 edges lit on a
   selected Service), **multi-select kind-filter compose** (OR/union — PO+SVC lit 22 Pods + 7 Services;
   chips already carry `aria-pressed`), **help overlay** (`?` binding + button; complete and drift-free —
-  every current shortcut listed incl. j/k, ⌘B, `[ ]`, 1/2/3, Esc-precedence, "Owns" edge gloss). Also
-  shipped this campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction**
-  for the drawer's labelled-fact chips (9322c65). The high-value finding rate is now clearly tapering —
+  every current shortcut listed incl. j/k, ⌘B, `[ ]`, 1/2/3, Esc-precedence, "Owns" edge gloss),
+  **ConfigMap data-key list** (26-key argocd-cm — sorted, sized, long keys wrap with the size held
+  right via `space-between`+`align-items:center`; a "Data ·N" header refuted — the hero kind + the
+  header-less routes/rules blocks make it redundant), **Ingress/HTTPRoute/Traefik-IngressRoute routing
+  tables** (single + 3-route `Host && PathPrefix → svc:port` render faithfully; keep the raw Traefik
+  matcher — cleaning it loses fidelity), **offline/dropped-stream state** (EXEMPLARY — every surface
+  speaks the drop: switcher "<ctx> — unavailable", red OFFLINE·RETRY pill, sidebar "Couldn't load
+  namespaces/RETRY", canvas "Can't reach the cluster — use offline·retry above", ghost cards),
+  **restart-triage degradation** (a 44-restart pod with an empty kubelet `lastState` correctly shows
+  `↻44` and OMITS the absent exit reason — it surfaces lastTerminated only when present). Also shipped
+  this campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for
+  the drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2).
+  The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
   log.)
