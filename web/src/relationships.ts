@@ -21,7 +21,7 @@ export const REL_CATEGORIES: RelCategoryDef[] = [
   { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic flow', edges: ['routes', 'selects'] },
   { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount', edges: ['mounts'] },
   { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'] },
-  { id: 'scheduling', label: 'Scheduling', hint: 'Pods → the Node they run on', edges: ['scheduledOn'] },
+  { id: 'scheduling', label: 'Scheduling', hint: 'Pods → their Node; PodDisruptionBudgets → the pods they guard', edges: ['scheduledOn', 'guards'] },
 ]
 
 const BY_ID = new Map(REL_CATEGORIES.map((c) => [c.id, c]))

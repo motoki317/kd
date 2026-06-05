@@ -3,8 +3,11 @@ package graph
 import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -93,6 +96,8 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			b.serviceEdges(id, ns, o, nodes)
 		case *networkingv1.Ingress:
 			b.ingressEdges(id, ns, o)
+		case *policyv1.PodDisruptionBudget:
+			b.pdbEdges(id, ns, o, nodes)
 		case *corev1.PersistentVolumeClaim:
 			// A bound PVC carries its target PV's name in spec.volumeName, completing the
 			// Pod → PVC → PV chain in the Volumes view (cycle 235). Modeled as a `mounts`
@@ -293,6 +298,24 @@ func (b *edgeBuilder) traefikIngressRouteEdges(id, ns string, u *unstructured.Un
 				continue
 			}
 			b.link(id, EdgeRoutes, "Service", ns, name)
+		}
+	}
+}
+
+// pdbEdges links a PodDisruptionBudget to the Pods its selector guards (EdgeGuards), the counterpart to
+// serviceEdges' selection — so a degraded PDB navigates to the pods that explain it. A PDB selector is a
+// full LabelSelector (matchExpressions, unlike a Service's plain map), matched via the apimachinery
+// helper. An EMPTY selector ({}) guards every pod in the namespace — the common "protect everything
+// here" pattern, and exactly the shape of a real namespace-wide PDB — so it must link to all pods, not
+// be skipped as noise (the Scheduling relationship is opt-in anyway). A nil selector matches nothing.
+func (b *edgeBuilder) pdbEdges(id, ns string, pdb *policyv1.PodDisruptionBudget, nodes []Node) {
+	sel, err := metav1.LabelSelectorAsSelector(pdb.Spec.Selector)
+	if err != nil {
+		return // malformed selector — LabelSelectorAsSelector already maps nil → matches-nothing
+	}
+	for _, n := range nodes {
+		if n.Kind == "Pod" && n.Namespace == ns && sel.Matches(labels.Set(n.Labels)) {
+			b.link(id, EdgeGuards, "Pod", ns, n.Name)
 		}
 	}
 }

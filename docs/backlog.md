@@ -232,6 +232,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**PodDisruptionBudget → guarded-pods edges (live-found via triage dogfooding, 2026-06-06):** running the
+real operator triage flow (land on most-troubled ns → filter Degraded → drill in) on a degraded PDB
+("0/3 healthy") hit a dead-end: a PDB selects pods via spec.selector (like a Service) but kd drew no
+edge, so nothing led from the PDB to the failing pods that explain it. Added `EdgeGuards` (PDB → pods),
+matched through the full LabelSelector (matchExpressions, not just a map), placed in the **Scheduling**
+relationship category (a node-drain/disruption concern, not Network). **Live-dogfooding caught a design
+error:** the real PDB had an *empty* selector (the namespace-wide "protect everything" pattern); my first
+cut skipped empty selectors as "too noisy" and so still dead-ended the actual case — fixed to guard every
+pod in the namespace (the Scheduling filter is opt-in anyway). Verified live: the degraded PDB now links
+to all 4 namespace pods and selecting it highlights them. New edge type wired through model.go /
+relationships.ts (Scheduling) / edgeRender.ts / types.ts.
+
 **PodDisruptionBudget drawer shows its policy + allowed disruptions (live-found, 2026-06-06):** a PDB's
 status read "3/2 healthy" and went Degraded when under-provisioned, but two facts stayed manifest-only:
 the configured policy (minAvailable/maxUnavailable — the intent) and `status.disruptionsAllowed` — *can I

@@ -292,6 +292,66 @@ subjects:
 	}
 }
 
+// TestPDBGuardsEdges proves a PodDisruptionBudget links to the pods its selector matches (so a degraded
+// PDB navigates to the failing pods), via a full LabelSelector with matchExpressions, and that an
+// empty-selector PDB (the namespace-wide "protect everything" shape) guards every pod in its namespace.
+func TestPDBGuardsEdges(t *testing.T) {
+	const fixture = `
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+  uid: pdb-uid
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web
+    matchExpressions:
+      - { key: tier, operator: In, values: [frontend] }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: web1-uid
+  labels: { app: web, tier: frontend }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: other-1
+  namespace: shop
+  uid: other1-uid
+  labels: { app: web, tier: backend }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: all-pdb
+  namespace: shop
+  uid: allpdb-uid
+spec:
+  minAvailable: 1
+  selector: {}
+`
+	g := Build(decodeFixture(t, fixture))
+
+	if !hasEdge(g, EdgeGuards, "PodDisruptionBudget", "web-pdb", "Pod", "web-1") {
+		t.Error("a PDB should guard the pod its matchLabels+matchExpressions select")
+	}
+	if hasEdge(g, EdgeGuards, "PodDisruptionBudget", "web-pdb", "Pod", "other-1") {
+		t.Error("a PDB must NOT guard a pod failing its matchExpressions (tier=backend)")
+	}
+	// An empty selector guards every pod in the namespace (the "protect everything here" pattern).
+	if !hasEdge(g, EdgeGuards, "PodDisruptionBudget", "all-pdb", "Pod", "web-1") ||
+		!hasEdge(g, EdgeGuards, "PodDisruptionBudget", "all-pdb", "Pod", "other-1") {
+		t.Error("an empty-selector PDB should guard every pod in its namespace")
+	}
+}
+
 func TestSelectsRequiresLabelMatch(t *testing.T) {
 	// A service whose selector matches no pod produces no selects edge.
 	const fixture = `

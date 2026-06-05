@@ -27,6 +27,9 @@ const (
 	// (a Workflow's WorkflowTemplate, a Certificate's Issuer, an ExternalSecret's
 	// SecretStore, …). Inferred by the convention scanner or by a curated CRD ref rule.
 	EdgeRefers EdgeType = "refers"
+	// EdgeGuards links a PodDisruptionBudget to the Pods its selector protects, so a degraded PDB
+	// ("0/3 healthy") leads to the failing pods that explain it instead of being a triage dead-end.
+	EdgeGuards EdgeType = "guards"
 )
 
 // Health is the normalized status shared across kinds, so the UI colors nodes uniformly.

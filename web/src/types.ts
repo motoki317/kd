@@ -14,6 +14,8 @@ export type EdgeType =
   // Issuer/Secret, ExternalSecret → SecretStore, generic *Ref fields from the convention
   // scanner). Rendered subtler than ownership so the topology backbone stays the primary read.
   | 'refers'
+  // 'guards' links a PodDisruptionBudget to the pods it protects (a node-drain/disruption concern).
+  | 'guards'
 
 // How the topology arranges resources. Replaces the old fixed `View` enum: grouping (the layout
 // strategy) is now orthogonal to which relationships are drawn (see RelCategory + relationships.ts).

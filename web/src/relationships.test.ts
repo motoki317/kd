@@ -21,6 +21,8 @@ describe('activeEdgeTypes', () => {
     expect([...activeEdgeTypes(set('ownership'))].sort()).toEqual(['ownerReference', 'refers'])
     expect([...activeEdgeTypes(set('network'))].sort()).toEqual(['routes', 'selects'])
     expect([...activeEdgeTypes(set('ownership', 'network'))].sort()).toEqual(['ownerReference', 'refers', 'routes', 'selects'])
+    // Scheduling carries both pod→node and PDB→guarded-pods (a node-drain/disruption concern).
+    expect([...activeEdgeTypes(set('scheduling'))].sort()).toEqual(['guards', 'scheduledOn'])
   })
   it('is empty for an empty selection', () => {
     expect(activeEdgeTypes(set()).size).toBe(0)
