@@ -371,4 +371,16 @@ func TestLastTerminatedString(t *testing.T) {
 	if got.State != "Running" || got.LastTerminated != "OOMKilled (exit 137)" {
 		t.Errorf("containerStat = %+v, want State=Running LastTerminated=%q", got, "OOMKilled (exit 137)")
 	}
+
+	// A container caught currently Terminated (e.g. mid-crashloop) must NOT also carry LastTerminated:
+	// the current State already shows the exit, so repeating an identical "last exit" is redundant.
+	crashing := corev1.ContainerStatus{
+		Name:                 "app",
+		RestartCount:         3,
+		State:                corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}},
+		LastTerminationState: term("Error", 1),
+	}
+	if g := containerStat(crashing, false); g.State != "Terminated: Error (exit 1)" || g.LastTerminated != "" {
+		t.Errorf("containerStat(crashing) = %+v, want State=%q LastTerminated empty", g, "Terminated: Error (exit 1)")
+	}
 }

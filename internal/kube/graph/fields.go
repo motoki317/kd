@@ -64,7 +64,15 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 }
 
 func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
-	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: lastTerminatedString(cs.LastTerminationState)}
+	// LastTerminated explains why a container that has since RESTARTED is now Running/Waiting — so it is
+	// only additive when the CURRENT state isn't itself a termination. A currently-Terminated container
+	// (e.g. caught mid-crashloop) already shows its exit in State; repeating the identical "last exit"
+	// is gratuitous (a crashloop's previous exit is the same). Suppress it there.
+	last := ""
+	if cs.State.Terminated == nil {
+		last = lastTerminatedString(cs.LastTerminationState)
+	}
+	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: last}
 }
 
 // terminatedDetail formats how a container exited: "OOMKilled (exit 137)", a bare reason on a clean
