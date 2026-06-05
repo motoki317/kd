@@ -291,6 +291,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- Dropped redundant pod→Node tree from the Relationship view; category relabelled "Disruption" (PDB-only) — pod↔node lives in the Nodes group-by (0f94f83)
 - Error/warn log lines get a faint left-edge severity accent (2a3dee4)
 - Health stripe floors its segments so trouble can't vanish at scale (7b91d33)
 - Drawer hero now explains its health tint (the gray "Unknown" ambiguity) (d58dd63)

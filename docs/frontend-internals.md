@@ -25,7 +25,9 @@ Two orthogonal, composable client controls replaced the old fixed server-side vi
   + help overlay share one source of truth with the segmented control.
 - **Relationship filter** chips (`RelCategory = ownership/network/volumes/rbac/scheduling`,
   `relationships.ts` maps each → EdgeTypes) re-project which edges are drawn. Add a dimension = a new
-  `relationships.ts` category.
+  `relationships.ts` category. The `scheduling` id is labelled **"Disruption"** and maps to `guards`
+  only — `scheduledOn` (pod→Node) is deliberately surfaced by NO category, since the Nodes group-by is
+  its richer home (it builds pod↔node from the capacity feed, not from projected edges).
 - `Topology.displayEdges = projectEdges(props.edges, relFilter)` (reverses `refers` so the referenced
   provider is the parent) feeds the **layout only**; `related()`/`ownerName()` keep walking the full
   `props.edges` so selection-spotlight and name-shortening stay relationship-agnostic.

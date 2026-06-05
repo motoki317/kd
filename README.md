@@ -19,7 +19,7 @@ You arrange the canvas yourself. Switch how resources are grouped:
 - **Nodes** — bars sized by capacity and usage, to see where resources actually go.
 - **Kind** — every resource boxed by type.
 
-Then pick which links to draw: ownership, network, volumes, RBAC, or scheduling. Custom resources show
+Then pick which links to draw: ownership, network, volumes, RBAC, or disruption. Custom resources show
 up too — Workflows, Certificates, ArgoCD Applications, and anything else a CRD defines, down to their
 Pods. Unhealthy resources stand out in color, and troubled namespaces sort to the top.
 
