@@ -91,6 +91,17 @@ func podStatusSummary(p *corev1.Pod) string {
 	if p.Status.Reason != "" {
 		return p.Status.Reason // pod-level, e.g. Evicted, NodeAffinity
 	}
+	// A pod stuck Pending because the scheduler can't place it has NO container statuses to explain why,
+	// so it would otherwise read a bare "Pending". Surface the PodScheduled condition's reason
+	// (Unschedulable, SchedulerError) — the single most common "why won't my pod run" answer, which is
+	// otherwise buried in status.conditions.
+	if p.Status.Phase == corev1.PodPending {
+		for _, c := range p.Status.Conditions {
+			if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse && c.Reason != "" {
+				return c.Reason
+			}
+		}
+	}
 	// A Running pod with some container not yet ready is up but not serving; show ready/total so
 	// "up but failing readiness" is distinguishable from a healthy Running.
 	if p.Status.Phase == corev1.PodRunning {

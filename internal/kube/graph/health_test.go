@@ -46,6 +46,23 @@ func TestPodStatusSummary(t *testing.T) {
 			pod:  corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodPending}},
 			want: "Pending",
 		},
+		"unschedulable pending surfaces the PodScheduled reason, not a bare Pending": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				Conditions: []corev1.PodCondition{{
+					Type: corev1.PodScheduled, Status: corev1.ConditionFalse, Reason: "Unschedulable",
+					Message: "0/3 nodes are available: 3 Insufficient cpu.",
+				}},
+			}},
+			want: "Unschedulable",
+		},
+		"a scheduled pending pod (PodScheduled true) still reads Pending": {
+			pod: corev1.Pod{Status: corev1.PodStatus{
+				Phase:      corev1.PodPending,
+				Conditions: []corev1.PodCondition{{Type: corev1.PodScheduled, Status: corev1.ConditionTrue}},
+			}},
+			want: "Pending",
+		},
 		"crash-looping container shows its reason, not Running": {
 			pod:  waiting("CrashLoopBackOff"),
 			want: "CrashLoopBackOff",
