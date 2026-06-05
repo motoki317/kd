@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, setServerShortNames, shortNodeName } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, selectionLabel, setServerShortNames, shortNodeName } from './names'
 import type { KNode } from './types'
 
 describe('relativeName', () => {
@@ -202,6 +202,21 @@ describe('cardTitle', () => {
   it('drops the restarts clause when restarts is 0 or missing', () => {
     const n = { kind: 'Pod', name: 'web-0', createdAt: twoHoursAgo, restarts: 0 } as KNode
     expect(cardTitle(n, now)).toBe('Pod web-0\n2h old')
+  })
+})
+
+describe('selectionLabel', () => {
+  it('speaks kind+name, status, and failure reason for a degraded selection', () => {
+    const n = { kind: 'Workflow', name: 'migrate-csqzg', status: 'Failed', message: 'migrate-dry-run: main: Error (exit code 1)' } as KNode
+    expect(selectionLabel(n)).toBe('Selected Workflow migrate-csqzg, Failed, migrate-dry-run: main: Error (exit code 1)')
+  })
+  it('stays terse for a healthy selection (no message clause)', () => {
+    expect(selectionLabel({ kind: 'Service', name: 'api', status: 'ClusterIP' } as KNode)).toBe('Selected Service api, ClusterIP')
+    expect(selectionLabel({ kind: 'Pod', name: 'web-0' } as KNode)).toBe('Selected Pod web-0')
+  })
+  it('is empty when nothing is selected, so the live region stays silent', () => {
+    expect(selectionLabel(null)).toBe('')
+    expect(selectionLabel(undefined)).toBe('')
   })
 })
 

@@ -2,7 +2,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Match, onC
 import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
 import { hasDescendantPod } from './loggable'
-import { setServerShortNames } from './names'
+import { selectionLabel, setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
@@ -413,6 +413,12 @@ export default function App() {
     if (!id) return null
     return graph.nodes[id] ?? capById().get(id) ?? null
   })
+  // Announce the current selection for assistive tech. j/k stepping deliberately keeps focus on the
+  // body (so repeated presses work — see the keydown handler), and the drawer is a complementary
+  // landmark, not a live region, so without this a screen-reader operator hears nothing as the
+  // selection — and the detail behind it — changes. Mirrors the card tooltip: kind+name, then the
+  // status and failure reason, so stepping through a degraded wall speaks each "why" aloud.
+  const selectionAnnouncement = createMemo(() => selectionLabel(selectedNode()))
   // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
   const ownerNodes = createMemo<KNode[]>(() => {
     const n = selectedNode()
@@ -652,6 +658,13 @@ export default function App() {
             hasPods={(id) => hasDescendantPod(id, nodes())}
           />
         </main>
+      </div>
+
+      {/* Always present (not behind a Show) so the live region exists before its text changes —
+          a region inserted at the same time as its content doesn't reliably announce. Visually
+          hidden; speaks the selection to assistive tech as j/k steps through the graph. */}
+      <div class="sr-only" role="status" aria-live="polite">
+        {selectionAnnouncement()}
       </div>
 
       <Show when={copiedRef()}>

@@ -181,6 +181,18 @@ export function cardTitle(n: KNode, now: Date): string {
   return lines.join('\n')
 }
 
+// selectionLabel is the single-line announcement an aria-live region speaks when the selection
+// changes (j/k stepping keeps focus on the body, so the drawer never announces itself). Same facts
+// as the card tooltip's head — kind+name, status, failure reason — comma-joined for speech and
+// prefixed "Selected " for context. Empty when nothing is selected, so the region stays silent.
+export function selectionLabel(n: KNode | null | undefined): string {
+  if (!n) return ''
+  const parts = [`${n.kind} ${n.name}`]
+  if (n.status) parts.push(n.status)
+  if (n.message) parts.push(n.message)
+  return `Selected ${parts.join(', ')}`
+}
+
 // cardStatus end-truncates a long status to its own row's width. End (not middle) keeps the leading
 // reason — "Init:CrashLoop…" beats "I…ackOff" — and the drawer still shows the full status.
 export function cardStatus(status: string): string {
