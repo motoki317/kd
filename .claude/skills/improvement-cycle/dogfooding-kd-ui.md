@@ -91,6 +91,18 @@ code, surfaced them. Look for these shapes on any view:
   — both noise in the tally AND a hidden real signal (a below-floor PDB blocks drains). Adding a *typed*
   rule (health.go + status.go + typedFactories) is a safe, invited extension; reinterpreting a tuned
   rule is not. Check: in cluster scope, what kinds show "Unknown"? A built-in there is a smell.
+- **A drill-in path that dead-ends at the resource that explains nothing.** Triaging a degraded PDB
+  ("0/3 healthy") led nowhere — a PDB selects pods like a Service but had no edge, so the failing pods
+  that explain it were unreachable. Run the *whole* triage flow (most-troubled ns → Degraded filter →
+  drill in → "why?") and notice where it stops. Fix = the missing edge (`EdgeGuards`, Scheduling
+  category). Check: from each degraded resource, can you navigate to what's actually broken?
+- **Your edge-case DEFAULT, validated only on synthetic fixtures, is wrong for the real data's shape.**
+  The PDB-guards edge's first cut skipped *empty* selectors as "too noisy" — and the real degraded PDB
+  had exactly an empty selector (the namespace-wide "protect everything" pattern), so the feature still
+  dead-ended the case it existed for. Unit fixtures used a populated selector and passed. **Lesson:**
+  after a feature passes tests, dogfood it against the REAL resource that motivated it — the actual
+  shape (empty selector, never-run cron, unset field) routinely differs from the tidy fixture, and only
+  live data exercises the default you guessed. This is *why* the loop mandates live verification.
 
 ## Recurring bug classes found live (check these on any UI change)
 
