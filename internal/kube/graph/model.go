@@ -54,7 +54,7 @@ type Node struct {
 	Status     string            `json:"status,omitempty"`     // short human-readable status, e.g. "Running", "2/2"
 	Message    string            `json:"message,omitempty"`    // the WHY behind an unhealthy resource (status.message / a blocking condition); empty for healthy ones
 	CreatedAt  string            `json:"createdAt,omitempty"`  // RFC3339 creation time, for age display
-	Restarts   int32             `json:"restarts,omitempty"`   // pod container restart total, a crash signal
+	Restarts   int32             `json:"restarts,omitempty"`   // pod restart total (init + app containers), a crash signal
 	Containers []string          `json:"containers,omitempty"` // pod app container names, for the log picker
 	// InitContainers names a pod's init containers (spec order), so the log picker can also reach a
 	// failed init container's logs — the place a pod stuck in Init records WHY. Kept separate from

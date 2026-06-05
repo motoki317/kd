@@ -684,6 +684,15 @@ func TestPodRestarts(t *testing.T) {
 	if got := podRestarts(pod); got != 8 {
 		t.Errorf("podRestarts = %d, want 8", got)
 	}
+	// An init-crashloop: the init container restarts while app containers never start. The total must
+	// reflect it, so the crash signal shows and the "previous logs" button appears.
+	initLoop := &corev1.Pod{Status: corev1.PodStatus{
+		InitContainerStatuses: []corev1.ContainerStatus{{RestartCount: 4}},
+		ContainerStatuses:     nil,
+	}}
+	if got := podRestarts(initLoop); got != 4 {
+		t.Errorf("podRestarts(init-crashloop) = %d, want 4", got)
+	}
 	if got := podRestarts(&corev1.Service{}); got != 0 {
 		t.Errorf("podRestarts(non-pod) = %d, want 0", got)
 	}

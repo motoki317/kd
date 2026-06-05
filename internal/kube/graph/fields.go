@@ -15,13 +15,18 @@ import (
 // apart from the health (health.go) and status-text (status.go) logic that also feed the Node.
 
 // podRestarts totals a pod's container restarts (0 for non-pods), the at-a-glance crash signal a
-// "Running" status alone hides.
+// "Running" status alone hides. Init containers count too: a pod wedged in an init-crashloop has 0
+// app-container restarts (they never start) but a restarting init container — the actual crash — and
+// this total gates the drawer's "previous logs" button, the way to read why that init container died.
 func podRestarts(obj runtime.Object) int32 {
 	p, ok := obj.(*corev1.Pod)
 	if !ok {
 		return 0
 	}
 	var n int32
+	for _, cs := range p.Status.InitContainerStatuses {
+		n += cs.RestartCount
+	}
 	for _, cs := range p.Status.ContainerStatuses {
 		n += cs.RestartCount
 	}
