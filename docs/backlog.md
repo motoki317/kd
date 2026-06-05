@@ -9,12 +9,20 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
-**Status (2026-06-05):** Both the **UX surface** and the **server surface** have been systematically
+**Status (2026-06-06):** Both the **UX surface** and the **server surface** have been systematically
 surveyed and are **mature** — at a mature surface ~94% of generated candidates get refuted, so source the
 next batch from real user feedback or a new feature area, not filler re-surveys. Recent batches drained
 the Open queue and hardened tests; the durable lessons are persisted in the `improvement-cycle` skill
 (especially `dogfooding-kd-ui.md` "Measurement pitfalls"). **Do NOT redundantly re-verify** the surfaces
 marked clean below — re-dogfood one only if its code changed.
+
+The 2026-06-06 session added two genuine, previously-undocumented gaps — a degraded **PDB's
+DisruptionAllowed reason** now shows inline (e84f8f6), and the breadcrumb no longer leaks the raw
+**`__cluster__` sentinel** (c5bade5) — both found by driving real flows, not source reads. A subsequent
+strict re-survey that turn (Alt+T trouble-cycle, KINDS scroll-fade, Volumes PVC→PV chain, `pvcHealth`
+phase mapping, SSE-connection `aria-live`) found **only already-documented-mature handling** — i.e. ≈0
+new high-value items, the improvement-cycle STOP signal. Per the standing rule, the next real value comes
+from new user feedback / a new feature area, **not** further re-surveys of these mature surfaces.
 
 Recent batches (newest first; `git log` has the commits):
 
