@@ -83,6 +83,20 @@ function ImageRef(props: { image: string; wrapClass: string }) {
   )
 }
 
+// MetaChip is the drawer's "labelled fact" idiom: a dim `addr-label` next to a bright `<code>` value,
+// shared by every kind-spec block (PVC access/class, Job runtime, HPA scale, PDB policy, StorageClass)
+// so they read as one visual language (Repetition) and a new essence field is a one-liner instead of a
+// copy-pasted 4-line span. `class` appends a state modifier on the same `port-addr` element the bare
+// blocks used (e.g. `port-failed` for a degraded count, `port-caution` for an operationally critical 0).
+function MetaChip(props: { label: string; value: string | number; title: string; class?: string }) {
+  return (
+    <span class="port-addr" classList={props.class ? { [props.class]: true } : undefined} title={props.title}>
+      <span class="addr-label">{props.label}</span>
+      <code>{props.value}</code>
+    </span>
+  )
+}
+
 // containerGroups splits a pod's container statuses into the two groups operators reason about
 // separately: init containers (run once, in order, before the app starts) and the long-running app
 // containers. Each carries a header label; order within a group is the server's (execution order).
@@ -234,16 +248,10 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.accessModes || props.node.storageClass}>
         <div class="drawer-ports">
           <Show when={props.node.accessModes}>
-            <span class="port-addr" title="Access modes">
-              <span class="addr-label">access</span>
-              <code>{props.node.accessModes}</code>
-            </span>
+            <MetaChip label="access" value={props.node.accessModes!} title="Access modes" />
           </Show>
           <Show when={props.node.storageClass}>
-            <span class="port-addr" title="Storage class">
-              <span class="addr-label">class</span>
-              <code>{props.node.storageClass}</code>
-            </span>
+            <MetaChip label="class" value={props.node.storageClass!} title="Storage class" />
           </Show>
         </div>
       </Show>
@@ -254,22 +262,13 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.lastRun || (props.node.active ?? 0) > 0 || (props.node.failed ?? 0) > 0}>
         <div class="drawer-ports">
           <Show when={props.node.lastRun}>
-            <span class="port-addr" title="Last schedule time">
-              <span class="addr-label">last run</span>
-              <code>{relativeAge(props.node.lastRun!)} ago</code>
-            </span>
+            <MetaChip label="last run" value={`${relativeAge(props.node.lastRun!)} ago`} title="Last schedule time" />
           </Show>
           <Show when={(props.node.active ?? 0) > 0}>
-            <span class="port-addr" title="Running now">
-              <span class="addr-label">active</span>
-              <code>{props.node.active}</code>
-            </span>
+            <MetaChip label="active" value={props.node.active!} title="Running now" />
           </Show>
           <Show when={(props.node.failed ?? 0) > 0}>
-            <span class="port-addr port-failed" title="Failed pods">
-              <span class="addr-label">failed</span>
-              <code>{props.node.failed}</code>
-            </span>
+            <MetaChip label="failed" value={props.node.failed!} title="Failed pods" class="port-failed" />
           </Show>
         </div>
       </Show>
@@ -279,16 +278,10 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.scaleReplicas || props.node.scaleRange}>
         <div class="drawer-ports">
           <Show when={props.node.scaleReplicas}>
-            <span class="port-addr" title="Current replicas (→ desired while scaling)">
-              <span class="addr-label">replicas</span>
-              <code>{props.node.scaleReplicas}</code>
-            </span>
+            <MetaChip label="replicas" value={props.node.scaleReplicas!} title="Current replicas (→ desired while scaling)" />
           </Show>
           <Show when={props.node.scaleRange}>
-            <span class="port-addr" title="Min–max replica bounds">
-              <span class="addr-label">range</span>
-              <code>{props.node.scaleRange}</code>
-            </span>
+            <MetaChip label="range" value={props.node.scaleRange!} title="Min–max replica bounds" />
           </Show>
         </div>
       </Show>
@@ -299,20 +292,15 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.pdbPolicy || props.node.disruptions}>
         <div class="drawer-ports">
           <Show when={props.node.pdbPolicy}>
-            <span class="port-addr" title="Disruption budget policy">
-              <span class="addr-label">policy</span>
-              <code>{props.node.pdbPolicy}</code>
-            </span>
+            <MetaChip label="policy" value={props.node.pdbPolicy!} title="Disruption budget policy" />
           </Show>
           <Show when={props.node.disruptions}>
-            <span
-              class="port-addr"
-              classList={{ 'port-caution': props.node.disruptions === '0' }}
+            <MetaChip
+              label="can disrupt"
+              value={props.node.disruptions!}
               title="Voluntary evictions allowed right now (0 → a node drain will block here)"
-            >
-              <span class="addr-label">can disrupt</span>
-              <code>{props.node.disruptions}</code>
-            </span>
+              class={props.node.disruptions === '0' ? 'port-caution' : undefined}
+            />
           </Show>
         </div>
       </Show>
@@ -321,21 +309,12 @@ export default function ResourceSummary(props: Props) {
           PVCs can grow. The class a PVC author clicks through to — manifest-only before. */}
       <Show when={props.node.provisioner}>
         <div class="drawer-ports">
-          <span class="port-addr" title="Provisioner (CSI driver / volume plugin)">
-            <span class="addr-label">provisioner</span>
-            <code>{props.node.provisioner}</code>
-          </span>
+          <MetaChip label="provisioner" value={props.node.provisioner!} title="Provisioner (CSI driver / volume plugin)" />
           <Show when={props.node.reclaimPolicy}>
-            <span class="port-addr" title="Reclaim policy — what happens to the PV when its PVC is deleted">
-              <span class="addr-label">reclaim</span>
-              <code>{props.node.reclaimPolicy}</code>
-            </span>
+            <MetaChip label="reclaim" value={props.node.reclaimPolicy!} title="Reclaim policy — what happens to the PV when its PVC is deleted" />
           </Show>
           <Show when={props.node.volumeBinding}>
-            <span class="port-addr" title="Volume binding mode">
-              <span class="addr-label">binding</span>
-              <code>{props.node.volumeBinding}</code>
-            </span>
+            <MetaChip label="binding" value={props.node.volumeBinding!} title="Volume binding mode" />
           </Show>
           <Show when={props.node.expandable}>
             <span class="port-chip" title="PVCs on this class can be expanded">expandable</span>
