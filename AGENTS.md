@@ -117,6 +117,12 @@ sleep 6   # SSE settle; ~15s for a remote EKS context's FIRST informer sync
 - **jsdom limits**: `offsetParent` is always null, `scrollIntoView`/`Element.animate` are missing (stub
   them), `getBoundingClientRect` returns zeros, and `animationend` never fires (assert the class was
   *added*, not auto-removed). Unit-test the DOM contract; verify the behaviour live.
+- **Clipboard in a non-secure context**: `navigator.clipboard` is `undefined` on any non-secure origin
+  (plain `http://<lan-ip>` — a real way operators reach a port-forwarded kd). `navigator.clipboard?.writeText(x).then(…)`
+  optional-chains only `clipboard`, so `?.writeText(x)` is `undefined` and the bare `.then` throws a
+  *synchronous* TypeError a trailing `.catch` can't catch. Either optional-chain the WHOLE chain
+  (`?.writeText(x)?.then(…)?.catch(…)`) or wrap an `await navigator.clipboard.writeText(x)` in `try/catch`
+  (what `CopyButton`/the drawer/label-chips do). Confirm only on real success; no-op silently otherwise.
 
 ## UI design principles (user-stated)
 
