@@ -23,9 +23,16 @@ Recent batches (newest first; `git log` has the commits):
   source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
   flows found a real, clearly-felt gap nearly every cycle. Shipped so far: Kinds-row overflow fade;
   drawer echoes the card's status string; PDB health rule (was bogus "Unknown"); filter overlay counts
-  true matches (folded included), not just visible cards. The four recurring shapes are now persisted in
-  the dogfooding skill's "UX-gap patterns" section — check them on any view. (Removed the Nodes-view
-  Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git log.)
+  true matches (folded included), not just visible cards; **drawer surfaces a degraded resource's
+  failure reason** (status.message, for aged-out events); **navigation reaches folded matches** (count
+  unified + auto-expand the fold on select — closed two Open items); **log count covers level/pod
+  filters**, not just text; **trouble badge/Alt+T cycle through all troubled namespaces**, not just the
+  worst. The four recurring shapes are persisted in the dogfooding skill's "UX-gap patterns" section, and
+  a new pitfall #8 (troubled-first nav masks fold-testing) in "Measurement pitfalls" — check them on any
+  view. Surfaces found MATURE this batch (don't re-survey unless code changes): Events tab (sort
+  newest-first, warning filter, source-nav, aged-out handled), ContextSwitcher (no short-name collisions
+  in the real kubeconfig), capacity per-pod expansion. (Removed the Nodes-view Relationships facet +
+  arrows and Kind-view arrows earlier per direct user request; see git log.)
 - **2026-06-05 b5** — cluster-scoped drawer fetched an empty `{ns}` (`namespaces//…` → 307→404); fixed at
   the `key()` builder (repairs manifest+events+logs at once) → technique is bug-class #6. Also: a
   "relationships hidden" toast (empty relFilter looked like "no connections"); `prefixParentNames`→
