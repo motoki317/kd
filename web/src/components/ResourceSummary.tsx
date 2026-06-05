@@ -228,6 +228,25 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A PVC/PV's access modes + storage class — the rest of its essence past the status's "Bound
+          10Gi": can more than one pod mount it (RWO vs RWX), and which provisioner/tier (gp3 vs
+          standard). Labelled chips (explicit over implicit), reusing the Service address row's idiom. */}
+      <Show when={props.node.accessModes || props.node.storageClass}>
+        <div class="drawer-ports">
+          <Show when={props.node.accessModes}>
+            <span class="port-addr" title="Access modes">
+              <span class="addr-label">access</span>
+              <code>{props.node.accessModes}</code>
+            </span>
+          </Show>
+          <Show when={props.node.storageClass}>
+            <span class="port-addr" title="Storage class">
+              <span class="addr-label">class</span>
+              <code>{props.node.storageClass}</code>
+            </span>
+          </Show>
+        </div>
+      </Show>
       {/* An Ingress/HTTPRoute/IngressRoute routing table (match → backend) — the network view's entry
           point, so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>

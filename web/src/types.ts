@@ -93,6 +93,8 @@ export interface KNode {
   subjects?: string[]
   dataKeys?: string[] // a ConfigMap/Secret's data keys, "key · size" (names + sizes only, never values)
   secretType?: string // a Secret's type (Opaque, kubernetes.io/tls, …)
+  accessModes?: string // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
+  storageClass?: string // a PVC/PV's storage class
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

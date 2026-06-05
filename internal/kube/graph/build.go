@@ -66,6 +66,8 @@ func Build(objs []runtime.Object) *Graph {
 			Subjects:          bindingSubjects(obj),
 			DataKeys:          dataKeys(obj),
 			SecretType:        secretType(obj),
+			AccessModes:       accessModes(obj),
+			StorageClass:      storageClass(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

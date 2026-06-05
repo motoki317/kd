@@ -41,6 +41,21 @@ describe('ResourceSummary data keys', () => {
   })
 })
 
+describe('ResourceSummary storage', () => {
+  it('shows a PVC\'s access modes and storage class as labelled chips', () => {
+    const node: KNode = {
+      id: 'pvc', kind: 'PersistentVolumeClaim', name: 'data', health: 'Healthy',
+      status: 'Bound 10Gi', accessModes: 'RWO', storageClass: 'gp3',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const labels = [...container.querySelectorAll('.port-addr .addr-label')].map((e) => e.textContent)
+    expect(labels).toEqual(expect.arrayContaining(['access', 'class']))
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('RWO')
+    expect(text).toContain('gp3')
+  })
+})
+
 describe('isFloatingImageTag', () => {
   it('treats a digest reference as pinned', () => {
     expect(isFloatingImageTag('nginx@sha256:abc')).toBe(false)

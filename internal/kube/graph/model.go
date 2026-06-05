@@ -65,6 +65,8 @@ type Node struct {
 	Subjects   []string          `json:"subjects,omitempty"`   // a binding's grantees, "Kind: [namespace/]name" (incl. non-node User/Group)
 	DataKeys   []string          `json:"dataKeys,omitempty"`   // a ConfigMap/Secret's data keys, "key · size" (NAMES + sizes only — never values, even for a Secret)
 	SecretType string            `json:"secretType,omitempty"` // a Secret's type (Opaque, kubernetes.io/tls, …) — the operationally-important classifier
+	AccessModes string           `json:"accessModes,omitempty"` // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
+	StorageClass string          `json:"storageClass,omitempty"` // a PVC/PV's storage class (the provisioner/tier — gp3, standard, …)
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

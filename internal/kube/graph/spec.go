@@ -370,6 +370,61 @@ func dataKeys(obj runtime.Object) []string {
 	return out
 }
 
+// accessModeShort abbreviates a PVC/PV access mode to the form operators read in `kubectl get pvc`
+// (RWO/ROX/RWX/RWOP), so the drawer answers "can more than one pod mount this?" at a glance.
+func accessModeShort(m corev1.PersistentVolumeAccessMode) string {
+	switch m {
+	case corev1.ReadWriteOnce:
+		return "RWO"
+	case corev1.ReadOnlyMany:
+		return "ROX"
+	case corev1.ReadWriteMany:
+		return "RWX"
+	case corev1.ReadWriteOncePod:
+		return "RWOP"
+	}
+	return string(m)
+}
+
+// accessModes joins a PVC's or PV's access modes in the abbreviated kubectl form (nil-safe, "" for
+// other kinds). De-duplicated because the API can list a mode more than once.
+func accessModes(obj runtime.Object) string {
+	var modes []corev1.PersistentVolumeAccessMode
+	switch o := obj.(type) {
+	case *corev1.PersistentVolumeClaim:
+		modes = o.Spec.AccessModes
+	case *corev1.PersistentVolume:
+		modes = o.Spec.AccessModes
+	default:
+		return ""
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range modes {
+		s := accessModeShort(m)
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, "/")
+}
+
+// storageClass returns a PVC's or PV's storage class name (the provisioner/tier), "" when unset for
+// other kinds. A PVC's spec.storageClassName is the request; we don't fall back to the bound PV's class
+// here (the client shows whichever the object itself declares — the manifest carries the resolved one).
+func storageClass(obj runtime.Object) string {
+	switch o := obj.(type) {
+	case *corev1.PersistentVolumeClaim:
+		if o.Spec.StorageClassName != nil {
+			return *o.Spec.StorageClassName
+		}
+	case *corev1.PersistentVolume:
+		return o.Spec.StorageClassName
+	}
+	return ""
+}
+
 // secretType returns a Secret's type as a display string (empty for non-Secrets). An empty type
 // defaults to Opaque, mirroring Kubernetes.
 func secretType(obj runtime.Object) string {

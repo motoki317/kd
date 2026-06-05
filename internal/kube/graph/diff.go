@@ -85,6 +85,8 @@ func nodeEqual(a, b Node) bool {
 		slices.Equal(a.Subjects, b.Subjects) && // a binding's subject edit must repaint
 		slices.Equal(a.DataKeys, b.DataKeys) && // a ConfigMap/Secret key add/remove/resize must repaint
 		a.SecretType == b.SecretType &&
+		a.AccessModes == b.AccessModes && // a PVC binding to a PV can fill in its modes/class — repaint
+		a.StorageClass == b.StorageClass &&
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node

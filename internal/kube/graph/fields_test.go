@@ -345,6 +345,37 @@ func TestDataKeys(t *testing.T) {
 	}
 }
 
+func TestAccessModesAndStorageClass(t *testing.T) {
+	gp3 := "gp3"
+	pvc := &corev1.PersistentVolumeClaim{Spec: corev1.PersistentVolumeClaimSpec{
+		AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce, corev1.ReadWriteOnce, corev1.ReadOnlyMany},
+		StorageClassName: &gp3,
+	}}
+	if got := accessModes(pvc); got != "RWO/ROX" { // de-duped, abbreviated
+		t.Errorf("accessModes(PVC) = %q, want RWO/ROX", got)
+	}
+	if got := storageClass(pvc); got != "gp3" {
+		t.Errorf("storageClass(PVC) = %q, want gp3", got)
+	}
+	pv := &corev1.PersistentVolume{Spec: corev1.PersistentVolumeSpec{
+		AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+		StorageClassName: "standard",
+	}}
+	if got := accessModes(pv); got != "RWX" {
+		t.Errorf("accessModes(PV) = %q, want RWX", got)
+	}
+	if got := storageClass(pv); got != "standard" {
+		t.Errorf("storageClass(PV) = %q, want standard", got)
+	}
+	// A PVC with no explicit class (nil pointer) and a non-storage kind yield empty, not a panic.
+	if got := storageClass(&corev1.PersistentVolumeClaim{}); got != "" {
+		t.Errorf("storageClass(classless PVC) = %q, want empty", got)
+	}
+	if got := accessModes(&corev1.Pod{}); got != "" {
+		t.Errorf("accessModes(Pod) = %q, want empty", got)
+	}
+}
+
 func TestRoleRules(t *testing.T) {
 	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},

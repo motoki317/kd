@@ -222,6 +222,15 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**PVC/PV drawer shows access modes + storage class (live-found, 2026-06-06):** a PVC's status already
+read "Bound 10Gi" (phase + capacity), but the rest of its essence was manifest-only: the access modes
+(can more than one pod mount it — RWO vs RWX, the multi-attach answer) and the storage class (the
+provisioner/tier — gp3 vs standard, the cost/perf answer). Added `accessModes` (abbreviated kubectl
+form, de-duped, "/"-joined) and `storageClass` to the graph Node for both PVC and PV, rendered as
+labelled `access`/`class` chips reusing the Service-address row idiom (explicit over implicit). Verified
+live on docker-desktop: a Bound PVC showed `access RWO · class hostpath`. diff.go repaints when a binding
+fills these in. Continues the "surface each kind's declarative essence" theme (ConfigMap/Secret, routing).
+
 **ConfigMap/Secret drawer lists its data keys + a Secret's type (live-found, 2026-06-06):** kd surfaces
 every other kind's declarative essence in the drawer summary (Ingress→routes, Role→rules,
 Service→ports) but a ConfigMap/Secret showed only labels + the raw Manifest tab — so "what keys does
