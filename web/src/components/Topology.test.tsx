@@ -172,7 +172,7 @@ describe('Topology', () => {
     ))
     // 2 Pods of 3 total resources, computed from the intersected filter set. (Trailing sr-only noun
     // for the live region, cycle 335/R8.)
-    expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources shown')
+    expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources match')
   })
 
   it('selected node never fades, even when a filter excludes it (cycle 224)', () => {
@@ -614,7 +614,19 @@ describe('Topology', () => {
     // Search "web" matches the Deployment + web-abc Pod (2 of 3). textContent includes the sr-only
     // suffix that gives the live announcement a noun (cycle 335/R8).
     const filtered = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
-    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources shown')
+    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources match')
+  })
+
+  it('count is the true match total over all nodes, so it agrees with the health pill (folded matches included)', () => {
+    // The count is computed over props.nodes, not the rendered/unfaded set — so a health-filter count
+    // matches the Degraded pill even when some matches fold into a collapse pill. Here 1 of 3 is
+    // Degraded; the contract that matters is "count == pill", not the visible-card tally.
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} healthFilter="Degraded" onHealthFilter={() => {}} />
+    ))
+    const pill = [...container.querySelectorAll('.topology-health-pills .legend-item')].find((p) => /Degraded/.test(p.textContent || ''))
+    expect(pill?.querySelector('.legend-count')?.textContent).toBe('1')
+    expect(container.querySelector('.topology-count')?.textContent).toBe('1 of 3 resources match')
   })
 
   // The match count is a polite live region so screen readers hear it update as the filter narrows.

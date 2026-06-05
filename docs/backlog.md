@@ -240,6 +240,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Filter count undercounted when matches were folded (live-found, 2026-06-06):** on a real staging
+namespace (57 Degraded across 144 Workflows, most folded into "+N more" pills), clicking the Degraded
+filter showed the bottom overlay "15 of 341" while the pill said "Degraded 57" — two numbers for one
+filter. The overlay counted `layout().nodes.filter(!faded)` (rendered, unfolded) but the health pill /
+kind chips count the full `props.nodes`, so folded matches vanished from the overlay. Switched it to a
+true intersection count (search ∩ health ∩ kind) over props.nodes; reworded the sr-only noun "shown" →
+"match" since folded matches aren't on canvas. Verified live: "57 of 341 resources match", agreeing
+with the pill. *Lesson: every count over a foldable canvas must decide explicitly whether it counts
+rendered cards or true matches — mixing the two across sibling indicators reads as a bug.*
+
 **PodDisruptionBudgets read "Unknown" health — noise that hid violated budgets (live-found,
 2026-06-06):** asking "what are the Unknown 3?" on `team-a` showed all three were PDBs with no
 health rule, so they fell through the CR-conditions heuristic to Unknown (a PDB's condition is

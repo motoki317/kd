@@ -424,6 +424,20 @@ export default function Topology(props: Props) {
     const s = props.kindFilter
     return s && s.size > 0 ? s : null
   })
+  // True count of resources matching the active filter intersection (search ∩ health ∩ kind), over the
+  // FULL node set. The bottom-left overlay must agree with the health pill / kind chip totals (which
+  // both count props.nodes), but a folded collapse pill removes matching nodes from layout().nodes —
+  // so counting only what's lit on canvas undercounts (a Degraded filter on a namespace whose troubled
+  // Workflows are mostly folded read "15 of 341" while the pill said 57). Count over props.nodes so the
+  // overlay reports the honest match total; the badged pills already point to the folded ones.
+  const filterMatchCount = createMemo(() => {
+    const q = query().trim()
+    const hf = props.healthFilter
+    const ak = activeKinds()
+    return props.nodes.filter(
+      (n) => (!q || nodeMatches(n, q)) && (!hf || n.health === hf) && (!ak || ak.has(n.kind)),
+    ).length
+  })
   // Counts + worst-health per kind in the current view. Chips order by count (most-common first,
   // typically Pod) — predictable so the row doesn't reshuffle when a single resource flips state.
   // The per-kind worst health (cycle 289) drives a small severity dot on the chip so the operator
@@ -2071,10 +2085,11 @@ export default function Topology(props: Props) {
               </>
             }
           >
-            {layout().nodes.filter((n) => !nodeFaded(n)).length} of {props.nodes.length}
+            {filterMatchCount()} of {props.nodes.length}
             {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
-                gives the polite live announcement a noun as the filter narrows the canvas. */}
-            <span class="sr-only"> resources shown</span>
+                gives the polite live announcement a noun. "match" (not "shown") because the count is
+                the true filter total — some matches may be folded into a collapse pill, not on canvas. */}
+            <span class="sr-only"> resources match</span>
           </Show>
         </div>
       </Show>
