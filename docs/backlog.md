@@ -263,7 +263,11 @@ is loggable if it's a built-in workload OR owns Pods in the current graph (`hasD
 `ownerUIDs` downward — the client mirror of the server), auto-covering Workflows and any future
 pod-owning CRD without hardcoding an operator's kinds. New `web/src/loggable.ts` (+7 tests). Verified
 live: a running Workflow now defaults to Logs and streams its pod's output (per-pod colour label);
-a ConfigMap still shows only Events/Manifest (no regression). (f34bee8)
+a ConfigMap still shows only Events/Manifest (no regression). (f34bee8) **Generality re-confirmed
+2026-06-06** on a structurally different operator: an ECK `Elasticsearch` CR (owns pods via a 2-hop
+`Elasticsearch→StatefulSet→Pod` chain) now defaults to Logs and streams 200 lines from `shop-es-default-0`
+— proving `hasDescendantPod`'s recursive walk covers any operator's pod-owning CRD at any depth, which a
+hardcoded Argo-only list never would. This is exactly why the general fix beat hardcoding.
 
 **Node status text now explains its Degraded dot (was a silent contradiction, 2026-06-06):** a node under
 resource pressure or NotReady got a red dot from `nodeHealth`, but `nodeStatusSummary` only ever returned
