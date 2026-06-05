@@ -390,6 +390,59 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
   })
 
+  it('Nodes view hides the Relationships facet (no edges are drawn there)', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1' },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 50 } } } }
+    // Same ownerReference edge that lights the Relationships facet in the other views.
+    const relEdges: KEdge[] = [{ from: 'node-a', to: 'p1', type: 'ownerReference' }]
+    const inNodes = render(() => (
+      <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" onRelFilter={() => {}} />
+    ))
+    expect(inNodes.container.querySelector('.topology-rels')).toBeNull()
+    cleanup()
+    // Control: in the relationship view the same edge DOES surface the facet, proving the data is
+    // there and only the Nodes view suppresses it.
+    const inRel = render(() => (
+      <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="relationship" onRelFilter={() => {}} />
+    ))
+    expect(inRel.container.querySelector('.topology-rels')).not.toBeNull()
+  })
+
+  it('Nodes view tallies Health over the displayed set only (cluster Nodes + own-namespace Pods)', () => {
+    // props.nodes carries the full namespace inventory the Nodes view never draws — a Degraded
+    // Deployment and a Progressing Service here must NOT leak into the health pills/stripe.
+    const graph: KNode[] = [
+      { id: 'd1', kind: 'Deployment', name: 'web', health: 'Degraded' },
+      { id: 's1', kind: 'Service', name: 'svc', health: 'Progressing' },
+      { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Degraded' },
+    ]
+    // The capacity feed is what's actually on screen: one Healthy Node, one Degraded own-namespace
+    // Pod, and one Unknown pod from another namespace (folded into the gray block, so not counted).
+    const capacity = {
+      nodes: [
+        { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+        { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Degraded', host: 'host-1' },
+        { id: 'p2', kind: 'Pod', name: 'p2', namespace: 'kube-system', health: 'Unknown', host: 'host-1' },
+      ] as KNode[],
+      usage: { items: { p1: { cpuMilli: 50 }, p2: { cpuMilli: 90 } } },
+    }
+    const { container } = render(() => (
+      <Topology nodes={graph} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" onHealthFilter={() => {}} />
+    ))
+    const pills = [...container.querySelectorAll('.topology-health-pills .legend-item')] as HTMLButtonElement[]
+    const counts = Object.fromEntries(
+      pills.map((p) => [p.textContent?.replace(/\d+$/, '').trim(), p.querySelector('.legend-count')?.textContent]),
+    )
+    // Only the displayed Node (Healthy) + own Pod (Degraded). No Progressing (Service was off-screen),
+    // no Unknown (other-namespace pod), no double-counted Degraded from the Deployment.
+    expect(counts).toEqual({ Healthy: '1', Degraded: '1' })
+    // The stripe mirrors the pills: exactly two segments.
+    expect(container.querySelector('.topology-stripe')!.querySelectorAll('span').length).toBe(2)
+  })
+
   it('Nodes view folds many tiny pods into one explicit "small pods" block, not a wall of floors', () => {
     const nodesV: KNode[] = [{ id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 8000 } }]
     const items: Record<string, { cpuMilli: number }> = { big: { cpuMilli: 600 } }

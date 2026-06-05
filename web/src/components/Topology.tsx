@@ -15,6 +15,7 @@ import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
 import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
 import { isNodeFaded } from '../fade'
+import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
@@ -439,8 +440,21 @@ export default function Topology(props: Props) {
   // pills and the proportion stripe. Counts props.nodes directly: those are the raw graph nodes
   // (no synthetic collapse pills — pills are layout-only), and a collapsed cluster only hides LIVE
   // resources that are still in props.nodes, so the totals are the true per-health counts.
+  // EXCEPT in the Nodes (capacity) view: that canvas draws only cluster Nodes + this namespace's
+  // Pods — not props.nodes' full inventory (Deployments, Services, ConfigMaps, …). Tally health
+  // over exactly the displayed set (every Node, plus own-namespace Pods from the cluster-wide
+  // capacity feed) so the pills + stripe describe what's actually on screen.
   const healthStats = createMemo(() => {
     const c = {} as Record<Health, number>
+    if (props.groupBy === 'nodes') {
+      const ns = props.namespace ?? ''
+      const clusterScope = ns === '' || ns === CLUSTER_SCOPE
+      for (const n of props.capacity?.nodes ?? []) {
+        const shown = n.kind === 'Node' || (n.kind === 'Pod' && (clusterScope || n.namespace === ns))
+        if (shown) c[n.health] = (c[n.health] ?? 0) + 1
+      }
+      return c
+    }
     for (const n of props.nodes) c[n.health] = (c[n.health] ?? 0) + 1
     return c
   })
@@ -1324,13 +1338,16 @@ export default function Topology(props: Props) {
           </div>
         </Show>
       </div>
-        {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. */}
-        <Show when={(relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
+        {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. The
+            Nodes (capacity) view draws no relationship edges — it groups pods by host, not by link —
+            so its Relationships facet would be inert; suppress it there (props.groupBy !== 'nodes')
+            and let the row carry the health pills alone. */}
+        <Show when={(props.groupBy !== 'nodes' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
           <div class="toolbar-row">
         {/* Relationships facet — which relationship categories are drawn (and so drive
             connectivity). Composable toggles: several can be active at once. One chip per category
             present in the graph; Shift+click solos. */}
-        <Show when={relChips().length > 0 && props.onRelFilter}>
+        <Show when={props.groupBy !== 'nodes' && relChips().length > 0 && props.onRelFilter}>
           <div class="toolbar-facet">
             <span class="toolbar-label">Relationships</span>
             <div class="topology-rels" role="toolbar" aria-label="Relationship filter" onKeyDown={onToolbarKey}>
