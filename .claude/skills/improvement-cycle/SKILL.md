@@ -44,6 +44,15 @@ per focus area returning structured candidates (`{title, area, files, problem, p
 value, evidence}`), piped straight into the verify stage, each finding then handed to an independent
 skeptic. Only run a Workflow when the user has opted into orchestration.
 
+**Decide directions yourself — don't ask the user.** On a UI/UX improvement cycle, when a candidate
+needs a design call (a unit policy, whether to surface X, a layout choice), make the **best** decision
+against the four design principles + the user's stated UX values, implement it, and note the reasoning
+in the commit. Do NOT pause the cycle with AskUserQuestion to ask which direction they prefer — the
+user wants sustained autonomous progress and has said iteration after shipping is cheap. (This is a
+standing instruction from the campaign owner; it overrides older backlog notes that said "pick WITH
+the user" for capacity-view / unit decisions.) Reserve questions for destructive/irreversible actions
+or a hard external blocker, never for feature direction.
+
 ## 2. VERIFY — adversarial, before building anything
 
 For each candidate, **try to refute it** against the real code. Default to rejecting. Open the
