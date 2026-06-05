@@ -393,7 +393,7 @@ export default function Topology(props: Props) {
   // clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
   // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full edge
   // set. Following relationships the operator hasn't enabled lit (and framed) nodes they can't even
-  // see — e.g. a Pod dragging in its Node via scheduledOn when Scheduling is off, so the selection-fit
+  // see — e.g. a Pod dragging in its mounted ConfigMaps when Volumes is off, so the selection-fit
   // zoomed way out. The spotlight now matches what's on screen. (BFS in spotlightSubtree, graphState.ts.)
   const related = createMemo(() => {
     const id = props.selectedId

@@ -14,14 +14,18 @@ export interface RelCategoryDef {
 }
 
 // Order = display order of the toggle buttons. Ownership first (the default, the backbone), then
-// the connectivity dimensions. `usesServiceAccount` rides with RBAC and `scheduledOn` with
-// Scheduling — both were edge types the old views under-used; here they get a home.
+// the connectivity dimensions. `usesServiceAccount` rides with RBAC. `scheduledOn` (pod→node) is
+// deliberately NOT surfaced as a relationship: the pod↔node story has a far richer dedicated home
+// in the Nodes group-by (capacity tracks per host), so re-drawing it here as a relationship tree
+// only rebuilt that same hierarchy as a tall, redundant column rooted at 2 Node hubs. The category
+// keeps its `scheduling` id (URL/localStorage compatibility) but is now PDB-only — relabelled
+// "Disruption" to name what actually remains.
 export const REL_CATEGORIES: RelCategoryDef[] = [
   { id: 'ownership', label: 'Ownership', hint: 'Parent→child workload tree (ownerReferences + CRD refs)', edges: ['ownerReference', 'refers'] },
   { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic flow', edges: ['routes', 'selects'] },
   { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount', edges: ['mounts'] },
   { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'] },
-  { id: 'scheduling', label: 'Scheduling', hint: 'Pods → their Node; PodDisruptionBudgets → the pods they guard', edges: ['scheduledOn', 'guards'] },
+  { id: 'scheduling', label: 'Disruption', hint: 'PodDisruptionBudgets → the pods they guard (pod↔node lives in the Nodes view)', edges: ['guards'] },
 ]
 
 const BY_ID = new Map(REL_CATEGORIES.map((c) => [c.id, c]))

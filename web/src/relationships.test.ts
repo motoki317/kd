@@ -11,7 +11,8 @@ const sample: KEdge[] = [
   e('svc', 'pod', 'selects'),
   e('pod', 'cm', 'mounts'),
   e('rb', 'role', 'binds'),
-  e('pod', 'node', 'scheduledOn'),
+  e('pdb', 'pod', 'guards'),
+  e('pod', 'node', 'scheduledOn'), // present in the graph but mapped to NO category (see below)
 ]
 
 const set = (...c: RelCategory[]) => new Set(c)
@@ -21,11 +22,15 @@ describe('activeEdgeTypes', () => {
     expect([...activeEdgeTypes(set('ownership'))].sort()).toEqual(['ownerReference', 'refers'])
     expect([...activeEdgeTypes(set('network'))].sort()).toEqual(['routes', 'selects'])
     expect([...activeEdgeTypes(set('ownership', 'network'))].sort()).toEqual(['ownerReference', 'refers', 'routes', 'selects'])
-    // Scheduling carries both pod→node and PDB→guarded-pods (a node-drain/disruption concern).
-    expect([...activeEdgeTypes(set('scheduling'))].sort()).toEqual(['guards', 'scheduledOn'])
+    // The Disruption category (id still 'scheduling') is PDB-only — pod→node moved to the Nodes view.
+    expect([...activeEdgeTypes(set('scheduling'))].sort()).toEqual(['guards'])
   })
   it('is empty for an empty selection', () => {
     expect(activeEdgeTypes(set()).size).toBe(0)
+  })
+  it('surfaces scheduledOn through NO category — pod→node is not a drawn relationship', () => {
+    const all = new Set(REL_CATEGORIES.map((c) => c.id))
+    expect(activeEdgeTypes(all).has('scheduledOn')).toBe(false)
   })
 })
 
@@ -47,9 +52,9 @@ describe('projectEdges', () => {
     expect(projectEdges(sample, set())).toEqual([])
   })
 
-  it('composes several categories at once', () => {
+  it('composes several categories at once (and drops the categoryless scheduledOn)', () => {
     const out = projectEdges(sample, set('ownership', 'volumes', 'scheduling'))
-    expect(out.map((x) => x.type).sort()).toEqual(['mounts', 'ownerReference', 'refers', 'scheduledOn'])
+    expect(out.map((x) => x.type).sort()).toEqual(['guards', 'mounts', 'ownerReference', 'refers'])
   })
 })
 

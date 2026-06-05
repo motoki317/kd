@@ -676,10 +676,10 @@ describe('Topology', () => {
     expect(faded(container)).toBe(1)
   })
 
-  it('selection spotlight follows only the SELECTED relationships, not all edges', () => {
-    // Pod(1) is wired to its Node(2) by scheduledOn and to a sibling Pod(3) by nothing. With only
-    // the Ownership relationship on, selecting the Pod must NOT drag in the Node via the (hidden)
-    // scheduledOn edge — otherwise the spotlight + selection-fit reach a node that isn't even drawn.
+  it('pod→node is never spotlit — not even with the Disruption relationship on (it lives in the Nodes view)', () => {
+    // Pod(1) is wired to its Node(2) by scheduledOn and to a sibling Pod(3) by nothing. scheduledOn
+    // is no longer surfaced by ANY relationship category — the pod↔node story moved to the Nodes
+    // group-by — so selecting the Pod must never drag in the Node, under Ownership OR Disruption.
     const ns: KNode[] = [
       { id: '1', kind: 'Pod', name: 'web', health: 'Healthy' },
       { id: '2', kind: 'Node', name: 'host-1', health: 'Healthy' },
@@ -687,20 +687,19 @@ describe('Topology', () => {
     ]
     const es: KEdge[] = [{ from: '1', to: '2', type: 'scheduledOn' }]
 
-    // Ownership only (scheduledOn not drawn): the Node + the other Pod both fade — nothing relates
-    // to the selected Pod through a visible relationship.
+    // Ownership only: the Node + the other Pod both fade — nothing relates through a visible edge.
     const ownership = render(() => (
       <Topology nodes={ns} edges={es} search="" {...base} relFilter={new Set<RelCategory>(['ownership'])} selectedId="1" />
     )).container
     expect(faded(ownership)).toBe(2)
     cleanup()
 
-    // Turn Scheduling on and the Node lights up (the scheduledOn edge is now displayed), so only the
-    // unrelated sibling Pod fades.
-    const scheduling = render(() => (
+    // Disruption on (the category still keyed 'scheduling'): scheduledOn STILL isn't drawn, so the
+    // Node stays faded too — pod→node is not a relationship the spotlight can traverse anymore.
+    const disruption = render(() => (
       <Topology nodes={ns} edges={es} search="" {...base} relFilter={new Set<RelCategory>(['scheduling'])} selectedId="1" />
     )).container
-    expect(faded(scheduling)).toBe(1) // only the other Pod
+    expect(faded(disruption)).toBe(2)
   })
 
   it('collapse pill: a bare selection shows no "N match" badge (empty search)', () => {
