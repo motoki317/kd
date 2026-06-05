@@ -24,6 +24,16 @@ phase mapping, SSE-connection `aria-live`) found **only already-documented-matur
 new high-value items, the improvement-cycle STOP signal. Per the standing rule, the next real value comes
 from new user feedback / a new feature area, **not** further re-surveys of these mature surfaces.
 
+**First successful production-scale dogfooding (2026-06-06, staging EKS — prior sessions hit API
+timeouts):** drove a real 354-node namespace (57 Degraded: 54 failed Argo `Workflow` CRs + 3 `Error`
+migrate Pods + 1 Unknown `VMServiceScrape`; 146 Workflows; 27 kinds). The UI's design **holds at scale**,
+confirming behaviours docker-desktop's tiny data can't exercise: per-kind severity dots correctly flag
+ONLY the troubled kinds (WF + PO red, VMServiceScrape gray-Unknown; all healthy kinds dotless — the
+"where do I look first" aid scales); Kind-grouping tiles + "+ show N more" folds keep 354 nodes legible;
+every failed Workflow carries its `status.message` ("child X failed") in the drawer (the CR `statusMessage`
+path at scale); the Degraded spotlight reports "57 of 354" honestly. One hypothesis refuted live (Pod-hero
+failed-container message — see Rejected). No scale-specific bug found; the surface is scale-robust.
+
 Recent batches (newest first; `git log` has the commits):
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
