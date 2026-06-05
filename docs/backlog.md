@@ -314,6 +314,21 @@ failure, sitting next to the ↻ count it explains. *Lesson: a now-Running conta
 single most useful triage fact (its last crash reason) one level down in lastState — surface it inline,
 don't make the operator read YAML.*
 
+**Buried container/scheduling triage info surfaced (live-found, 2026-06-05):** a theme of three
+fixes, each lifting the single most actionable fact out of the raw manifest into the visible UI.
+(1) A restarted-but-now-Running container's last crash reason (see the lastState entry above).
+(2) A **current** `Terminated` container showed bare "Terminated: Error" with no exit code — extracted a
+shared `terminatedDetail()` so the live state and the lastState read identically ("Terminated: Error
+(exit 137)"; 137=SIGKILL/OOM vs exit 1=app error point at different fixes; a clean "Terminated:
+Completed" still omits the code). Found on a real failed Argo workflow pod (main container exit 137).
+(3) An **Unschedulable** pod read a bare "Pending" — `podStatusSummary` never read the `PodScheduled`
+condition, so the #1 "why won't my pod run" answer was hidden; now it surfaces the reason
+("Unschedulable") like it already lifts `Init:<reason>` / Evicted. Health stays Progressing (a
+transient scheduling gap during a node scale-up shouldn't flash Degraded). Verified live with a probe
+pod requesting impossible CPU on docker-desktop (deleted after). *Lesson: a Pending/Terminated pod's
+WHY lives one level down — in `status.conditions[PodScheduled]` or `state.terminated.exitCode` — and is
+worth lifting into the compact status text, distinct from the user-blocked full `status.message` panel.*
+
 **Cluster-scoped resource drawer fetched an empty namespace (live-found, 2026-06-05):** selecting a
 Node / PriorityClass / ClusterRole (any cluster-scoped resource) showed "unavailable" for its manifest
 and "Couldn't load events." — found by dogfooding docker-desktop cluster scope and reading the network
