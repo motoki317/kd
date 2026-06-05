@@ -334,3 +334,41 @@ func TestHumanizeBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestLastTerminatedString(t *testing.T) {
+	term := func(reason string, exit int32) corev1.ContainerState {
+		return corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: exit}}
+	}
+	cases := []struct {
+		name  string
+		state corev1.ContainerState
+		want  string
+	}{
+		{"reason and non-zero exit", term("OOMKilled", 137), "OOMKilled (exit 137)"},
+		{"reason only (clean exit)", term("Completed", 0), "Completed"},
+		{"exit code only, no reason", term("", 137), "exit 137"},
+		{"nothing actionable (clean, no reason)", term("", 0), ""},
+		{"never terminated before", corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := lastTerminatedString(c.state); got != c.want {
+				t.Errorf("lastTerminatedString = %q, want %q", got, c.want)
+			}
+		})
+	}
+
+	// containerStat wires LastTerminationState through: a now-Running container that was OOMKilled
+	// carries the previous reason so the drawer can explain the restart.
+	cs := corev1.ContainerStatus{
+		Name:                 "app",
+		Ready:                true,
+		RestartCount:         1,
+		State:                corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+		LastTerminationState: term("OOMKilled", 137),
+	}
+	got := containerStat(cs, false)
+	if got.State != "Running" || got.LastTerminated != "OOMKilled (exit 137)" {
+		t.Errorf("containerStat = %+v, want State=Running LastTerminated=%q", got, "OOMKilled (exit 137)")
+	}
+}

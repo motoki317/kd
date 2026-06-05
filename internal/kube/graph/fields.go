@@ -64,7 +64,27 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 }
 
 func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
-	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image}
+	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: lastTerminatedString(cs.LastTerminationState)}
+}
+
+// lastTerminatedString renders the PREVIOUS termination of a restarted container — "OOMKilled (exit
+// 137)", "Error (exit 1)", or a bare "exit 137" when the runtime gave no reason. Returns "" when the
+// container never terminated before (lastState empty) or terminated cleanly with no reason and a zero
+// exit (nothing actionable to surface). The exit code is included only when non-zero: "Completed"
+// alone reads cleaner than "Completed (exit 0)".
+func lastTerminatedString(s corev1.ContainerState) string {
+	t := s.Terminated
+	if t == nil || (t.Reason == "" && t.ExitCode == 0) {
+		return ""
+	}
+	switch {
+	case t.Reason != "" && t.ExitCode != 0:
+		return fmt.Sprintf("%s (exit %d)", t.Reason, t.ExitCode)
+	case t.Reason != "":
+		return t.Reason
+	default:
+		return fmt.Sprintf("exit %d", t.ExitCode)
+	}
 }
 
 // containerStateString renders a container's current state as "Running", "Waiting: <reason>", or

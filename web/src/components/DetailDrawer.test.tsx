@@ -261,6 +261,23 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.container-restarts')?.textContent).toContain('4')
   })
 
+  it('surfaces a restarted container\'s last-termination reason inline (why it restarted)', () => {
+    const pod: KNode = {
+      ...configMap,
+      kind: 'Pod',
+      // Currently Running but OOMKilled on its last restart — the reason must show without opening the
+      // manifest, and a clean container must NOT get a spurious "last exit" line.
+      containerStatuses: [
+        { name: 'app', ready: true, restarts: 1, state: 'Running', lastTerminated: 'OOMKilled (exit 137)' },
+        { name: 'sidecar', ready: true, state: 'Running' },
+      ],
+    }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const lines = [...container.querySelectorAll('.container-last-terminated')].map((e) => e.textContent?.trim())
+    expect(lines).toHaveLength(1) // only the restarted container, not the clean sidecar
+    expect(lines[0]).toBe('last exit: OOMKilled (exit 137)')
+  })
+
   it('init containers come before main containers (cycle 274)', () => {
     const pod: KNode = {
       ...configMap,

@@ -2195,6 +2195,14 @@ button.drawer-host:hover {
   color: var(--health-degraded);
   flex: none;
 }
+/* Why the container previously exited (its last restart). Indented to align under the name like the
+   image row, and amber (--health-suspended) — a PAST termination is a caution that must stand out from
+   the live green "Running" state without reading as a current failure (red). */
+.container-last-terminated {
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--health-suspended);
+}
 /* The container's running image, indented under the name (past the status dot) so the card reads as
    "this container → runs this image". Same chip look as the workload image list for consistency. */
 .container-image {

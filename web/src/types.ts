@@ -103,6 +103,7 @@ export interface ContainerStatus {
   state: string // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
   init?: boolean
   image?: string // the actually-running image, paired with the container in the drawer
+  lastTerminated?: string // why it PREVIOUSLY exited ("OOMKilled (exit 137)") — explains a restart
 }
 
 export interface KEdge {

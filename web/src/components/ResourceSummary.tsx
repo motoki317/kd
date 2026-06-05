@@ -264,6 +264,13 @@ export default function ResourceSummary(props: Props) {
                             </span>
                           </Show>
                         </div>
+                        <Show when={cs.lastTerminated}>
+                          {/* Why it previously exited — surfaced inline next to the restart count so an
+                              operator sees "OOMKilled" without digging into the manifest's lastState. */}
+                          <div class="container-last-terminated" title="Reason the container previously exited (its last restart)">
+                            last exit: {cs.lastTerminated}
+                          </div>
+                        </Show>
                         <Show when={cs.image}>
                           <div class="container-image" title={cs.image}>
                             <code>{cs.image}</code>

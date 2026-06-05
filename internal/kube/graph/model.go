@@ -105,6 +105,10 @@ type ContainerStatus struct {
 	State    string `json:"state"`           // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
 	Init     bool   `json:"init,omitempty"`  // an init container (runs to completion before the app ones)
 	Image    string `json:"image,omitempty"` // the actually-running image, so the drawer pairs each container with its image
+	// LastTerminated is why the container PREVIOUSLY exited (e.g. "OOMKilled (exit 137)"), from
+	// lastState.terminated. Empty unless the container restarted at least once — it answers "why did
+	// this restart" for a now-Running container, the actionable signal otherwise buried in the manifest.
+	LastTerminated string `json:"lastTerminated,omitempty"`
 }
 
 // Edge is a typed relationship from one node to another.
