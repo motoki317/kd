@@ -273,6 +273,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Health stripe floors its segments so trouble can't vanish at scale (2026-06-06):** the top-of-canvas
+health-distribution stripe (the first at-a-glance "is this namespace OK?" read) sized each state's segment
+by pure `flex` proportion. Measured live on staging: a 1-of-354 Unknown segment was 3px, and a lone
+Degraded in a 1000+ resource namespace would render sub-pixel and vanish — the stripe would falsely read
+"all healthy" while trouble exists (the pills still show it, so the stripe *contradicts* them). Added a 4px
+`min-width` floor (`.topology-stripe > span`) so any present state stays visible at any namespace size;
+only present states render, so it invents no colour, and the large Healthy segment absorbs the few px.
+Mirrors the capacity bars' established min-segment precedent. Verified live (computed min-width 4px); the
+existing "segment per present state" Topology test was strengthened to lock the lone-Degraded contract. (7b91d33)
+
 **Drawer hero now explains its health tint (the gray "Unknown" ambiguity) (2026-06-06):** dogfooding a
 real `VMServiceScrape` (Unknown health) at production scale, the drawer conveyed health by colour tint
 ALONE — and a gray "Unknown" tint + the terse "unknown state" status reads like a *fault* when it only
