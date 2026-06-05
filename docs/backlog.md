@@ -273,6 +273,15 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Drawer hero now explains its health tint (the gray "Unknown" ambiguity) (2026-06-06):** dogfooding a
+real `VMServiceScrape` (Unknown health) at production scale, the drawer conveyed health by colour tint
+ALONE — and a gray "Unknown" tint + the terse "unknown state" status reads like a *fault* when it only
+means kd has no rule for the kind (usually a CRD). The sidebar dots already carry the `healthHint` gloss
+("Unknown — kd can't classify these…") as a title; the drawer didn't. Mirrored that gloss onto
+`.drawer-hero` (`title={healthHint[health]}`) so the colour self-explains on hover, consistent with the
+sidebar (repetition) and explicit-over-implicit. Verified live (hero title present on the Unknown
+resource); +2 `ResourceSummary` tests. (d58dd63)
+
 **Breadcrumb showed the raw `__cluster__` sentinel instead of `[cluster]` (2026-06-06):** dogfooding the
 cluster-scope view, the top breadcrumb read `__cluster__` — the internal URL/wire sentinel — while the
 sidebar and document title already prettified it to `[cluster]`. The breadcrumb rendered `namespace()`
