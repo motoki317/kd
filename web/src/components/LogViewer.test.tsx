@@ -252,6 +252,23 @@ describe('LogViewer', () => {
     expect(lineWith('second crash').classList.contains('log-line-flash')).toBe(true)
   })
 
+  it('tags each line with its detected level class — the hook the severity left-accent styles', async () => {
+    // The error/warn left-edge accent (index.css `.log-line:has(> .log-level-error)`) relies on the
+    // per-line level badge class. Lock that contract so a badge-class rename can't silently drop the
+    // accent: an error line carries .log-level-error, an info line .log-level-info and never -error.
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { line: 'I0521 1 main.go:1] all good' })
+    es.emit('log', { line: 'E0521 1 main.go:2] boom' })
+    await findByText(/boom/)
+    const lineWith = (t: string) => [...container.querySelectorAll('.log-line')].find((l) => l.textContent?.includes(t))!
+    expect(lineWith('boom').querySelector('.log-level-error')).toBeTruthy()
+    expect(lineWith('all good').querySelector('.log-level-info')).toBeTruthy()
+    expect(lineWith('all good').querySelector('.log-level-error')).toBeNull()
+  })
+
   it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
     const { container, findByPlaceholderText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

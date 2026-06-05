@@ -3155,6 +3155,18 @@ button.event-source:focus-visible {
   border-radius: 3px;
   transition: background-color 0.12s;
 }
+/* Extend a line's severity signal across the whole row, not just the 3-char level badge in the left
+   gutter: when an operator's eye is on the message text, ERROR/WARN lines otherwise blend into the
+   INFO stream. A faint left-edge accent (the badge's own hue) makes them pop while scanning — the
+   contrast affordance mature log viewers (Grafana/Kibana/Datadog) provide. inset box-shadow, not a
+   border, so the dense pre-wrap lines don't shift; only error/warn get it (info/debug stay plain so
+   the accent means "look here", not "everywhere"). */
+.log-line:has(> .log-level-error) {
+  box-shadow: inset 2px 0 0 #ff9b95;
+}
+.log-line:has(> .log-level-warn) {
+  box-shadow: inset 2px 0 0 #f6c768;
+}
 /* No-wrap mode (cycle 327): each entry stays on one line and the body scrolls horizontally. width
    max-content lets the line box (and its hover wash) extend to the full content width; min-width 100%
    keeps short lines full-width so the hover target isn't a stub. The body already has overflow:auto. */
