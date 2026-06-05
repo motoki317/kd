@@ -671,7 +671,7 @@ export default function App() {
                   <kbd>/</kbd> Filter namespaces · <kbd>↑</kbd> <kbd>↓</kbd> step through them (<kbd>Enter</kbd> opens the top match)
                 </li>
                 <li>
-                  <kbd>Alt</kbd>+<kbd>T</kbd> Jump to the most-troubled namespace
+                  <kbd>Alt</kbd>+<kbd>T</kbd> Step to the next troubled namespace (worst first; repeat to cycle through them)
                 </li>
                 <li>
                   <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
