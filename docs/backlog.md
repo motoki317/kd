@@ -58,6 +58,22 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
+- **Search match counts disagree when matches fold into pills** — *found live 2026-06-06 (real staging
+  team-a, search "workflow": 144 Workflows, most folded). Surfaced BY the same-day overlay-count fix
+  (`d6a77b9`), needs a navigation-aware fix, not a rush.* The toolbar `.topology-matches` shows
+  navigable matches (`matches()` over `layout().nodes`, folded excluded) = "38 matches", while the
+  bottom `.topology-count` now shows true total (over props.nodes) = "158 of 341 match". Before the
+  overlay fix both read ~38 (agreed but the overlay was wrong for the health-filter triage case); now
+  the overlay is correct everywhere but the two search indicators disagree (38 vs 158). The pill badges
+  ("● 37 match") correctly show where the 120 folded matches are, so the data's consistent — only the
+  two *count* readouts diverge. **The real fix** (worth its own cycle): make the search Enter-cycle
+  reach folded matches by auto-expanding the containing fold on navigate, then `matches()` / the
+  position indicator can count the full set ("Match 3 of 158") and both readouts unify. A cheaper
+  stopgap (toolbar shows "38 of 158", title explains the fold) leaves Enter still unable to reach the
+  120 — half a fix. **Don't** revert the overlay to visible-only: that re-breaks the health-pill
+  agreement the fix restored. Tied to the open "j/k nav can select a folded node" item — both are
+  "navigation must account for folds" and could share the auto-expand-on-navigate machinery.
+
 - **A pressured-but-Ready Node reads "Ready" while its health dot is Degraded** — *found in code while
   surfacing pod triage info (2026-06-05); NOT yet verified live (couldn't safely induce node pressure /
   NotReady on docker-desktop — filling a disk or killing a kubelet is destructive).* `nodeHealth`
