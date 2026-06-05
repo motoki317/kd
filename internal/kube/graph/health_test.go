@@ -157,10 +157,27 @@ func TestNodeHealthAndStatus(t *testing.T) {
 		{"cordoned but ready", node(corev1.ConditionTrue, true), HealthSuspended, "Ready,SchedulingDisabled"},
 		// A real fault outranks the cordon: a cordoned node that's also down is Degraded, not Suspended.
 		{"cordoned and not ready", node(corev1.ConditionFalse, true), HealthDegraded, "NotReady,SchedulingDisabled"},
+		// Pressure on a Ready node: the status text must carry the cause so it agrees with the Degraded
+		// dot instead of reading a contradictory bare "Ready".
 		{
 			"memory pressure",
 			node(corev1.ConditionTrue, false, corev1.NodeCondition{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue}),
-			HealthDegraded, "Ready",
+			HealthDegraded, "Ready · MemoryPressure",
+		},
+		{
+			"disk and pid pressure",
+			node(corev1.ConditionTrue, false,
+				corev1.NodeCondition{Type: corev1.NodeDiskPressure, Status: corev1.ConditionTrue},
+				corev1.NodeCondition{Type: corev1.NodePIDPressure, Status: corev1.ConditionTrue}),
+			HealthDegraded, "Ready · DiskPressure, PIDPressure",
+		},
+		// NotReady carries the kubelet reason (e.g. a network/CNI fault) instead of a pressure suffix.
+		{
+			"not ready with reason",
+			&corev1.Node{Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionFalse, Reason: "KubeletNotReady"},
+			}}},
+			HealthDegraded, "NotReady · KubeletNotReady",
 		},
 	}
 	for _, tc := range tests {

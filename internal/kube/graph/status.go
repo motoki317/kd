@@ -206,17 +206,42 @@ func deploymentStatus(d *appsv1.Deployment) string {
 	return fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, desiredReplicas(d.Spec.Replicas))
 }
 
-// nodeStatusSummary mirrors kubectl's node STATUS: Ready/NotReady, plus ,SchedulingDisabled when the
-// node is cordoned.
+// nodeStatusSummary mirrors kubectl's node STATUS (Ready/NotReady, plus ,SchedulingDisabled when the
+// node is cordoned), then appends the *why* behind a non-green health dot so the status text never
+// silently contradicts the colour (the matching problem podStatusSummary solves): an otherwise-Ready
+// node under resource pressure carries the active pressure(s) ("Ready · DiskPressure"), while a
+// NotReady node carries its NodeReady reason ("NotReady · KubeletNotReady"). nodeHealth already paints
+// the dot Degraded for both, but the cause is otherwise buried in status.conditions.
 func nodeStatusSummary(n *corev1.Node) string {
-	status := "NotReady"
+	ready := false
+	var notReadyReason string
+	var pressures []string
 	for _, c := range n.Status.Conditions {
-		if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
-			status = "Ready"
+		switch c.Type {
+		case corev1.NodeReady:
+			ready = c.Status == corev1.ConditionTrue
+			if !ready {
+				notReadyReason = c.Reason
+			}
+		case corev1.NodeMemoryPressure, corev1.NodeDiskPressure, corev1.NodePIDPressure:
+			if c.Status == corev1.ConditionTrue {
+				pressures = append(pressures, string(c.Type))
+			}
 		}
+	}
+	status := "NotReady"
+	if ready {
+		status = "Ready"
 	}
 	if n.Spec.Unschedulable {
 		status += ",SchedulingDisabled"
+	}
+	if ready {
+		if len(pressures) > 0 {
+			status += " · " + strings.Join(pressures, ", ")
+		}
+	} else if notReadyReason != "" {
+		status += " · " + notReadyReason
 	}
 	return status
 }
