@@ -465,6 +465,28 @@ button.conn.conn-retry:focus-visible {
 .help-section {
   margin-top: 12px;
 }
+/* On a screen wide enough for two columns, flow the reference card into 2 columns so the whole
+   card fits the viewport height without the internal scroll the operator has to discover (the
+   Relationships/Actions/Edges sections were cut off below the fold in one tall column). Sections
+   never split across the break, so each stays a coherent group. Narrow screens keep one column
+   and the existing max-height scroll. */
+@media (min-width: 740px) {
+  .help-panel {
+    max-width: 720px;
+  }
+  .help-sections {
+    column-count: 2;
+    column-gap: 28px;
+  }
+  .help-sections .help-section {
+    break-inside: avoid;
+  }
+  /* The first section already sits under the h3; in a column flow its top margin would also push
+     the second column's first section down unevenly. Zero it — the column gap carries the spacing. */
+  .help-sections .help-section:first-child {
+    margin-top: 6px;
+  }
+}
 .help-section h4 {
   margin: 0 0 6px;
   font-size: 10px;

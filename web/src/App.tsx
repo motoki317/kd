@@ -671,7 +671,11 @@ export default function App() {
             <h3>Keyboard shortcuts</h3>
             {/* Grouped so the overlay reads as a reference card (Navigation / Grouping /
                 Relationships / Actions), not a flat undifferentiated list. The grouping modes are
-                enumerated with their number keys so "2 groups by node" is discoverable. */}
+                enumerated with their number keys so "2 groups by node" is discoverable.
+                The sections flow into 2 columns on a wide-enough screen (help-sections) so the full
+                card fits the viewport without the operator having to discover an internal scroll —
+                the bottom sections (Relationships/Actions/Edges) were being cut off below the fold. */}
+            <div class="help-sections">
             <section class="help-section">
               <h4>Navigation</h4>
               <ul>
@@ -782,6 +786,7 @@ export default function App() {
                 </li>
               </ul>
             </section>
+            </div>
           </div>
         </div>
       </Show>
