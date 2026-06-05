@@ -235,6 +235,19 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Drawer offers aggregated Logs for any pod-owning resource, not just built-in workloads (2026-06-06):**
+dogfooding the real staging cluster surfaced 94 pods owned *directly* by Argo `Workflow` CRs — yet
+opening a Workflow drawer showed no Logs tab (the client gated on a hardcoded built-in-kind set:
+Pod/Deployment/StatefulSet/…), exactly when an operator debugging a failed/running pipeline wants its
+pods' output. Adversarially verified the server already aggregates generically (`podsForResource` →
+`graph.DescendantPodNames`, walking ownerReferences) and that `isHistorical` drops only *Succeeded* pods
+— so Failed and Running workflow pods stay in the graph and have logs. Fixed at the client gate: a node
+is loggable if it's a built-in workload OR owns Pods in the current graph (`hasDescendantPod` walks
+`ownerUIDs` downward — the client mirror of the server), auto-covering Workflows and any future
+pod-owning CRD without hardcoding an operator's kinds. New `web/src/loggable.ts` (+7 tests). Verified
+live: a running Workflow now defaults to Logs and streams its pod's output (per-pod colour label);
+a ConfigMap still shows only Events/Manifest (no regression). (f34bee8)
+
 **Node status text now explains its Degraded dot (was a silent contradiction, 2026-06-06):** a node under
 resource pressure or NotReady got a red dot from `nodeHealth`, but `nodeStatusSummary` only ever returned
 `Ready`/`NotReady`(+`,SchedulingDisabled`) — so a pressured-but-Ready node read a bare "Ready" beside a red
