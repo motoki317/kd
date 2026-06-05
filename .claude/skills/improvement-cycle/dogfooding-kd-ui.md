@@ -67,6 +67,26 @@ code change", not "every cycle". Reusable overshoot check:
 pairwise screen-rect intersection of `.node .node-bg` (>4px on both axes = a real overlap). Node-name
 fit check: `getBBox().right` of each `.cap-row text` ≤ its `.cap-node-frame` right edge.
 
+**Reaching a staging/EKS context (it starts `pending`).** kd lazy-loads each context's informer on
+first access, so a remote cluster shows `status:"pending"` in `/api/v1/contexts` until you touch it.
+Trigger the sync by requesting its namespaces — `curl --max-time 25 ".../contexts/<urlenc-arn>/namespaces"`
+(URL-encode the ARN). First sync is ~15–25s and the very first call after a cold start can return empty
+or time out — just retry once; it goes `ready` and stays warm. Only then will `?ctx=<arn>` render in the
+browser without a long blank.
+
+**Verified scale-robust 2026-06-06 (staging, a 354-node namespace — 57 Degraded: 54 failed Argo
+`Workflow` CRs + 3 `Error` Pods + 1 Unknown `VMServiceScrape`; 146 Workflows / 27 kinds):** the
+per-kind **severity dots** (`.kind-chip-dot`) flag ONLY troubled kinds (WF+PO red, VMServiceScrape gray;
+healthy kinds dotless) — the "where do I look first" aid scales; **Kind-grouping** tiles + "+ show N more"
+folds keep 354 nodes legible; every failed Workflow shows its `status.message` ("child X failed") in the
+drawer; the Degraded spotlight pill reads an honest "57 of 354"; the **trouble-badge / Alt+T** cycle steps
+all 5 troubled namespaces worst-first and `scrollIntoView`s each (incl. ones below the alphabetical
+fold) — assert `.ns-list .active` rect ⊂ `.ns-list` rect after each click. **Caveat — homogeneous
+trouble:** this cluster's failures are *uniformly* degraded Argo Workflows, so it's ideal for density/scale
+but NOT for failure-type variety (use docker-desktop's status-subresource injection, above, for a specific
+unhealthy shape). One hypothesis refuted here: a failed Pod needs no hero `message` — its failed container
+card is already red-tinted and high in the drawer (see backlog Rejected).
+
 ## Capacity (Nodes) view — interaction recipes
 
 This view is the hardest to unit-test (geometry + viewport fit + SVG). Recipes:
