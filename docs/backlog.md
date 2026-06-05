@@ -232,6 +232,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**PodDisruptionBudget drawer shows its policy + allowed disruptions (live-found, 2026-06-06):** a PDB's
+status read "3/2 healthy" and went Degraded when under-provisioned, but two facts stayed manifest-only:
+the configured policy (minAvailable/maxUnavailable — the intent) and `status.disruptionsAllowed` — *can I
+drain a node right now?*, THE question during a cluster upgrade. Added `pdbPolicy` ("min 2" / "max 50%")
+and `disruptions` (a string so the critical "0" isn't hidden by an omitempty zero), rendered as labelled
+chips; `can disrupt 0` takes the caution (amber) colour — a drain blocks here, a heads-up rather than the
+alarming degraded red. Verified live on docker-desktop: a min-2 PDB showed `can disrupt 1` (neutral), a
+min-3 PDB `can disrupt 0` (amber). Completes the "surface each kind's declarative essence" sweep
+(routing, ConfigMap/Secret, PVC/PV, Job/CronJob, HPA, PDB).
+
 **HPA drawer shows replica state + min/max bounds (live-found, 2026-06-06):** a HorizontalPodAutoscaler
 (an unstructured CR here — no typed factory) already linked to its scale target, but showed no
 autoscaling essence: how many replicas it runs, whether it's mid-scale, and the min–max bounds it works

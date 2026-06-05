@@ -2405,6 +2405,11 @@ button.drawer-host:hover {
 .port-addr.port-failed code {
   color: var(--health-degraded);
 }
+/* A PDB allowing 0 disruptions isn't broken, but it's a heads-up — a node drain blocks here — so the
+   count takes the caution (suspended) colour rather than the alarming degraded red. */
+.port-addr.port-caution code {
+  color: var(--health-suspended);
+}
 .drawer-labels {
   margin-top: 8px;
 }

@@ -8,6 +8,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -444,6 +445,39 @@ func TestHPAScaleAndRange(t *testing.T) {
 	}
 	if got := hpaScale(&corev1.Pod{}); got != "" {
 		t.Errorf("hpaScale(Pod) = %q, want empty", got)
+	}
+}
+
+func TestPDBPolicyAndDisruptions(t *testing.T) {
+	minAvail := intstr.FromInt32(2)
+	pdb := &policyv1.PodDisruptionBudget{
+		Spec:   policyv1.PodDisruptionBudgetSpec{MinAvailable: &minAvail},
+		Status: policyv1.PodDisruptionBudgetStatus{DisruptionsAllowed: 1, CurrentHealthy: 3, DesiredHealthy: 2},
+	}
+	if got := pdbPolicy(pdb); got != "min 2" {
+		t.Errorf("pdbPolicy(minAvailable) = %q, want \"min 2\"", got)
+	}
+	if got := pdbDisruptions(pdb); got != "1" {
+		t.Errorf("pdbDisruptions = %q, want \"1\"", got)
+	}
+	// maxUnavailable as a percentage; disruptionsAllowed 0 (the "drain blocks here" state) is surfaced, not hidden
+	maxPct := intstr.FromString("50%")
+	pdb2 := &policyv1.PodDisruptionBudget{
+		Spec:   policyv1.PodDisruptionBudgetSpec{MaxUnavailable: &maxPct},
+		Status: policyv1.PodDisruptionBudgetStatus{DisruptionsAllowed: 0},
+	}
+	if got := pdbPolicy(pdb2); got != "max 50%" {
+		t.Errorf("pdbPolicy(maxUnavailable%%) = %q, want \"max 50%%\"", got)
+	}
+	if got := pdbDisruptions(pdb2); got != "0" {
+		t.Errorf("pdbDisruptions(none allowed) = %q, want \"0\" (not hidden)", got)
+	}
+	// non-PDB kinds yield empty
+	if got := pdbPolicy(&corev1.Pod{}); got != "" {
+		t.Errorf("pdbPolicy(Pod) = %q, want empty", got)
+	}
+	if got := pdbDisruptions(&corev1.Pod{}); got != "" {
+		t.Errorf("pdbDisruptions(Pod) = %q, want empty", got)
 	}
 }
 

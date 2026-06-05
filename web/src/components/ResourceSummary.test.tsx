@@ -64,6 +64,32 @@ describe('ResourceSummary batch', () => {
   })
 })
 
+describe('ResourceSummary PDB', () => {
+  it('shows the policy and allowed disruptions', () => {
+    const node: KNode = {
+      id: 'pdb', kind: 'PodDisruptionBudget', name: 'web', health: 'Healthy',
+      status: '3/2 healthy', pdbPolicy: 'min 2', disruptions: '1',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('min 2')
+    expect(text).toContain('can disrupt')
+    expect(text).toContain('1')
+    expect(container.querySelector('.port-caution')).toBeNull() // 1 allowed → no caution
+  })
+
+  it('flags 0 allowed disruptions with the caution chip (a drain would block)', () => {
+    const node: KNode = {
+      id: 'pdb', kind: 'PodDisruptionBudget', name: 'tight', health: 'Healthy',
+      pdbPolicy: 'max 0', disruptions: '0',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const caution = container.querySelector('.port-caution')
+    expect(caution?.querySelector('.addr-label')?.textContent).toBe('can disrupt')
+    expect(caution?.textContent).toContain('0')
+  })
+})
+
 describe('ResourceSummary HPA', () => {
   it('shows replica state and bounds as labelled chips', () => {
     const node: KNode = {

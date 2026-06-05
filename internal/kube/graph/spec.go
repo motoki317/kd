@@ -9,6 +9,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -493,6 +494,33 @@ func hpaRange(obj runtime.Object) string {
 		minR = 1
 	}
 	return fmt.Sprintf("%d–%d", minR, maxR)
+}
+
+// pdbPolicy renders a PodDisruptionBudget's configured intent — "min N" (minAvailable) or "max N"
+// (maxUnavailable), where N is a count or a percentage — the policy the status's "healthy" count alone
+// doesn't reveal. Empty for non-PDBs or a PDB with neither set (invalid, but don't panic).
+func pdbPolicy(obj runtime.Object) string {
+	p, ok := obj.(*policyv1.PodDisruptionBudget)
+	if !ok {
+		return ""
+	}
+	switch {
+	case p.Spec.MinAvailable != nil:
+		return "min " + p.Spec.MinAvailable.String()
+	case p.Spec.MaxUnavailable != nil:
+		return "max " + p.Spec.MaxUnavailable.String()
+	}
+	return ""
+}
+
+// pdbDisruptions renders how many voluntary evictions a PDB allows right now (status.disruptionsAllowed)
+// as a string so "0" — the operationally critical "a node drain will block here" state — is surfaced,
+// not hidden by an omitempty zero. Empty only for non-PDBs.
+func pdbDisruptions(obj runtime.Object) string {
+	if p, ok := obj.(*policyv1.PodDisruptionBudget); ok {
+		return fmt.Sprintf("%d", p.Status.DisruptionsAllowed)
+	}
+	return ""
 }
 
 // secretType returns a Secret's type as a display string (empty for non-Secrets). An empty type

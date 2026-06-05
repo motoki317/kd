@@ -292,6 +292,30 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A PodDisruptionBudget's configured policy (min N / max N) and how many voluntary evictions it
+          allows right now. "can disrupt 0" is the operationally critical state — a node drain/upgrade
+          blocks here — so it carries the caution colour to draw the eye (the status's "healthy" count
+          can't say this). The PDB→pods edge already shows what it guards. */}
+      <Show when={props.node.pdbPolicy || props.node.disruptions}>
+        <div class="drawer-ports">
+          <Show when={props.node.pdbPolicy}>
+            <span class="port-addr" title="Disruption budget policy">
+              <span class="addr-label">policy</span>
+              <code>{props.node.pdbPolicy}</code>
+            </span>
+          </Show>
+          <Show when={props.node.disruptions}>
+            <span
+              class="port-addr"
+              classList={{ 'port-caution': props.node.disruptions === '0' }}
+              title="Voluntary evictions allowed right now (0 → a node drain will block here)"
+            >
+              <span class="addr-label">can disrupt</span>
+              <code>{props.node.disruptions}</code>
+            </span>
+          </Show>
+        </div>
+      </Show>
       {/* An Ingress/HTTPRoute/IngressRoute routing table (match → backend) — the network view's entry
           point, so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>

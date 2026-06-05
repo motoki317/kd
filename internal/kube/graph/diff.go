@@ -92,6 +92,8 @@ func nodeEqual(a, b Node) bool {
 		a.Failed == b.Failed &&
 		a.ScaleReplicas == b.ScaleReplicas && // an HPA scaling (replica count moving) must repaint
 		a.ScaleRange == b.ScaleRange &&
+		a.PDBPolicy == b.PDBPolicy &&
+		a.Disruptions == b.Disruptions && // a PDB's allowed-disruptions dropping to 0 must repaint
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node

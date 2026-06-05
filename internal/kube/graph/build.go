@@ -73,6 +73,8 @@ func Build(objs []runtime.Object) *Graph {
 			Failed:            batchFailed(obj),
 			ScaleReplicas:     hpaScale(obj),
 			ScaleRange:        hpaRange(obj),
+			PDBPolicy:         pdbPolicy(obj),
+			Disruptions:       pdbDisruptions(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

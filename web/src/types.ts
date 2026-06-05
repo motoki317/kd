@@ -100,6 +100,8 @@ export interface KNode {
   failed?: number // a Job's failed pod count
   scaleReplicas?: string // an HPA's replica state, "current[ → desired]"
   scaleRange?: string // an HPA's min–max replica bounds ("2–10")
+  pdbPolicy?: string // a PodDisruptionBudget's policy, "min 2" / "max 1"
+  disruptions?: string // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks)
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>
