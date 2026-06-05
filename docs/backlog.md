@@ -291,6 +291,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- Help overlay (`?`) flows into 2 columns ≥740px wide so the full reference card fits without an undiscoverable internal scroll (91986b4)
 - Search match-count is now a button that flies to the matches on click (mouse path beside Enter; search doesn't auto-fit while typing) (e5c71f3)
 - Dropped redundant pod→Node tree from the Relationship view; category relabelled "Disruption" (PDB-only) — pod↔node lives in the Nodes group-by (0f94f83)
 - Error/warn log lines get a faint left-edge severity accent (2a3dee4)
