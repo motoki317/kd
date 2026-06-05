@@ -123,17 +123,6 @@ Recent batches (newest first; `git log` has the commits):
   conditions. Needs a metrics-server-backed cluster to dogfood current-metric rendering (docker-desktop
   has none — the chips verified there but `cpu <unknown>`).
 
-- **Cluster scope shows ~60 "Unknown"-health resources — investigate which kinds and why** — *observed
-  live 2026-06-06 dogfooding `__cluster__` on docker-desktop (Healthy 274 · Unknown 60).* Cluster-scoped
-  plumbing (APIService, FlowSchema, PriorityLevelConfiguration, IPAddress, ValidatingWebhookConfiguration,
-  …) falls through the CR health catch-all. Per the dogfooding doc's "built-in in the CR catch-all → bogus
-  Unknown" pattern, an Unknown built-in is a smell — but 60 across many kinds is a real tally-noise problem
-  (the cluster health summary reads alarmingly). **First step:** enumerate exactly which kinds show Unknown
-  and why (no conditions → should be Healthy-by-existence; conditions present but non-Ready/Available → the
-  catch-all returns Unknown). Likely fix: treat a cluster-scoped built-in with no interpretable condition
-  as Healthy-by-existence rather than Unknown, OR add typed/group rules for the worst offenders. Medium
-  value (cluster scope is viewed less than namespaces, but the noisy tally undermines trust). Scope first.
-
 ## Future / larger work — deferred (examined, not actionable now)
 
 Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
@@ -242,6 +231,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**Cluster-scope health tally: CRDs + FlowSchemas no longer falsely "Unknown" (live-found, 2026-06-06):**
+opening `__cluster__` read `Healthy 274 · Unknown 60` — alarming at a glance. Scoped the exact culprits:
+49 CustomResourceDefinitions (conditions Established/NamesAccepted) + 11 FlowSchemas (condition Dangling)
+= 60, all falling through the Ready/Available catch-all to Unknown. Added typed group rules (the *invited*
+extension per the dogfooding doc, NOT a reinterpretation of the tuned catch-all): a CRD is Healthy when
+Established with accepted names, Degraded on a name conflict / not-established; a FlowSchema is Degraded
+only when Dangling=True (references a missing PriorityLevelConfiguration), else Healthy. Shared
+`conditionStatuses` helper for named-condition rules. Verified live: the tally went from `274 · Unknown
+60` to a clean `Healthy 334`, with honest Degraded preserved for genuinely-broken plumbing.
 
 **StorageClass drawer shows provisioner, reclaim, binding, expansion (live-found, 2026-06-06):**
 dogfooding cluster scope, a StorageClass — the class a PVC author clicks through to (after the PVC drawer

@@ -23,9 +23,58 @@ func crHealth(u *unstructured.Unstructured) Health {
 		return eckHealth(u)
 	case gvk.Group == "gateway.networking.k8s.io":
 		return gatewayAPIHealth(u, gvk.Kind)
+	case gvk.Group == "apiextensions.k8s.io":
+		return crdHealth(u)
+	case gvk.Group == "flowcontrol.apiserver.k8s.io":
+		return flowControlHealth(u, gvk.Kind)
 	default:
 		return crHealthFromConditions(u)
 	}
+}
+
+// conditionStatuses maps each status.conditions[].type to its status string, for rules that key on a
+// specific named condition rather than the Ready/Available convention.
+func conditionStatuses(u *unstructured.Unstructured) map[string]string {
+	out := map[string]string{}
+	conds, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
+	for _, c := range conds {
+		if m, ok := c.(map[string]any); ok {
+			if typ, _ := m["type"].(string); typ != "" {
+				st, _ := m["status"].(string)
+				out[typ] = st
+			}
+		}
+	}
+	return out
+}
+
+// crdHealth reads a CustomResourceDefinition's conditions. An established CRD with accepted names is
+// serving (Healthy); a name conflict (NamesAccepted=False) or a not-established CRD isn't serving
+// (Degraded). The catch-all called every CRD "Unknown" — its conditions are Established/NamesAccepted,
+// not Ready/Available — which made cluster-scope health read alarmingly (49 CRDs on a stock cluster).
+func crdHealth(u *unstructured.Unstructured) Health {
+	conds := conditionStatuses(u)
+	if conds["NamesAccepted"] == "False" {
+		return HealthDegraded // a name conflict with another CRD — it isn't serving
+	}
+	switch conds["Established"] {
+	case "True":
+		return HealthHealthy
+	case "False":
+		return HealthDegraded
+	}
+	return HealthHealthy // no Established condition yet (just created) — existence == health
+}
+
+// flowControlHealth reads an API Priority and Fairness object. A FlowSchema's Dangling=True means it
+// references a missing PriorityLevelConfiguration — a real misconfiguration; otherwise it's healthy. Its
+// only condition is Dangling (not Ready/Available), so the catch-all called every FlowSchema Unknown. A
+// PriorityLevelConfiguration carries no conditions and is healthy by existence.
+func flowControlHealth(u *unstructured.Unstructured, kind string) Health {
+	if kind == "FlowSchema" && conditionStatuses(u)["Dangling"] == "True" {
+		return HealthDegraded
+	}
+	return HealthHealthy
 }
 
 // crHealthFromConditions is the catch-all for custom resources kd has no dedicated rule for. It

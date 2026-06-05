@@ -110,6 +110,49 @@ func TestCRConditionMessage(t *testing.T) {
 	}
 }
 
+// TestCRDHealth proves a CustomResourceDefinition is classified by its Established/NamesAccepted
+// conditions (not left "Unknown" by the Ready/Available catch-all): an established CRD with accepted
+// names is Healthy; a name conflict or a not-established CRD is Degraded. This is what cleared 49
+// stock-cluster CRDs out of the cluster-scope "Unknown" tally.
+func TestCRDHealth(t *testing.T) {
+	const g = "apiextensions.k8s.io/v1"
+	established := cr(g, "CustomResourceDefinition", map[string]any{"conditions": conds(cond("Established", "True"), cond("NamesAccepted", "True"))})
+	if got := health(established); got != HealthHealthy {
+		t.Errorf("established CRD health = %q, want Healthy", got)
+	}
+	nameConflict := cr(g, "CustomResourceDefinition", map[string]any{"conditions": conds(cond("Established", "True"), cond("NamesAccepted", "False"))})
+	if got := health(nameConflict); got != HealthDegraded {
+		t.Errorf("name-conflict CRD health = %q, want Degraded", got)
+	}
+	notEstablished := cr(g, "CustomResourceDefinition", map[string]any{"conditions": conds(cond("Established", "False"), cond("NamesAccepted", "True"))})
+	if got := health(notEstablished); got != HealthDegraded {
+		t.Errorf("not-established CRD health = %q, want Degraded", got)
+	}
+	fresh := cr(g, "CustomResourceDefinition", nil) // just created, no conditions yet
+	if got := health(fresh); got != HealthHealthy {
+		t.Errorf("condition-less CRD health = %q, want Healthy (existence)", got)
+	}
+}
+
+// TestFlowControlHealth proves a FlowSchema's Dangling condition (its only one — not Ready/Available)
+// drives health: Dangling=True (references a missing PriorityLevelConfiguration) is Degraded, else
+// Healthy; a PriorityLevelConfiguration is healthy by existence. Clears 11 FlowSchemas out of "Unknown".
+func TestFlowControlHealth(t *testing.T) {
+	const g = "flowcontrol.apiserver.k8s.io/v1"
+	ok := cr(g, "FlowSchema", map[string]any{"conditions": conds(cond("Dangling", "False"))})
+	if got := health(ok); got != HealthHealthy {
+		t.Errorf("non-dangling FlowSchema health = %q, want Healthy", got)
+	}
+	dangling := cr(g, "FlowSchema", map[string]any{"conditions": conds(cond("Dangling", "True"))})
+	if got := health(dangling); got != HealthDegraded {
+		t.Errorf("dangling FlowSchema health = %q, want Degraded", got)
+	}
+	plc := cr(g, "PriorityLevelConfiguration", nil)
+	if got := health(plc); got != HealthHealthy {
+		t.Errorf("PriorityLevelConfiguration health = %q, want Healthy", got)
+	}
+}
+
 // TestArgoWorkflowHealth pins the status.phase mapping for Argo Workflows. The cluster's real
 // workflows showed phase Succeeded/Failed with a generic Completed condition — proof the catch-all
 // (which reads Ready/Available) would mis-call them Unknown, hence the dedicated phase rule.
