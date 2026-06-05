@@ -205,6 +205,17 @@ that should reopen it, so a future agent inherits the analysis instead of re-sur
   already delivers. exec/attach would use WebSocket (per the SSE ADR). *Reopen when:* a streaming-v2
   effort is on the table for other reasons (e.g. exec/attach).
 
+- **Manifest syntax highlighting** — *deferred (feature with dependency/bug cost, secondary view).* The
+  Manifest tab renders raw YAML/JSON in a plain `<pre class="manifest">` (`DetailDrawer.tsx:597`), find-
+  matches wrapped in `<mark>`; no key/value/string colouring. Highlighting would aid scanning a long
+  manifest, and k9s/Lens do it — but it needs either a highlighter dependency (bundle cost on a tool that
+  ships one embedded binary) or a hand-rolled YAML+JSON tokenizer (real edge cases: values with colons,
+  block scalars, the YAML↔JSON format toggle), for a *secondary* drill-into-raw view where the existing
+  in-manifest find already locates fields and plain output matches `kubectl`. Not a safe quick slice.
+  *Reopen when:* operators report the raw manifest is hard to scan, or a highlighter is already pulled in
+  for another reason — then prefer a tiny dependency-free "dim the keys" pass over full tokenisation, and
+  verify it survives the format toggle + find-highlight overlay.
+
 *Resolved this pass — "Component tests for Topology / DetailDrawer" (already done):* `Topology.test.tsx`,
 `DetailDrawer.test.tsx`, `LogViewer.test.tsx`, `Sidebar.test.tsx`, and `CopyButton.test.tsx` already ship
 ~100 component tests via `@solidjs/testing-library` + `fireEvent` (227 web assertions total). The residual
