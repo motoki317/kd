@@ -203,6 +203,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Manifest find scrolls to the first match on type (live-found, 2026-06-06):** typing in the drawer's
+"find in manifest" box highlighted matches and showed "1/3", but left the manifest pinned at the top
+with the first hit below the fold (a 2886px manifest in a 395px viewport) — unlike the browser's own
+Cmd+F, which scrolls as you type. Worse, because the cursor reset to match 0 without scrolling, the first
+Enter advanced to "2/3", appearing to skip the very hit the count claimed you were on. Added a
+scroll-to-first-match on every query change (microtask-deferred so the fresh `<mark>`s exist); moved the
+query-reset effect below `scrollManifestMatch`/`manifestMatchCount` so the eager `on` doesn't hit the
+TDZ. Verified live: typing scrolled `scrollTop 0 → 2253` with the "1/3" match in view. Matches the
+browser-find muscle memory the field's "(Enter ↓ · Shift+Enter ↑)" hint already implies.
+
 **Trouble badge / Alt+T now CYCLE through troubled namespaces (live-found, 2026-06-06):** the sidebar
 badge ("N need attention") and Alt+T both jumped to the single most-troubled namespace and re-landed
 there on every repeat — so on a real cluster with 6 troubled namespaces among 38 A→Z rows, reaching the

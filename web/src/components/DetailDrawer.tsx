@@ -202,8 +202,6 @@ export default function DetailDrawer(props: Props) {
     setManifestQuery('')
     setManifestMatchIdx(0)
   }))
-  // Query change resets the match cursor — a new query has a new "first match".
-  createEffect(on(manifestQuery, () => setManifestMatchIdx(0)))
   const manifestSegments = createMemo(() => {
     if (detail.error) return []
     return splitByMatch(detail() ?? '', manifestQuery())
@@ -223,6 +221,16 @@ export default function DetailDrawer(props: Props) {
     setManifestMatchIdx(next)
     queueMicrotask(() => scrollManifestMatch(next))
   }
+  // On a query change, reset to the first match AND scroll it into view — so typing reveals the first
+  // hit immediately, the way the browser's own find does. Without the scroll the count read "1/3"
+  // while the manifest stayed pinned at the top with the hit below the fold, and the first Enter then
+  // appeared to skip straight to "2/3". Deferred a microtask so the freshly-rendered <mark>s exist
+  // before we scroll. Placed below scrollManifestMatch/manifestMatchCount so the eager `on` (defer:
+  // false) doesn't reference them in the temporal dead zone.
+  createEffect(on(manifestQuery, () => {
+    setManifestMatchIdx(0)
+    if (manifestQuery() && manifestMatchCount() > 0) queueMicrotask(() => scrollManifestMatch(0))
+  }))
 
   const shownEvents = createMemo(() => {
     // The resource throws when errored; reading events() then surfaces an uncaught rejection. The

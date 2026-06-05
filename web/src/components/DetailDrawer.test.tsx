@@ -557,6 +557,10 @@ describe('DetailDrawer', () => {
     // Wait until the manifest text actually loads — find runs against detail(), so an early
     // dispatch fires before the resource resolves and reports 0 matches.
     await findByText((_t, el) => !!el?.classList.contains('manifest') && (el?.textContent ?? '').includes('feature_flag'))
+    // jsdom has no layout; stub scrollIntoView so the scroll-to-first-match-on-type fires without
+    // throwing, and so we can assert it was called.
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
     const find = (await findByPlaceholderText(/find in manifest/)) as HTMLInputElement
     find.value = 'feature'
     find.dispatchEvent(new Event('input', { bubbles: true }))
@@ -565,6 +569,13 @@ describe('DetailDrawer', () => {
     // The count badge reads "<current>/<total>" once Enter cycling kicked in (cycle 263); fresh
     // state is index 0, i.e. "1/2".
     expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/1\/2/)
+    // Typing must scroll the FIRST match into view (browser-find behaviour), not leave the manifest
+    // pinned at the top with the hit below the fold. Deferred a microtask in the component.
+    await Promise.resolve()
+    expect(scrollSpy).toHaveBeenCalled()
+    // The match scrolled to is match 0 (the one the "1/2" count points at) — so the first Enter
+    // advances to 2/2 rather than appearing to skip the hit the count already claims you're on.
+    expect((scrollSpy.mock.instances[0] as HTMLElement).classList.contains('current')).toBe(true)
   })
 
   it('restores focus to the resource search when the drawer closes with focus inside it', async () => {
