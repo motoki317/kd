@@ -458,13 +458,24 @@ func cronLastRun(obj runtime.Object) string {
 	return ""
 }
 
+// asUnstructuredKind returns obj as an unstructured object when it is one AND its kind matches — the
+// access gate every CR-essence extractor shares (kd keeps CRs and the few schemaless built-ins like HPA
+// and StorageClass as *unstructured.Unstructured; see typedFactories). nil when the type or kind differs,
+// so a caller reads `if u := asUnstructuredKind(obj, "X"); u != nil { … }`.
+func asUnstructuredKind(obj runtime.Object, kind string) *unstructured.Unstructured {
+	if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kind {
+		return u
+	}
+	return nil
+}
+
 // hpaScale extracts a HorizontalPodAutoscaler's replica state — "current" when stable, "current → desired"
 // mid-scale — answering "how many is it running, and is it actively scaling?". Empty for non-HPAs. An HPA
 // has no typed factory here, so it arrives unstructured and is navigated by field path (the autoscaling
 // v1/v2 schemas share these status field names).
 func hpaScale(obj runtime.Object) string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || u.GetKind() != "HorizontalPodAutoscaler" {
+	u := asUnstructuredKind(obj, "HorizontalPodAutoscaler")
+	if u == nil {
 		return ""
 	}
 	cur, hasCur, _ := unstructured.NestedInt64(u.Object, "status", "currentReplicas")
@@ -481,8 +492,8 @@ func hpaScale(obj runtime.Object) string {
 // hpaRange extracts an HPA's min–max replica bounds ("2–10"); minReplicas defaults to 1 when unset
 // (matching the API default). Empty for non-HPAs or when maxReplicas is unset.
 func hpaRange(obj runtime.Object) string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || u.GetKind() != "HorizontalPodAutoscaler" {
+	u := asUnstructuredKind(obj, "HorizontalPodAutoscaler")
+	if u == nil {
 		return ""
 	}
 	maxR, hasMax, _ := unstructured.NestedInt64(u.Object, "spec", "maxReplicas")
@@ -526,10 +537,7 @@ func pdbDisruptions(obj runtime.Object) string {
 // asStorageClass returns the object as an unstructured StorageClass (kd has no typed factory for it), or
 // nil. A StorageClass's fields (provisioner, reclaimPolicy, …) sit at the top level, not under spec.
 func asStorageClass(obj runtime.Object) *unstructured.Unstructured {
-	if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == "StorageClass" {
-		return u
-	}
-	return nil
+	return asUnstructuredKind(obj, "StorageClass")
 }
 
 // storageClassProvisioner returns a StorageClass's provisioner (its defining fact — which CSI driver /
