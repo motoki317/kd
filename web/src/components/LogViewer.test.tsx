@@ -132,6 +132,23 @@ describe('LogViewer', () => {
     expect(container.querySelector('.logs-waiting')?.textContent).toBe('no lines match the active filters')
   })
 
+  it('shows the shown/total count for a level filter, not only a text filter', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { line: 'E0521 12:00:00.000000 1 main.go:1] boom' }) // parses as error
+    es.emit('log', { line: 'I0521 12:00:01.000000 1 main.go:2] ready' }) // parses as info
+    await findByText('boom', { exact: false })
+    // No filter yet → no count readout (the whole buffer is shown).
+    expect(container.querySelector('.logs-count')).toBeNull()
+    // Hide INFO via its chip — no text filter involved. The count must still surface so the operator
+    // sees 1 of 2 lines remain (previously the readout was gated on the text filter alone).
+    const infoChip = [...container.querySelectorAll('.logs-levels button')].find((b) => b.textContent === 'INF') as HTMLButtonElement
+    infoChip.click()
+    expect(container.querySelector('.logs-count')?.textContent).toBe('1/2')
+  })
+
   it('gives the "Aa" case toggle a worded accessible name (not just the glyph)', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

@@ -105,6 +105,11 @@ export default function LogViewer(props: Props) {
     const base = hp.size ? lines().filter((l) => !hp.has(l.pod)) : lines()
     return filterLogLines(base, filter(), caseSensitive(), hiddenLevels())
   })
+  // Any filter is active — text grep, a dimmed level chip, or a hidden pod. Drives the "shown/total"
+  // count and the copy-button's "filtered" wording: all three filter kinds subset the buffer
+  // identically, so the operator deserves the same "you're seeing X of Y" feedback for each (the
+  // empty-state message already covers all three; the count readout used to lag behind on text-only).
+  const filtering = createMemo(() => !!filter() || hiddenLevels().size > 0 || hiddenPods().size > 0)
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
@@ -366,8 +371,12 @@ export default function LogViewer(props: Props) {
               ↧ {errorIndices().length} err
             </button>
           </Show>
-          <Show when={filter()}>
-            <span class="logs-count" classList={{ none: visibleLines().length === 0 }}>
+          <Show when={filtering()}>
+            <span
+              class="logs-count"
+              classList={{ none: visibleLines().length === 0 }}
+              title={`${visibleLines().length} of ${lines().length} lines shown (rest hidden by the active filters)`}
+            >
               {visibleLines().length}/{lines().length}
             </span>
           </Show>
@@ -392,9 +401,10 @@ export default function LogViewer(props: Props) {
                   })
                   .join('\n')
               }
-              // Copy acts on the filtered view, so say so when a filter is active — otherwise the
-              // static "Copy logs" hides that you're copying a subset, not the whole buffer (cycle 318).
-              title={filter() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
+              // Copy acts on the filtered view, so say so when ANY filter is active (text, level, or
+              // pod) — otherwise the static "Copy logs" hides that you're copying a subset, not the
+              // whole buffer (cycle 318; extended to level/pod filters so all three read alike).
+              title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
           </Show>
         </span>

@@ -196,6 +196,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Log line-count readout now covers level + pod filters, not just text (live-found, 2026-06-06):**
+dogfooding a real pod's logs, dimming the INFO/DEBUG level chips subset the buffer (e.g. 150 of 200
+lines) but showed NO "shown/total" count — the readout was gated on the text filter alone, while the
+level and pod chips (and the empty-state message, already fixed in cycle 328) silently hid lines. An
+operator dropping INFO noise to scan errors had no signal that 50 lines were hidden, so a short error
+list could read as "the pod barely logged." Added a `filtering` predicate (text OR a hidden level OR a
+hidden pod) gating the count and the copy-button's "filtered" wording, so all three filter kinds give
+identical feedback. Verified live (count "150/200" with only a level filter active; clear hover title).
+Same Repetition rationale the count's own cycle-318 comment states — extended to the sibling filters.
+
 **Navigation now reaches folded matches — count unified + auto-expand-on-select (closed TWO Open items;
 shipped 2026-06-06):** the toolbar `.topology-matches` counted `matches()` over `layout().nodes` (folded
 excluded → "38") while the bottom overlay counted the full set ("158"), and `j`/`k`/Enter could land
