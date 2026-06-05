@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines, formatLogTime, parseLogLevel, splitByMatch } from './logs'
+import { filterLogLines, formatLogTime, parseJsonLog, parseLogLevel, splitByMatch } from './logs'
 import type { LogEntry } from './api'
 
 const lines: LogEntry[] = [
@@ -83,6 +83,28 @@ describe('formatLogTime', () => {
   it('returns the input unchanged when it is not an RFC3339 timestamp', () => {
     expect(formatLogTime('not a time')).toBe('not a time')
     expect(formatLogTime('')).toBe('')
+  })
+})
+
+describe('parseJsonLog', () => {
+  it('leads with the message and trails the remaining fields, dropping badge/time-column keys', () => {
+    const line = '{"@timestamp":"2026-06-05T13:57:56.364Z","log.level":"INFO","message":"node started","service":"es","node":"es-0"}'
+    expect(parseJsonLog(line)).toEqual({ message: 'node started', extras: 'service=es node=es-0' })
+  })
+  it('accepts msg/log as message aliases and serializes non-string field values', () => {
+    expect(parseJsonLog('{"msg":"ready","port":9200,"tls":true}')).toEqual({ message: 'ready', extras: 'port=9200 tls=true' })
+    expect(parseJsonLog('{"log":"hi","tags":["a","b"]}')).toEqual({ message: 'hi', extras: 'tags=["a","b"]' })
+  })
+  it('returns null for non-JSON, arrays, and objects without a string message — they stay raw', () => {
+    expect(parseJsonLog('plain text line')).toBeNull()
+    expect(parseJsonLog('E0521 12:00:00 main.go:42] boom')).toBeNull() // klog, not JSON
+    expect(parseJsonLog('[1,2,3]')).toBeNull()
+    expect(parseJsonLog('{"level":"info","count":3}')).toBeNull() // no message field
+    expect(parseJsonLog('{"message":42}')).toBeNull() // message not a string
+    expect(parseJsonLog('{ not valid json')).toBeNull()
+  })
+  it('yields empty extras when the only fields are the message and dropped keys', () => {
+    expect(parseJsonLog('{"level":"warn","message":"lonely"}')).toEqual({ message: 'lonely', extras: '' })
   })
 })
 

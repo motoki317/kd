@@ -155,6 +155,26 @@ describe('LogViewer', () => {
     expect(container.querySelector('.logs-count')?.textContent).toBe('1/2')
   })
 
+  it('renders a JSON log line message-first with the extras dimmed; plain lines stay raw', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { line: '{"@timestamp":"2026-06-05T13:57:56.364Z","log.level":"INFO","message":"node started","node":"es-0"}' })
+    es.emit('log', { line: 'plain stdout line, not json' })
+    await findByText('node started', { exact: false })
+    // The JSON line leads with its message (.log-msg, normal foreground) and trails the rest dimmed
+    // (.log-json-extra). @timestamp + log.level are dropped from extras — the badge/time column show them.
+    const msg = container.querySelector('.log-msg')
+    expect(msg?.textContent).toBe('node started')
+    expect(container.querySelector('.log-json-extra')?.textContent?.trim()).toBe('node=es-0')
+    // The embedded log.level still drives the colored badge.
+    expect(msg?.closest('.log-line')?.querySelector('.log-level-info')).toBeTruthy()
+    // The plain line is untouched — no message/extras wrappers, so non-JSON rendering is unchanged.
+    const plain = [...container.querySelectorAll('.log-line')].find((l) => /plain stdout/.test(l.textContent || ''))
+    expect(plain?.querySelector('.log-msg')).toBeNull()
+  })
+
   it('gives the "Aa" case toggle a worded accessible name (not just the glyph)', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

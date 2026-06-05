@@ -3252,6 +3252,12 @@ button.event-source:focus-visible {
   color: #97a2b0;
   background: rgba(255, 255, 255, 0.08);
 }
+/* JSON-log rendering: the parsed `message` keeps the body's normal foreground (it's what you read),
+   while the trailing structured fields are dimmed to the timestamp grey — present for grep/context but
+   visually subordinate, so the eye lands on the message first (contrast + proximity). */
+.log-json-extra {
+  color: #6b7888;
+}
 /* Per-level filter chips (cycle 328): same colors as the inline badges so the toolbar control reads
    as "these are the levels showing". color/background are inherited from the shared .log-level-<lvl>
    rules above; this only adds the button chrome. A dimmed (.off) chip means that level is hidden —

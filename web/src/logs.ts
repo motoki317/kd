@@ -31,6 +31,40 @@ export function parseLogLevel(line: string): LogLevel | null {
   return null
 }
 
+// parseJsonLog recognizes a JSON-object log line (Elasticsearch, zap, logrus, pino, bunyan, …) and
+// splits it into the human message and the remaining fields, so the viewer can LEAD with the message —
+// the part an operator actually reads — instead of a wall of raw JSON with the message buried
+// mid-object. Returns null for anything that isn't a JSON object carrying a recognizable message field,
+// so plain-text/klog lines fall through to the normal renderer untouched. NON-DESTRUCTIVE: `extras`
+// carries every other field except the ones the viewer ALREADY surfaces (the level badge + the time
+// column), so nothing readable is hidden; callers keep the raw line for copy/grep — this only reorders
+// what is shown. Conservative on purpose: an object without a string message stays raw rather than
+// guessing which field is the message.
+const JSON_MSG_KEYS = ['message', 'msg', 'log'] as const
+// Keys already represented by the badge/time column (or pure noise) — dropped from `extras` so the
+// reformat is a net DE-clutter. Everything else is preserved as `key=value`.
+const JSON_DROP_KEYS = new Set(['message', 'msg', 'log', 'level', 'lvl', 'severity', 'log.level', '@timestamp', 'timestamp', 'time', 'ts'])
+
+export function parseJsonLog(line: string): { message: string; extras: string } | null {
+  const t = line.trimStart()
+  if (t[0] !== '{') return null // fast path: the vast majority of lines are not JSON objects
+  let obj: unknown
+  try {
+    obj = JSON.parse(t)
+  } catch {
+    return null
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
+  const rec = obj as Record<string, unknown>
+  const msgKey = JSON_MSG_KEYS.find((k) => typeof rec[k] === 'string')
+  if (!msgKey) return null
+  const extras = Object.keys(rec)
+    .filter((k) => !JSON_DROP_KEYS.has(k))
+    .map((k) => `${k}=${typeof rec[k] === 'string' ? rec[k] : JSON.stringify(rec[k])}`)
+    .join(' ')
+  return { message: rec[msgKey] as string, extras }
+}
+
 // formatLogTime compacts a kubectl --timestamps RFC3339Nano stamp (2026-05-29T05:40:51.832381Z) to
 // HH:MM:SS.mmm for the timestamp column. It slices the time substring out directly rather than
 // parsing into a Date, so the value stays in the source's UTC (lining up with kubectl --timestamps)

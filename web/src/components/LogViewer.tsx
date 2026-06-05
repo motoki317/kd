@@ -2,7 +2,7 @@ import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Sh
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
-import { filterLogLines, formatLogTime, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
+import { filterLogLines, formatLogTime, parseJsonLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -443,7 +443,11 @@ export default function LogViewer(props: Props) {
       </Show>
       <pre ref={pre} class="logs-body" classList={{ 'no-wrap': !wrap() }} onScroll={onScroll} tabindex="0">
         <For each={visibleLines()}>
-          {(l) => (
+          {(l) => {
+            // A JSON-object line (ES/zap/logrus/…) renders message-first instead of as a raw blob.
+            // Skip the parse for ANSI lines (they carry their own colouring and are rarely JSON).
+            const json = hasAnsi(l.line) ? null : parseJsonLog(l.line)
+            return (
             <div
               class="log-line"
               // Alt/Option-click copies just this line (with its pod/timestamp prefix, matching the
@@ -482,31 +486,60 @@ export default function LogViewer(props: Props) {
                 {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
                 <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>
               </Show>
-              {/* Plain lines (the common case) skip the ANSI parser to keep allocations down —
-                  ANSI segmentation only kicks in for lines that actually contain a CSI escape.
-                  Both branches further chunk each segment via splitByMatch so a typed filter
-                  also highlights the matched substring inline (cycle 249), making the position
-                  of the hit obvious in a long line. */}
+              {/* A JSON-object line leads with its `message` (bright) and trails the remaining fields
+                  dimmed — the operator reads the message without scanning past @timestamp/level noise,
+                  and with no-wrap the message sits at the visible left while the extras scroll off.
+                  Nothing is lost: the raw line still backs copy/grep, and `extras` keeps every field the
+                  badge/time column don't already show. Highlighting runs on the displayed text so a
+                  filter still marks hits in either part. */}
               <Show
-                when={hasAnsi(l.line)}
+                when={json}
                 fallback={
-                  <For each={splitByMatch(l.line, filter(), caseSensitive())}>
-                    {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
-                  </For>
+                  // Plain lines (the common case) skip the ANSI parser to keep allocations down — ANSI
+                  // segmentation only kicks in for lines that actually contain a CSI escape. Both
+                  // branches chunk each segment via splitByMatch so a typed filter highlights the
+                  // matched substring inline (cycle 249), making the hit's position obvious.
+                  <Show
+                    when={hasAnsi(l.line)}
+                    fallback={
+                      <For each={splitByMatch(l.line, filter(), caseSensitive())}>
+                        {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
+                      </For>
+                    }
+                  >
+                    <For each={parseAnsi(l.line)}>
+                      {(seg) => (
+                        <span style={ansiStyleToCss(seg.style)}>
+                          <For each={splitByMatch(seg.text, filter(), caseSensitive())}>
+                            {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
+                          </For>
+                        </span>
+                      )}
+                    </For>
+                  </Show>
                 }
               >
-                <For each={parseAnsi(l.line)}>
-                  {(seg) => (
-                    <span style={ansiStyleToCss(seg.style)}>
-                      <For each={splitByMatch(seg.text, filter(), caseSensitive())}>
+                {(j) => (
+                  <>
+                    <span class="log-msg">
+                      <For each={splitByMatch(j().message, filter(), caseSensitive())}>
                         {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
                       </For>
                     </span>
-                  )}
-                </For>
+                    <Show when={j().extras}>
+                      <span class="log-json-extra">
+                        {' '}
+                        <For each={splitByMatch(j().extras, filter(), caseSensitive())}>
+                          {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
+                        </For>
+                      </span>
+                    </Show>
+                  </>
+                )}
               </Show>
             </div>
-          )}
+            )
+          }}
         </For>
         {visibleLines().length === 0 && !error() && (
           // Distinguish "logs exist but every line is hidden by a filter" from "no logs yet". The
