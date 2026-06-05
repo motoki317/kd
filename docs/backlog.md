@@ -254,6 +254,15 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Breadcrumb showed the raw `__cluster__` sentinel instead of `[cluster]` (2026-06-06):** dogfooding the
+cluster-scope view, the top breadcrumb read `__cluster__` — the internal URL/wire sentinel — while the
+sidebar and document title already prettified it to `[cluster]`. The breadcrumb rendered `namespace()`
+verbatim; its own comment describes an icon reinforcing a *bracketed* label, so the raw value was never
+intended (a missed mapping, not a design choice). Fixed + centralized: extracted `namespaceLabel()` into
+`ns.ts` (beside the other cluster-sentinel handling) so the sentinel can't leak into one surface while
+another prettifies it, and pointed both the breadcrumb and the doc title at it. Verified live (breadcrumb
++ title now `[cluster]`, no `__cluster__` anywhere in the DOM); +2 `ns.test.ts` cases. (c5bade5)
+
 **A degraded PDB now surfaces its DisruptionAllowed reason inline, not just "0/3 healthy" (2026-06-06):**
 dogfooding `team-b` (the one Degraded namespace on docker-desktop): the Degraded-health spotlight
 correctly isolated a single PDB `opa-b` ("0/3 healthy", "can disrupt 0"), but the drawer gave no
