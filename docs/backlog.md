@@ -213,7 +213,8 @@ is unavailable); the yank wasn't. Optional-chained the whole promise chain
 (`?.writeText(ref)?.then(…)?.catch(…)`) so it no-ops silently when unavailable and confirms only on a real
 success. Verified live both ways: with a working clipboard stub it writes `Pod/…` and shows the "Copied …"
 toast; with `clipboard` forced undefined it throws nothing, leaves the page responsive, and shows no false
-toast.
+toast. A sweep found the identical pattern in `LogViewer`'s alt-click line copy (the `.catch` there can't
+catch a *synchronous* `undefined.then` throw either) — fixed the same way.
 
 **Structured search `Kind/name` matches the kind by prefix, not substring (live-found, 2026-06-06):**
 typing `po/ui-a` (the canonical Pod short name) lit Endpoints (end·**po**·ints), NetworkPolicy

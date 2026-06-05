@@ -444,13 +444,17 @@ export default function LogViewer(props: Props) {
                 const el = e.currentTarget as HTMLElement
                 const ts = l.time ? `${l.time} ` : ''
                 const pod = props.aggregated ? `${l.pod} | ` : ''
+                // Optional-chain the whole chain: in a non-secure context `navigator.clipboard` is
+                // undefined, so `?.writeText(…)` is undefined and a bare `.then` would throw a
+                // TypeError synchronously (the `.catch` can't catch a sync throw). Same guard as the
+                // App-level y-yank.
                 navigator.clipboard
                   ?.writeText(`${pod}${ts}${l.line}`)
-                  .then(() => {
+                  ?.then(() => {
                     el.classList.add('copied')
                     setTimeout(() => el.classList.remove('copied'), 700)
                   })
-                  .catch(() => {})
+                  ?.catch(() => {})
               }}
             >
               {/* Colored severity badge (cycle 322) for error-first scanning. Only shown when a
