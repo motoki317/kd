@@ -103,6 +103,16 @@ Recent batches (newest first; `git log` has the commits):
   graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
   split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
+- **GRPCRoute has routing edges but no drawer routing table** — *follow-up to the 2026-06-06 routing
+  trio; low value, deferred.* `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's
+  `backendRefs` (it's in the *Route kind list), so the Network view connects it — but the drawer's
+  `routes()` table only handles HTTPRoute (path matches). A GRPCRoute matches on
+  `spec.rules[].matches[].method.{service,method}` (gRPC service/method, not a URL path), so a faithful
+  table would render e.g. `helloworld.Greeter/SayHello → svc:port`. **Deferred because** gRPC ingress is
+  rare in this deployment (no GRPCRoute instances on either reachable cluster) and the edge — the
+  topology-level answer — already lands. Build it if a cluster here adopts GRPCRoute: add a
+  `grpcRouteMatches` branch to `routes()` mirroring `httpRoutePaths`, fixture-tested.
+
 ## Future / larger work — deferred (examined, not actionable now)
 
 Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
