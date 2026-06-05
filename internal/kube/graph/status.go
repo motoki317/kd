@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -95,6 +96,8 @@ func statusMessage(obj runtime.Object, h Health) string {
 		msg = blockingConditionMessage(o.Status.Conditions)
 	case *appsv1.Deployment:
 		msg = deploymentProblemMessage(o)
+	case *policyv1.PodDisruptionBudget:
+		msg = pdbBlockMessage(o)
 	}
 	return truncateRunes(strings.TrimSpace(msg), maxStatusMessage)
 }
@@ -119,6 +122,24 @@ func deploymentProblemMessage(d *appsv1.Deployment) string {
 		degraded = degraded || (c.Type != appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionFalse)
 		if degraded && c.Message != "" {
 			return c.Message
+		}
+	}
+	return ""
+}
+
+// pdbBlockMessage explains WHY a degraded PDB allows no voluntary disruptions — the DisruptionAllowed
+// condition's message (or its reason when the message is empty). The drawer already flags "can disrupt
+// 0"; this says which kind of 0 it is, because the two diverge sharply for the operator: the workload
+// sitting below its floor (InsufficientPods — scale up before draining) reads nothing like the
+// controller being unable to evaluate the budget at all (SyncFailed, e.g. a guarded pod's owner lacks
+// the scale subresource — the PDB is misconfigured and a drain will block indefinitely).
+func pdbBlockMessage(p *policyv1.PodDisruptionBudget) string {
+	for _, c := range p.Status.Conditions {
+		if c.Type == policyv1.DisruptionAllowedCondition && c.Status == metav1.ConditionFalse {
+			if c.Message != "" {
+				return c.Message
+			}
+			return c.Reason
 		}
 	}
 	return ""

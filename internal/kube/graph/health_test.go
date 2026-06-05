@@ -365,6 +365,28 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(stuck Deployment) = %q", got)
 	}
 
+	// A degraded PDB surfaces its DisruptionAllowed condition message — the WHY behind "can disrupt 0"
+	// (here the controller can't evaluate the budget at all, the misconfigured-empty-selector case).
+	pdbSync := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
+		CurrentHealthy: 0, DesiredHealthy: 3,
+		Conditions: []metav1.Condition{{
+			Type: "DisruptionAllowed", Status: metav1.ConditionFalse, Reason: "SyncFailed",
+			Message: "workflows.argoproj.io does not implement the scale subresource",
+		}},
+	}}
+	if got := statusMessage(pdbSync, HealthDegraded); got != "workflows.argoproj.io does not implement the scale subresource" {
+		t.Errorf("statusMessage(SyncFailed PDB) = %q, want the condition message", got)
+	}
+	// When the condition carries only a reason (no message), fall back to the reason so the operator
+	// still learns the app is below its floor rather than seeing nothing.
+	pdbFloor := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
+		CurrentHealthy: 1, DesiredHealthy: 3,
+		Conditions: []metav1.Condition{{Type: "DisruptionAllowed", Status: metav1.ConditionFalse, Reason: "InsufficientPods"}},
+	}}
+	if got := statusMessage(pdbFloor, HealthDegraded); got != "InsufficientPods" {
+		t.Errorf("statusMessage(InsufficientPods PDB) = %q, want the reason fallback", got)
+	}
+
 	// Over-long messages are rune-capped so a pathological status can't bloat the payload.
 	long := &unstructured.Unstructured{Object: map[string]any{
 		"status": map[string]any{"message": strings.Repeat("x", 500)},
