@@ -110,6 +110,57 @@ func TestCRConditionMessage(t *testing.T) {
 	}
 }
 
+// TestArgoWorkflowMessage proves a failed Argo Workflow's drawer shows the LEAF step's real error,
+// not the top-level "child '<id>' failed" propagation pointer. Models the real staging shape: a DAG
+// node + a step node both forward the failure, while the Pod leaf "migrate-dry-run" carries the
+// actual "main: Error (exit code 1)". The Pod leaf must win; a Workflow that fails with no leaf
+// message must keep the top-level pointer; non-Workflow CRs must be untouched.
+func TestArgoWorkflowMessage(t *testing.T) {
+	node := func(typ, phase, name, msg, fin string) map[string]any {
+		return map[string]any{"type": typ, "phase": phase, "displayName": name, "message": msg, "finishedAt": fin}
+	}
+	const ver = "argoproj.io/v1alpha1"
+	withLeaf := cr(ver, "Workflow", map[string]any{
+		"phase":   "Failed",
+		"message": "child 'wf-3628068524' failed",
+		"nodes": map[string]any{
+			"wf-root":       node("DAG", "Failed", "wf", "child 'wf-3628068524' failed", "2026-06-06T01:00:05Z"),
+			"wf-1111111111": node("StepGroup", "Failed", "[0]", "child 'wf-3628068524' failed", "2026-06-06T01:00:04Z"),
+			"wf-3628068524": node("Pod", "Failed", "migrate-dry-run", "main: Error (exit code 1)", "2026-06-06T01:00:03Z"),
+			"wf-notify":     node("Pod", "Succeeded", "notify", "", "2026-06-06T01:00:06Z"),
+		},
+	})
+	if got := statusMessage(withLeaf, HealthDegraded); got != "migrate-dry-run: main: Error (exit code 1)" {
+		t.Errorf("statusMessage = %q, want the failed Pod leaf's error, not the child pointer", got)
+	}
+	// A Pod leaf outranks a parent step that happens to carry its own non-pointer message.
+	podOverStep := cr(ver, "Workflow", map[string]any{
+		"phase":   "Failed",
+		"message": "child 'wf-pod' failed",
+		"nodes": map[string]any{
+			"wf-retry": node("Retry", "Failed", "build", "No more retries left", "2026-06-06T01:00:09Z"),
+			"wf-pod":   node("Pod", "Failed", "compile", "exec format error", "2026-06-06T01:00:08Z"),
+		},
+	})
+	if got := statusMessage(podOverStep, HealthDegraded); got != "compile: exec format error" {
+		t.Errorf("statusMessage = %q, want the Pod leaf over the parent step", got)
+	}
+	// No leaf message (status offloaded/compressed) → keep the top-level pointer rather than blanking.
+	noLeaf := cr(ver, "Workflow", map[string]any{
+		"phase":   "Failed",
+		"message": "Workflow operation error: timed out",
+		"nodes":   map[string]any{"wf-root": node("DAG", "Failed", "wf", "child 'x' failed", "")},
+	})
+	if got := statusMessage(noLeaf, HealthDegraded); got != "Workflow operation error: timed out" {
+		t.Errorf("statusMessage = %q, want the top-level message when no leaf error exists", got)
+	}
+	// Non-Workflow CRs are untouched by the Argo drill-down.
+	other := cr("example.com/v1", "Widget", map[string]any{"message": "top-level reason"})
+	if got := statusMessage(other, HealthDegraded); got != "top-level reason" {
+		t.Errorf("statusMessage(non-Workflow) = %q, want the top-level message unchanged", got)
+	}
+}
+
 // TestCRDHealth proves a CustomResourceDefinition is classified by its Established/NamesAccepted
 // conditions (not left "Unknown" by the Ready/Available catch-all): an established CRD with accepted
 // names is Healthy; a name conflict or a not-established CRD is Degraded. This is what cleared 49

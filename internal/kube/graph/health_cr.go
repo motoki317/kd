@@ -138,6 +138,73 @@ func crConditionMessage(u *unstructured.Unstructured) string {
 	return ""
 }
 
+// argoWorkflowMessage drills past an Argo Workflow's top-level status.message — which is only a
+// PROPAGATION POINTER naming a child node ID ("child 'wf-3628068524' failed"), useless for triage —
+// into status.nodes to surface the deepest FAILED leaf step's own error ("migrate-dry-run: main:
+// Error (exit code 1)"). Pod-type leaves win (the actual container that errored) over parent steps;
+// among equals the most recently finished failure, then a stable name order, so the result is
+// deterministic across SSE patches. Returns "" for non-Workflows, when nodes are absent (offloaded/
+// compressed status), or when no leaf carries a non-pointer message — leaving the caller's existing
+// status.message fallback intact, so this never regresses a Workflow that fails at the top level.
+func argoWorkflowMessage(u *unstructured.Unstructured) string {
+	gvk := u.GroupVersionKind()
+	if gvk.Group != "argoproj.io" || gvk.Kind != "Workflow" {
+		return ""
+	}
+	nodes, found, err := unstructured.NestedMap(u.Object, "status", "nodes")
+	if err != nil || !found {
+		return ""
+	}
+	type cand struct {
+		text     string
+		isPod    bool
+		finished string
+	}
+	var best *cand
+	for _, raw := range nodes {
+		n, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if p, _ := n["phase"].(string); p != "Failed" && p != "Error" {
+			continue
+		}
+		msg, _ := n["message"].(string)
+		msg = strings.TrimSpace(msg)
+		// Skip the parent nodes that merely forward a descendant's failure — we want the leaf that
+		// actually errored, not another "child '<id>' failed" pointer.
+		if msg == "" || strings.HasPrefix(msg, "child '") {
+			continue
+		}
+		text := msg
+		if name, _ := n["displayName"].(string); name != "" {
+			text = name + ": " + msg
+		}
+		fin, _ := n["finishedAt"].(string)
+		c := cand{text: text, isPod: n["type"] == "Pod", finished: fin}
+		if best == nil || moreRelevantFailure(c.isPod, c.finished, c.text, best.isPod, best.finished, best.text) {
+			cc := c
+			best = &cc
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return best.text
+}
+
+// moreRelevantFailure orders two failed Workflow leaves: a Pod (container) execution outranks a
+// parent step; then the most recently finished failure; then a stable name order for determinism.
+func moreRelevantFailure(aPod bool, aFin, aText string, bPod bool, bFin, bText string) bool {
+	if aPod != bPod {
+		return aPod
+	}
+	if aFin != bFin {
+		return aFin > bFin
+	}
+	return aText < bText
+}
+
 // argoHealth covers the argoproj.io group, which hosts several unrelated controllers, so it
 // dispatches by kind. Argo Workflows / Rollouts roll their status up into a single status.phase;
 // an ArgoCD Application exposes status.health.status using kd's own vocabulary.

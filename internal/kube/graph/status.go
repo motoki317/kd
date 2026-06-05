@@ -89,7 +89,12 @@ func statusMessage(obj runtime.Object, h Health) string {
 		// Prefer a top-level status.message, but most controllers carry the "why" of a degraded CR in
 		// conditions[].message (a Certificate, an ExternalSecret), so fall back to that.
 		msg, _, _ = unstructured.NestedString(o.Object, "status", "message")
-		if msg == "" {
+		// An Argo Workflow's top-level message is a propagation pointer ("child '<id>' failed") naming
+		// a node the operator can't act on; drill into status.nodes for the failed leaf step's real
+		// error. Falls through to the pointer/conditions when no leaf message exists.
+		if leaf := argoWorkflowMessage(o); leaf != "" {
+			msg = leaf
+		} else if msg == "" {
 			msg = crConditionMessage(o)
 		}
 	case *corev1.Pod:
