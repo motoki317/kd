@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareNamespaces, mostTroubled, nextTroubled, troubledNamespaces } from './ns'
+import { compareNamespaces, mostTroubled, namespaceLabel, nextTroubled, troubledNamespaces } from './ns'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 
 const list: NamespaceInfo[] = [
@@ -62,5 +62,15 @@ describe('nextTroubled', () => {
   it('returns undefined when nothing is troubled', () => {
     expect(nextTroubled([{ name: 'a', health: 'Healthy' }], null)).toBeUndefined()
     expect(nextTroubled([], null)).toBeUndefined()
+  })
+})
+
+describe('namespaceLabel', () => {
+  it('maps the cluster sentinel to the user-facing [cluster] label, never the raw __cluster__', () => {
+    expect(namespaceLabel(CLUSTER_SCOPE)).toBe('[cluster]')
+    expect(namespaceLabel(CLUSTER_SCOPE)).not.toContain('__')
+  })
+  it('passes a real namespace name through unchanged', () => {
+    expect(namespaceLabel('team-a')).toBe('team-a')
   })
 })

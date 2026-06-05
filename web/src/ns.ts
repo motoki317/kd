@@ -1,6 +1,14 @@
 import { healthSeverity } from './health'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 
+// namespaceLabel maps a namespace name to what the operator should SEE — the cluster pseudo-namespace's
+// internal sentinel (`__cluster__`, a URL/wire detail) is never user-facing and renders as `[cluster]`
+// everywhere it's shown (breadcrumb, document title, …). Centralized so the sentinel can't leak raw into
+// one surface while another prettifies it (the breadcrumb did exactly that before this existed).
+export function namespaceLabel(ns: string): string {
+  return ns === CLUSTER_SCOPE ? '[cluster]' : ns
+}
+
 // compareNamespaces orders namespaces troubled-first (worst health, then most non-ready resources),
 // breaking ties alphabetically. The sidebar LIST is plain alphabetical now (a stable row order the
 // operator can aim at), so this is used only to pick the first-load default selection — landing the

@@ -6,7 +6,7 @@ import { setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
 import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
-import { mostTroubled, nextTroubled } from './ns'
+import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
@@ -238,7 +238,7 @@ export default function App() {
   // when both are known, falling back gracefully — the trailing "kd" anchors recognition.
   createEffect(() => {
     const parts: string[] = []
-    if (namespace()) parts.push(namespace() === CLUSTER_SCOPE ? '[cluster]' : namespace()!)
+    if (namespace()) parts.push(namespaceLabel(namespace()!))
     if (ctx() && contextsInfo()?.enabled) parts.push(ctx()!)
     parts.push('kd')
     document.title = parts.join(' · ')
@@ -500,7 +500,9 @@ export default function App() {
                 <circle cx="2.8" cy="8" r="0.5" fill="currentColor" />
               </svg>
             </Show>
-            <span class="crumb-ns" classList={{ 'crumb-ns-cluster': namespace() === CLUSTER_SCOPE }}>{namespace()}</span>
+            <span class="crumb-ns" classList={{ 'crumb-ns-cluster': namespace() === CLUSTER_SCOPE }}>
+              {namespaceLabel(namespace()!)}
+            </span>
           </span>
         </Show>
         <div class="topbar-spacer" />
