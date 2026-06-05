@@ -336,6 +336,7 @@ single commit maps cleanly; otherwise search the title in git log.
 - Navigation now reaches folded matches — count unified + auto-expand-on-select
 - Surfaced a degraded resource's failure reason in the drawer
 - Capacity node labels mixed units within one pair
+- A failed Argo Workflow's drawer shows the leaf step's real error, not the child-node pointer
 
 ### Earlier cycles (2026-05 and before — see git log for detail)
 - Filter count undercounted when matches were folded
