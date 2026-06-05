@@ -291,6 +291,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- A JSON log's level badge/filter/jump-to-error now works even when `level` trails a long message (message-first loggers like pino/bunyan) (6a5c5f3)
 - Init-container logs are now reachable in the pod log picker (labelled optgroup) — the place a stuck-in-Init pod records WHY (e22c47f)
 - JSON-object log lines (ES/zap/logrus/…) render message-first with dimmed extras instead of raw blobs; copy/grep stay on the raw line (6e353b9)
 - Help overlay (`?`) flows into 2 columns ≥740px wide so the full reference card fits without an undiscoverable internal scroll (91986b4)
