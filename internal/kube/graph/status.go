@@ -85,7 +85,12 @@ func statusMessage(obj runtime.Object, h Health) string {
 	var msg string
 	switch o := obj.(type) {
 	case *unstructured.Unstructured:
+		// Prefer a top-level status.message, but most controllers carry the "why" of a degraded CR in
+		// conditions[].message (a Certificate, an ExternalSecret), so fall back to that.
 		msg, _, _ = unstructured.NestedString(o.Object, "status", "message")
+		if msg == "" {
+			msg = crConditionMessage(o)
+		}
 	case *corev1.Pod:
 		msg = blockingConditionMessage(o.Status.Conditions)
 	case *appsv1.Deployment:

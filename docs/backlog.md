@@ -232,6 +232,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**A degraded CR now explains itself — surface its condition message (live-found via triage, 2026-06-06):**
+continuing the triage flow onto a degraded CR (an ECK Elasticsearch "Ready · yellow"), the drawer gave
+the colour but no "why". Root cause: `statusMessage` read only a top-level `status.message` for an
+unstructured CR, but most controllers (cert-manager Certificate, external-secrets ExternalSecret, …) put
+the reason in `status.conditions[].message`. Added `crConditionMessage` (the not-True Ready/Available
+condition's message — mirroring `crHealthFromConditions` so message matches the health verdict), used as
+a fallback in `statusMessage`. The drawer's existing message block renders it (no client change).
+Verified live with a throwaway CRD + a `Ready=False` Widget — the identical path a real Certificate hits:
+the drawer showed "backend datastore unreachable: connection refused" where before it was blank. (ECK ES
+itself uses non-Ready/Available conditions, so it stays colour-only — honest; the win is the many CRs
+that DO use Ready/Available.)
+
 **PodDisruptionBudget → guarded-pods edges (live-found via triage dogfooding, 2026-06-06):** running the
 real operator triage flow (land on most-troubled ns → filter Degraded → drill in) on a degraded PDB
 ("0/3 healthy") hit a dead-end: a PDB selects pods via spec.selector (like a Service) but kd drew no

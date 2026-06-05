@@ -62,6 +62,33 @@ func crHealthFromConditions(u *unstructured.Unstructured) Health {
 	return HealthUnknown
 }
 
+// crConditionMessage returns the message of the CR's Ready/Available condition when that condition isn't
+// True — the "why" behind a degraded CR (a Certificate's "Issuing certificate…", an ExternalSecret's
+// provider error), which most controllers put in conditions[].message rather than a top-level
+// status.message (the only place statusMessage looked before). Mirrors crHealthFromConditions' condition
+// selection so the surfaced message matches the health verdict. Empty when absent or the condition is True.
+func crConditionMessage(u *unstructured.Unstructured) string {
+	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
+	if err != nil || !found {
+		return ""
+	}
+	for _, c := range conds {
+		m, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		if typ, _ := m["type"].(string); typ != "Ready" && typ != "Available" {
+			continue
+		}
+		if s, _ := m["status"].(string); s == "True" {
+			return "" // healthy condition carries no "why"
+		}
+		msg, _ := m["message"].(string)
+		return msg
+	}
+	return ""
+}
+
 // argoHealth covers the argoproj.io group, which hosts several unrelated controllers, so it
 // dispatches by kind. Argo Workflows / Rollouts roll their status up into a single status.phase;
 // an ArgoCD Application exposes status.health.status using kd's own vocabulary.

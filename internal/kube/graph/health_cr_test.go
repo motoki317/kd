@@ -78,6 +78,38 @@ func TestCRHealthFromConditions(t *testing.T) {
 	}
 }
 
+// TestCRConditionMessage proves a degraded CR's "why" — the message on its not-True Ready/Available
+// condition (where cert-manager, external-secrets, etc. put it) — is surfaced as the Node message,
+// falling back from the top-level status.message that most CRs don't set. A True condition carries no
+// "why". Asserts through statusMessage (the integration), with h forced non-Healthy as Build computes.
+func TestCRConditionMessage(t *testing.T) {
+	condM := func(typ, status, msg string) map[string]any {
+		return map[string]any{"type": typ, "status": status, "message": msg}
+	}
+	degraded := cr("cert-manager.io/v1", "Certificate", map[string]any{
+		"conditions": conds(condM("Ready", "False", "Issuing certificate as Secret does not exist")),
+	})
+	if got := statusMessage(degraded, HealthDegraded); got != "Issuing certificate as Secret does not exist" {
+		t.Errorf("statusMessage(degraded CR) = %q, want the condition message", got)
+	}
+	// A top-level status.message wins over the condition message when both are present.
+	both := cr("example.com/v1", "Widget", map[string]any{
+		"message":    "top-level reason",
+		"conditions": conds(condM("Ready", "False", "condition reason")),
+	})
+	if got := statusMessage(both, HealthDegraded); got != "top-level reason" {
+		t.Errorf("statusMessage = %q, want the top-level status.message to win", got)
+	}
+	// A True Ready condition has no "why"; a healthy CR yields no message regardless.
+	ready := cr("example.com/v1", "Widget", map[string]any{"conditions": conds(condM("Ready", "True", "all good"))})
+	if got := statusMessage(ready, HealthDegraded); got != "" {
+		t.Errorf("statusMessage(True condition) = %q, want empty", got)
+	}
+	if got := statusMessage(degraded, HealthHealthy); got != "" {
+		t.Errorf("statusMessage(healthy) = %q, want empty (the early-return guard)", got)
+	}
+}
+
 // TestArgoWorkflowHealth pins the status.phase mapping for Argo Workflows. The cluster's real
 // workflows showed phase Succeeded/Failed with a generic Completed condition — proof the catch-all
 // (which reads Ready/Available) would mis-call them Unknown, hence the dedicated phase rule.
