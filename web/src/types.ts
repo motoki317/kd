@@ -74,6 +74,7 @@ export interface KNode {
   createdAt?: string
   restarts?: number
   containers?: string[]
+  initContainers?: string[]
   images?: string[]
   host?: string
   capacity?: string

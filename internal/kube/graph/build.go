@@ -50,6 +50,7 @@ func Build(objs []runtime.Object) *Graph {
 			CreatedAt:         creationTime(m),
 			Restarts:          podRestarts(obj),
 			Containers:        containerNames(obj),
+			InitContainers:    initContainerNames(obj),
 			Images:            containerImages(obj),
 			Host:              podHost(obj),
 			Capacity:          nodeCapacity(obj),

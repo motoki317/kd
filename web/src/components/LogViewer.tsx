@@ -14,8 +14,12 @@ interface Props {
   name: string
   // aggregated logs span several descendant pods, so each line is labelled with its source pod.
   aggregated: boolean
-  // container names for a single pod; >1 enables the per-container picker.
+  // app container names for a single pod; the picker appears when there's >1 container to choose
+  // across both groups (app + init).
   containers: string[]
+  // init container names — selectable in the picker too, so a failed init container's logs (why a pod
+  // is stuck in Init) are reachable, not just the app containers'.
+  initContainers?: string[]
   // restart total for a single pod; >0 offers the "previous" (crashed container) logs.
   restarts: number
   // single pod's status, to tell "container not started yet" from a real stream drop.
@@ -284,9 +288,23 @@ export default function LogViewer(props: Props) {
     <div class="logs">
       <div class="logs-header">
         <span>Logs</span>
-        <Show when={!props.aggregated && props.containers.length > 1}>
+        {/* Picker appears when there's more than one container to choose across BOTH groups, so a
+            single-app-container pod with an init container now also gets it. When init containers
+            exist the two groups are split into labelled optgroups (init runs first) so the operator
+            can tell which is which; with none, the flat list keeps the common case unchanged. */}
+        <Show when={!props.aggregated && props.containers.length + (props.initContainers?.length ?? 0) > 1}>
           <select class="logs-container" aria-label="Container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
-            <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
+            <Show
+              when={(props.initContainers?.length ?? 0) > 0}
+              fallback={<For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>}
+            >
+              <optgroup label="Init containers">
+                <For each={props.initContainers}>{(c) => <option value={c}>{c}</option>}</For>
+              </optgroup>
+              <optgroup label="App containers">
+                <For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>
+              </optgroup>
+            </Show>
           </select>
         </Show>
         <Show when={!props.aggregated && props.restarts > 0}>

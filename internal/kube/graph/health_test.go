@@ -623,6 +623,34 @@ func TestContainerImages(t *testing.T) {
 	}
 }
 
+func TestContainerNames(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{
+		InitContainers: []corev1.Container{{Name: "init-fs"}, {Name: "init-migrate"}},
+		Containers:     []corev1.Container{{Name: "app"}, {Name: "sidecar"}},
+	}}
+	// App and init containers are reported separately, each in spec order, so the picker can label
+	// the two groups and a failed init container's logs stay reachable.
+	if got := containerNames(pod); len(got) != 2 || got[0] != "app" || got[1] != "sidecar" {
+		t.Errorf("containerNames(pod) = %v, want [app sidecar]", got)
+	}
+	if got := initContainerNames(pod); len(got) != 2 || got[0] != "init-fs" || got[1] != "init-migrate" {
+		t.Errorf("initContainerNames(pod) = %v, want [init-fs init-migrate]", got)
+	}
+
+	// A pod with no init containers reports nil (so the wire omits the field, and the picker stays a
+	// flat list); a non-pod reports nil for both.
+	plain := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "only"}}}}
+	if got := initContainerNames(plain); got != nil {
+		t.Errorf("initContainerNames(no-init pod) = %v, want nil", got)
+	}
+	if got := initContainerNames(&corev1.Service{}); got != nil {
+		t.Errorf("initContainerNames(non-pod) = %v, want nil", got)
+	}
+	if got := containerNames(&corev1.Service{}); got != nil {
+		t.Errorf("containerNames(non-pod) = %v, want nil", got)
+	}
+}
+
 func TestContainerStateString(t *testing.T) {
 	cases := []struct {
 		desc  string

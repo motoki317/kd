@@ -432,6 +432,7 @@ export default function DetailDrawer(props: Props) {
                 name={node().name}
                 aggregated={!isPod()}
                 containers={node().containers ?? []}
+                initContainers={node().initContainers ?? []}
                 restarts={node().restarts ?? 0}
                 status={node().status}
                 visible={tab() === 'logs'}

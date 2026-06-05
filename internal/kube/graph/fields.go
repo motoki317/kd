@@ -42,6 +42,21 @@ func containerNames(obj runtime.Object) []string {
 	return names
 }
 
+// initContainerNames lists a pod's init container names (nil for non-pods, or a pod without init
+// containers), in spec order. The log picker exposes them so an operator can read a failed init
+// container's output — the place a pod stuck in Init records why it never started its app containers.
+func initContainerNames(obj runtime.Object) []string {
+	p, ok := obj.(*corev1.Pod)
+	if !ok || len(p.Spec.InitContainers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(p.Spec.InitContainers))
+	for _, c := range p.Spec.InitContainers {
+		names = append(names, c.Name)
+	}
+	return names
+}
+
 // containerStatuses condenses a pod's per-container runtime state (init containers first, then app
 // containers), nil for non-pods. It's the "which container is actually broken" detail an aggregate
 // restart count or phase hides.

@@ -50,6 +50,27 @@ describe('LogViewer', () => {
     expect(agg.container.querySelector('.logs-container')).toBeNull()
   })
 
+  it('lists init containers in their own optgroup so a failed init container’s logs are reachable', () => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} initContainers={['init-fs', 'init-migrate']} restarts={0} />
+    ))
+    const select = container.querySelector('.logs-container')
+    expect(select).toBeTruthy() // 1 app + 2 init = 3 → picker shows even with a single app container
+    const groups = [...select!.querySelectorAll('optgroup')].map((g) => g.label)
+    expect(groups).toEqual(['Init containers', 'App containers'])
+    const initOpts = [...select!.querySelectorAll('optgroup[label="Init containers"] option')].map((o) => o.textContent)
+    expect(initOpts).toEqual(['init-fs', 'init-migrate'])
+  })
+
+  it('keeps the picker a flat list (no optgroups) when a pod has no init containers', () => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'sidecar']} initContainers={[]} restarts={0} />
+    ))
+    const select = container.querySelector('.logs-container')!
+    expect(select.querySelectorAll('optgroup').length).toBe(0)
+    expect(select.querySelectorAll('option').length).toBe(2)
+  })
+
   it('always offers a timestamps toggle', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     expect(container.querySelector('.logs-ts')?.textContent).toContain('timestamps')

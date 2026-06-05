@@ -55,8 +55,12 @@ type Node struct {
 	Message    string            `json:"message,omitempty"`    // the WHY behind an unhealthy resource (status.message / a blocking condition); empty for healthy ones
 	CreatedAt  string            `json:"createdAt,omitempty"`  // RFC3339 creation time, for age display
 	Restarts   int32             `json:"restarts,omitempty"`   // pod container restart total, a crash signal
-	Containers []string          `json:"containers,omitempty"` // pod container names, for the log picker
-	Images     []string          `json:"images,omitempty"`     // distinct container images, "what's deployed here"
+	Containers []string          `json:"containers,omitempty"` // pod app container names, for the log picker
+	// InitContainers names a pod's init containers (spec order), so the log picker can also reach a
+	// failed init container's logs — the place a pod stuck in Init records WHY. Kept separate from
+	// Containers so the picker can label the two groups (init runs to completion before the app ones).
+	InitContainers []string `json:"initContainers,omitempty"`
+	Images         []string `json:"images,omitempty"` // distinct container images, "what's deployed here"
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
 	Capacity   string            `json:"capacity,omitempty"`   // a Node's CPU/memory/pod capacity, for "how big is this node"
 	ClusterIP  string            `json:"clusterIP,omitempty"`  // a Service's reachable address ("headless"/ExternalName target for those)
