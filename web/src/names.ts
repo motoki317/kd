@@ -170,6 +170,9 @@ export function prefixParentNames(nodes: KNode[], edges: KEdge[]): Map<string, s
 export function cardTitle(n: KNode, now: Date): string {
   const lines = [`${n.kind} ${n.name}`]
   if (n.status) lines.push(n.status)
+  // The failure reason (server-set only for unhealthy nodes) sits right under the status it explains,
+  // so an operator triaging a wall of degraded cards reads the WHY on hover — zero-click, no drawer.
+  if (n.message) lines.push(n.message)
   const meta: string[] = []
   if (n.createdAt) meta.push(`${relativeAge(n.createdAt, now)} old`)
   if (n.host) meta.push(`on ${n.host}`)

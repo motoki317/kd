@@ -184,6 +184,16 @@ describe('cardTitle', () => {
     expect(cardTitle(n, now)).toBe('Pod web-0\nRunning\n2h old · on node-1 · ↻ 3 restarts')
   })
 
+  it('surfaces the failure reason between status and meta, so a hover triages without the drawer', () => {
+    const n = { kind: 'Workflow', name: 'migrate-csqzg', status: 'Failed', message: 'migrate-dry-run: main: Error (exit code 1)', createdAt: twoHoursAgo } as KNode
+    expect(cardTitle(n, now)).toBe('Workflow migrate-csqzg\nFailed\nmigrate-dry-run: main: Error (exit code 1)\n2h old')
+  })
+
+  it('omits the message line for a healthy node (server leaves it empty)', () => {
+    const n = { kind: 'Pod', name: 'web-0', status: 'Running', createdAt: twoHoursAgo } as KNode
+    expect(cardTitle(n, now)).toBe('Pod web-0\nRunning\n2h old')
+  })
+
   it('omits absent facts — no status line, no meta when the node carries none', () => {
     const n = { kind: 'Service', name: 'api' } as KNode
     expect(cardTitle(n, now)).toBe('Service api')
