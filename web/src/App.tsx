@@ -324,7 +324,11 @@ export default function App() {
         const sel = graph.nodes[selectedId() ?? '']
         if (sel) {
           const ref = `${sel.kind}/${sel.name}`
-          navigator.clipboard?.writeText(ref).then(() => setCopiedRef(ref))
+          // Optional-chain the WHOLE promise chain, not just `clipboard` — in a non-secure context
+          // (plain http://<lan-ip>, a real kd access path) `navigator.clipboard` is undefined, so the
+          // bare `?.writeText(ref).then(…)` threw an uncaught TypeError on `.then` of undefined.
+          // Confirm only on a real success (matches CopyButton's silent-no-op-when-unavailable).
+          navigator.clipboard?.writeText(ref)?.then(() => setCopiedRef(ref))?.catch(() => {})
         }
       } else if (e.key === 'Escape') {
         // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.

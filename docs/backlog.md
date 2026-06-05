@@ -203,6 +203,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**`y`-yank threw an uncaught TypeError in a non-secure context (found by code-read during dogfooding,
+2026-06-06):** the shortcut did `navigator.clipboard?.writeText(ref).then(() => setCopiedRef(ref))`. The
+`?.` guards only `clipboard`, so when `navigator.clipboard` is undefined — every non-secure context,
+e.g. plain `http://<lan-ip>:port`, a real way operators reach a port-forwarded/LAN kd — `?.writeText(ref)`
+is `undefined` and `.then(…)` throws an uncaught TypeError in the keydown handler. `CopyButton` is robust
+(its `try/catch` around `await` swallows the same throw and is documented to silently no-op when the API
+is unavailable); the yank wasn't. Optional-chained the whole promise chain
+(`?.writeText(ref)?.then(…)?.catch(…)`) so it no-ops silently when unavailable and confirms only on a real
+success. Verified live both ways: with a working clipboard stub it writes `Pod/…` and shows the "Copied …"
+toast; with `clipboard` forced undefined it throws nothing, leaves the page responsive, and shows no false
+toast.
+
 **Structured search `Kind/name` matches the kind by prefix, not substring (live-found, 2026-06-06):**
 typing `po/ui-a` (the canonical Pod short name) lit Endpoints (end·**po**·ints), NetworkPolicy
 (network·**po**·licy) and PolicyEndpoint alongside Pods, because the kind side of the structured
