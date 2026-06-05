@@ -27,12 +27,21 @@ Recent batches (newest first; `git log` has the commits):
   failure reason** (status.message, for aged-out events); **navigation reaches folded matches** (count
   unified + auto-expand the fold on select — closed two Open items); **log count covers level/pod
   filters**, not just text; **trouble badge/Alt+T cycle through all troubled namespaces**, not just the
-  worst. The four recurring shapes are persisted in the dogfooding skill's "UX-gap patterns" section, and
-  a new pitfall #8 (troubled-first nav masks fold-testing) in "Measurement pitfalls" — check them on any
-  view. Surfaces found MATURE this batch (don't re-survey unless code changes): Events tab (sort
-  newest-first, warning filter, source-nav, aged-out handled), ContextSwitcher (no short-name collisions
-  in the real kubeconfig), capacity per-pod expansion. (Removed the Nodes-view Relationships facet +
-  arrows and Kind-view arrows earlier per direct user request; see git log.)
+  worst; **manifest find scrolls to the first match on type**; **structured `po/` search matches kind by
+  prefix** (was substring — lit Endpoints/NetworkPolicy); **`y`-yank + log-line clipboard copy guarded
+  in non-secure contexts** (threw uncaught TypeErrors); **image refs emphasise the tag, dim the registry
+  prefix** (+ extracted a shared `ImageRef`). The four recurring shapes are persisted in the dogfooding
+  skill's "UX-gap patterns" section, pitfall #8 (troubled-first nav masks fold-testing) in "Measurement
+  pitfalls", and the clipboard non-secure-context gotcha in AGENTS.md — check them on any view. Surfaces
+  found MATURE (don't re-survey unless code changes): Events tab (sort/filter/source-nav/aged-out),
+  ContextSwitcher (no short-name collisions in the real kubeconfig), capacity per-pod expansion + Memory
+  mode, rel-filter compose (every edge delta matches its badge count), Pod/Deployment/Service drawer
+  layouts, **cluster-scope view** (long kind chips truncate + scroll with full-kind titles), **owner-chip
+  navigation + Alt+Left history**, **narrow-viewport toolbar wrap** (760px — primary rows stay in
+  bounds), **zero-match search empty-state** (clear-filters CTA), **drawer expand mode** (520→1050px,
+  aria-pressed, focus-trap). The high-value finding rate is now clearly tapering — most flows verify
+  mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the Nodes-view
+  Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git log.)
 - **2026-06-05 b5** — cluster-scoped drawer fetched an empty `{ns}` (`namespaces//…` → 307→404); fixed at
   the `key()` builder (repairs manifest+events+logs at once) → technique is bug-class #6. Also: a
   "relationships hidden" toast (empty relFilter looked like "no connections"); `prefixParentNames`→
