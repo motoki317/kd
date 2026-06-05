@@ -308,6 +308,43 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestDataKeys(t *testing.T) {
+	cm := &corev1.ConfigMap{
+		Data:       map[string]string{"Corefile": "abcde", "extra.conf": "x"},
+		BinaryData: map[string][]byte{"cert.bin": make([]byte, 2048)},
+	}
+	want := []string{"Corefile · 5B", "cert.bin · 2Ki", "extra.conf · 1B"} // sorted by key
+	if got := dataKeys(cm); !slices.Equal(got, want) {
+		t.Errorf("dataKeys(ConfigMap) =\n%v\nwant\n%v", got, want)
+	}
+
+	sec := &corev1.Secret{
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{"tls.crt": make([]byte, 1200), "tls.key": make([]byte, 1600)},
+	}
+	wantSec := []string{"tls.crt · 1Ki", "tls.key · 2Ki"} // 1600B rounds to 2Ki (%.0f)
+	if got := dataKeys(sec); !slices.Equal(got, wantSec) {
+		t.Errorf("dataKeys(Secret) =\n%v\nwant\n%v", got, wantSec)
+	}
+	if got := secretType(sec); got != "kubernetes.io/tls" {
+		t.Errorf("secretType = %q, want kubernetes.io/tls", got)
+	}
+	// An empty Secret type defaults to Opaque (matching kubectl).
+	if got := secretType(&corev1.Secret{}); got != "Opaque" {
+		t.Errorf("secretType(empty) = %q, want Opaque", got)
+	}
+	// Non-ConfigMap/Secret kinds (and empty data) yield nil — the drawer renders nothing.
+	if got := dataKeys(&corev1.Pod{}); got != nil {
+		t.Errorf("dataKeys(Pod) = %v, want nil", got)
+	}
+	if got := dataKeys(&corev1.ConfigMap{}); got != nil {
+		t.Errorf("dataKeys(empty ConfigMap) = %v, want nil", got)
+	}
+	if got := secretType(&corev1.ConfigMap{}); got != "" {
+		t.Errorf("secretType(non-secret) = %q, want empty", got)
+	}
+}
+
 func TestRoleRules(t *testing.T) {
 	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},

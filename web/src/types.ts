@@ -91,6 +91,8 @@ export interface KNode {
   rules?: string[]
   roleRef?: string
   subjects?: string[]
+  dataKeys?: string[] // a ConfigMap/Secret's data keys, "key · size" (names + sizes only, never values)
+  secretType?: string // a Secret's type (Opaque, kubernetes.io/tls, …)
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

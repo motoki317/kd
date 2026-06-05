@@ -2388,6 +2388,18 @@ button.drawer-host:hover {
 .route-arrow {
   color: var(--text-dim);
 }
+/* A ConfigMap/Secret data-key row: the key reads bright, its size dim and right-aligned (Contrast +
+   Alignment), so a column of keys scans by name with sizes lined up — the node-bar value/capacity idiom. */
+.route-row.data-key {
+  justify-content: space-between;
+}
+.data-key-name {
+  overflow-wrap: anywhere;
+}
+.data-key-size {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 .drawer-labels {
   margin-top: 8px;
 }

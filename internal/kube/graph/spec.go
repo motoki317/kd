@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -327,6 +328,59 @@ func isTraefik(u *unstructured.Unstructured) bool {
 		return true
 	}
 	return false
+}
+
+// dataKeys lists a ConfigMap's or Secret's data keys as "key · size" rows, sorted (nil for other
+// kinds), so the drawer answers "what does this hold?" without opening the manifest — the same
+// declarative-essence surfacing routes/rules give an Ingress/Role. Only key NAMES and byte sizes are
+// emitted, NEVER values: for a Secret the values are sensitive, and a name+size list is strictly less
+// than the (RBAC-gated) Manifest tab already reveals. ConfigMap binaryData is included alongside data.
+func dataKeys(obj runtime.Object) []string {
+	sizes := map[string]int{}
+	switch o := obj.(type) {
+	case *corev1.ConfigMap:
+		for k, v := range o.Data {
+			sizes[k] = len(v)
+		}
+		for k, v := range o.BinaryData {
+			sizes[k] = len(v)
+		}
+	case *corev1.Secret:
+		for k, v := range o.Data {
+			sizes[k] = len(v) // already-decoded bytes; we surface the length, not the content
+		}
+		for k, v := range o.StringData {
+			sizes[k] = len(v)
+		}
+	default:
+		return nil
+	}
+	if len(sizes) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(sizes))
+	for k := range sizes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = k + " · " + humanizeBytes(int64(sizes[k]))
+	}
+	return out
+}
+
+// secretType returns a Secret's type as a display string (empty for non-Secrets). An empty type
+// defaults to Opaque, mirroring Kubernetes.
+func secretType(obj runtime.Object) string {
+	s, ok := obj.(*corev1.Secret)
+	if !ok {
+		return ""
+	}
+	if s.Type == "" {
+		return string(corev1.SecretTypeOpaque)
+	}
+	return string(s.Type)
 }
 
 // roleRules formats a Role/ClusterRole's policy rules as "resources: verbs" rows (nil otherwise), so

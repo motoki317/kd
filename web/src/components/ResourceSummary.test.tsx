@@ -1,5 +1,45 @@
-import { describe, expect, it } from 'vitest'
+import { cleanup, render } from '@solidjs/testing-library'
+import { afterEach, describe, expect, it } from 'vitest'
+import ResourceSummary from './ResourceSummary'
 import { isFloatingImageTag, parseImageRef } from './ResourceSummary'
+import type { KNode } from '../types'
+
+afterEach(cleanup)
+
+const base = { owners: [], onNavigate: () => {} }
+
+describe('ResourceSummary data keys', () => {
+  it('lists a ConfigMap\'s keys with the size split into a dim suffix', () => {
+    const node: KNode = {
+      id: 'cm', kind: 'ConfigMap', name: 'coredns', health: 'Healthy',
+      dataKeys: ['Corefile · 600B', 'extra.conf · 12B'],
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const rows = [...container.querySelectorAll('.route-row.data-key')]
+    expect(rows).toHaveLength(2)
+    expect(rows[0].querySelector('.data-key-name')?.textContent).toBe('Corefile')
+    expect(rows[0].querySelector('.data-key-size')?.textContent).toBe('600B')
+  })
+
+  it('leads a Secret with its type and never renders values', () => {
+    const node: KNode = {
+      id: 's', kind: 'Secret', name: 'tls', health: 'Healthy',
+      secretType: 'kubernetes.io/tls', dataKeys: ['tls.crt · 1Ki', 'tls.key · 2Ki'],
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const typeRow = container.querySelector('.route-row.secret-type')
+    expect(typeRow?.textContent).toContain('kubernetes.io/tls')
+    // only names + sizes — the rendered summary must not leak a value-looking blob
+    expect(container.querySelectorAll('.route-row.data-key')).toHaveLength(2)
+  })
+
+  it('renders no data section for a kind without keys', () => {
+    const node: KNode = { id: 'p', kind: 'Pod', name: 'web', health: 'Healthy' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    expect(container.querySelector('.data-key')).toBeNull()
+    expect(container.querySelector('.secret-type')).toBeNull()
+  })
+})
 
 describe('isFloatingImageTag', () => {
   it('treats a digest reference as pinned', () => {

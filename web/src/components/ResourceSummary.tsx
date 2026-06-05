@@ -269,6 +269,35 @@ export default function ResourceSummary(props: Props) {
           </For>
         </div>
       </Show>
+      {/* A ConfigMap/Secret's data keys ("key · size") — the "what does this hold?" answer, the
+          declarative essence the manifest otherwise buries (mirrors routes/rules for Ingress/Role). A
+          Secret leads with its type (the operationally-important classifier: tls vs dockerconfigjson vs
+          Opaque). NEVER values — only key names + sizes, strictly less than the RBAC-gated Manifest tab. */}
+      <Show when={props.node.secretType || (props.node.dataKeys?.length ?? 0) > 0}>
+        <div class="drawer-routes">
+          <Show when={props.node.secretType}>
+            <code class="route-row secret-type" title="Secret type">
+              <span class="addr-label">type</span>
+              {props.node.secretType}
+            </code>
+          </Show>
+          <For each={props.node.dataKeys}>
+            {(k) => {
+              // Server sends "key · size"; split so the key reads bright and its size dim + right-aligned
+              // (Contrast + Alignment — the same value/capacity treatment the node bars use).
+              const sep = k.lastIndexOf(' · ')
+              return sep < 0 ? (
+                <code class="route-row">{k}</code>
+              ) : (
+                <code class="route-row data-key">
+                  <span class="data-key-name">{k.slice(0, sep)}</span>
+                  <span class="data-key-size">{k.slice(sep + 3)}</span>
+                </code>
+              )
+            }}
+          </For>
+        </div>
+      </Show>
       {/* Containers (cycle 338): a Pod's per-container runtime state and its image belong together —
           "which container is broken and what's it running?" — so each container is one card pairing
           status (dot + state + restarts) with its image, grouped into Init vs app containers with

@@ -63,6 +63,8 @@ type Node struct {
 	Rules      []string          `json:"rules,omitempty"`      // a Role/ClusterRole's policy rules, "resources: verbs"
 	RoleRef    string            `json:"roleRef,omitempty"`    // a RoleBinding/ClusterRoleBinding's target role, "Kind/name"
 	Subjects   []string          `json:"subjects,omitempty"`   // a binding's grantees, "Kind: [namespace/]name" (incl. non-node User/Group)
+	DataKeys   []string          `json:"dataKeys,omitempty"`   // a ConfigMap/Secret's data keys, "key · size" (NAMES + sizes only — never values, even for a Secret)
+	SecretType string            `json:"secretType,omitempty"` // a Secret's type (Opaque, kubernetes.io/tls, …) — the operationally-important classifier
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

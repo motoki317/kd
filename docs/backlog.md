@@ -222,6 +222,19 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**ConfigMap/Secret drawer lists its data keys + a Secret's type (live-found, 2026-06-06):** kd surfaces
+every other kind's declarative essence in the drawer summary (Ingress→routes, Role→rules,
+Service→ports) but a ConfigMap/Secret showed only labels + the raw Manifest tab — so "what keys does
+this hold?", the single most common question about these kinds, meant reading YAML. Added `dataKeys`
+("key · size", sorted) and `secretType` to the graph Node (server-side, from the typed ConfigMap/Secret;
+ConfigMap binaryData and Secret stringData included). The drawer renders them in the routes/rules visual
+language (Repetition): a Secret leads with a labelled `type` row (the operational classifier — tls vs
+dockerconfigjson vs Opaque), then keys with the size split into a dim, right-aligned suffix (Contrast +
+Alignment — the node-bar value/capacity idiom). **Security:** only key NAMES + byte sizes are emitted,
+NEVER values — strictly less than the (RBAC-gated) Manifest tab already shows. Verified live on
+docker-desktop: coredns ConfigMap (Corefile · 420B) and a bootstrap-token Secret (type +
+6 keys with sizes, no values). diff.go repaints on a key add/remove/resize.
+
 **Traefik IngressRoute routing table + Service edges, like Ingress (live-found, 2026-06-06):** the real
 clusters here run Traefik, yet a Traefik `IngressRoute` (a CRD) drawer showed only labels + raw manifest
 and the node sat isolated in the Network view — no routing table, no edge to its backends. Added
