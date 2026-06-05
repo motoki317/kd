@@ -91,6 +91,49 @@ func TestConventionRefEdges_GenericRef(t *testing.T) {
 	}
 }
 
+// TestGatewayRouteEdges proves a Gateway API HTTPRoute links to its backend Services as EdgeRoutes
+// (the Ingress's networking category, not the generic EdgeRefers), including a kind-less backendRef
+// (Service is the default — the shape the convention scanner can't link) and a cross-namespace ref.
+func TestGatewayRouteEdges(t *testing.T) {
+	hr := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata":   map[string]any{"name": "store", "namespace": "shop", "uid": "hr-uid"},
+		"spec": map[string]any{
+			"rules": []any{
+				map[string]any{"backendRefs": []any{
+					map[string]any{"name": "api-svc", "port": int64(8080)},                   // kind-less → defaults to Service
+					map[string]any{"name": "shared", "kind": "Service", "namespace": "infra"}, // cross-namespace
+					map[string]any{"name": "bucket", "kind": "Bucket"},                        // non-Service backend → no node, skipped
+				}},
+			},
+		},
+	}}
+	apiSvc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Service",
+		"metadata": map[string]any{"name": "api-svc", "namespace": "shop", "uid": "api-uid"},
+	}}
+	shared := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Service",
+		"metadata": map[string]any{"name": "shared", "namespace": "infra", "uid": "shared-uid"},
+	}}
+	g := Build([]runtime.Object{hr, apiSvc, shared})
+
+	if !hasEdge(g, EdgeRoutes, "HTTPRoute", "store", "Service", "api-svc") {
+		t.Errorf("missing EdgeRoutes HTTPRoute/store -> Service/api-svc (kind-less backendRef); edges = %+v", g.Edges)
+	}
+	if !hasEdge(g, EdgeRoutes, "HTTPRoute", "store", "Service", "shared") {
+		t.Errorf("missing cross-namespace EdgeRoutes to Service/shared; edges = %+v", g.Edges)
+	}
+	// The route's backends are its whole ref surface, so the generic scanner must not also fire
+	// (it would double-emit the explicit kind:Service ref as EdgeRefers).
+	for _, e := range g.Edges {
+		if e.Type == EdgeRefers {
+			t.Errorf("unexpected EdgeRefers from a Gateway route (generic scanner should be skipped): %+v", e)
+		}
+	}
+}
+
 // TestConventionRefEdges_IgnoresNameValuePair proves the scanner doesn't mistake a
 // generic name/value parameter for a reference (Workflow.spec.arguments[].parameters
 // have name+value; they aren't refs).

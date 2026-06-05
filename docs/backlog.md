@@ -212,6 +212,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Gateway API route → Service edges join the Network relationship (live-found, 2026-06-06):** an
+Ingress links to its backends via `EdgeRoutes` (the Network category), but an HTTPRoute (a CRD) got
+nothing usable: the convention scanner only links a backendRef that carries an explicit `kind`, and
+Gateway API backendRefs default to `kind: Service` and omit it — so an HTTPRoute had *no* topology edge
+to the Services it routes to, and the Network filter showed it as an isolated node. Added a dedicated
+`gatewayRouteEdges` handler (HTTPRoute/GRPCRoute/TCPRoute/TLSRoute/UDPRoute) emitting `EdgeRoutes` for
+each `spec.rules[].backendRefs` Service (cross-namespace refs honored), skipping the generic scanners for
+those kinds so the explicit-kind case can't double-emit an `EdgeRefers`. Verified live on docker-desktop:
+the "Network" chip counted 2, both edges rendered titled "HTTPRoute … routes to Service …".
+
 **Gateway API HTTPRoute drawer shows its routing table, like Ingress (live-found, 2026-06-06):** a
 legacy `Ingress` drawer parsed its rules into a "host/path → service:port" table (`ingressRoutes`), but
 the modern Gateway API `HTTPRoute` — which kd already health-checks (`health_cr.go`) and is the Ingress

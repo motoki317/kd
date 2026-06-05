@@ -107,6 +107,16 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			b.link(id, EdgeBinds, roleRefKind(o.RoleRef), "", o.RoleRef.Name)
 			b.subjectEdges(id, "", o.Subjects)
 		case *unstructured.Unstructured:
+			// A Gateway API route (HTTPRoute/GRPCRoute/…) declares its backends in
+			// spec.rules[].backendRefs — the Gateway-API analogue of an Ingress's rules. Model
+			// them as EdgeRoutes so they share the Ingress's networking category, and skip the
+			// generic scanners: backends are the route's whole reference surface, and the
+			// convention scanner can't link a kind-less Service backendRef anyway (the common
+			// shape, since Service is the backendRef default).
+			if isGatewayRoute(o) {
+				b.gatewayRouteEdges(id, ns, o)
+				break
+			}
 			// Custom resource. Try the curated registry first (deterministic, hand-coded
 			// for vendor schemas), then fall back to the convention scanner for the
 			// generic {name, kind, …} shape.
@@ -202,6 +212,52 @@ func (b *edgeBuilder) ingressEdges(id, ns string, ing *networkingv1.Ingress) {
 			if path.Backend.Service != nil {
 				b.link(id, EdgeRoutes, "Service", ns, path.Backend.Service.Name)
 			}
+		}
+	}
+}
+
+// isGatewayRoute reports whether a CR is a Gateway API *Route kind, the ones whose backends are a
+// routing relationship (matching the kinds health_cr.go already recognizes).
+func isGatewayRoute(u *unstructured.Unstructured) bool {
+	if u.GroupVersionKind().Group != "gateway.networking.k8s.io" {
+		return false
+	}
+	switch u.GetKind() {
+	case "HTTPRoute", "GRPCRoute", "TCPRoute", "TLSRoute", "UDPRoute":
+		return true
+	}
+	return false
+}
+
+// gatewayRouteEdges links a Gateway API route to each Service it routes to (spec.rules[].backendRefs),
+// the EdgeRoutes counterpart to ingressEdges. A backendRef defaults to kind Service; a non-Service
+// backend has no node to point at and is skipped. backendRefs may name another namespace (allowed via a
+// ReferenceGrant), so an explicit namespace overrides the route's own.
+func (b *edgeBuilder) gatewayRouteEdges(id, ns string, u *unstructured.Unstructured) {
+	rules, _, _ := unstructured.NestedSlice(u.Object, "spec", "rules")
+	for _, ri := range rules {
+		rule, ok := ri.(map[string]any)
+		if !ok {
+			continue
+		}
+		refs, _ := rule["backendRefs"].([]any)
+		for _, refi := range refs {
+			ref, ok := refi.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := ref["name"].(string)
+			if name == "" {
+				continue
+			}
+			if k, _ := ref["kind"].(string); k != "" && k != "Service" {
+				continue
+			}
+			toNS := ns
+			if n, _ := ref["namespace"].(string); n != "" {
+				toNS = n
+			}
+			b.link(id, EdgeRoutes, "Service", toNS, name)
 		}
 	}
 }
