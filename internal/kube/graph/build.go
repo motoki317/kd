@@ -68,6 +68,9 @@ func Build(objs []runtime.Object) *Graph {
 			SecretType:        secretType(obj),
 			AccessModes:       accessModes(obj),
 			StorageClass:      storageClass(obj),
+			LastRun:           cronLastRun(obj),
+			Active:            batchActive(obj),
+			Failed:            batchFailed(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

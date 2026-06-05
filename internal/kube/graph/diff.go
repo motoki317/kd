@@ -87,6 +87,9 @@ func nodeEqual(a, b Node) bool {
 		a.SecretType == b.SecretType &&
 		a.AccessModes == b.AccessModes && // a PVC binding to a PV can fill in its modes/class — repaint
 		a.StorageClass == b.StorageClass &&
+		a.LastRun == b.LastRun && // a CronJob firing (lastScheduleTime advancing) must repaint
+		a.Active == b.Active && // a Job/CronJob's active count changing must repaint
+		a.Failed == b.Failed &&
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node

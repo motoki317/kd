@@ -41,6 +41,29 @@ describe('ResourceSummary data keys', () => {
   })
 })
 
+describe('ResourceSummary batch', () => {
+  it('shows a CronJob\'s last-run time and active count', () => {
+    const node: KNode = {
+      id: 'cj', kind: 'CronJob', name: 'backup', health: 'Healthy', status: '0 2 * * *',
+      lastRun: new Date(Date.now() - 3 * 3600_000).toISOString(), active: 1,
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('last run')
+    expect(text).toContain('ago')
+    expect(text).toContain('active')
+    expect(container.querySelector('.port-failed')).toBeNull() // no failures → no failed chip
+  })
+
+  it('flags a Job\'s failed count with the degraded-coloured chip', () => {
+    const node: KNode = { id: 'j', kind: 'Job', name: 'migrate', health: 'Degraded', status: '0/1', failed: 5 }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const failed = container.querySelector('.port-failed')
+    expect(failed?.textContent).toContain('5')
+    expect(failed?.querySelector('.addr-label')?.textContent).toBe('failed')
+  })
+})
+
 describe('ResourceSummary storage', () => {
   it('shows a PVC\'s access modes and storage class as labelled chips', () => {
     const node: KNode = {

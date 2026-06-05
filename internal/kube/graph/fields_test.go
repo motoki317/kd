@@ -3,11 +3,14 @@ package graph
 import (
 	"slices"
 	"testing"
+	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -373,6 +376,34 @@ func TestAccessModesAndStorageClass(t *testing.T) {
 	}
 	if got := accessModes(&corev1.Pod{}); got != "" {
 		t.Errorf("accessModes(Pod) = %q, want empty", got)
+	}
+}
+
+func TestBatchInfo(t *testing.T) {
+	now := metav1.Now()
+	cron := &batchv1.CronJob{
+		Spec:   batchv1.CronJobSpec{Schedule: "0 2 * * *"},
+		Status: batchv1.CronJobStatus{LastScheduleTime: &now, Active: []corev1.ObjectReference{{Name: "j1"}, {Name: "j2"}}},
+	}
+	if got := batchActive(cron); got != 2 {
+		t.Errorf("batchActive(CronJob) = %d, want 2", got)
+	}
+	if got := cronLastRun(cron); got != now.UTC().Format(time.RFC3339) {
+		t.Errorf("cronLastRun = %q, want the RFC3339 lastScheduleTime", got)
+	}
+	job := &batchv1.Job{Status: batchv1.JobStatus{Active: 1, Failed: 3, Succeeded: 0}}
+	if got := batchActive(job); got != 1 {
+		t.Errorf("batchActive(Job) = %d, want 1", got)
+	}
+	if got := batchFailed(job); got != 3 {
+		t.Errorf("batchFailed(Job) = %d, want 3", got)
+	}
+	// A never-run CronJob and non-batch kinds yield zero values, no panic.
+	if got := cronLastRun(&batchv1.CronJob{}); got != "" {
+		t.Errorf("cronLastRun(never-run) = %q, want empty", got)
+	}
+	if got := batchFailed(&corev1.Pod{}); got != 0 {
+		t.Errorf("batchFailed(Pod) = %d, want 0", got)
 	}
 }
 

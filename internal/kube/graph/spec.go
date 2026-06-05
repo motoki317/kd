@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -421,6 +423,36 @@ func storageClass(obj runtime.Object) string {
 		}
 	case *corev1.PersistentVolume:
 		return o.Spec.StorageClassName
+	}
+	return ""
+}
+
+// batchActive returns how many pods/jobs a Job or CronJob has running right now ("is one running?"),
+// the answer the "succeeded/total" status and schedule expression both omit. 0 for other kinds.
+func batchActive(obj runtime.Object) int32 {
+	switch o := obj.(type) {
+	case *batchv1.Job:
+		return o.Status.Active
+	case *batchv1.CronJob:
+		return int32(len(o.Status.Active))
+	}
+	return 0
+}
+
+// batchFailed returns a Job's failed-pod count — burning retries that the "succeeded/total" status
+// hides (a Job at "0/1" with 5 failures looks merely pending). 0 for other kinds.
+func batchFailed(obj runtime.Object) int32 {
+	if o, ok := obj.(*batchv1.Job); ok {
+		return o.Status.Failed
+	}
+	return 0
+}
+
+// cronLastRun returns a CronJob's last schedule time as RFC3339 (empty when it has never fired or for
+// other kinds) — the "did my cron actually run?" answer the schedule expression alone can't give.
+func cronLastRun(obj runtime.Object) string {
+	if o, ok := obj.(*batchv1.CronJob); ok && o.Status.LastScheduleTime != nil {
+		return o.Status.LastScheduleTime.UTC().Format(time.RFC3339)
 	}
 	return ""
 }

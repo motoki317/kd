@@ -222,6 +222,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Job/CronJob drawer shows last-run, active, and failed counts (live-found, 2026-06-06):** the status
+line gave a Job "succeeded/total" and a CronJob its schedule expression — but omitted the runtime
+questions operators actually ask: *did my cron actually fire* (a schedule string doesn't say), *is
+anything running now*, and *is a Job burning retries* (a Job at "0/1" with 5 failures looks merely
+pending). Added `lastRun` (CronJob status.lastScheduleTime, RFC3339 → client `relativeAge`), `active`
+(Job status.Active / CronJob len(status.active)), and `failed` (Job status.Failed) to the graph Node,
+rendered as labelled chips beside the status — the failed chip in the degraded colour so it reads as
+trouble (Contrast, matching the health vocabulary). Verified live on docker-desktop with a demo cron
+(last run 32s ago), a sleeping Job (active 1), and a failing Job (failed 4, red). diff.go repaints on a
+cron firing or a count changing. Continues the "surface each kind's declarative essence" theme.
+
 **PVC/PV drawer shows access modes + storage class (live-found, 2026-06-06):** a PVC's status already
 read "Bound 10Gi" (phase + capacity), but the rest of its essence was manifest-only: the access modes
 (can more than one pod mount it — RWO vs RWX, the multi-attach answer) and the storage class (the

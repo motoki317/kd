@@ -95,6 +95,9 @@ export interface KNode {
   secretType?: string // a Secret's type (Opaque, kubernetes.io/tls, …)
   accessModes?: string // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
   storageClass?: string // a PVC/PV's storage class
+  lastRun?: string // a CronJob's last schedule time (RFC3339)
+  active?: number // a Job/CronJob's currently-running pods/jobs
+  failed?: number // a Job's failed pod count
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

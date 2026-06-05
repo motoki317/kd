@@ -247,6 +247,32 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A Job/CronJob's runtime progress the status line omits: when a CronJob last fired ("did it
+          actually run?"), how many pods/jobs are running now, and a Job's failed count — burning retries
+          the "succeeded/total" status hides (a Job at "0/1" with 5 failures looks merely pending). The
+          failed chip carries the degraded colour so it reads as trouble, matching the health vocabulary. */}
+      <Show when={props.node.lastRun || (props.node.active ?? 0) > 0 || (props.node.failed ?? 0) > 0}>
+        <div class="drawer-ports">
+          <Show when={props.node.lastRun}>
+            <span class="port-addr" title="Last schedule time">
+              <span class="addr-label">last run</span>
+              <code>{relativeAge(props.node.lastRun!)} ago</code>
+            </span>
+          </Show>
+          <Show when={(props.node.active ?? 0) > 0}>
+            <span class="port-addr" title="Running now">
+              <span class="addr-label">active</span>
+              <code>{props.node.active}</code>
+            </span>
+          </Show>
+          <Show when={(props.node.failed ?? 0) > 0}>
+            <span class="port-addr port-failed" title="Failed pods">
+              <span class="addr-label">failed</span>
+              <code>{props.node.failed}</code>
+            </span>
+          </Show>
+        </div>
+      </Show>
       {/* An Ingress/HTTPRoute/IngressRoute routing table (match → backend) — the network view's entry
           point, so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>

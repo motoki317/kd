@@ -2400,6 +2400,11 @@ button.drawer-host:hover {
   color: var(--text-dim);
   white-space: nowrap;
 }
+/* A Job's failed-pod count reads as trouble (degraded colour), so it stands apart from the neutral
+   last-run / active chips beside it. */
+.port-addr.port-failed code {
+  color: var(--health-degraded);
+}
 .drawer-labels {
   margin-top: 8px;
 }
