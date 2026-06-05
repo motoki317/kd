@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -62,6 +63,70 @@ func statusSummary(obj runtime.Object) string {
 		}
 		return ""
 	}
+}
+
+// maxStatusMessage bounds the surfaced message so a pathological multi-KB status can't bloat the
+// graph payload (and the SSE diff). The drawer truncates it for display anyway; this just caps what
+// crosses the wire. Rune-based so it never splits a multibyte character.
+const maxStatusMessage = 300
+
+// statusMessage surfaces the one-line WHY behind an unhealthy resource — the failure reason that
+// otherwise hides in the manifest's status, so an operator triaging a Degraded/Failed resource sees it
+// in the drawer instead of opening the raw YAML. Only populated for non-Healthy resources: a healthy
+// one has no "why" worth the payload, and surfacing one would be noise. Sources by kind: a CR's
+// status.message (Argo Workflow/Rollout failures and many controllers write it there); a Pod's blocking
+// condition message (the Unschedulable detail the per-container statuses can't carry); a Deployment's
+// degraded-condition message (a rollout/replica failure). Other kinds carry their "why" elsewhere
+// (container statuses, events) and return "".
+func statusMessage(obj runtime.Object, h Health) string {
+	if h == HealthHealthy {
+		return ""
+	}
+	var msg string
+	switch o := obj.(type) {
+	case *unstructured.Unstructured:
+		msg, _, _ = unstructured.NestedString(o.Object, "status", "message")
+	case *corev1.Pod:
+		msg = blockingConditionMessage(o.Status.Conditions)
+	case *appsv1.Deployment:
+		msg = deploymentProblemMessage(o)
+	}
+	return truncateRunes(strings.TrimSpace(msg), maxStatusMessage)
+}
+
+// blockingConditionMessage returns the message of the first pod condition that isn't satisfied (e.g. a
+// False PodScheduled carrying "0/3 nodes are available: 3 Insufficient cpu") — the scheduling/readiness
+// reason that the container statuses don't express.
+func blockingConditionMessage(conds []corev1.PodCondition) string {
+	for _, c := range conds {
+		if c.Status != corev1.ConditionTrue && c.Message != "" {
+			return c.Message
+		}
+	}
+	return ""
+}
+
+// deploymentProblemMessage returns the explanatory message of a Deployment's degraded condition: a
+// ReplicaFailure that's True, or a Progressing/Available that's False (e.g. ProgressDeadlineExceeded).
+func deploymentProblemMessage(d *appsv1.Deployment) string {
+	for _, c := range d.Status.Conditions {
+		degraded := c.Type == appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionTrue
+		degraded = degraded || (c.Type != appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionFalse)
+		if degraded && c.Message != "" {
+			return c.Message
+		}
+	}
+	return ""
+}
+
+// truncateRunes caps s to max runes, appending an ellipsis when it cuts — rune-safe so it never splits
+// a multibyte character.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max-1]) + "…"
 }
 
 // podStatusSummary mirrors kubectl's STATUS column: a waiting/terminated container reason

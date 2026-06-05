@@ -216,6 +216,21 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-status')).toBeNull()
   })
 
+  it('surfaces an unhealthy resource’s failure message, full text in the title for hover', () => {
+    const msg = '0/3 nodes are available: 3 Insufficient cpu.'
+    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web', namespace: 'shop', health: 'Progressing', status: 'Unschedulable', message: msg }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const m = container.querySelector('.drawer-message') as HTMLElement
+    expect(m).toBeTruthy()
+    expect(m.textContent).toBe(msg)
+    expect(m.getAttribute('title')).toBe(msg) // full text on hover even when CSS clamps the display
+  })
+
+  it('omits the message block when a resource has none (the healthy/common case)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('.drawer-message')).toBeNull()
+  })
+
   it('offers a copy-name button in the header (cycle 287: title also documents Shift+click for Kind/name)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const btn = container.querySelector('.drawer-name .copy-btn') as HTMLButtonElement

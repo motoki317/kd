@@ -109,23 +109,6 @@ Recent batches (newest first; `git log` has the commits):
   nearby pill. *Don't "fix" by making selection feed `collapseMatchCount` — that reintroduces the
   phantom-hit the comment guards against.*
 
-- **Surface a degraded resource's status message for faster triage** — *verified live (cycle 44,
-  a remote staging cluster, a busy namespace: a 21-day-old Failed Workflow), needs a scope/format
-  decision.* When an
-  unhealthy resource's Events have aged out (k8s events have a TTL — a 3-week-old failure shows "No
-  recent events."), the only place the failure reason lives is the manifest's `status.message`, which
-  the operator must open the Manifest tab and `⌘F "message"` to find. The card + drawer show the phase
-  ("Failed") but not the *why*. `KNode` carries only `status?: string` (the phase, e.g. from
-  `health_cr.go` `crPhase`); the server never extracts `status.message`. **What it takes:** a new
-  `Node.Reason`/`Message` field populated for degraded resources (server: read `status.message` — present
-  for Argo Workflows/Rollouts and many CRs, absent/irrelevant for Pods which use container statuses),
-  thread through `diff.go` equality + `types.ts`, and show it in `ResourceSummary` for degraded nodes.
-  **Why deferred (not a quick fix):** it's server+client across the user-iterated health pipeline;
-  `status.message` format varies wildly by kind (some are long/multi-line) so it needs a per-kind or
-  truncation policy; and whether the summary *should* carry it vs. keeping the manifest authoritative is
-  a genuine design call (the phase-on-card + detail-in-manifest split may be deliberate). **Reopen:**
-  when the user wants failure reasons in the drawer summary and states the kind/format policy.
-
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
   (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
@@ -248,6 +231,19 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**Surfaced a degraded resource's failure reason in the drawer (was an Open item; shipped 2026-06-06):**
+when an unhealthy resource's Events had aged out (k8s event TTL — a 3-week-old failure shows "No recent
+events."), the only place the *why* lived was the manifest's `status.message`, which the operator had to
+dig out via the Manifest tab + `⌘F`. The card/drawer showed the phase ("Failed") but not the reason.
+Added a `Message` field to `KNode`: the server extracts it only for non-Healthy resources
+(`statusMessage` in `status.go` — unstructured `status.message`, Pod blocking-condition, Deployment
+problem-condition), rune-truncated to 300, threaded through `diff.go` equality + `types.ts`, and shown
+under the drawer hero (`.drawer-message`, red left accent, 3-line clamp, full text on hover via `title`).
+Empty for Healthy resources so the drawer stays clean. Verified live on a real staging EKS cluster: a
+Failed Workflow drawer surfaced `child '…' failed` with the full reason on hover and a red accent border.
+Chose truncated-in-drawer over manifest-only: the reason is the first thing an operator needs and the
+manifest stays authoritative for the untruncated text.
 
 **Capacity node labels mixed units within one pair (was an Open item; shipped 2026-06-06):** a node's
 Use bar read "876m / 16" (millicores over cores) while another node read "2.15 / 16" — independent

@@ -36,6 +36,7 @@ func Build(objs []runtime.Object) *Graph {
 		if !ok {
 			continue
 		}
+		h := health(obj)
 		node := Node{
 			ID:                nodeID(kind, m),
 			Kind:              kind,
@@ -43,8 +44,9 @@ func Build(objs []runtime.Object) *Graph {
 			Namespace:         m.GetNamespace(),
 			Name:              m.GetName(),
 			Labels:            m.GetLabels(),
-			Health:            health(obj),
+			Health:            h,
 			Status:            statusSummary(obj),
+			Message:           statusMessage(obj, h),
 			CreatedAt:         creationTime(m),
 			Restarts:          podRestarts(obj),
 			Containers:        containerNames(obj),

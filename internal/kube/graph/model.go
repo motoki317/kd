@@ -49,6 +49,7 @@ type Node struct {
 	Name       string            `json:"name"`
 	Health     Health            `json:"health"`
 	Status     string            `json:"status,omitempty"`     // short human-readable status, e.g. "Running", "2/2"
+	Message    string            `json:"message,omitempty"`    // the WHY behind an unhealthy resource (status.message / a blocking condition); empty for healthy ones
 	CreatedAt  string            `json:"createdAt,omitempty"`  // RFC3339 creation time, for age display
 	Restarts   int32             `json:"restarts,omitempty"`   // pod container restart total, a crash signal
 	Containers []string          `json:"containers,omitempty"` // pod container names, for the log picker

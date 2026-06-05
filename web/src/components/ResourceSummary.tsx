@@ -112,6 +112,15 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </div>
+      {/* The failure reason behind an unhealthy resource (server only sets it for non-Healthy ones) —
+          the WHY that otherwise hides in the manifest's status.message. Sits right under the hero so it
+          reads next to the status it explains (proximity). Clamped to a few lines with the full text on
+          hover (title), since k8s messages can be long; a left accent ties it to the trouble. */}
+      <Show when={props.node.message}>
+        <div class="drawer-message" title={props.node.message}>
+          {props.node.message}
+        </div>
+      </Show>
       <div class="drawer-meta">
         <Show when={props.node.namespace}>
           <span>{props.node.namespace}</span>

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -10,6 +11,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -306,6 +308,53 @@ func TestPDBHealthIgnoresBenignDisruptionBlocked(t *testing.T) {
 	}}
 	if got := health(p); got != HealthHealthy {
 		t.Errorf("health(budget-met PDB with SyncFailed) = %q, want Healthy", got)
+	}
+}
+
+func TestStatusMessage(t *testing.T) {
+	// Healthy resources carry no message, whatever their status fields say (keeps the payload lean).
+	healthyPod := &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	if got := statusMessage(healthyPod, HealthHealthy); got != "" {
+		t.Errorf("statusMessage(healthy) = %q, want \"\"", got)
+	}
+
+	// A Pod's blocking condition (Unschedulable) carries the WHY the container statuses can't.
+	unsched := &corev1.Pod{Status: corev1.PodStatus{
+		Phase: corev1.PodPending,
+		Conditions: []corev1.PodCondition{{
+			Type: corev1.PodScheduled, Status: corev1.ConditionFalse, Reason: "Unschedulable",
+			Message: "0/3 nodes are available: 3 Insufficient cpu.",
+		}},
+	}}
+	if got := statusMessage(unsched, HealthProgressing); got != "0/3 nodes are available: 3 Insufficient cpu." {
+		t.Errorf("statusMessage(unschedulable pod) = %q", got)
+	}
+
+	// A CR's status.message is the canonical failure reason (Argo Workflow / Rollout / many controllers).
+	wf := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",
+		"status": map[string]any{"phase": "Failed", "message": "child 'step-2' failed"},
+	}}
+	if got := statusMessage(wf, HealthDegraded); got != "child 'step-2' failed" {
+		t.Errorf("statusMessage(failed Workflow) = %q, want the status.message", got)
+	}
+
+	// A Deployment surfaces its degraded condition's message (ProgressDeadlineExceeded).
+	deploy := &appsv1.Deployment{Status: appsv1.DeploymentStatus{Conditions: []appsv1.DeploymentCondition{{
+		Type: appsv1.DeploymentProgressing, Status: corev1.ConditionFalse, Reason: "ProgressDeadlineExceeded",
+		Message: "ReplicaSet \"web-abc\" has timed out progressing.",
+	}}}}
+	if got := statusMessage(deploy, HealthDegraded); got != "ReplicaSet \"web-abc\" has timed out progressing." {
+		t.Errorf("statusMessage(stuck Deployment) = %q", got)
+	}
+
+	// Over-long messages are rune-capped so a pathological status can't bloat the payload.
+	long := &unstructured.Unstructured{Object: map[string]any{
+		"status": map[string]any{"message": strings.Repeat("x", 500)},
+	}}
+	got := statusMessage(long, HealthDegraded)
+	if len([]rune(got)) != maxStatusMessage || !strings.HasSuffix(got, "…") {
+		t.Errorf("statusMessage(long) len = %d (want %d, ellipsis-terminated)", len([]rune(got)), maxStatusMessage)
 	}
 }
 

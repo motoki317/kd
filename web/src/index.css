@@ -2044,6 +2044,24 @@ button.conn.conn-retry:focus-visible {
   line-height: 1.3;
   word-break: break-word;
 }
+/* The failure reason for an unhealthy resource. A left accent in the degraded hue ties it to the
+   trouble without shouting; clamped to 3 lines (full text on hover via title) so a long k8s message
+   doesn't push the tabs/body off-screen. */
+.drawer-message {
+  margin: 8px 0 0;
+  padding: 6px 9px;
+  border-left: 2px solid var(--health-degraded);
+  background: color-mix(in srgb, var(--health-degraded) 7%, transparent);
+  border-radius: 0 4px 4px 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 /* Keep the copy affordance quiet until the header is hovered, so the name stays the focus. */
 .drawer-name .copy-btn {
   opacity: 0;

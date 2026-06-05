@@ -68,6 +68,7 @@ export interface KNode {
   name: string
   health: Health
   status?: string
+  message?: string // the WHY behind an unhealthy resource (failure reason); empty for healthy ones
   createdAt?: string
   restarts?: number
   containers?: string[]

@@ -73,6 +73,7 @@ func nodeEqual(a, b Node) bool {
 		a.Name == b.Name &&
 		a.Health == b.Health &&
 		a.Status == b.Status &&
+		a.Message == b.Message && // a failure reason appearing/changing must repaint the drawer
 		a.Restarts == b.Restarts &&
 		a.Host == b.Host &&
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
