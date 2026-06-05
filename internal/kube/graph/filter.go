@@ -81,34 +81,19 @@ func SummarizeBuilt(g *Graph, clusterScope bool) Summary {
 // lets the API aggregate logs for a workload across all the pods it ultimately owns (Deployment →
 // ReplicaSet → Pod, CronJob → Job → Pod, ...). Historical pods are absent because Build drops them.
 func (g *Graph) DescendantPodNames(id string) []string {
-	children := map[string][]string{}
-	for _, e := range g.Edges {
-		if e.Type == EdgeOwner {
-			children[e.From] = append(children[e.From], e.To)
-		}
-	}
 	kind := make(map[string]string, len(g.Nodes))
 	name := make(map[string]string, len(g.Nodes))
 	for _, n := range g.Nodes {
 		kind[n.ID], name[n.ID] = n.Kind, n.Name
 	}
-
+	// DescendantIDs already walks the ownerReference subtree (cycle-guarded); narrow it to Pods so the
+	// two traversals stay one implementation. The id itself is included, so a Pod id yields its own name.
 	var pods []string
-	seen := map[string]bool{}
-	var walk func(string)
-	walk = func(cur string) {
-		if seen[cur] {
-			return // ownerReferences are a DAG in practice, but guard against cycles regardless
-		}
-		seen[cur] = true
-		if kind[cur] == "Pod" {
-			pods = append(pods, name[cur])
-		}
-		for _, c := range children[cur] {
-			walk(c)
+	for _, did := range g.DescendantIDs(id) {
+		if kind[did] == "Pod" {
+			pods = append(pods, name[did])
 		}
 	}
-	walk(id)
 	slices.Sort(pods)
 	return pods
 }
