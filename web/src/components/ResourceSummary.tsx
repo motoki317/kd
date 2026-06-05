@@ -41,6 +41,48 @@ export function isFloatingImageTag(img: string): boolean {
   return tag === 'latest' || tag === 'stable' || tag === 'main' || tag === 'master' || tag === 'edge'
 }
 
+// parseImageRef splits an image reference into the registry/path prefix (infra noise — usually the
+// same across every container in a cluster), the repository name, and the tag-or-digest. The drawer
+// dims the prefix and emphasises the tag so the operator's first question — "which version is
+// running?" — reads at a glance instead of hiding at the end of a long ECR/GCR URL. Mirrors the
+// registry split in isFloatingImageTag (path first, so a "registry:5000" port is never a false tag).
+export function parseImageRef(img: string): { prefix: string; name: string; tag: string } {
+  const lastSlash = img.lastIndexOf('/')
+  const prefix = lastSlash >= 0 ? img.slice(0, lastSlash + 1) : ''
+  const tail = lastSlash >= 0 ? img.slice(lastSlash + 1) : img
+  // A digest pin (name@sha256:…) wins over a tag; keep the whole "@sha256:…" as the emphasised part.
+  const at = tail.indexOf('@')
+  if (at >= 0) return { prefix, name: tail.slice(0, at), tag: tail.slice(at) }
+  const colon = tail.indexOf(':')
+  if (colon >= 0) return { prefix, name: tail.slice(0, colon), tag: tail.slice(colon) }
+  return { prefix, name: tail, tag: '' }
+}
+
+// ImageRef renders one image reference — dim registry/path prefix, normal repo name, emphasised
+// tag/digest — plus the floating-tag warning and a copy button that yanks the FULL ref. Shared by the
+// per-container cards and the workload image list so both read identically (one place to evolve).
+function ImageRef(props: { image: string; wrapClass: string }) {
+  const parts = createMemo(() => parseImageRef(props.image))
+  return (
+    <div class={props.wrapClass} title={props.image}>
+      <code class="image-ref">
+        <span class="image-ref-prefix">{parts().prefix}</span>
+        {parts().name}
+        <span class="image-ref-tag">{parts().tag}</span>
+      </code>
+      <Show when={isFloatingImageTag(props.image)}>
+        <span
+          class="image-floating-tag"
+          title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
+        >
+          floating tag
+        </span>
+      </Show>
+      <CopyButton text={() => props.image} title="Copy image" />
+    </div>
+  )
+}
+
 // containerGroups splits a pod's container statuses into the two groups operators reason about
 // separately: init containers (run once, in order, before the app starts) and the long-running app
 // containers. Each carries a header label; order within a group is the server's (execution order).
@@ -238,22 +280,7 @@ export default function ResourceSummary(props: Props) {
         fallback={
           <Show when={(props.node.images?.length ?? 0) > 0}>
             <div class="drawer-images">
-              <For each={props.node.images}>
-                {(img) => (
-                  <div class="drawer-image" title={img}>
-                    <code>{img}</code>
-                    <Show when={isFloatingImageTag(img)}>
-                      <span
-                        class="image-floating-tag"
-                        title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
-                      >
-                        floating tag
-                      </span>
-                    </Show>
-                    <CopyButton text={() => img} title="Copy image" />
-                  </div>
-                )}
-              </For>
+              <For each={props.node.images}>{(img) => <ImageRef image={img} wrapClass="drawer-image" />}</For>
             </div>
           </Show>
         }
@@ -296,18 +323,7 @@ export default function ResourceSummary(props: Props) {
                           </div>
                         </Show>
                         <Show when={cs.image}>
-                          <div class="container-image" title={cs.image}>
-                            <code>{cs.image}</code>
-                            <Show when={isFloatingImageTag(cs.image!)}>
-                              <span
-                                class="image-floating-tag"
-                                title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
-                              >
-                                floating tag
-                              </span>
-                            </Show>
-                            <CopyButton text={() => cs.image!} title="Copy image" />
-                          </div>
+                          <ImageRef image={cs.image!} wrapClass="container-image" />
                         </Show>
                       </div>
                     )}

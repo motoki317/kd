@@ -2292,6 +2292,19 @@ button.drawer-host:hover {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* Image reference emphasis (Contrast): the registry/account/path prefix is infra noise — usually
+   identical across a pod's containers — so it's dimmed (opacity is context-relative, staying the
+   faintest part whether the code base colour is --text or --text-dim), while the tag/digest is
+   pulled bright + semibold because "which version is running" is the operator's first question. The
+   repo name keeps the base code colour in between. Reuses the same emphasise-what-matters / dim-the-
+   context language as the capacity bars' value-vs-capacity styling. */
+.image-ref-prefix {
+  opacity: 0.55;
+}
+.image-ref-tag {
+  color: var(--text);
+  font-weight: 600;
+}
 /* Small badge that flags an image without a pinned tag/digest — same shape as label-chip but
    tinted in the Suspended (amber) hue so it reads as "you should know about this" rather than
    "this is broken". The full explanation lives in the title. */

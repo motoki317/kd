@@ -203,6 +203,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Image references emphasise the tag, dim the registry prefix (live-found, 2026-06-06):** every
+container card and workload image rendered the full ref in one uniform `<code>` — so a long ECR/GCR
+prefix (`111122223333.dkr.ecr.us-west-2.amazonaws.com/quay-io/argoproj/`, usually identical across
+a pod's containers) carried the same visual weight as the operator's first question, the version. Added
+`parseImageRef` (prefix / repo name / tag-or-digest, reusing isFloatingImageTag's path-first split so a
+`registry:5000` port is never a false tag) and rendered the prefix at 0.55 opacity, the tag bright +
+semibold — the same emphasise-what-matters / dim-the-context language as the capacity bars. Also
+extracted the duplicated image markup (code + floating-tag badge + copy) into one shared `ImageRef`
+component used by both sites. Copy still yanks the full ref; the title still shows it. Verified live on a
+real pod: prefix dimmed (opacity 0.55), `:v4.0.5` at weight 600 / `--text`. Unit-tested the parse
+(full ECR ref, digest pin, registry port, bare image).
+
 **`y`-yank threw an uncaught TypeError in a non-secure context (found by code-read during dogfooding,
 2026-06-06):** the shortcut did `navigator.clipboard?.writeText(ref).then(() => setCopiedRef(ref))`. The
 `?.` guards only `clipboard`, so when `navigator.clipboard` is undefined — every non-secure context,
