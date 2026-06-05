@@ -65,10 +65,11 @@ func newServerWithDefault(t *testing.T, policy, defaultRole string, objs ...runt
 	t.Helper()
 	typed := fake.NewSimpleClientset(objs...)
 	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
-	// EagerKinds opts events back in (it's in DefaultSkipKinds) so the events-tab tests
-	// see them in the cache. Discoverer overrides the fake clientset's empty discovery.
+	// Events are deliberately NOT eager-loaded (DefaultSkipKinds); the events handler queries them
+	// live from the API server, so the events-tab test reads them straight from the typed fake — no
+	// EagerKinds workaround needed (its absence here is what proves the live-query path works in
+	// production, where events are skipped). Discoverer overrides the fake clientset's empty discovery.
 	opts := store.Options{
-		EagerKinds: []string{"events"},
 		Discoverer: discovery.Static(fixtureResources),
 	}
 	reg := registry.NewInCluster(registry.Clients{Typed: typed, Dynamic: dyn}, 0, opts)

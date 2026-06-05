@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/motoki317/kd/internal/kube/graph"
@@ -37,8 +38,7 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.authorizeKind(w, r, store, ns, kind, "get"); !ok {
 		return
 	}
-	// Snapshots arrive as *unstructured.Unstructured from the dynamic-informer store.
-	// Convert known kinds (Event included) once so downstream typed assertions work.
+	// The graph (for the resource's UID and its owned subtree) comes from the cached snapshot.
 	snapshot := graph.AsTypedSlice(store.SnapshotNamespace(ns))
 	g := graph.Build(snapshot)
 	rootID := g.NodeID(kind, name)
@@ -52,7 +52,24 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	for _, id := range g.DescendantIDs(rootID) {
 		uids[id] = true
 	}
-	writeJSON(w, eventsResponse{Events: eventsFor(snapshot, uids, kind, name)})
+	// Events are NOT eager-loaded into the informer cache (DefaultSkipKinds — too high-cardinality
+	// and short-lived to keep watched), so they are absent from the snapshot. Fetch them live from
+	// the API server on demand, kubectl-describe style. The cluster sentinel lists across all
+	// namespaces (a cluster-scoped resource's events have no fixed namespace).
+	eventsNS := ns
+	if eventsNS == ClusterScopeNamespace {
+		eventsNS = metav1.NamespaceAll
+	}
+	list, err := store.Client().CoreV1().Events(eventsNS).List(r.Context(), metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, "failed to list events", http.StatusBadGateway)
+		return
+	}
+	evs := make([]runtime.Object, len(list.Items))
+	for i := range list.Items {
+		evs[i] = &list.Items[i]
+	}
+	writeJSON(w, eventsResponse{Events: eventsFor(evs, uids, kind, name)})
 }
 
 // eventsFor collects the events whose involvedObject is in the uid set (the resource and its
