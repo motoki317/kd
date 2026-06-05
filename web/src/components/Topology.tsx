@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { connGroups, kindGroups, layoutGraph, layoutGraphByKind, type CollapseMeta } from '../layout'
-import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
+import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatPair, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
 import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
@@ -1542,6 +1542,10 @@ export default function Topology(props: Props) {
                   // namespace's pod segments undercounts when other namespaces + system overhead also run
                   // on the node, so max(pod sum, node usage) keeps the headline figure honest.
                   const useShown = Math.max(row.useTotal, row.nodeUse ?? 0)
+                  // Node-row "value / capacity" labels: format both parts in the capacity's unit so the
+                  // two stacked bars never clash ("876m / 16" → "0.88 / 16"). See formatPair.
+                  const reqPair = formatPair(row.reqTotal, row.cap, capResource())
+                  const usePair = formatPair(useShown, row.useCap, capResource())
                   const segClasses = (s: CapSeg) => ({
                     over: s.over,
                     near: s.nearLimit,
@@ -1654,8 +1658,8 @@ export default function Topology(props: Props) {
                       </Show>
                       {/* Reserved (request) total, sat right after the request bar (proximity): "req / cap". */}
                       <text class="cap-bar-value" x={row.x + Math.max(row.trackW, row.reqTotal * capInfo().scale) + 8} y={row.reqBarY + 12}>
-                        <tspan class="cap-bar-value-strong">{fmt(row.reqTotal)}</tspan>
-                        {row.cap !== undefined ? ` / ${fmt(row.cap)}` : ''}
+                        <tspan class="cap-bar-value-strong">{reqPair.value}</tspan>
+                        {row.cap !== undefined ? ` / ${reqPair.cap}` : ''}
                       </text>
 
                       {/* Usage bar: this namespace's pods sized by actual usage, then the single folded
@@ -1738,8 +1742,8 @@ export default function Topology(props: Props) {
                           The node's real usage (incl. overhead) gauged against TOTAL physical capacity,
                           not allocatable — usage can spill into the reserved region. */}
                       <text class="cap-bar-value" x={row.x + Math.max(row.useTrackW, useShown * capInfo().scale) + 8} y={row.trackY + 12}>
-                        <tspan class="cap-bar-value-strong">{fmt(useShown)}</tspan>
-                        {row.useCap !== undefined ? ` / ${fmt(row.useCap)}` : ''}
+                        <tspan class="cap-bar-value-strong">{usePair.value}</tspan>
+                        {row.useCap !== undefined ? ` / ${usePair.cap}` : ''}
                       </text>
 
                       {/* Per-pod bullets (expanded): each pod is its own bordered CARD — name header, then

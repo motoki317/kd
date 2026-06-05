@@ -1,6 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { layoutGraphByCapacity } from './capacityLayout'
+import { formatPair, layoutGraphByCapacity } from './capacityLayout'
 import type { KNode, Resources } from './types'
+
+describe('formatPair', () => {
+  it('CPU: a cores-scale cap pulls the numerator into cores (no "876m / 16" clash)', () => {
+    expect(formatPair(876, 16000, 'cpu')).toEqual({ value: '0.88', cap: '16' })
+    expect(formatPair(2150, 16000, 'cpu')).toEqual({ value: '2.15', cap: '16' })
+  })
+  it('CPU: a sub-core cap keeps both parts in millicores (already one unit)', () => {
+    expect(formatPair(480, 940, 'cpu')).toEqual({ value: '480m', cap: '940m' })
+  })
+  it('CPU: trims trailing zeros on the cores form', () => {
+    expect(formatPair(2000, 2000, 'cpu')).toEqual({ value: '2', cap: '2' })
+  })
+  it('memory: both parts in the cap’s binary unit', () => {
+    const Gi = 1024 ** 3
+    expect(formatPair(0.5 * Gi, 8 * Gi, 'memory')).toEqual({ value: '0.5Gi', cap: '8Gi' })
+  })
+  it('an undefined cap falls back to a single formatted value (no reference unit to match)', () => {
+    expect(formatPair(500, undefined, 'cpu')).toEqual({ value: '500m', cap: '' })
+  })
+  it('an undefined value renders as a dash, keeping the cap', () => {
+    expect(formatPair(undefined, 16000, 'cpu')).toEqual({ value: '—', cap: '16' })
+  })
+})
 
 const node = (name: string, allocCpu: number, capCpu: number): KNode => ({
   id: `node-${name}`,

@@ -492,6 +492,32 @@ export function layoutGraphByCapacity(
   }
 }
 
+// formatPair renders a "value / capacity" pair with BOTH parts in ONE unit — the unit the CAPACITY
+// (the reference) naturally uses — so a node's two stacked bars never clash units. Independent
+// per-value formatting gave "876m / 16" (millicores numerator over a cores denominator) and varied
+// the unit node-to-node; here the denominator picks the unit and the numerator follows: "0.88 / 16"
+// (cores) or "480m / 940m" (millicores), each label in a single unit. Returns the parts separately so
+// the value can still render bold (the contrast cue). CPU: cores when the cap is ≥1 core, else
+// millicores; memory: the cap's binary unit.
+export function formatPair(value: number | undefined, cap: number | undefined, res: CapResource): { value: string; cap: string } {
+  if (cap === undefined) return { value: formatQuantity(value, res), cap: '' } // no reference unit to match
+  if (res === 'cpu') {
+    const cores = cap >= 1000
+    const f = (v: number | undefined) => (v === undefined ? '—' : cores ? `${+(v / 1000).toFixed(2)}` : `${Math.round(v)}m`)
+    return { value: f(value), cap: f(cap) }
+  }
+  const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
+  let i = 0
+  let n = cap
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
+  }
+  const div = 1024 ** i
+  const f = (v: number | undefined) => (v === undefined ? '—' : `${+(v / div).toFixed(i > 0 ? 1 : 0)}${units[i]}`)
+  return { value: f(value), cap: f(cap) }
+}
+
 // formatQuantity renders a canonical-unit resource value for the capacity view's labels: CPU
 // millicores as cores ("1.5") or millicores ("500m") and memory bytes as binary units ("8Gi").
 export function formatQuantity(v: number | undefined, res: CapResource): string {

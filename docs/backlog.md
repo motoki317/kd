@@ -126,21 +126,6 @@ Recent batches (newest first; `git log` has the commits):
   a genuine design call (the phase-on-card + detail-in-manifest split may be deliberate). **Reopen:**
   when the user wants failure reasons in the drawer summary and states the kind/format policy.
 
-- **Capacity bar `value / capacity` labels mix units, hurting at-a-glance comparison** — *verified
-  live (cycle 22, a remote staging cluster Nodes view), needs a unit-policy decision before implementing.*
-  `formatQuantity` (`web/src/capacityLayout.ts`, moved there from layout.ts in the cycle-36 split) picks a unit per value by magnitude, independently for the
-  numerator and denominator. So a node's Use bar reads `85m / 1` (millicores / cores) while its Req bar
-  right below reads `860m / 940m` (both millicores) — the two stacked capacities of ONE node (`1` =
-  1000m total, `940m` allocatable) render in clashing units and don't visibly read as "both ≈1 core".
-  Memory has the same straddle (`512Mi / 8Gi`). The bar LENGTH already encodes the ratio, so this is a
-  label-readability refinement, not a correctness bug. **Why deferred:** the fix is a `formatPair(value,
-  cap, res)` that formats both parts in the capacity's unit, but the unit policy is a genuine
-  user-judgment call with real tradeoffs — always-millicores (`85m / 1000m`, kubectl-native but verbose
-  `64000m` on big nodes) vs cores-for-≥1 (`0.09 / 1`, concise but lossy small decimals). The capacity
-  view is a heavily-tuned, user-iterated surface (see the capacity-view ADR + `docs/frontend-internals.md`,
-  which say don't reinterpret it without the user), so pick the unit policy WITH the user, then ship `formatPair` +
-  tests. **Reopen:** when the user states a preferred unit policy for paired capacity labels.
-
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
   (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
@@ -263,6 +248,18 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**Capacity node labels mixed units within one pair (was an Open item; shipped 2026-06-06):** a node's
+Use bar read "876m / 16" (millicores over cores) while another node read "2.15 / 16" — independent
+per-value `formatQuantity` picked the unit per number, so a single "value / cap" label clashed and the
+unit varied node-to-node. Added `formatPair(value, cap, res)`: the capacity (denominator) picks the
+unit and both parts follow — CPU cores when cap ≥1 core else millicores, memory in the cap's binary
+unit. Applied to the node-row Use/Req labels. Verified live on docker-desktop ("0.89 / 16") and a real
+EKS cluster with sub-core fargate nodes ("480m / 940m", both millicores) — zero mixed-unit labels.
+Chose derive-from-cap over always-cores (the option preview hinted cores even for sub-core caps): it's
+more precise for small nodes and still single-unit, the actual goal. *Per-pod bullet labels left as
+formatQuantity — they show one `use` against two refs (limit/request), so a single per-card unit is a
+separate follow-up; node-row was the felt complaint.*
 
 **Filter count undercounted when matches were folded (live-found, 2026-06-06):** on a real staging
 namespace (57 Degraded across 144 Workflows, most folded into "+N more" pills), clicking the Degraded
