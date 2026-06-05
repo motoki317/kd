@@ -9,118 +9,42 @@ to discover, adversarially verify, and ship items; the **`backlog-management`** 
 format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
 an entry actionable — keep them.
 
-**Status (2026-06-05, batch 5):** A live-dogfooding batch whose headline is a **real bug the frozen
-harness (batch 4) couldn't surface visually but the network log did**: every cluster-scoped resource
-(Node, PriorityClass, ClusterRole) showed "unavailable" + "Couldn't load events" because the drawer
-built its fetch URL with an empty `{ns}` segment (`namespaces//resources/...` → 307→404); fixed by
-substituting the `CLUSTER_SCOPE` sentinel at the `key()` builder (repairs manifest+events+logs at once).
-The technique is the durable takeaway — `agent-browser network requests | grep resources` exposes
-malformed-URL bugs the rAF-frozen compositor hides behind a generic "unavailable" (now bug-class #6 in
-`dogfooding-kd-ui.md`; dogfood the drawer in **cluster scope**, not just a namespace). Also shipped: a
-non-blocking **"relationships hidden"** bottom toast (explicit-over-implicit — an empty relFilter draws
-edgeless cards indistinguishable from "no connections"; one-click "show ownership" restore); two
-organizing refactors (`prefixParentNames` extracted to `names.ts` with 6 contract tests;
-`shortContextName` comment corrected to match its `/`-only trim); GatewayClass status-summary coverage.
-**Validated clean this batch — do NOT redundantly re-verify** (adversarial checks held; one suspected
-"swapped Use/Req capacity ceilings" was DISPROVEN by rigorous y-pairing): drawer manifest/events/logs
-(namespaced + cluster-scoped), deep-link `sel=` restore, owner-chip tree navigation, selection clears
-on namespace switch; free-text + structured `Kind/name` search incl. edge cases AND capacity-view
-fade integration; capacity view overshoot invariant (Σ Use-segs = true utilization, no floor inflation)
-+ 58-card expansion at scale (aligned, equal-width) + per-pod tick semantics (no limit → no tick);
-relationship-filter default (ownership-only) + toggle + composition (network atop ownership);
-help-overlay shortcuts (zero drift vs handlers); no console errors in normal operation. **Added in a
-later pass of the same batch** (also clean, also shipped the **sidebar trouble-badge → jump button**,
-proximity + explicit-over-implicit): theme toggle light↔dark↔system (+ dark-theme contrast eyeballed
-via screenshot); drawer expand-to-fill ↔ restore (520↔1050px); Escape progressive back-out
-(help→blur→deselect→clear transient filters, leaves persisted view-config alone); kind-chip
-multi-select (PO+DEPLOY composes, persists `?kinds=`); in-drawer manifest find (highlight + Enter/Shift
-+Enter cycling); log-level filter chips (persistent HIDE-preference — see the do-not-re-propose row);
-**offline→retry resilience** (kill the server → "offline · retry" pill with reconnect title → restart →
-graph reloads). Coverage hardened to graph 94.4% / store 76.4% / api 81.7% / discovery — every
-remaining sub-100% pure fn in graph is now pinned (kindFromType, nodeTotalCapacity, podReady, podEdges,
-ingressBackend, asConventionRef, creationTime, nodeID); only the I/O `BuildUsage` wrapper stays low (its
-pure `joinUsage` core is tested). **Confirmed still user-blocked, do NOT force:** the "status.message in
-drawer" + "capacity-bar unit policy" items both need a user design decision (capacity view is flagged
-"don't reinterpret without the user").
+**Status (2026-06-05):** Both the **UX surface** and the **server surface** have been systematically
+surveyed and are **mature** — at a mature surface ~94% of generated candidates get refuted, so source the
+next batch from real user feedback or a new feature area, not filler re-surveys. Recent batches drained
+the Open queue and hardened tests; the durable lessons are persisted in the `improvement-cycle` skill
+(especially `dogfooding-kd-ui.md` "Measurement pitfalls"). **Do NOT redundantly re-verify** the surfaces
+marked clean below — re-dogfood one only if its code changed.
 
-**Status (2026-06-05, batch 4):** A dogfooding + test-hardening batch whose headline is a **harness
-limitation, not a feature**: the headless agent-browser compositor is FROZEN — `requestAnimationFrame`
-callbacks never fire and CSS animations/transitions never advance (proven directly). This silently
-manufactures a whole class of false positives, and it cost two fully-convincing fake bugs here before
-root-cause: (1) "expanding a busy node doesn't bring its pods into view" (every non-initial viewport
-move is rAF-driven, so an eval-dispatched expand can't move the canvas — only the direct-set `firstFit`
-ever lands); (2) "the drawer overflows / its × is clipped at 1280px" (the drawer's entry `@keyframes`
-freezes at its `translateX(32px)` from-frame, so it measures 32px off-screen — `animation:none` snaps it
-flush). Both were retracted, NOT "fixed" — fixing either would have broken real behaviour. The rule going
-forward: **never conclude a fit/zoom/overflow/clip/off-screen bug from an agent-browser geometry
-measurement of an animated element** — unit-test the computed target, or force the resting state
-(`el.style.animation='none'`) before measuring. Persisted as pitfalls #5 (rAF) and #6 (frozen entry
-animation) in `dogfooding-kd-ui.md`, and as two do-not-re-propose rows. The rest of the batch hardened
-Go coverage on previously-0% pure logic the capacity view + handlers depend on (joinUsage/uidResolvers
-usage join, event tie-break/time-fallback/count-clamp, AsTyped passthrough, KindOf/GVKOf, config
-CSV/CIDR/env parsing) — each isolating the testable transform from untestable I/O where needed
-(joinUsage split out of BuildUsage). The earlier same-day status follows.
+Recent batches (newest first; `git log` has the commits):
 
-**Status (2026-06-05, batch 3):** Continued a11y + dogfooding sweep. Shipped: copy-success live region
-(`role=status`) so screen readers hear the CopyButton confirm; **completed the single-select a11y sweep**
-by converting the drawer's Manifest YAML/JSON toggle to a `role=radiogroup` (the last bare-`.active`
-pick-one control). The rest of the batch was **adversarial refutation** — most candidates this lens
-surfaced were already-handled or measurement artifacts: a "light-theme renders dark chips / fails AA"
-pair was two agent-browser measurement bugs (a `transition: background` reads stale under headless
-getComputedStyle after a runtime theme toggle; a naive parser mis-reads `color(srgb …/α)` backgrounds),
-both themes are AA-compliant; the topology search's Enter-cycle + "N of M" indicator already exist
-(cycles 284–285); graph nodes are intentionally not per-node tabbable (search-cycling is the keyboard
-path, verified end-to-end); the empty-state is already state-aware. Lessons persisted to
-`dogfooding-kd-ui.md` ("Measurement pitfalls" section). Signal: the UI surface is genuinely thinning —
-this batch was ~1 ship + 1 a11y completion per several refutations. The earlier same-day status follows.
-
-**Status (2026-06-05, cont.):** A second dogfooding+refactor batch (cycles 12–18) shipped on top of the
-pass below. Theme: the "UX surface mature" claim had a real **accessibility blind spot** — prior surveys
-never audited ARIA roles, yet the drawer tabs were `aria-pressed` toggles (not a tablist) and the
-single-select Group/Resource segmented controls were `role=group`+`aria-pressed` (not radiogroups). Fixed
-both to the proper WAI-ARIA patterns with a tested `rovingFocus` arrow-key helper. Also shipped: **(a)**
-auto-frame matches when a health/kind filter toggles — *with a readability-floor guard* found necessary
-live (the naive fit zoomed scattered matches to a 0.04× speck); **(b)** completed+de-drifted the help edge
-legend (was missing `usesServiceAccount`), derived from the edge taxonomy; **(c)** three pure-logic
-extractions slimming the 2100-line Topology.tsx (`capacityTooltips`, `edgeRender`, `cardTitle`→`names`),
-each now unit-tested. Knowledge persisted to `dogfooding-kd-ui.md` (new bug class: auto-fit-to-scattered →
-speck; a11y control-role conventions). Lesson reinforced: "surveyed mature" ≠ mature — a *new audit lens*
-(here, ARIA) finds real gaps the prior lenses structurally missed. Remaining a11y TODO logged in the
-playbook (sidebar list, drawer action buttons, log controls, drawer focus-on-open). The earlier same-day
-status follows.
-
-**Status (2026-06-05):** A live-dogfooding pass (drive the real UI with agent-browser, not just tests)
-found that the **maturity claim below did not hold for the fresh Nodes-capacity surface, viewport-edge
-behaviour, or empty-data paths** — areas a test suite structurally misses. Nine cycles shipped, several
-high-impact: **(1) namespaces with no edges hung forever on "connecting…"** — `graph.Build` returned a
-nil Edges slice → `"edges":null` → the client's `[...g.edges]` threw inside the SSE listener before
-`connState` went live (every system / standalone-resource namespace was unusable; fixed both ends).
-**(2) SSE capacity flood** — the ~40KB cluster-wide capacity payload was re-sent on every store change
-(Lease heartbeats!), ~280KB/7s on an idle namespace; gated on real graph change. **(3) Nodes expand
-fit** zoomed OUT to 4px cards; **(4) pod-card click** zoomed OUT instead of onto the bars; **(5) help
-overlay** overflowed the viewport with no scroll; **(6) capacity tooltip** clipped off-screen at edges;
-plus a stale sidebar comment. Knowledge persisted to the **`dogfooding-kd-ui.md`** playbook (recipes +
-recurring bug classes: fit-zoom direction, viewport-edge clipping, swallowed EventSource-listener throws,
-nil-Go-slice→`null`). Lesson: a passing test suite is NOT a maturity signal for interaction/edge/empty
-paths — dogfood them. See `git log` for the commits. The earlier (2026-05-29) status follows:
-
-**Status (2026-05-29):** UX surface mature (cycle 339: 16 candidates → 1 low-value). This session
-drained the backlog via the improvement-cycle: the **`Open` queue is empty**. The one Open item (B-001)
-shipped as a 3-button a11y sweep, and one Future item shipped as a correctness fix (CRD-removal ghost
-cleanup). Every remaining Future item was re-examined against the real code and **deferred with a
-verified rationale + a reopen trigger** (see below) — they are genuine design-pass / deployment-pressure
-work, not safe improvement-cycle slices. Two workflow-proposed "small wins" were refuted on inspection
-(a store summary cache — regressive because `notify()` has no namespace granularity; a discovery-diff
-CRD prune — unsafe because `Discover()` tolerates partial results).
-
-A follow-up survey then covered the **server-side** surface (store/informer lifecycle, registry, rbac/auth,
-api/sse, kubeconfig/bootstrap) — never systematically surveyed before. 31 agents, mostly refuted
-(already-handled / wrong / low-value) = the same maturity signal. It shipped three real items (malformed
-`policy.csv` re-parse/log-spam fix; an auth groups-gating regression test; deterministic store-test
-teardown) and rejected the rest — notably "shut the caches down on SIGTERM," which one agent rated HIGH
-but is in fact low-value (Go reaps background goroutines on process exit; the process-lifetime cache design
-is intentional and documented). Both the UX and server surfaces are now surveyed and mature; the next batch
-should come from real user feedback or a new feature area — don't grind filler cycles.
+- **2026-06-05 b5** — cluster-scoped drawer fetched an empty `{ns}` (`namespaces//…` → 307→404); fixed at
+  the `key()` builder (repairs manifest+events+logs at once) → technique is bug-class #6. Also: a
+  "relationships hidden" toast (empty relFilter looked like "no connections"); `prefixParentNames`→
+  `names.ts`; GatewayClass status coverage. Clean (don't re-verify): drawer (ns + cluster-scope), search,
+  capacity overshoot invariant + 58-card expansion, rel-filter compose, theme toggle, offline→retry.
+- **2026-06-05 b4** — headline is a *harness limitation, not a feature*: the headless agent-browser
+  compositor is FROZEN (rAF + CSS animations never advance), manufacturing fake fit/overflow/clip bugs.
+  Two convincing fakes retracted, NOT "fixed" (would have broken real behaviour). Persisted as pitfalls
+  #5/#6 + two do-not-re-propose rows. Hardened Go coverage on previously-0% pure logic.
+- **2026-06-05 b3** — copy-success live region; **completed the single-select a11y sweep** (Manifest
+  YAML/JSON → radiogroup, the last bare-`.active` pick-one). Mostly refutation (measurement artifacts) —
+  surface thinning.
+- **2026-06-05 b2** — found a real **a11y blind spot**: drawer tabs were `aria-pressed` not a tablist;
+  Group/Resource were `role=group`+`aria-pressed` not radiogroups. Fixed both + a tested `rovingFocus`
+  helper. Also: auto-frame-on-filter *with a readability floor* (naive fit zoomed scattered matches to a
+  0.04× speck); help-legend de-drift; three pure-logic extractions slimming Topology.tsx. Lesson:
+  "surveyed mature" ≠ mature — a *new audit lens* (ARIA) finds gaps prior lenses structurally missed.
+- **2026-06-05 b1** — dogfooding found the maturity claim didn't hold for the fresh Nodes-capacity /
+  viewport-edge / empty-data paths. Nine cycles, several high-impact: **edgeless namespaces hung on
+  "connecting…"** (nil Go `Edges` slice → `"edges":null` → client `[...g.edges]` threw inside the SSE
+  listener before `connState` went live); SSE capacity flood (~40KB re-sent on every Lease heartbeat);
+  expand-fit & pod-click zoomed OUT; help overflow; tooltip edge-clip. Lesson: **a passing test suite is
+  NOT a maturity signal for interaction/edge/empty paths — dogfood them.**
+- **2026-05-29** — UX surface declared mature (16 candidates → 1 low-value); drained Open, deferred every
+  Future item with a rationale + reopen trigger. Then surveyed the never-before-covered **server surface**
+  (31 agents, mostly refuted) — shipped 3 (policy.csv re-parse/log-spam, auth groups-gating test, store
+  teardown), rejected the rest (incl. "shutdown caches on SIGTERM" — Go reaps goroutines on exit).
 
 ---
 
@@ -189,8 +113,8 @@ should come from real user feedback or a new feature area — don't grind filler
   cap, res)` that formats both parts in the capacity's unit, but the unit policy is a genuine
   user-judgment call with real tradeoffs — always-millicores (`85m / 1000m`, kubectl-native but verbose
   `64000m` on big nodes) vs cores-for-≥1 (`0.09 / 1`, concise but lossy small decimals). The capacity
-  view is a heavily-tuned, user-iterated surface (see the extensive CLAUDE.md note, which says don't
-  reinterpret it without the user), so pick the unit policy WITH the user, then ship `formatPair` +
+  view is a heavily-tuned, user-iterated surface (see the capacity-view ADR + `docs/frontend-internals.md`,
+  which say don't reinterpret it without the user), so pick the unit policy WITH the user, then ship `formatPair` +
   tests. **Reopen:** when the user states a preferred unit policy for paired capacity labels.
 
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
