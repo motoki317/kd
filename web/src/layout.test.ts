@@ -994,4 +994,24 @@ describe('formatQuantity', () => {
     expect(formatQuantity(8.5 * 1024 ** 3, 'memory')).toBe('8.5Gi')
     expect(formatQuantity(1024 ** 4, 'memory')).toBe('1Ti')
   })
+  it('renders multi-core nodes with two significant decimals (live cluster shapes)', () => {
+    // Real staging nodes report allocatable like 3.92 / 1.93 cores; the label must keep both decimals,
+    // not round to whole cores (a "4" / "2" would overstate a node's true schedulable pool).
+    expect(formatQuantity(3920, 'cpu')).toBe('3.92')
+    expect(formatQuantity(1930, 'cpu')).toBe('1.93')
+    expect(formatQuantity(1010, 'cpu')).toBe('1.01')
+  })
+  it('rounds a near-whole-core value to that whole core (the label cannot show it is slightly off)', () => {
+    // toFixed(2) collapses 1.995–2.005 cores to "2": an operator reading "2" cannot tell a node is a
+    // few millicores under/over two cores. Pinned so the rounding band is a known, intentional limit
+    // of the headline label (the exact value is always in the hover tooltip).
+    expect(formatQuantity(1995, 'cpu')).toBe('2')
+    expect(formatQuantity(1996, 'cpu')).toBe('2')
+    expect(formatQuantity(2005, 'cpu')).toBe('2')
+  })
+  it('caps memory at the largest known binary unit (Pi), never overflowing to exbi', () => {
+    // The unit table tops out at Pi, so a value ≥ 1024 Pi stays expressed in Pi rather than inventing
+    // an "Ei" suffix — pins the `i < units.length - 1` loop guard.
+    expect(formatQuantity(1024 ** 6, 'memory')).toBe('1024Pi')
+  })
 })
