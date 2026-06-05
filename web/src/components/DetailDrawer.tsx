@@ -5,6 +5,7 @@ import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
 import type { KNode } from '../types'
+import { LOGGABLE_KINDS } from '../loggable'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
 import ResourceSummary from './ResourceSummary'
@@ -25,13 +26,15 @@ interface Props {
   canBack?: boolean
   onBack?: () => void
   onClose: () => void
+  // Reports whether a node id owns Pods in the current graph, so a pod-owning CRD (Argo Workflow, a
+  // custom workload controller) the kind list can't enumerate still offers the aggregated Logs tab.
+  // A predicate (not a boolean) so the check follows displayNode through the drawer's exit animation.
+  hasPods?: (nodeId: string) => boolean
 }
 
 type Tab = 'logs' | 'events' | 'manifest'
 const TAB_LABELS: Record<Tab, string> = { logs: 'Logs', events: 'Events', manifest: 'Manifest' }
 
-// Kinds with logs worth showing: a Pod, or a controller whose descendant pods' logs we aggregate.
-const LOGGABLE = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob'])
 
 // DetailDrawer inspects the selected resource across tabs: live Logs (pods and the controllers that
 // own them), Events (kubectl-describe's "why is this degraded"), and the Manifest. Logs default for
@@ -92,7 +95,14 @@ export default function DetailDrawer(props: Props) {
   })
 
   const isPod = createMemo(() => displayNode()?.kind === 'Pod')
-  const loggable = createMemo(() => (displayNode() ? LOGGABLE.has(displayNode()!.kind) : false))
+  // A node is loggable by built-in kind OR because it owns Pods in the graph (Argo Workflow, custom
+  // workload CRDs) — the latter asked of the parent, which holds the graph. Keyed on displayNode so the
+  // tab set stays correct through the exit animation (props.node clears first).
+  const loggable = createMemo(() => {
+    const n = displayNode()
+    if (!n) return false
+    return LOGGABLE_KINDS.has(n.kind) || (props.hasPods?.(n.id) ?? false)
+  })
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')

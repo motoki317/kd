@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
+import { hasDescendantPod } from './loggable'
 import { setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
@@ -646,6 +647,7 @@ export default function App() {
             canBack={selectionHistory().length > 0}
             onBack={goBackSelection}
             onClose={() => setSelectedId(null)}
+            hasPods={(id) => hasDescendantPod(id, nodes())}
           />
         </main>
       </div>
