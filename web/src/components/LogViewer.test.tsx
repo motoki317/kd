@@ -111,7 +111,7 @@ describe('LogViewer', () => {
     await findByText('stream interrupted')
   })
 
-  it('says "no lines match" (not "waiting for output") when a filter hides every line', async () => {
+  it('names the hidden-line count and offers a reset when a filter hides every line', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
     ))
@@ -127,9 +127,15 @@ describe('LogViewer', () => {
     levelBtns.forEach((b) => {
       if (b.getAttribute('aria-pressed') === 'true') b.click()
     })
-    // The bug was here: with no text filter, the empty-state said "waiting for log output…",
-    // implying the pod was silent — even though 2 lines were streaming, just level-hidden.
-    expect(container.querySelector('.logs-waiting')?.textContent).toBe('no lines match the active filters')
+    // The empty state must NOT read "waiting" (implying silence) — it names the count so the operator
+    // knows lines exist and are merely hidden (a persisted level filter is the common cause).
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('all 2 lines hidden by the active filters')
+    // ...and a "show all" reset restores them in one click.
+    const reset = container.querySelector('.logs-clear-filters') as HTMLButtonElement
+    expect(reset).toBeTruthy()
+    reset.click()
+    expect(container.querySelectorAll('.log-line').length).toBe(2)
+    expect(container.querySelector('.logs-waiting')).toBeNull()
   })
 
   it('shows the shown/total count for a level filter, not only a text filter', async () => {

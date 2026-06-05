@@ -212,6 +212,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Logs empty-state names the hidden count + offers a one-click reset (live-found, 2026-06-06):** the
+level filter persists across pods (`kd:logsHideLevels` — a deliberate triage habit), so opening a pod
+whose output is entirely INFO/DEBUG after hiding those levels elsewhere showed an empty pane reading
+"no lines match the active filters" with no recovery — looking like the pod was silent. Changed the
+empty-state to name the count ("all 20 lines hidden by the active filters" — lines exist, just hidden)
+and added a "show all" button that clears every log filter (text, case, levels incl. the persisted
+pref, pods) in one click. Mirrors the topology empty-state's clear-filters affordance (Repetition).
+Verified live with a persisted info/debug filter on an all-INFO Workflow pod: empty-state showed the
+count + reset; "show all" restored 50 lines, re-lit every level chip, and cleared the localStorage pref.
+
 **Image references emphasise the tag, dim the registry prefix (live-found, 2026-06-06):** every
 container card and workload image rendered the full ref in one uniform `<code>` — so a long ECR/GCR
 prefix (`111122223333.dkr.ecr.us-west-2.amazonaws.com/quay-io/argoproj/`, usually identical across

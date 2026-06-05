@@ -110,6 +110,17 @@ export default function LogViewer(props: Props) {
   // identically, so the operator deserves the same "you're seeing X of Y" feedback for each (the
   // empty-state message already covers all three; the count readout used to lag behind on text-only).
   const filtering = createMemo(() => !!filter() || hiddenLevels().size > 0 || hiddenPods().size > 0)
+  // Reset every log filter at once — the recovery action when the active filters (often a level filter
+  // PERSISTED from a previous pod via kd:logsHideLevels) have hidden the entire buffer, so a new pod's
+  // output reads as empty. Clears the persisted level pref too; hidden-pods is per-resource so it just
+  // resets in memory. Mirrors the topology empty-state's "clear all filters" affordance (Repetition).
+  const clearLogFilters = () => {
+    setFilter('')
+    setCaseSensitive(false)
+    setHiddenLevels(new Set<LogLevel>())
+    writePref('kd:logsHideLevels', '')
+    setHiddenPods(new Set<string>())
+  }
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
@@ -503,7 +514,13 @@ export default function LogViewer(props: Props) {
           // chips) left 25 streaming lines reading "waiting for log output…" — falsely implying the
           // pod was silent. Keying on the raw buffer covers every filter (level, pod, text).
           <div class="logs-waiting">
-            {lines().length > 0 ? 'no lines match the active filters' : 'waiting for log output…'}
+            <Show when={lines().length > 0} fallback={'waiting for log output…'}>
+              {/* Name the count so a PERSISTED level filter that hides a fresh pod's whole output reads
+                  as "30 lines are here, hidden" not "this pod is silent", and offer a one-click reset
+                  (the topology empty-state has the same affordance). */}
+              all {lines().length} line{lines().length === 1 ? '' : 's'} hidden by the active filters
+              <button class="logs-clear-filters" onClick={clearLogFilters}>show all</button>
+            </Show>
           </div>
         )}
       </pre>

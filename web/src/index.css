@@ -3238,6 +3238,22 @@ button.event-source:focus-visible {
 .logs-waiting {
   color: #6b7888;
 }
+/* One-click reset shown beside the "all N lines hidden" empty-state — mirrors the topology
+   clear-filters affordance so the same "your filter emptied this, undo it" gesture reads alike. */
+.logs-clear-filters {
+  margin-left: 8px;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.logs-clear-filters:hover {
+  background: var(--surface);
+  color: var(--text);
+}
 /* Filter-match highlight: a soft amber wash + inherited text color so the hit reads as
    "this is what your query matched" without losing legibility on the dark logs background. */
 .log-match {
