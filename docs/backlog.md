@@ -52,9 +52,16 @@ Recent batches (newest first; `git log` has the commits):
   speaks the drop: switcher "<ctx> — unavailable", red OFFLINE·RETRY pill, sidebar "Couldn't load
   namespaces/RETRY", canvas "Can't reach the cluster — use offline·retry above", ghost cards),
   **restart-triage degradation** (a 44-restart pod with an empty kubelet `lastState` correctly shows
-  `↻44` and OMITS the absent exit reason — it surfaces lastTerminated only when present). Also shipped
-  this campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for
-  the drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2).
+  `↻44` and OMITS the absent exit reason — it surfaces lastTerminated only when present), **manifest
+  find** (`.manifest-find-count` "1/7" on match, "no matches" on miss, Enter/Shift+Enter cycle, an
+  `sr-only` live region, and the query + highlights persist across a YAML↔JSON format toggle), **aggregated
+  log per-pod chips** (`.logs-pods` `flex-wrap:wrap` — a multi-step workflow's many source-pod chips wrap,
+  never clip; each `aria-pressed` + colour-dot), **Events aggregate the owned subtree generically**
+  (`events.go` `DescendantIDs`, the consistency the Workflow-Logs fix matched). Also shipped this
+  campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for the
+  drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2),
+  **aggregated Logs for any pod-owning resource** incl. Argo Workflows (f34bee8), **DescendantPodNames
+  built on DescendantIDs** (47868f0).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
