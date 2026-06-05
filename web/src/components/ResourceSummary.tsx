@@ -95,6 +95,21 @@ export default function ResourceSummary(props: Props) {
               altTitle="for Kind/name"
             />
           </div>
+          {/* Echo the card's status string (phase / "Ready · yellow" / "Unschedulable" / "1/1") so
+              drilling in keeps the same status language the operator just read on the card, rather
+              than dropping it to a bare icon tint. Non-pod resources have no container cards, so this
+              is otherwise the only place the status would appear. Health-coloured like the card, but
+              a Healthy status stays dim — the hero icon tint already keeps healthy quiet so the eye
+              lands on trouble first, and a prominent green "Running" on every healthy resource fights
+              that. */}
+          <Show when={props.node.status}>
+            <div
+              class="drawer-status"
+              style={{ color: props.node.health === 'Healthy' ? 'var(--text-dim)' : healthColor(props.node.health) }}
+            >
+              {props.node.status}
+            </div>
+          </Show>
         </div>
       </div>
       <div class="drawer-meta">

@@ -2036,6 +2036,14 @@ button.conn.conn-retry:focus-visible {
   gap: 8px;
   min-width: 0;
 }
+/* The resource's status/phase echoed under the name (see ResourceSummary). Sits just below the name
+   (proximity) and is health-coloured for troubled states (contrast), matching the card's status text. */
+.drawer-status {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-word;
+}
 /* Keep the copy affordance quiet until the header is hovered, so the name stays the focus. */
 .drawer-name .copy-btn {
   opacity: 0;

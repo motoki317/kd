@@ -240,6 +240,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Drawer dropped the status string the card showed (live-found, 2026-06-06):** dogfooding the triage
+flow — spotlight a Progressing resource, click it to ask "why" — showed the drawer header reduced the
+card's status ("Ready · yellow", "Unschedulable", "1/1", "Running") to a bare health-tinted icon. For
+non-pod resources (CRs, Deployments) there are no container cards, so the status vanished entirely on
+drill-in and the operator had to open Manifest to recover what they'd just read on the card. Echoed the
+status under the name in the drawer hero, health-coloured like the card (repetition) but kept dim for
+Healthy (the hero icon tint already keeps healthy quiet — a green "Running" on every healthy resource
+fights that). Verified live: Progressing CR → "Ready · yellow" in blue; Healthy pod → "Running" dim.
+*Lesson: drilling in should never show LESS than the card — carry the same status language through.*
+
 **Overflowing Kinds row had no scroll affordance (live-found, 2026-06-06):** dogfooding the landing
 view on `team-a` (19 kinds, 1280px viewport) showed the Kinds filter truncating ~517px of chips at
 a hard right edge — `overflow-x:auto` scrolls but macOS hides the scrollbar until use, so an operator

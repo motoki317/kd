@@ -193,6 +193,29 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('8 vCPU · 16Gi · 110 pods')
   })
 
+  it('echoes the card status string under the name, health-coloured for a troubled resource', () => {
+    const es: KNode = { id: 'es1', kind: 'Elasticsearch', name: 'shop', namespace: 'shop', health: 'Progressing', status: 'Ready · yellow' }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={es} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const s = container.querySelector('.drawer-status') as HTMLElement
+    expect(s).toBeTruthy()
+    expect(s.textContent).toBe('Ready · yellow')
+    // Troubled → health-coloured (contrast), mirroring the card's status text.
+    expect(s.style.color).toBe('var(--health-progressing)')
+  })
+
+  it('keeps a Healthy status quiet (dim, not green) so the eye lands on trouble', () => {
+    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web', namespace: 'shop', health: 'Healthy', status: 'Running' }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const s = container.querySelector('.drawer-status') as HTMLElement
+    expect(s.textContent).toBe('Running')
+    expect(s.style.color).toBe('var(--text-dim)')
+  })
+
+  it('omits the status line when a resource has no status (e.g. a ConfigMap)', () => {
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(container.querySelector('.drawer-status')).toBeNull()
+  })
+
   it('offers a copy-name button in the header (cycle 287: title also documents Shift+click for Kind/name)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const btn = container.querySelector('.drawer-name .copy-btn') as HTMLButtonElement
