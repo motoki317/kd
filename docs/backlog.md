@@ -18,6 +18,14 @@ marked clean below — re-dogfood one only if its code changed.
 
 Recent batches (newest first; `git log` has the commits):
 
+- **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
+  running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
+  source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
+  flows found a real, clearly-felt gap nearly every cycle. Shipped so far: Kinds-row overflow fade;
+  drawer echoes the card's status string; PDB health rule (was bogus "Unknown"); filter overlay counts
+  true matches (folded included), not just visible cards. The four recurring shapes are now persisted in
+  the dogfooding skill's "UX-gap patterns" section — check them on any view. (Removed the Nodes-view
+  Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git log.)
 - **2026-06-05 b5** — cluster-scoped drawer fetched an empty `{ns}` (`namespaces//…` → 307→404); fixed at
   the `key()` builder (repairs manifest+events+logs at once) → technique is bug-class #6. Also: a
   "relationships hidden" toast (empty relFilter looked like "no connections"); `prefixParentNames`→

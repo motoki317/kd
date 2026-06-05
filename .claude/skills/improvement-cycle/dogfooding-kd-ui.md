@@ -67,6 +67,31 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
 `.cap-bullet` (g) + `.cap-bullet-frame` (card rect), `.cap-bar-value` (the "use / cap" labels),
 `.cap-tooltip` (cursor-following). Resource toggle = the CPU/Memory buttons; persists to `kd:capRes`.
 
+## UX-gap patterns found by operator dogfooding (a different lens than the harness traps below)
+
+Distinct from the harness/measurement artifacts: these are *real* gaps a human feels by USING the app,
+that a source survey misses because the code "looks complete." The 2026-06-06 campaign found four in
+four cycles at a surface the source-survey called mature — the lens (run a real operator flow), not the
+code, surfaced them. Look for these shapes on any view:
+
+- **A scrolling row with no overflow cue.** `overflow-x:auto` scrolls but macOS hides the scrollbar
+  until use, so a truncated row (the Kinds filter) reads as "that's all there is" — actively misleading
+  on a legend. Fix = a scroll-position edge fade (`scrollEdges` + mask classes). Check: any single-line
+  `overflow-x` row — does it cue more content? (`scrollWidth > clientWidth` with no fade = the gap.)
+- **Drilling in shows LESS than the card.** The drawer dropped the status string the card showed
+  ("Ready · yellow") to a bare icon tint. Carry the same status language through (card → drawer →
+  manifest). Check: for each fact a card shows (status, restarts, age), does the drawer still show it?
+- **A count over a foldable canvas mixes "rendered" with "true match."** The bottom overlay counted
+  visible-unfaded nodes ("15 of 341") while the health pill counted the full set ("57") — folded matches
+  vanished from one but not the other. Decide per-counter explicitly: rendered-cards vs true-matches
+  (`props.nodes` filter), and keep sibling indicators on the same basis. Check: filter on a namespace
+  where matches FOLD (a real cluster), compare every visible count against the pill/chip totals.
+- **A built-in kind landing in the CR catch-all → bogus "Unknown" health.** PDBs fell through
+  `crHealthFromConditions` (their condition is `DisruptionAllowed`, not `Ready`/`Available`) to Unknown
+  — both noise in the tally AND a hidden real signal (a below-floor PDB blocks drains). Adding a *typed*
+  rule (health.go + status.go + typedFactories) is a safe, invited extension; reinterpreting a tuned
+  rule is not. Check: in cluster scope, what kinds show "Unknown"? A built-in there is a smell.
+
 ## Recurring bug classes found live (check these on any UI change)
 
 1. **Fit-zoom DIRECTION.** A "zoom to X" must enlarge X. The Nodes expand fit zoomed *out* (fit a
