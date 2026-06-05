@@ -117,6 +117,12 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 				b.gatewayRouteEdges(id, ns, o)
 				break
 			}
+			// A Traefik IngressRoute is the same story as an Ingress: spec.routes[].services name the
+			// backend Services. Emit EdgeRoutes and skip the generic scanners, for the same reasons.
+			if o.GetKind() == "IngressRoute" && isTraefik(o) {
+				b.traefikIngressRouteEdges(id, ns, o)
+				break
+			}
 			// Custom resource. Try the curated registry first (deterministic, hand-coded
 			// for vendor schemas), then fall back to the convention scanner for the
 			// generic {name, kind, …} shape.
@@ -258,6 +264,35 @@ func (b *edgeBuilder) gatewayRouteEdges(id, ns string, u *unstructured.Unstructu
 				toNS = n
 			}
 			b.link(id, EdgeRoutes, "Service", toNS, name)
+		}
+	}
+}
+
+// traefikIngressRouteEdges links a Traefik IngressRoute to each Kubernetes Service it routes to
+// (spec.routes[].services). A service entry may instead target a TraefikService (kind: TraefikService)
+// for mirroring/weighting; those are skipped here (no Service node), accepting the loss of that advanced
+// chain in exchange for keeping the common plain-Service case edge-clean.
+func (b *edgeBuilder) traefikIngressRouteEdges(id, ns string, u *unstructured.Unstructured) {
+	routes, _, _ := unstructured.NestedSlice(u.Object, "spec", "routes")
+	for _, ri := range routes {
+		route, ok := ri.(map[string]any)
+		if !ok {
+			continue
+		}
+		svcs, _ := route["services"].([]any)
+		for _, si := range svcs {
+			s, ok := si.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := s["name"].(string)
+			if name == "" {
+				continue
+			}
+			if k, _ := s["kind"].(string); k != "" && k != "Service" {
+				continue
+			}
+			b.link(id, EdgeRoutes, "Service", ns, name)
 		}
 	}
 }

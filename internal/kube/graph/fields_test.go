@@ -260,6 +260,54 @@ func TestHTTPRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestTraefikIngressRouteRoutes(t *testing.T) {
+	ir := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "IngressRoute",
+		"metadata":   map[string]any{"name": "app", "namespace": "shop"},
+		"spec": map[string]any{
+			"routes": []any{
+				// matcher shown verbatim; numeric port; two services weighted-split
+				map[string]any{
+					"match": "Host(`app.example.com`) && PathPrefix(`/api`)",
+					"services": []any{
+						map[string]any{"name": "api-svc", "port": int64(8080)},
+						map[string]any{"name": "api-canary", "port": float64(8080)},
+					},
+				},
+				// named (string) port
+				map[string]any{"match": "Host(`app.example.com`)", "services": []any{
+					map[string]any{"name": "web-svc", "port": "http"},
+				}},
+				// a TraefikService target: the table still names it (a declared target), though no
+				// topology edge links it (it isn't a Service node) — see traefikIngressRouteEdges.
+				map[string]any{"match": "PathPrefix(`/mirror`)", "services": []any{
+					map[string]any{"name": "split", "kind": "TraefikService"},
+				}},
+				// a middleware-only route with no services at all still shows its match
+				map[string]any{"match": "PathPrefix(`/redirect`)"},
+			},
+		},
+	}}
+	want := []string{
+		"Host(`app.example.com`) && PathPrefix(`/api`) → api-svc:8080, api-canary:8080",
+		"Host(`app.example.com`) → web-svc:http",
+		"PathPrefix(`/mirror`) → split",
+		"PathPrefix(`/redirect`)",
+	}
+	if got := routes(ir); !slices.Equal(got, want) {
+		t.Errorf("traefikIngressRouteRoutes =\n%v\nwant\n%v", got, want)
+	}
+	// A non-Traefik CRD named IngressRoute (different group) must not be mistaken for one.
+	other := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "example.com/v1", "kind": "IngressRoute",
+		"spec": map[string]any{"routes": []any{map[string]any{"match": "x", "services": []any{map[string]any{"name": "s"}}}}},
+	}}
+	if got := traefikIngressRouteRoutes(other); got != nil {
+		t.Errorf("traefikIngressRouteRoutes(non-traefik) = %v, want nil", got)
+	}
+}
+
 func TestRoleRules(t *testing.T) {
 	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},

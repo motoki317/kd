@@ -144,14 +144,17 @@ func ingressBackend(s *networkingv1.IngressServiceBackend) string {
 }
 
 // routes returns the human-readable routing table ("host/path → service:port" rows) for the kinds that
-// declare one. Legacy Ingress and Gateway API HTTPRoute solve the same problem (external entry → backend
-// service), so they share one Node.Routes field and render identically; the drawer needn't know which
-// API produced the table.
+// declare one. Legacy Ingress, Gateway API HTTPRoute, and Traefik IngressRoute all solve the same
+// problem (external entry → backend service), so they share one Node.Routes field and render
+// identically; the drawer needn't know which API produced the table.
 func routes(obj runtime.Object) []string {
 	if r := ingressRoutes(obj); r != nil {
 		return r
 	}
-	return httpRouteRoutes(obj)
+	if r := httpRouteRoutes(obj); r != nil {
+		return r
+	}
+	return traefikIngressRouteRoutes(obj)
 }
 
 // httpRouteRoutes formats a Gateway API HTTPRoute's routing table as "host/path → service[:port]" rows
@@ -247,13 +250,83 @@ func httpRouteBackends(rule map[string]any) string {
 // httpRoutePort reads a backendRef's port, tolerating both numeric shapes unstructured decoding yields
 // (int64 from the dynamic client, float64 from a JSON round-trip).
 func httpRoutePort(ref map[string]any) string {
-	switch p := ref["port"].(type) {
+	return intStrString(ref["port"])
+}
+
+// intStrString renders an unstructured port-like value that may be a number (int64 from the dynamic
+// client, float64 from a JSON round-trip) or a named-port string. Empty for anything else (e.g. absent).
+func intStrString(v any) string {
+	switch p := v.(type) {
+	case string:
+		return p
 	case int64:
 		return fmt.Sprintf("%d", p)
 	case float64:
 		return fmt.Sprintf("%d", int64(p))
 	}
 	return ""
+}
+
+// traefikIngressRouteRoutes formats a Traefik IngressRoute's routing table as "match → service[:port]"
+// rows (nil otherwise). Traefik's match is already a human-readable matcher expression
+// (Host(`x`) && PathPrefix(`/y`)), so it's shown verbatim; a route's services join with ", ". A route
+// with no plain-Service backend (a TraefikService chain, or middleware-only) still shows its match so
+// the rule is visible. IngressRoute is a CRD, so it arrives unstructured.
+func traefikIngressRouteRoutes(obj runtime.Object) []string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || u.GetKind() != "IngressRoute" || !isTraefik(u) {
+		return nil
+	}
+	routeList, _, _ := unstructured.NestedSlice(u.Object, "spec", "routes")
+	var out []string
+	for _, ri := range routeList {
+		route, ok := ri.(map[string]any)
+		if !ok {
+			continue
+		}
+		match, _ := route["match"].(string)
+		if match == "" {
+			continue
+		}
+		if svc := traefikRouteServices(route); svc != "" {
+			out = append(out, match+" → "+svc)
+		} else {
+			out = append(out, match)
+		}
+	}
+	return out
+}
+
+// traefikRouteServices renders an IngressRoute route's backend services as "name[:port]" joined by ", ".
+// A Traefik service port is an int-or-string (a named port is valid), so it tolerates both.
+func traefikRouteServices(route map[string]any) string {
+	svcs, _ := route["services"].([]any)
+	var out []string
+	for _, si := range svcs {
+		s, ok := si.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := s["name"].(string)
+		if name == "" {
+			continue
+		}
+		if port := intStrString(s["port"]); port != "" {
+			name += ":" + port
+		}
+		out = append(out, name)
+	}
+	return strings.Join(out, ", ")
+}
+
+// isTraefik reports whether a CR belongs to Traefik's API group (the current traefik.io and the legacy
+// traefik.containo.us both ship IngressRoute).
+func isTraefik(u *unstructured.Unstructured) bool {
+	switch u.GroupVersionKind().Group {
+	case "traefik.io", "traefik.containo.us":
+		return true
+	}
+	return false
 }
 
 // roleRules formats a Role/ClusterRole's policy rules as "resources: verbs" rows (nil otherwise), so

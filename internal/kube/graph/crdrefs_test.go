@@ -134,6 +134,37 @@ func TestGatewayRouteEdges(t *testing.T) {
 	}
 }
 
+// TestTraefikIngressRouteEdges proves a Traefik IngressRoute links to the Kubernetes Services in its
+// spec.routes[].services as EdgeRoutes (the Network category), skipping a TraefikService backend.
+func TestTraefikIngressRouteEdges(t *testing.T) {
+	ir := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "IngressRoute",
+		"metadata":   map[string]any{"name": "app", "namespace": "shop", "uid": "ir-uid"},
+		"spec": map[string]any{
+			"routes": []any{
+				map[string]any{"match": "Host(`a`)", "services": []any{
+					map[string]any{"name": "api-svc", "port": int64(80)},
+					map[string]any{"name": "split", "kind": "TraefikService"}, // not a Service node → skipped
+				}},
+			},
+		},
+	}}
+	svc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Service",
+		"metadata": map[string]any{"name": "api-svc", "namespace": "shop", "uid": "api-uid"},
+	}}
+	g := Build([]runtime.Object{ir, svc})
+	if !hasEdge(g, EdgeRoutes, "IngressRoute", "app", "Service", "api-svc") {
+		t.Errorf("missing EdgeRoutes IngressRoute/app -> Service/api-svc; edges = %+v", g.Edges)
+	}
+	for _, e := range g.Edges {
+		if e.Type == EdgeRefers {
+			t.Errorf("unexpected EdgeRefers from a Traefik IngressRoute (generic scanner should be skipped): %+v", e)
+		}
+	}
+}
+
 // TestConventionRefEdges_IgnoresNameValuePair proves the scanner doesn't mistake a
 // generic name/value parameter for a reference (Workflow.spec.arguments[].parameters
 // have name+value; they aren't refs).

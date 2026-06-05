@@ -212,6 +212,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Traefik IngressRoute routing table + Service edges, like Ingress (live-found, 2026-06-06):** the real
+clusters here run Traefik, yet a Traefik `IngressRoute` (a CRD) drawer showed only labels + raw manifest
+and the node sat isolated in the Network view — no routing table, no edge to its backends. Added
+`traefikIngressRouteRoutes` (renders each `spec.routes[].match` verbatim — Traefik's matcher DSL is
+already readable — → its services) into the shared `routes()`, and `traefikIngressRouteEdges` emitting
+`EdgeRoutes` for each route's Kubernetes Service (TraefikService backends named in the table but not
+edged, as they aren't Service nodes). Covers both `traefik.io` and legacy `traefik.containo.us` groups,
+int/named ports. Verified live on the real staging argo-workflows IngressRoute: drawer showed the
+match → service row, Network category gained the routing edge. Highest-value of the routing trio for
+this deployment (the others are Gateway API, not used here).
+
 **Gateway API route → Service edges join the Network relationship (live-found, 2026-06-06):** an
 Ingress links to its backends via `EdgeRoutes` (the Network category), but an HTTPRoute (a CRD) got
 nothing usable: the convention scanner only links a backendRef that carries an explicit `kind`, and
