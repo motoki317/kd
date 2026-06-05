@@ -94,6 +94,10 @@ func nodeEqual(a, b Node) bool {
 		a.ScaleRange == b.ScaleRange &&
 		a.PDBPolicy == b.PDBPolicy &&
 		a.Disruptions == b.Disruptions && // a PDB's allowed-disruptions dropping to 0 must repaint
+		a.Provisioner == b.Provisioner &&
+		a.ReclaimPolicy == b.ReclaimPolicy &&
+		a.VolumeBinding == b.VolumeBinding &&
+		a.Expandable == b.Expandable &&
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node

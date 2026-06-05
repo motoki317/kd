@@ -316,6 +316,32 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A StorageClass's essence: its provisioner (which CSI driver/plugin backs volumes), reclaim
+          policy (does deleting a PVC destroy the data — Delete vs Retain), binding mode, and whether
+          PVCs can grow. The class a PVC author clicks through to — manifest-only before. */}
+      <Show when={props.node.provisioner}>
+        <div class="drawer-ports">
+          <span class="port-addr" title="Provisioner (CSI driver / volume plugin)">
+            <span class="addr-label">provisioner</span>
+            <code>{props.node.provisioner}</code>
+          </span>
+          <Show when={props.node.reclaimPolicy}>
+            <span class="port-addr" title="Reclaim policy — what happens to the PV when its PVC is deleted">
+              <span class="addr-label">reclaim</span>
+              <code>{props.node.reclaimPolicy}</code>
+            </span>
+          </Show>
+          <Show when={props.node.volumeBinding}>
+            <span class="port-addr" title="Volume binding mode">
+              <span class="addr-label">binding</span>
+              <code>{props.node.volumeBinding}</code>
+            </span>
+          </Show>
+          <Show when={props.node.expandable}>
+            <span class="port-chip" title="PVCs on this class can be expanded">expandable</span>
+          </Show>
+        </div>
+      </Show>
       {/* An Ingress/HTTPRoute/IngressRoute routing table (match → backend) — the network view's entry
           point, so it should say where external traffic goes without opening the manifest. */}
       <Show when={(props.node.routes?.length ?? 0) > 0}>

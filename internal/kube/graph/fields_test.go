@@ -481,6 +481,47 @@ func TestPDBPolicyAndDisruptions(t *testing.T) {
 	}
 }
 
+func TestStorageClassInfo(t *testing.T) {
+	sc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion":           "storage.k8s.io/v1",
+		"kind":                 "StorageClass",
+		"metadata":             map[string]any{"name": "gp3"},
+		"provisioner":          "ebs.csi.aws.com",
+		"reclaimPolicy":        "Retain",
+		"volumeBindingMode":    "WaitForFirstConsumer",
+		"allowVolumeExpansion": true,
+	}}
+	if got := storageClassProvisioner(sc); got != "ebs.csi.aws.com" {
+		t.Errorf("provisioner = %q, want ebs.csi.aws.com", got)
+	}
+	if got := storageClassReclaim(sc); got != "Retain" {
+		t.Errorf("reclaim = %q, want Retain", got)
+	}
+	if got := storageClassBinding(sc); got != "WaitForFirstConsumer" {
+		t.Errorf("binding = %q, want WaitForFirstConsumer", got)
+	}
+	if !storageClassExpandable(sc) {
+		t.Error("expandable = false, want true")
+	}
+	// Unset reclaim/binding default to the API defaults (Delete / Immediate); expansion defaults false.
+	bare := &unstructured.Unstructured{Object: map[string]any{
+		"kind": "StorageClass", "provisioner": "rancher.io/local-path",
+	}}
+	if got := storageClassReclaim(bare); got != "Delete" {
+		t.Errorf("reclaim(unset) = %q, want Delete (API default)", got)
+	}
+	if got := storageClassBinding(bare); got != "Immediate" {
+		t.Errorf("binding(unset) = %q, want Immediate (API default)", got)
+	}
+	if storageClassExpandable(bare) {
+		t.Error("expandable(unset) = true, want false")
+	}
+	// Non-StorageClass kinds yield zero values (no defaults leaking onto a Pod).
+	if got := storageClassReclaim(&corev1.Pod{}); got != "" {
+		t.Errorf("reclaim(Pod) = %q, want empty", got)
+	}
+}
+
 func TestRoleRules(t *testing.T) {
 	role := &rbacv1.Role{Rules: []rbacv1.PolicyRule{
 		{APIGroups: []string{""}, Resources: []string{"pods", "services"}, Verbs: []string{"get", "list", "watch"}},

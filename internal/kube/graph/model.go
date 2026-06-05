@@ -77,6 +77,10 @@ type Node struct {
 	ScaleRange  string           `json:"scaleRange,omitempty"`  // an HPA's min–max replica bounds ("2–10") — is it at the ceiling?
 	PDBPolicy   string           `json:"pdbPolicy,omitempty"`   // a PodDisruptionBudget's policy, "min 2" / "max 1" (the configured intent)
 	Disruptions string           `json:"disruptions,omitempty"` // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks here); "" for non-PDBs
+	Provisioner string           `json:"provisioner,omitempty"` // a StorageClass's provisioner (the CSI driver / volume plugin) — its defining fact
+	ReclaimPolicy string         `json:"reclaimPolicy,omitempty"` // a StorageClass's reclaim policy (Delete/Retain) — does deleting a PVC destroy the data?
+	VolumeBinding string         `json:"volumeBinding,omitempty"` // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
+	Expandable  bool             `json:"expandable,omitempty"`  // a StorageClass's allowVolumeExpansion — can PVCs on it grow?
 	Labels     map[string]string `json:"labels,omitempty"`
 	OwnerUIDs  []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

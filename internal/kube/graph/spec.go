@@ -523,6 +523,58 @@ func pdbDisruptions(obj runtime.Object) string {
 	return ""
 }
 
+// asStorageClass returns the object as an unstructured StorageClass (kd has no typed factory for it), or
+// nil. A StorageClass's fields (provisioner, reclaimPolicy, …) sit at the top level, not under spec.
+func asStorageClass(obj runtime.Object) *unstructured.Unstructured {
+	if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == "StorageClass" {
+		return u
+	}
+	return nil
+}
+
+// storageClassProvisioner returns a StorageClass's provisioner (its defining fact — which CSI driver /
+// plugin backs volumes on it), "" for other kinds.
+func storageClassProvisioner(obj runtime.Object) string {
+	if u := asStorageClass(obj); u != nil {
+		s, _, _ := unstructured.NestedString(u.Object, "provisioner")
+		return s
+	}
+	return ""
+}
+
+// storageClassReclaim returns a StorageClass's reclaim policy (Delete/Retain — does deleting a PVC
+// destroy the underlying data?). The API default is Delete when unset.
+func storageClassReclaim(obj runtime.Object) string {
+	if u := asStorageClass(obj); u != nil {
+		if s, found, _ := unstructured.NestedString(u.Object, "reclaimPolicy"); found {
+			return s
+		}
+		return "Delete"
+	}
+	return ""
+}
+
+// storageClassBinding returns a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer).
+// Immediate is the API default when unset.
+func storageClassBinding(obj runtime.Object) string {
+	if u := asStorageClass(obj); u != nil {
+		if s, found, _ := unstructured.NestedString(u.Object, "volumeBindingMode"); found {
+			return s
+		}
+		return "Immediate"
+	}
+	return ""
+}
+
+// storageClassExpandable reports a StorageClass's allowVolumeExpansion (can PVCs on it grow?).
+func storageClassExpandable(obj runtime.Object) bool {
+	if u := asStorageClass(obj); u != nil {
+		b, _, _ := unstructured.NestedBool(u.Object, "allowVolumeExpansion")
+		return b
+	}
+	return false
+}
+
 // secretType returns a Secret's type as a display string (empty for non-Secrets). An empty type
 // defaults to Opaque, mirroring Kubernetes.
 func secretType(obj runtime.Object) string {

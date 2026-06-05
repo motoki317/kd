@@ -75,6 +75,10 @@ func Build(objs []runtime.Object) *Graph {
 			ScaleRange:        hpaRange(obj),
 			PDBPolicy:         pdbPolicy(obj),
 			Disruptions:       pdbDisruptions(obj),
+			Provisioner:       storageClassProvisioner(obj),
+			ReclaimPolicy:     storageClassReclaim(obj),
+			VolumeBinding:     storageClassBinding(obj),
+			Expandable:        storageClassExpandable(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

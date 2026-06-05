@@ -104,6 +104,10 @@ export interface KNode {
   scaleRange?: string // an HPA's min–max replica bounds ("2–10")
   pdbPolicy?: string // a PodDisruptionBudget's policy, "min 2" / "max 1"
   disruptions?: string // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks)
+  provisioner?: string // a StorageClass's provisioner (CSI driver / volume plugin)
+  reclaimPolicy?: string // a StorageClass's reclaim policy (Delete/Retain)
+  volumeBinding?: string // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
+  expandable?: boolean // a StorageClass's allowVolumeExpansion
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

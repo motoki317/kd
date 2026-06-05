@@ -105,6 +105,27 @@ describe('ResourceSummary HPA', () => {
   })
 })
 
+describe('ResourceSummary StorageClass', () => {
+  it('shows provisioner, reclaim, binding, and an expandable flag', () => {
+    const node: KNode = {
+      id: 'sc', kind: 'StorageClass', name: 'gp3', health: 'Healthy',
+      provisioner: 'ebs.csi.aws.com', reclaimPolicy: 'Retain', volumeBinding: 'WaitForFirstConsumer', expandable: true,
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('ebs.csi.aws.com')
+    expect(text).toContain('Retain')
+    expect(text).toContain('WaitForFirstConsumer')
+    expect([...container.querySelectorAll('.port-chip')].some((c) => c.textContent === 'expandable')).toBe(true)
+  })
+
+  it('omits the expandable flag when not allowed', () => {
+    const node: KNode = { id: 'sc', kind: 'StorageClass', name: 'std', health: 'Healthy', provisioner: 'k8s.io/minikube-hostpath', reclaimPolicy: 'Delete' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    expect([...container.querySelectorAll('.port-chip')].some((c) => c.textContent === 'expandable')).toBe(false)
+  })
+})
+
 describe('ResourceSummary storage', () => {
   it('shows a PVC\'s access modes and storage class as labelled chips', () => {
     const node: KNode = {
