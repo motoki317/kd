@@ -253,6 +253,20 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**A degraded PDB now surfaces its DisruptionAllowed reason inline, not just "0/3 healthy" (2026-06-06):**
+dogfooding `team-b` (the one Degraded namespace on docker-desktop): the Degraded-health spotlight
+correctly isolated a single PDB `opa-b` ("0/3 healthy", "can disrupt 0"), but the drawer gave no
+*why* — the actionable `DisruptionAllowed=False` condition ("workflows.argoproj.io does not implement the
+scale subresource", reason `SyncFailed`) lived only in the raw manifest YAML. `statusMessage` already
+surfaces the one-line WHY for unhealthy Pods/Deployments/CRs but had no PDB case. Added one
+(`pdbBlockMessage`, message → reason fallback): the two common blocked states demand opposite operator
+actions — `InsufficientPods` (app below floor → scale up before draining) vs `SyncFailed`
+(controller can't evaluate → the PDB is misconfigured, drains block indefinitely). Health classification
+unchanged (still keys on the floor, not the condition — see `TestPDBHealthIgnoresBenignDisruptionBlocked`);
+this only adds explanatory text to an already-Degraded PDB. The message renders in the existing
+`.drawer-message` hero slot (below status, above the policy chips — proximity). Verified live: the drawer
+now shows the full reason; +2 `statusMessage` test cases. (e84f8f6)
+
 **Drawer offers aggregated Logs for any pod-owning resource, not just built-in workloads (2026-06-06):**
 dogfooding the real staging cluster surfaced 94 pods owned *directly* by Argo `Workflow` CRs — yet
 opening a Workflow drawer showed no Logs tab (the client gated on a hardcoded built-in-kind set:
