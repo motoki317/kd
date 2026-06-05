@@ -744,6 +744,36 @@ describe('Topology', () => {
     expect(pillExpanded()).toBe('false')
   })
 
+  it('search match count includes folded matches, not just on-canvas cards', () => {
+    // A Deployment "web" with 8 pods folds (the middle 5 hide behind the pill). Search "web" matches
+    // all 9 resources, but 5 are folded. The toolbar count must report the honest total (9), not the
+    // on-canvas-only count (4) — otherwise it disagrees with the bottom overlay and the Enter-cycle
+    // silently skips every folded match (the live-found "38 vs 158" divergence).
+    const owner: KNode = { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const pods: KNode[] = Array.from({ length: 8 }, (_, i) => ({ id: `p-${i}`, kind: 'Pod', name: `web-${i}`, health: 'Healthy' as const }))
+    const owns: KEdge[] = pods.map((p) => ({ from: 'd', to: p.id, type: 'ownerReference' as const }))
+    const { container } = render(() => <Topology nodes={[owner, ...pods]} edges={owns} search="web" {...base} />)
+    expect(container.querySelector('.collapse-pill')).toBeTruthy() // the fold actually happened
+    expect(container.querySelector('.topology-matches')?.textContent).toMatch(/9 match/)
+  })
+
+  it('auto-expands the fold when navigation selects a hidden node (so it gets its .selected marker)', () => {
+    // Enter-cycle / j-k stepping / deep-links walk the FULL node set, so a target is often a node
+    // folded behind a "+N more" pill — the drawer opens but the card isn't drawn, leaving no on-canvas
+    // cue. Selecting a hidden node must auto-expand its containing fold so the card renders, .selected.
+    const owner: KNode = { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const pods: KNode[] = Array.from({ length: 8 }, (_, i) => ({ id: `p-${i}`, kind: 'Pod', name: `web-${i}`, health: 'Healthy' as const }))
+    const owns: KEdge[] = pods.map((p) => ({ from: 'd', to: p.id, type: 'ownerReference' as const }))
+    // web-0 (head) + web-6/web-7 (tail) stay visible; web-1..web-5 fold. p-3 (web-3) is in the hidden
+    // middle, so without auto-expand it would not render at all.
+    const { container } = render(() => <Topology nodes={[owner, ...pods]} edges={owns} search="" {...base} selectedId="p-3" />)
+    // The folded pod now renders with its .selected marker (name may be middle-truncated to fit the
+    // card — "…-3" — so assert the ordinal suffix, not the full string).
+    const selected = container.querySelector('.node.selected .node-name')
+    expect(selected).toBeTruthy()
+    expect(selected?.textContent).toMatch(/-3$/)
+  })
+
   it('accents only edges directly touching the selected node, not the whole component (cycle 309)', () => {
     // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod should accent only the
     // RS→Pod edge (2→3) that touches it — NOT the Deployment→RS edge (1→2) further up the tree.

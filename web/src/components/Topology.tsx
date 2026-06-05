@@ -221,6 +221,26 @@ export default function Topology(props: Props) {
     // namespace inventory regardless of which relationships are active.
     return layoutGraph(props.nodes, edges, 'LR', expandedClusters())
   })
+  // Auto-expand the fold hiding a navigated-to selection. Enter-cycle, j/k stepping, and deep-links
+  // all walk the FULL node set (troubled-first), so a target is often a node folded behind a "+N more"
+  // pill: the drawer opens but the node isn't rendered, so there's no on-canvas .selected marker and
+  // the operator can't see where it lives. When the selection isn't currently visible, find the single
+  // pill whose fold covers it and expand just that one — revealing the node with its marker. Scoped to
+  // the EXACT selected node (not its related() subtree) so selecting a hub never unfolds every sibling.
+  createEffect(() => {
+    const id = props.selectedId
+    if (!id) return
+    const nodes = layout().nodes
+    if (nodes.some((n) => n.id === id && !n.collapse)) return // already on canvas
+    for (const n of nodes) {
+      const meta = n.collapse
+      if (!meta) continue
+      if (meta.hidden.some((h) => h.id === id) || meta.hiddenDescendants?.some((h) => h.id === id)) {
+        setExpandedClusters((s) => (s.has(meta.key) ? s : new Set(s).add(meta.key)))
+        break
+      }
+    }
+  })
   // Kind grouping draws a faint kind-label band above each kind box so the operator can scan
   // "this section is all Pods, that's all Services" without inferring it from card kinds.
   const groups = createMemo(() => (props.groupBy === 'kind' ? kindGroups(layout()) : []))
@@ -389,15 +409,18 @@ export default function Topology(props: Props) {
   const matches = createMemo(() => {
     const q = query().trim()
     if (!q) return null
-    // Intersect with the active kind filter so the "X of N" count and Enter-cycle (which both read
-    // matches()) only ever count cards that are actually LIT — not ones faded out by the kind chips
-    // (cycle 314). Read props.kindFilter directly rather than the activeKinds() memo: this memo is
-    // created eagerly above that one, so referencing it would hit the TDZ.
+    // Count over the FULL node set, not layout().nodes — a folded collapse pill removes matching
+    // nodes from the layout, so counting only what's on canvas undercounts (search "workflow" on a
+    // namespace whose 144 Workflows are mostly folded read "38" while the honest total is 158). The
+    // matchOrdered Enter-cycle steps through this full set and auto-expands the fold hiding each
+    // target (see the selection auto-expand effect), so every counted match is actually reachable;
+    // and this readout now agrees with the bottom-overlay filterMatchCount. Intersect with the kind
+    // filter so faded-out kinds don't count. Read props.kindFilter directly (not activeKinds(),
+    // declared later → TDZ).
     const kf = props.kindFilter
     const kindOk = (kind: string) => !kf || kf.size === 0 || kf.has(kind)
     const m = new Set<string>()
-    for (const n of layout().nodes) {
-      if (n.collapse) continue // synthetic pill, not a searchable resource
+    for (const n of props.nodes) {
       if (kindOk(n.kind) && nodeMatches(n, q)) m.add(n.id)
     }
     return m

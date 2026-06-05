@@ -58,22 +58,6 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
-- **Search match counts disagree when matches fold into pills** — *found live 2026-06-06 (real staging
-  team-a, search "workflow": 144 Workflows, most folded). Surfaced BY the same-day overlay-count fix
-  (`d6a77b9`), needs a navigation-aware fix, not a rush.* The toolbar `.topology-matches` shows
-  navigable matches (`matches()` over `layout().nodes`, folded excluded) = "38 matches", while the
-  bottom `.topology-count` now shows true total (over props.nodes) = "158 of 341 match". Before the
-  overlay fix both read ~38 (agreed but the overlay was wrong for the health-filter triage case); now
-  the overlay is correct everywhere but the two search indicators disagree (38 vs 158). The pill badges
-  ("● 37 match") correctly show where the 120 folded matches are, so the data's consistent — only the
-  two *count* readouts diverge. **The real fix** (worth its own cycle): make the search Enter-cycle
-  reach folded matches by auto-expanding the containing fold on navigate, then `matches()` / the
-  position indicator can count the full set ("Match 3 of 158") and both readouts unify. A cheaper
-  stopgap (toolbar shows "38 of 158", title explains the fold) leaves Enter still unable to reach the
-  120 — half a fix. **Don't** revert the overlay to visible-only: that re-breaks the health-pill
-  agreement the fix restored. Tied to the open "j/k nav can select a folded node" item — both are
-  "navigation must account for folds" and could share the auto-expand-on-navigate machinery.
-
 - **A pressured-but-Ready Node reads "Ready" while its health dot is Degraded** — *found in code while
   surfacing pod triage info (2026-06-05); NOT yet verified live (couldn't safely induce node pressure /
   NotReady on docker-desktop — filling a disk or killing a kubelet is destructive).* `nodeHealth`
@@ -88,26 +72,6 @@ Recent batches (newest first; `git log` has the commits):
   — a status-string change alone is unit-testable, but the directive wants the real unhealthy-node render
   confirmed. Keep health classification unchanged (pressure already → Degraded; don't re-decide it).
 
-- **`j`/`k` nav can select a folded node, which then has no on-canvas cue** — *verified live (cycle
-  74, a remote staging cluster, a busy namespace: 132 nodes / 16 collapse pills folding ~70 Failed
-  Workflows); the pill-badge omission is DELIBERATE — this is a narrow refinement, not a bug.*
-  `orderedForNav` walks the FULL `props.nodes` (folded included) and `j`/`k` step "troubled first", so
-  in a namespace whose troubled resources are mostly *folded*, `j` lands selection on a hidden node:
-  the drawer opens (full info) and the spotlight fades the rest, but there's **no `.selected` marker**
-  because the node isn't rendered (it's behind a "+N more" pill). Measured: visible nav target → 1
-  on-canvas marker; folded target → 0. **Why this is mostly by-design:** the collapse-pill match badge
-  (`collapseMatchCount`, `Topology.tsx:552-567`) *intentionally* fires only for an EXPLICIT query
-  (search / health filter), NOT for selection — the comment spells out why: a selected resource lights
-  its whole `related()` subtree, so badging every hidden sibling in it would read as a phantom search
-  hit. So "nav doesn't badge the pill" is a considered choice, not an oversight. **The narrow residual:**
-  badging the ONE pill that contains the *exact* selected node (≠ badging the whole subtree) would
-  reveal where a nav-selected folded node lives without the phantom-hit problem — but that distinction
-  may have been deliberately skipped for simplicity. **If reopened:** the only defensible change is a
-  cue scoped to the single pill whose `meta.hidden` includes `selectedId` (e.g. an outline), wired
-  where `selectedId` changes — NOT a `collapseMatchCount`-style badge (that path is correctly
-  query-only). Low priority: the drawer already carries full info and the operator can expand the
-  nearby pill. *Don't "fix" by making selection feed `collapseMatchCount` — that reintroduces the
-  phantom-hit the comment guards against.*
 
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
@@ -231,6 +195,21 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
 
 ## Done
+
+**Navigation now reaches folded matches — count unified + auto-expand-on-select (closed TWO Open items;
+shipped 2026-06-06):** the toolbar `.topology-matches` counted `matches()` over `layout().nodes` (folded
+excluded → "38") while the bottom overlay counted the full set ("158"), and `j`/`k`/Enter could land
+selection on a node folded behind a "+N more" pill — the drawer opened but the card wasn't drawn, so
+there was no on-canvas `.selected` marker. Both are "navigation must account for folds" and shared one
+fix: (1) `matches()` now iterates `props.nodes`, so the toolbar count = the honest total and agrees with
+the overlay, and the Enter-cycle / position indicator ("Match 3 of 158") cover every match; (2) a new
+`createEffect` on `selectedId` finds the single pill whose fold hides the selection and expands just that
+one, scoped to the EXACT node (not its `related()` subtree, so selecting a hub never unfolds every
+sibling). Verified live on a real staging namespace (341 resources, 15 folds): toolbar "158 matches" ==
+overlay "158 of 341"; selecting a known-folded pod by exact name rendered it with its `.selected` marker
+(folded→rendered transition fired only on selection, not on search alone — confirming no over-eager
+unfolding). Two unit tests lock the contract. This is the navigation-aware fix both Open items called for
+(NOT the rejected `collapseMatchCount`-badge approach, which would reintroduce the phantom-hit).
 
 **Surfaced a degraded resource's failure reason in the drawer (was an Open item; shipped 2026-06-06):**
 when an unhealthy resource's Events had aged out (k8s event TTL — a 3-week-old failure shows "No recent
