@@ -1565,10 +1565,12 @@ export default function Topology(props: Props) {
                   // namespace's pod segments undercounts when other namespaces + system overhead also run
                   // on the node, so max(pod sum, node usage) keeps the headline figure honest.
                   const useShown = Math.max(row.useTotal, row.nodeUse ?? 0)
-                  // Node-row "value / capacity" labels: format both parts in the capacity's unit so the
-                  // two stacked bars never clash ("876m / 16" → "0.88 / 16"). See formatPair.
-                  const reqPair = formatPair(row.reqTotal, row.cap, capResource())
-                  const usePair = formatPair(useShown, row.useCap, capResource())
+                  // Node-row "value / capacity" labels: format BOTH stacked bars in one unit, picked from
+                  // the node's TOTAL capacity, so the Use bar (cap = total) and Req bar (cap = the smaller
+                  // allocatable) never clash — e.g. "0.06 / 1" Use over "480m / 940m" Req. See formatPair.
+                  const unitRef = row.useCap ?? row.cap
+                  const reqPair = formatPair(row.reqTotal, row.cap, capResource(), unitRef)
+                  const usePair = formatPair(useShown, row.useCap, capResource(), unitRef)
                   const segClasses = (s: CapSeg) => ({
                     over: s.over,
                     near: s.nearLimit,

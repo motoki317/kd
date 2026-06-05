@@ -232,6 +232,16 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Nodes capacity view: a node's Use/Req CPU bars no longer clash units (live-found on staging, 2026-06-06):**
+on a real multi-node EKS cluster the same node showed Use `0.06 / 1` (cores) above Req `480m / 940m`
+(millicores) — same node, same resource, two units, impossible to compare at a glance. Root cause:
+`formatPair` chose the unit from each bar's OWN cap; the Use bar's cap is total capacity (1000m → cores)
+but the Req bar's cap is the ~940m allocatable, which judged alone fell under the 1-core line → millicores.
+Fixed by deciding the unit ONCE per node from its total capacity (new `unitRef` param) and applying it to
+both bars, while each still displays its own cap. Now both read cores (`0.06 / 1` over `0.48 / 0.94`), so
+"88% reserved, barely used" reads instantly. **Hidden on docker-desktop** (its integer-core node has
+allocatable==capacity, no straddle) — only real allocatable-shaved nodes exposed it: the real-data lesson.
+
 **Cluster-scope health tally: CRDs + FlowSchemas no longer falsely "Unknown" (live-found, 2026-06-06):**
 opening `__cluster__` read `Healthy 274 · Unknown 60` — alarming at a glance. Scoped the exact culprits:
 49 CustomResourceDefinitions (conditions Established/NamesAccepted) + 11 FlowSchemas (condition Dangling)

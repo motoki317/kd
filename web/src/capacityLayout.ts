@@ -492,23 +492,31 @@ export function layoutGraphByCapacity(
   }
 }
 
-// formatPair renders a "value / capacity" pair with BOTH parts in ONE unit — the unit the CAPACITY
-// (the reference) naturally uses — so a node's two stacked bars never clash units. Independent
-// per-value formatting gave "876m / 16" (millicores numerator over a cores denominator) and varied
-// the unit node-to-node; here the denominator picks the unit and the numerator follows: "0.88 / 16"
-// (cores) or "480m / 940m" (millicores), each label in a single unit. Returns the parts separately so
-// the value can still render bold (the contrast cue). CPU: cores when the cap is ≥1 core, else
-// millicores; memory: the cap's binary unit.
-export function formatPair(value: number | undefined, cap: number | undefined, res: CapResource): { value: string; cap: string } {
+// formatPair renders a "value / capacity" pair with BOTH parts in ONE unit, so a node's two stacked
+// bars never clash units. The unit is picked from `unitRef` (default `cap`) — pass the NODE'S TOTAL
+// CAPACITY as unitRef for both the Use and Req bars so they share a unit even though their own caps
+// differ: a 1-core node's Use cap is 1000m (→ cores) but its Req cap is the ~940m allocatable (which,
+// judged alone, fell under the 1-core line → millicores), producing the clashing "0.06 / 1" Use over
+// "480m / 940m" Req. With unitRef = total capacity, both read cores ("0.06 / 1" and "0.48 / 0.94").
+// Each bar still DISPLAYS its own cap; only the unit choice is shared. CPU: cores when the ref is ≥1
+// core, else millicores; memory: the ref's binary unit. Real multi-core nodes always read cores; the
+// bug only ever surfaced where allocatable dipped below a whole core (hidden on integer-core dev nodes).
+export function formatPair(
+  value: number | undefined,
+  cap: number | undefined,
+  res: CapResource,
+  unitRef?: number,
+): { value: string; cap: string } {
   if (cap === undefined) return { value: formatQuantity(value, res), cap: '' } // no reference unit to match
+  const ref = unitRef ?? cap // the value that decides the unit; the displayed cap is unchanged
   if (res === 'cpu') {
-    const cores = cap >= 1000
+    const cores = ref >= 1000
     const f = (v: number | undefined) => (v === undefined ? '—' : cores ? `${+(v / 1000).toFixed(2)}` : `${Math.round(v)}m`)
     return { value: f(value), cap: f(cap) }
   }
   const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
   let i = 0
-  let n = cap
+  let n = ref
   while (n >= 1024 && i < units.length - 1) {
     n /= 1024
     i++

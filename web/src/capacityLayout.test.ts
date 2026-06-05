@@ -10,6 +10,13 @@ describe('formatPair', () => {
   it('CPU: a sub-core cap keeps both parts in millicores (already one unit)', () => {
     expect(formatPair(480, 940, 'cpu')).toEqual({ value: '480m', cap: '940m' })
   })
+  it('CPU: unitRef from the node total keeps the Req bar in cores when its allocatable dips sub-core', () => {
+    // The real bug: a 1-core node's Use bar (cap 1000 → cores "0.06 / 1") clashed with its Req bar
+    // (cap 940, judged alone → millicores "480m / 940m"). Passing the node total (1000) as unitRef
+    // pulls the Req bar into cores too, so both stacked bars read one unit.
+    expect(formatPair(60, 1000, 'cpu', 1000)).toEqual({ value: '0.06', cap: '1' })
+    expect(formatPair(480, 940, 'cpu', 1000)).toEqual({ value: '0.48', cap: '0.94' })
+  })
   it('CPU: trims trailing zeros on the cores form', () => {
     expect(formatPair(2000, 2000, 'cpu')).toEqual({ value: '2', cap: '2' })
   })
