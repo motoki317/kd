@@ -15,6 +15,7 @@ import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
 import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
 import { isNodeFaded } from '../fade'
+import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
@@ -564,6 +565,22 @@ export default function Topology(props: Props) {
   // The full-width control bar overlays the top of the canvas; the fit reads its live height so it
   // can centre the graph in the VISIBLE area below the bar instead of behind it.
   let toolbarEl: HTMLDivElement | undefined
+  // The Kinds filter is a strict single line that scrolls horizontally when a namespace has more kinds
+  // than fit. Without an edge cue the truncation reads as "that's all there is" (macOS hides the
+  // scrollbar until use), so an operator misses off-screen kinds. Track which edges still have content
+  // and fade them (scrollEdges + the .scroll-l/.scroll-r mask classes).
+  let kindsRowEl: HTMLDivElement | undefined
+  const [kindsEdges, setKindsEdges] = createSignal<ScrollEdges>({ l: false, r: false })
+  const updateKindsEdges = () => {
+    const el = kindsRowEl
+    if (el) setKindsEdges(scrollEdges(el.scrollLeft, el.scrollWidth, el.clientWidth))
+  }
+  // Recompute when the chip set changes (a namespace/view switch changes how many kinds overflow). The
+  // <For> commits a tick after kindChips(), so defer the DOM measure to the microtask queue.
+  createEffect(() => {
+    kindChips() // track
+    queueMicrotask(updateKindsEdges)
+  })
   let pointerDown = false
   let dragging = false
   let startX = 0
@@ -712,6 +729,7 @@ export default function Topology(props: Props) {
       if (rafId) cancelAnimationFrame(rafId)
       rafId = requestAnimationFrame(() => {
         rafId = 0
+        updateKindsEdges() // bar width changed → re-evaluate which kind chips overflow
         if (!svg) return
         const l = layout()
         if (l.width === 0) return
@@ -1420,7 +1438,15 @@ export default function Topology(props: Props) {
           <div class="toolbar-row">
           <div class="toolbar-facet toolbar-facet-grow">
             <span class="toolbar-label">Kinds</span>
-            <div class="topology-kinds" role="toolbar" aria-label="Kind filter" onKeyDown={onToolbarKey}>
+            <div
+              class="topology-kinds"
+              classList={{ 'scroll-l': kindsEdges().l, 'scroll-r': kindsEdges().r }}
+              ref={kindsRowEl}
+              onScroll={updateKindsEdges}
+              role="toolbar"
+              aria-label="Kind filter"
+              onKeyDown={onToolbarKey}
+            >
             <For each={kindChips()}>
               {(c, i) => (
                 <button

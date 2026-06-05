@@ -1380,6 +1380,22 @@ button.conn.conn-retry:focus-visible {
   background: var(--border-strong);
   border-radius: 3px;
 }
+/* Edge fades cue the horizontal overflow: a hard truncation reads as "that's all there is"; a fade at
+   an edge reads as "more chips continue this way". JS (scrollEdges) toggles .scroll-l/.scroll-r so a
+   non-overflowing row stays crisp and each fade only appears when there's real content past that edge.
+   The 28px ramp matches a chip's width so a partly-clipped chip dissolves rather than getting sliced. */
+.topology-kinds.scroll-r {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.topology-kinds.scroll-l {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+.topology-kinds.scroll-l.scroll-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
 /* The Kinds facet fills the bar so its chip row has the full width before scrolling. */
 .toolbar-facet-grow {
   flex: 1 1 auto;

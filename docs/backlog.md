@@ -240,6 +240,17 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 ## Done
 
+**Overflowing Kinds row had no scroll affordance (live-found, 2026-06-06):** dogfooding the landing
+view on `team-a` (19 kinds, 1280px viewport) showed the Kinds filter truncating ~517px of chips at
+a hard right edge — `overflow-x:auto` scrolls but macOS hides the scrollbar until use, so an operator
+scanning "which kinds are here" can't tell 6 more chips (incl. Workflow) continue off-screen. Added an
+edge fade (mask-image) toggled by scroll position via a pure `scrollEdges()` helper: fade right at the
+start ("more this way"), flip to fade left at the end, both in the middle, none when it fits. Verified
+live: `scroll-r` at start → `scroll-l` after scrolling to the end; a few-kind namespace shows no fade.
+*Lesson: a horizontally-scrolling row needs an explicit overflow cue — a hard truncation reads as
+"that's all there is", which on a legend ("what kinds are here") actively misleads. Found by USING the
+app, not surveying code — the source looked complete (styled scrollbar present), but the OS hides it.*
+
 **Restarted container hid WHY it restarted (live-found, 2026-06-05):** a pod that the cluster had
 OOMKilled overnight and then restarted showed only "Running ↻1" in the drawer — the actionable reason
 (OOMKilled, exit 137 → raise the memory limit) sat in `status.containerStatuses[].lastState.terminated`,
