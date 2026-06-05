@@ -8,6 +8,20 @@ afterEach(cleanup)
 
 const base = { owners: [], onNavigate: () => {} }
 
+describe('ResourceSummary hero health gloss', () => {
+  it('explains the health-tint colour via a title gloss — gray "Unknown" reads as a fault otherwise', () => {
+    const node: KNode = { id: 'x', kind: 'VMServiceScrape', name: 'metrics', health: 'Unknown' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const hero = container.querySelector('.drawer-hero')
+    expect(hero?.getAttribute('title')).toContain("can't classify")
+  })
+  it('carries the matching gloss for a healthy resource too (consistent with the sidebar dots)', () => {
+    const node: KNode = { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    expect(container.querySelector('.drawer-hero')?.getAttribute('title')?.toLowerCase()).toContain('healthy')
+  })
+})
+
 describe('ResourceSummary data keys', () => {
   it('lists a ConfigMap\'s keys with the size split into a dim suffix', () => {
     const node: KNode = {

@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js'
-import { healthColor } from '../health'
+import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode } from '../types'
@@ -133,7 +133,15 @@ export default function ResourceSummary(props: Props) {
           reads as the "blown up" version of the card you just clicked. The icon's host <g> picks
           up the health color (.health-tint*) so the hero pops in the row even before the eye
           reads the kind text or name. */}
-      <div class="drawer-hero" classList={{ [`health-tint-${props.node.health.toLowerCase()}`]: true }}>
+      {/* The hero's health tint is the only health signal in the drawer; a bare colour reads
+          ambiguously for the uncommon states — gray "Unknown" especially looks like a fault when it
+          just means kd has no rule for the kind. The same healthHint gloss the sidebar dots carry
+          explains the colour on hover (explicit-over-implicit), so the operator isn't left inferring. */}
+      <div
+        class="drawer-hero"
+        classList={{ [`health-tint-${props.node.health.toLowerCase()}`]: true }}
+        title={healthHint[props.node.health]}
+      >
         <svg class="drawer-hero-icon" viewBox="0 0 14 14" width="34" height="34" aria-hidden="true">
           {kindIcon(props.node.kind)}
         </svg>
