@@ -76,10 +76,13 @@ function nodeLabel(n: KNode): string {
   return `${n.kind} ${ns}${n.name}`
 }
 
-// edgeTitle builds the SVG <title> hover text for an edge: "<from> <verb> <to>".
-export function edgeTitle(e: KEdge, nodes: KNode[]): string {
-  const fromN = nodes.find((n) => n.id === e.from)
-  const toN = nodes.find((n) => n.id === e.to)
+// edgeTitle builds the SVG <title> hover text for an edge: "<from> <verb> <to>". Takes a by-id map
+// (ReadonlyMap so a Map of the layout's PositionedNode subtype passes covariantly) for O(1) endpoint
+// lookup — this runs for EVERY edge on every reactive render, so a linear find per endpoint was
+// O(edges×nodes) on each SSE patch / selection change.
+export function edgeTitle(e: KEdge, byId: ReadonlyMap<string, KNode>): string {
+  const fromN = byId.get(e.from)
+  const toN = byId.get(e.to)
   const fromS = fromN ? nodeLabel(fromN) : e.from
   // A bundled hub→pill edge points at a synthetic "+N older" pill (not in nodes); read it as the
   // aggregate it is rather than leaking the sentinel id into the tooltip.

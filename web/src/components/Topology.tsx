@@ -555,6 +555,14 @@ export default function Topology(props: Props) {
     }
     return meta.hidden.reduce((c, n) => c + (hit(n) ? 1 : 0), 0)
   }
+  // One id→node map per layout, so the per-edge lookups below (the kind-fade test and each edge's
+  // hover title) are O(1) instead of a linear find apiece — they run for every edge on every render,
+  // so the old finds were O(edges×nodes) on each SSE patch / selection change.
+  const nodeById = createMemo(() => {
+    const m = new Map<string, import('../layout').PositionedNode>()
+    for (const n of layout().nodes) m.set(n.id, n)
+    return m
+  })
   const edgeFaded = (e: KEdge) => {
     const m = matches()
     if (m) return !(m.has(e.from) && m.has(e.to))
@@ -562,8 +570,8 @@ export default function Topology(props: Props) {
     if (activeKinds()) {
       // Light the edge only when both endpoints pass the kind filter — keeps the active subset's
       // connectivity readable instead of leaving dangling lines that go nowhere.
-      const a = layout().nodes.find((n) => n.id === e.from)
-      const b = layout().nodes.find((n) => n.id === e.to)
+      const a = nodeById().get(e.from)
+      const b = nodeById().get(e.to)
       return !(a && b && nodeKindOk(a.kind) && nodeKindOk(b.kind))
     }
     const r = related()
@@ -1944,7 +1952,7 @@ export default function Topology(props: Props) {
                   onPointerLeave={() => setHoverEnds(null)}
                 >
                   {/* <title> on the path makes hover reveal the relationship type. */}
-                  <title>{edgeTitle(e, props.nodes)}</title>
+                  <title>{edgeTitle(e, nodeById())}</title>
                   <path class="edge-hit" d={edgePath(e.points)} fill="none" stroke="transparent" stroke-width="10" />
                   <path
                     classList={{ faded: edgeFaded(e), adjacent: edgeAdjacent(e), owner: e.type === 'ownerReference' }}

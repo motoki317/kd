@@ -32,21 +32,21 @@ describe('edgePath', () => {
 })
 
 describe('edgeTitle', () => {
-  const nodes = [node('a', 'Service', 'web', 'prod'), node('b', 'Pod', 'web-0', 'prod')]
+  const byId = new Map([node('a', 'Service', 'web', 'prod'), node('b', 'Pod', 'web-0', 'prod')].map((n) => [n.id, n]))
 
   it('reads "<from> <verb> <to>" with namespaced labels', () => {
     const e = { from: 'a', to: 'b', type: 'selects' } as KEdge
-    expect(edgeTitle(e, nodes)).toBe('Service prod/web selects Pod prod/web-0')
+    expect(edgeTitle(e, byId)).toBe('Service prod/web selects Pod prod/web-0')
   })
 
   it('names a bundled hub→pill edge as "folded resources" rather than leaking the sentinel id', () => {
     const e = { from: 'a', to: '__collapse__:host:node-1', type: 'ownerReference' } as KEdge
-    expect(edgeTitle(e, nodes)).toBe('Service prod/web owns folded resources')
+    expect(edgeTitle(e, byId)).toBe('Service prod/web owns folded resources')
   })
 
   it('falls back to the raw id when an endpoint is missing from the node set', () => {
     const e = { from: 'ghost', to: 'b', type: 'mounts' } as KEdge
-    expect(edgeTitle(e, nodes)).toBe('ghost mounts Pod prod/web-0')
+    expect(edgeTitle(e, byId)).toBe('ghost mounts Pod prod/web-0')
   })
 })
 
