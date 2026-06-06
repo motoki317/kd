@@ -144,6 +144,11 @@ Recent batches (newest first; `git log` has the commits):
   normal/ignored; ApplicationSet's ErrorOccurred=True → Degraded. Verified live: **the whole staging cluster
   now has 0 Unknown dots across every namespace** — the condition-less-control-CR false-alarm class is fully
   drained on this cluster).
+  **Node usage gauges** (4ef6096 — the pod-gauge cycle left a gap: selecting a Node showed only static
+  capacity, never live load, unless you switched to the Nodes layout. Generalized the gauge over its ceiling
+  (Pod → limit/request, Node → allocatable); usage past allocatable flags as pressure. Verified live: a node
+  drawer in cluster-scope shows "CPU 61m / 940m alloc", "Mem 1.1Gi / 7Gi alloc"). Pod-gauge configs all
+  verified live too: unconstrained (dashed "unset"), request-only ("2m / 100m req"), request+limit (tick).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
