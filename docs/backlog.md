@@ -319,6 +319,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- A StorageClass now surfaces its default marker (was invisible everywhere) + provisioner as the hero status, dropping the redundant provisioner chip so it reads as the headline; completes the cluster-scoped legibility set CRD/PriorityClass/IngressClass/StorageClass (fad924f)
 - An IngressClass card/drawer now shows its controller + default marker ("traefik.io/ingress-controller · default") — "which controller serves my Ingress" — completing the cluster-scoped legibility set with CRD + PriorityClass (7ea29b0)
 - A PriorityClass card/drawer now shows its value (comma-grouped) + globalDefault + never-preempts, the preemption-debugging facts, instead of just age (9a20ff0)
 - Persisted the display-vs-logs graph split (Build drops completed pods; use BuildForLogs) + main-container default in AGENTS.md "Common surprises" (36df784)
