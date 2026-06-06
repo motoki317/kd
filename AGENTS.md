@@ -115,6 +115,10 @@ sleep 6   # SSE settle; ~15s for a remote EKS context's FIRST informer sync
   path still receives pointer events — use it as a fat invisible hit target over a thin line.
 - **CSS**: a two-class selector out-specifies a one-class one (no `!important`); gate animations behind
   `@media (prefers-reduced-motion: reduce)`; persist display prefs in `localStorage` under `kd:*` keys.
+  Setting `display:` on a **direct child of `<details>`** out-cascades the UA rule that hides closed
+  content (`details:not([open]) > :not(summary){display:none}`), so the section shows whether open or
+  closed and the `<summary>` becomes a dead toggle — re-hide with an explicit `:not([open])` rule. (Only
+  reproduces in a real browser; jsdom renders neither CSS nor native `<details>` toggling — verify live.)
 - **jsdom limits**: `offsetParent` is always null, `scrollIntoView`/`Element.animate` are missing (stub
   them), `getBoundingClientRect` returns zeros, and `animationend` never fires (assert the class was
   *added*, not auto-removed). Unit-test the DOM contract; verify the behaviour live.
