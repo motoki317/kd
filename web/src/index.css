@@ -2006,6 +2006,14 @@ button.conn.conn-retry:focus-visible {
   z-index: 20;
   box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
 }
+/* The operator expands the drawer to READ a tab (logs/manifest/events), so the verbose resource
+   summary — tall for a pod (containers, images, ports, labels) — must yield the height it eats in the
+   side panel. Cap it and let it scroll, so the active tab panel fills the rest of the canvas; the
+   header actions sit outside this box and stay fixed. (Only when expanded; the side panel is unchanged.) */
+.drawer.expanded .drawer-summary {
+  max-height: 30vh;
+  overflow-y: auto;
+}
 @keyframes drawer-in {
   from { transform: translateX(32px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }

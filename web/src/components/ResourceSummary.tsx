@@ -129,7 +129,7 @@ export default function ResourceSummary(props: Props) {
   const labels = createMemo(() => Object.entries(props.node.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)))
 
   return (
-    <div>
+    <div class="drawer-summary">
       {/* Drawer "hero" header (cycle 128): a card-sized kind silhouette plus the kind label and
           name stacked beside it — mirrors the topology card's icon-forward design so the drawer
           reads as the "blown up" version of the card you just clicked. The icon's host <g> picks

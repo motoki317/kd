@@ -20,6 +20,13 @@ describe('ResourceSummary hero health gloss', () => {
     const { container } = render(() => <ResourceSummary node={node} {...base} />)
     expect(container.querySelector('.drawer-hero')?.getAttribute('title')?.toLowerCase()).toContain('healthy')
   })
+  // The root carries .drawer-summary so the expanded drawer can cap + scroll it, yielding the freed
+  // height to the active tab panel (logs/manifest). jsdom can't measure the CSS cap, so assert the hook.
+  it('exposes a .drawer-summary root so the expanded drawer can reclaim its height for the tab panel', () => {
+    const node: KNode = { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    expect(container.querySelector('.drawer-summary')).toBeTruthy()
+  })
 })
 
 describe('ResourceSummary labels', () => {
