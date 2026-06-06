@@ -76,10 +76,12 @@ func nodeEqual(a, b Node) bool {
 		a.Message == b.Message && // a failure reason appearing/changing must repaint the drawer
 		a.Restarts == b.Restarts &&
 		a.Host == b.Host &&
+		a.Taints == b.Taints && // a Node being cordoned/tainted must repaint
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
 		a.ExternalIP == b.ExternalIP && // a LoadBalancer's "pending" → assigned address must repaint
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
 		slices.Equal(a.Routes, b.Routes) && // an Ingress rule edit must repaint
+		slices.Equal(a.NetPol, b.NetPol) && // a NetworkPolicy rule edit must repaint
 		slices.Equal(a.Rules, b.Rules) && // a Role rule edit must repaint
 		a.RoleRef == b.RoleRef &&
 		slices.Equal(a.Subjects, b.Subjects) && // a binding's subject edit must repaint

@@ -94,6 +94,8 @@ func TestNodeEqualDetectsFieldChanges(t *testing.T) {
 		{"ExternalIP", func(n *Node) { n.ExternalIP = "203.0.113.7" }},
 		{"Ports", func(n *Node) { n.Ports = []string{"443/TCP"} }},
 		{"Routes", func(n *Node) { n.Routes = []string{"h/p → s:443"} }},
+		{"NetPol", func(n *Node) { n.NetPol = []string{"Egress: deny all"} }},
+		{"Taints", func(n *Node) { n.Taints = "node.kubernetes.io/unschedulable:NoSchedule" }},
 		{"Rules", func(n *Node) { n.Rules = []string{"pods: list"} }},
 		{"RoleRef", func(n *Node) { n.RoleRef = "ClusterRole/admin" }},
 		{"Subjects", func(n *Node) { n.Subjects = []string{"Group: b"} }},
