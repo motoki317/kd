@@ -582,3 +582,46 @@ func TestTraefikNoStatusHealthy(t *testing.T) {
 		}
 	}
 }
+
+// TestAPIServiceStatus: an aggregated APIService surfaces its backing Service when healthy and the
+// Available=False reason when the apiserver can't reach that backend; a Local APIService (no backing
+// service) stays silent. Health rides the catch-all Available-condition reader, so an unavailable one
+// is also Degraded — the red dot the status string now explains.
+func TestAPIServiceStatus(t *testing.T) {
+	apiSvc := func(spec map[string]any, status map[string]any) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "apiregistration.k8s.io/v1",
+			"kind":       "APIService",
+			"metadata":   map[string]any{"name": "v1beta1.metrics.k8s.io"},
+		}
+		if spec != nil {
+			obj["spec"] = spec
+		}
+		if status != nil {
+			obj["status"] = status
+		}
+		return &unstructured.Unstructured{Object: obj}
+	}
+	svc := map[string]any{"service": map[string]any{"namespace": "metrics-server", "name": "metrics-server"}}
+	available := map[string]any{"conditions": conds(map[string]any{"type": "Available", "status": "True", "reason": "Passed"})}
+	broken := map[string]any{"conditions": conds(map[string]any{"type": "Available", "status": "False", "reason": "FailedDiscoveryCheck"})}
+
+	if got := statusSummary(apiSvc(svc, available)); got != "→ metrics-server/metrics-server" {
+		t.Errorf("available aggregated APIService = %q, want backing service", got)
+	}
+	if got, want := statusSummary(apiSvc(svc, broken)), "Unavailable · FailedDiscoveryCheck"; got != want {
+		t.Errorf("unavailable APIService = %q, want %q", got, want)
+	}
+	if got := health(apiSvc(svc, broken)); got != HealthDegraded {
+		t.Errorf("unavailable APIService health = %q, want Degraded", got)
+	}
+	// A Local APIService (built-in group, no spec.service, no conditions) carries nothing to surface
+	// and is Healthy by existence.
+	local := apiSvc(nil, nil)
+	if got := statusSummary(local); got != "" {
+		t.Errorf("local APIService status = %q, want \"\"", got)
+	}
+	if got := health(local); got != HealthHealthy {
+		t.Errorf("local APIService health = %q, want Healthy", got)
+	}
+}

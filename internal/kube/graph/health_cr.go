@@ -471,8 +471,34 @@ func crKindStatus(u *unstructured.Unstructured) string {
 		return gatewayStatusSummary(u, gvk.Kind)
 	case gvk.Group == "wgpolicyk8s.io" || gvk.Group == "reports.kyverno.io":
 		return policyReportStatus(u)
+	case gvk.Group == "apiregistration.k8s.io" && gvk.Kind == "APIService":
+		return apiServiceStatus(u)
 	}
 	return ""
+}
+
+// apiServiceStatus summarizes an aggregated APIService: which Service backs the API group, and — when
+// the apiserver can't reach that backend — the Available=False reason. An unavailable aggregated API
+// (metrics.k8s.io, custom.metrics, a conversion webhook's API) silently breaks every client of that
+// group — kubectl top, the HPA, `kubectl get <cr>` — with no hint at the APIService node itself, which
+// otherwise reads blank. A Local APIService (a built-in group served by the apiserver, no backing
+// service) carries nothing worth surfacing, so it stays silent.
+func apiServiceStatus(u *unstructured.Unstructured) string {
+	svcName, _, _ := unstructured.NestedString(u.Object, "spec", "service", "name")
+	if svcName == "" {
+		return "" // a Local group served by the apiserver itself
+	}
+	backend := svcName
+	if ns, _, _ := unstructured.NestedString(u.Object, "spec", "service", "namespace"); ns != "" {
+		backend = ns + "/" + svcName
+	}
+	if crConditionStatus(u, "Available") == "False" {
+		if r := crConditionReason(u, "Available"); r != "" {
+			return "Unavailable · " + r
+		}
+		return "Unavailable"
+	}
+	return "→ " + backend
 }
 
 // gatewayStatusSummary names a Gateway API resource's attach state in one word, mirroring the
@@ -529,6 +555,27 @@ func crConditionStatus(u *unstructured.Unstructured, typ string) string {
 		if t, _ := m["type"].(string); t == typ {
 			s, _ := m["status"].(string)
 			return s
+		}
+	}
+	return ""
+}
+
+// crConditionReason returns the short reason token (e.g. "FailedDiscoveryCheck") of the named
+// status.conditions[] entry — the compact "why" behind a non-True condition, preferred over the long
+// free-text message for a status chip. Empty when the condition or its reason is absent.
+func crConditionReason(u *unstructured.Unstructured, typ string) string {
+	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
+	if err != nil || !found {
+		return ""
+	}
+	for _, c := range conds {
+		m, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		if t, _ := m["type"].(string); t == typ {
+			r, _ := m["reason"].(string)
+			return r
 		}
 	}
 	return ""
