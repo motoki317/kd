@@ -59,12 +59,24 @@ Three traps, each cost a debugging session — heed them:
 
 - Conventional Commits, **English**. Commit per coherent slice. Git ops ONLY when explicitly asked, or
   when moving between phases.
-- **No machine-local or environment leakage.** Git-tracked files (code, comments, tests, docs) and
-  commit messages must read identically on any machine. Never commit machine-local paths (`/Users/…`,
-  `/home/…`) or private-environment state — real kubectl context/cluster names, cloud ARNs, account IDs,
-  internal hostnames, private product names. Use generic placeholders: `<repo>/web` for paths, AWS's
-  docs identifiers (account `111122223333`, region `us-west-2`, cluster `prod-cluster`). A real value
-  needed to reproduce something stays in gitignored scratch (`docs/plans/`), never a tracked file.
+- **No machine-local or environment leakage — this is absolute.** Git-tracked files (code, comments,
+  tests, docs) **and commit messages** must read identically on any machine and reveal nothing about the
+  author's clusters. **NEVER write a locally-available resource name into the repo** — not a namespace,
+  cluster, context, node, service, pod, middleware, or product name you can see in *your* kube
+  environment, and not a cloud ARN / account ID / internal hostname / machine-local path (`/Users/…`,
+  `/home/…`). This binds **everywhere**, with no exception for the tempting cases that have leaked before:
+  a dogfooding/"verified live" note (in a commit message, `docs/backlog.md`, or a code comment), a **test
+  fixture or its expected value**, an example in a doc. Describing a real finding is never a license to
+  name the real resource — invent a placeholder and use it consistently on both the input and the
+  expected side. Use generic, clearly-fictional placeholders: `<repo>/web` for paths; AWS docs
+  identifiers (account `111122223333`, region `us-west-2`, cluster `prod-cluster`); invented namespaces/
+  workloads (`team-a`, `api-b`, `shop`). A real value needed to reproduce something stays in gitignored
+  scratch (`docs/plans/` or a session-only browser tab), never a tracked file.
+  - **Enforced by a test:** `internal/leakcheck` derives the real kube context/cluster/namespace names
+    and account IDs from your local kubeconfig (it hardcodes none — it stays cluster-agnostic) and fails
+    if any reaches a tracked file. Names a kubeconfig can't surface (internal product/service names) go in
+    a gitignored `.leakcheck` denylist — copy `.leakcheck.example`. Run `go test ./internal/leakcheck/`
+    before committing dogfooding notes.
 - ADRs are dated `YYYYMMDD-title.md`; design rationale lives there, not in comments.
 - TDD for pure logic (`auth`, `rbac`, `graph`, layout, store mapping). Fixture-driven where possible
   (`graph_test.go` decodes YAML into runtime objects).

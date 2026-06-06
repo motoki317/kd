@@ -26,6 +26,10 @@ policy.local.csv
 .env
 .envrc.local
 
+# Leak-guard denylist: machine-local product/service names for internal/leakcheck.
+# Never commit real names (see AGENTS.md). The .example is the tracked template.
+.leakcheck
+
 # Nix
 result
 result-*

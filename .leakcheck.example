@@ -1,0 +1,13 @@
+# Leak-guard denylist (template) — copy to `.leakcheck`, which is gitignored.
+#
+# internal/leakcheck scans the tracked tree for these tokens (case-insensitive, literal) and
+# fails the build if any appears. Kube context/cluster/namespace names and cloud account IDs are
+# derived automatically from your kubeconfig — list here only what a kubeconfig can't surface:
+# internal PRODUCT and SERVICE names that show up in dogfooding notes (a real workload name, an
+# internal middleware, a private cluster nickname).
+#
+# One token per line; '#' starts a comment. Keep this .example free of any real name.
+#
+# my-internal-product
+# some-private-service
+# 111122223333
