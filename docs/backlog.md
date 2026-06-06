@@ -194,17 +194,6 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
-- **Workload-level usage gauges (aggregate descendant pods)** — *high value, feasible client-side; surfaced
-  dogfooding the new pod/node gauges (3b5386e/4ef6096/1a96e68).* The drawer now shows live CPU/memory gauges
-  for a Pod (vs request/limit) and a Node (vs allocatable). A Deployment/StatefulSet/DaemonSet/ReplicaSet has
-  no usage of its own, but the client already holds every descendant pod's usage (capacity feed, keyed by UID)
-  AND the ownership edges — so a workload gauge ("CPU 2.3 / 3.0 cores · summed across 3 pods", usage vs ΣpodA
-  requests) is a pure client-side aggregation, no server change. Answers "how much is my Deployment using?" at
-  a glance. **Build as:** walk descendant pods (a `DescendantPods`-style traversal exists for logs; mirror it
-  in App or pass the aggregate to the drawer), sum usage + requests/limits, reuse `UsageGauges` with a
-  "summed across N pods" caption; gate on the kind being a pod-owning workload AND ≥1 descendant having usage.
-  Use `formatPair` (per the unit-consistency lesson). Verify live on a multi-replica Deployment on staging.
-
 - **Triage-aware fold representatives in the connectivity/ownership view** — *follow-up to the
   kind-view fix (9d4438c); high value (default view), deferred on risk.* `layoutGraphByKind` now
   floats health-filter matches into a folded kind box's visible slots so the box's face shows the
@@ -408,6 +397,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- The drawer now rolls up a workload's live usage from its replicas: a Deployment/StatefulSet/DaemonSet has no metrics of its own, so the CPU/memory gauges were Pod/Node-only and an operator had to open each replica to answer "how much is this using vs reserving?". Pure client-side sum — walk descendant pods (mirroring the logs traversal), sum usage + requests/limits, gauge the total like a Pod with a "summed across N pods" caption; a bound stays defined only if some replica sets it, the rollup is suppressed until ≥1 replica has a reading, and the caption notes partial metering. Verified live on staging: coredns (2 replicas) read "CPU 3m / 200m req · summed across 2 pods" = exactly 2× a single pod's bounds (badaf12)
 - Kyverno/wgpolicy policy reports (PolicyReport, EphemeralReport — 57 in one staging namespace) now classify by their result summary (fail/error > 0 → Degraded) and show the tally as status ("1 skip", "2 fail, 3 pass") instead of reading Healthy-by-existence with a blank status + opaque UUID name — a failing report (policy violation) was invisible in the health tally/Degraded filter. Handles both summary nestings (Kyverno spec.summary, wgpolicy top-level); the path was a live-only bug the unit test missed. Verified live (0cb87b8)
 - A Traefik Middleware card/drawer now shows WHAT it does ("rateLimit 10/1s, burst 20", "forwardAuth → …", "redirect → https") instead of just kind+name+age — the complement to the IngressRoute "via <middleware>" chain, so clicking through to a middleware finally answers "what is this?"; common types enriched, others fall back to the bare type name. Verified live on staging (c810a3b)
 - A NetworkPolicy now lists each rule's actual peers + ports ("Ingress 50051/TCP ← ui-a, team-b/api-b, workflows.argoproj.io/workflow exists, …") instead of a bare "Ingress: 1 rule" that answered nothing about "who can reach these pods" (and hid that an empty rule = allow-from-anywhere); cross-namespace peers ns-qualified, ipBlock as CIDR, empty peer list = "anywhere", deny-all preserved. Also drops selectorSummary's empty "()" for valueless Exists ops. Verified live on staging — api-a's "1 rule" was actually 6 sources (2bf0d78)
