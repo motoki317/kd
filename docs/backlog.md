@@ -346,6 +346,7 @@ single commit maps cleanly; otherwise search the title in git log.
 - NetworkPolicy drawer summarizes target + per-direction rules (+ registered it in typedFactories)
 - NetworkPolicy → pods "governs" edge (Network category) — no longer a disconnected island
 - Light-mode caution TEXT readable (--caution-text, 4.71:1) — amber was ~1.85:1 on white
+- O(1) edge endpoint lookup (memoized node map) — was O(edges×nodes) per render in fade+title
 
 ### Earlier cycles (2026-05 and before — see git log for detail)
 - Filter count undercounted when matches were folded
