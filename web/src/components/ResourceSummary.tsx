@@ -375,7 +375,7 @@ export default function ResourceSummary(props: Props) {
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address
           is copyable for pasting into a curl/port-forward. */}
-      <Show when={props.node.clusterIP || props.node.externalIP || (props.node.ports?.length ?? 0) > 0}>
+      <Show when={props.node.clusterIP || props.node.externalIP || (props.node.ports?.length ?? 0) > 0 || props.node.selector}>
         <div class="drawer-ports">
           <Show when={props.node.clusterIP}>
             <span class="port-addr">
@@ -403,6 +403,19 @@ export default function ResourceSummary(props: Props) {
                 {ep().total === 0 ? 'no endpoints' : `${ep().ready}/${ep().total} ready`}
               </span>
             )}
+          </Show>
+          {/* The pod selector — the "why no endpoints" answer. A Service with 0 backends is the network
+              view's most common failure, and the selector (a typo'd label, a renamed workload) is what
+              an operator otherwise opens the manifest to find. Carries the caution tint exactly when it
+              matches nothing (total 0), so the eye lands on the suspect, matching the PDB "can disrupt 0"
+              idiom. The Service→Pod edges already show what it DOES match when it matches. */}
+          <Show when={props.node.selector}>
+            <MetaChip
+              label="selector"
+              value={props.node.selector!}
+              title="Pod selector — the labels a backing Pod must carry"
+              class={props.node.endpoints?.total === 0 ? 'port-caution' : undefined}
+            />
           </Show>
         </div>
       </Show>

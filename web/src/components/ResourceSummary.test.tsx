@@ -121,6 +121,31 @@ describe('ResourceSummary pod usage gauges', () => {
   })
 })
 
+describe('ResourceSummary service selector', () => {
+  it('shows a Service pod selector so "no endpoints" has a visible cause', () => {
+    const svc: KNode = {
+      id: 's', kind: 'Service', name: 'web', health: 'Degraded',
+      clusterIP: '10.0.0.1', selector: 'app=web, tier=frontend',
+      endpoints: { ready: 0, total: 0 },
+    }
+    const { container } = render(() => <ResourceSummary node={svc} {...base} />)
+    const chip = container.querySelector('.drawer-ports .port-addr.port-caution')
+    expect(chip?.textContent).toContain('selector')
+    expect(chip?.textContent).toContain('app=web, tier=frontend')
+    // 0 endpoints → the selector is the suspect, so it carries the caution tint (same idiom as PDB "0").
+    expect(chip).toBeTruthy()
+  })
+  it('shows the selector without the caution tint when the Service has ready backends', () => {
+    const svc: KNode = {
+      id: 's2', kind: 'Service', name: 'web', health: 'Healthy',
+      clusterIP: '10.0.0.2', selector: 'app=web', endpoints: { ready: 2, total: 2 },
+    }
+    const { container } = render(() => <ResourceSummary node={svc} {...base} />)
+    expect(container.querySelector('.drawer-ports .port-caution')).toBeNull()
+    expect(container.textContent).toContain('app=web')
+  })
+})
+
 describe('ResourceSummary labels', () => {
   it('renders labels in a collapsed-by-default <details> (a Pod can carry 20+ operator-internal labels)', () => {
     // The drawer must not lead with a wall of labels — they live behind a "Labels · N" disclosure that

@@ -72,6 +72,7 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			ClusterIP:         serviceClusterIP(obj),
 			ExternalIP:        serviceExternalAddress(obj),
 			Ports:             servicePorts(obj),
+			Selector:          serviceSelector(obj),
 			Routes:            routes(obj),
 			Scrapes:           scrapeConfig(obj),
 			Rules:             roleRules(obj),

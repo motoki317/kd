@@ -253,6 +253,21 @@ func wantInt64(t *testing.T, name string, got *int64, want int64) {
 	}
 }
 
+func TestServiceSelector(t *testing.T) {
+	// Sorted "k=v, k=v" so the readout is stable regardless of map order.
+	svc := &corev1.Service{Spec: corev1.ServiceSpec{Selector: map[string]string{"tier": "web", "app": "shop"}}}
+	if got, want := serviceSelector(svc), "app=shop, tier=web"; got != want {
+		t.Errorf("serviceSelector = %q, want %q", got, want)
+	}
+	// A selectorless Service (ExternalName, or manually-managed endpoints) has nothing to debug → "".
+	if got := serviceSelector(&corev1.Service{}); got != "" {
+		t.Errorf("serviceSelector(selectorless) = %q, want empty", got)
+	}
+	if got := serviceSelector(&corev1.Pod{}); got != "" {
+		t.Errorf("serviceSelector(non-service) = %q, want empty", got)
+	}
+}
+
 func TestServicePorts(t *testing.T) {
 	svc := &corev1.Service{Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{
 		{Name: "https", Port: 443, TargetPort: intstr.FromInt32(8443), Protocol: corev1.ProtocolTCP},

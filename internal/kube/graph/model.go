@@ -77,6 +77,7 @@ type Node struct {
 	ClusterIP  string            `json:"clusterIP,omitempty"`  // a Service's reachable address ("headless"/ExternalName target for those)
 	ExternalIP string            `json:"externalIP,omitempty"` // a Service's external address (LoadBalancer ingress / externalIPs / "pending")
 	Ports      []string          `json:"ports,omitempty"`      // a Service's port mappings, "port→target[:nodePort]/proto"
+	Selector   string            `json:"selector,omitempty"`   // a Service's pod selector "k=v, k=v" — the "why no endpoints" answer; "" for selectorless
 	Routes     []string          `json:"routes,omitempty"`     // an Ingress/HTTPRoute/IngressRoute routing table, "match → service:port"
 	Scrapes    []string          `json:"scrapes,omitempty"`    // a ServiceMonitor/VMServiceScrape's target selector + endpoints, "what does this scrape, on which port/path"
 	Rules      []string          `json:"rules,omitempty"`      // a Role/ClusterRole's policy rules, "resources: verbs"

@@ -74,6 +74,28 @@ func serviceClusterIP(obj runtime.Object) string {
 	}
 }
 
+// serviceSelector renders a Service's pod selector as "k=v, k=v" (sorted), the answer to a Service's
+// most common failure — "no endpoints" means this selector matches no ready pod, so showing it lets an
+// operator spot a typo'd label or a renamed workload without opening the manifest. "" for a non-service
+// or a selectorless Service (ExternalName, or one with manually-managed endpoints), so the drawer omits
+// it — those have no selector to debug. Mirrors the selector kd already surfaces for NetworkPolicies.
+func serviceSelector(obj runtime.Object) string {
+	svc, ok := obj.(*corev1.Service)
+	if !ok || len(svc.Spec.Selector) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(svc.Spec.Selector))
+	for k := range svc.Spec.Selector {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+svc.Spec.Selector[k])
+	}
+	return strings.Join(parts, ", ")
+}
+
 // serviceExternalAddress returns a Service's external reachability — the "how do I reach this from
 // outside the cluster" answer the cluster IP can't give: a LoadBalancer's assigned ingress IP (or
 // hostname, or "pending" while it provisions) and any admin-set spec.externalIPs. An IP is preferred

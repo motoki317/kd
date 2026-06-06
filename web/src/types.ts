@@ -99,6 +99,7 @@ export interface KNode {
   clusterIP?: string
   externalIP?: string
   ports?: string[]
+  selector?: string // a Service's pod selector "k=v, k=v" — the "why no endpoints" answer; absent for selectorless
   routes?: string[]
   rules?: string[]
   roleRef?: string
