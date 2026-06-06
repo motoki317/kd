@@ -119,9 +119,11 @@ Recent batches (newest first; `git log` has the commits):
   container tagging each line, client labels by container + orders the merged buffer by emission time so
   per-container tail dumps interleave; per-container filter chips generalize the per-pod mechanism. Verified
   live on an `alloy` 2-container pod: picker defaults `__all__`, 204 lines monotonically time-ordered across
-  both containers, each labelled). Remaining open from this batch: control-bar rel-group collapse, pod
-  sidebar CPU/mem bars + declutter, bigger/expandable logs panel (the drawer already has an expand-to-canvas
-  mode — verify whether that satisfies it).
+  both containers, each labelled). (2) **bigger logs when expanded** (a84b7e6 — the drawer's expand-to-canvas
+  mode already existed (icon button, 81% width), but the verbose resource summary ate ~half the height even
+  expanded; cap it at 30vh + scroll when expanded so the active tab panel reclaims it. Verified live: a
+  22-label ES pod's summary capped 345→240px, log body +35% to 403px; lean pods unaffected). Remaining open
+  from this batch: control-bar rel-group collapse, pod sidebar CPU/mem bars + declutter.
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
