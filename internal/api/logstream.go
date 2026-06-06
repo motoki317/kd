@@ -187,9 +187,8 @@ func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 // pod never aborts the rest of an aggregate.
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
 	c := container
-	// An empty container errors on multi-container pods, so default to the first container.
-	if c == "" && len(pod.Spec.Containers) > 0 {
-		c = pod.Spec.Containers[0].Name
+	if c == "" {
+		c = defaultLogContainer(pod)
 	}
 	opts := &corev1.PodLogOptions{Container: c, Follow: follow, Previous: previous, Timestamps: timestamps}
 	if tail != nil {
@@ -215,6 +214,24 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1
 			return
 		}
 	}
+}
+
+// defaultLogContainer picks which container's logs to show when the request names none. An empty
+// container errors on a multi-container pod, so a default is required. It prefers a container named
+// "main" — the Argo Workflows convention for the step that does the actual work, which sits BEHIND a
+// `wait`/executor sidecar listed first; defaulting to the first container showed only executor noise
+// for a workflow pod (the exact logs an operator opens a failed run to read are in `main`). For an
+// ordinary app+sidecar pod (no `main`), it falls back to the first container, the app by convention.
+func defaultLogContainer(pod *corev1.Pod) string {
+	for _, ct := range pod.Spec.Containers {
+		if ct.Name == "main" {
+			return ct.Name
+		}
+	}
+	if len(pod.Spec.Containers) > 0 {
+		return pod.Spec.Containers[0].Name
+	}
+	return ""
 }
 
 // splitLogTimestamp separates the kubelet timestamp prefix ("<RFC3339Nano> message") from the
