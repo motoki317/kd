@@ -415,6 +415,47 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestWebhookConfigSummary(t *testing.T) {
+	wh := func(kind string, policies ...string) *unstructured.Unstructured {
+		webhooks := make([]any, len(policies))
+		for i, p := range policies {
+			w := map[string]any{"name": "w"}
+			if p != "" { // "" models an unset failurePolicy (v1 defaults it to Fail)
+				w["failurePolicy"] = p
+			}
+			webhooks[i] = w
+		}
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "admissionregistration.k8s.io/v1", "kind": kind,
+			"metadata": map[string]any{"name": "cfg"},
+			"webhooks": webhooks,
+		}}
+	}
+	cases := []struct {
+		name string
+		u    *unstructured.Unstructured
+		want string
+	}{
+		// the real staging shapes: all-Fail (aws-load-balancer) and all-Ignore (elastic-operator)
+		{"all fail", wh("ValidatingWebhookConfiguration", "Fail", "Fail", "Fail"), "3 webhooks · Fail"},
+		{"all ignore", wh("MutatingWebhookConfiguration", "Ignore", "Ignore"), "2 webhooks · Ignore"},
+		// any fail-closed webhook makes the whole config read Fail — the cluster-risk fact
+		{"mixed reads Fail", wh("ValidatingWebhookConfiguration", "Ignore", "Fail"), "2 webhooks · Fail"},
+		// an unset policy defaults to Fail in v1, so it counts as fail-closed
+		{"unset defaults Fail", wh("MutatingWebhookConfiguration", ""), "1 webhook · Fail"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := statusSummary(c.u); got != c.want {
+				t.Errorf("statusSummary = %q, want %q", got, c.want)
+			}
+		})
+	}
+	if got := webhookConfigSummary(&corev1.Pod{}); got != "" {
+		t.Errorf("webhookConfigSummary(non-webhook) = %q, want \"\"", got)
+	}
+}
+
 func TestTraefikMiddlewareSummary(t *testing.T) {
 	mw := func(spec map[string]any) *unstructured.Unstructured {
 		return &unstructured.Unstructured{Object: map[string]any{

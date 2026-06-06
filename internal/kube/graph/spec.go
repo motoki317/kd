@@ -926,6 +926,48 @@ func npPorts(ports []networkingv1.NetworkPolicyPort) string {
 	return strings.Join(out, ", ")
 }
 
+// webhookConfigSummary renders an admission webhook configuration's essence — how many webhooks it
+// registers and whether any is fail-closed ("3 webhooks · Fail"). failurePolicy is the operationally
+// critical fact: a Fail webhook whose backend is down BLOCKS every matching API operation (the classic
+// "I can't create anything" cluster outage), while Ignore degrades gracefully. v1 defaults an unset
+// policy to Fail, so absence counts as fail-closed; a config with any fail-closed webhook reads "Fail".
+// Empty for any other kind. ValidatingWebhookConfiguration/MutatingWebhookConfiguration arrive
+// unstructured (admissionregistration types aren't in kd's typed factories).
+func webhookConfigSummary(obj runtime.Object) string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return ""
+	}
+	switch u.GetKind() {
+	case "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration":
+	default:
+		return ""
+	}
+	webhooks, _, _ := unstructured.NestedSlice(u.Object, "webhooks")
+	if len(webhooks) == 0 {
+		return ""
+	}
+	failClosed := false
+	for _, wi := range webhooks {
+		w, ok := wi.(map[string]any)
+		if !ok {
+			continue
+		}
+		if fp, _ := w["failurePolicy"].(string); fp != "Ignore" { // unset defaults to Fail in v1
+			failClosed = true
+		}
+	}
+	policy := "Ignore"
+	if failClosed {
+		policy = "Fail"
+	}
+	unit := "webhooks"
+	if len(webhooks) == 1 {
+		unit = "webhook"
+	}
+	return fmt.Sprintf("%d %s · %s", len(webhooks), unit, policy)
+}
+
 // ingressClassSummary renders an IngressClass's essence — the controller that handles Ingresses of
 // this class, and whether it's the cluster default (the `is-default-class` annotation, i.e. the
 // controller that picks up an Ingress with no className). This answers "which controller serves my

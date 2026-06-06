@@ -80,6 +80,11 @@ func statusSummary(obj runtime.Object) string {
 		if s := traefikMiddlewareSummary(obj); s != "" {
 			return s
 		}
+		// An admission webhook config's status IS its webhook count + fail policy — a Fail webhook whose
+		// backend is down blocks matching API ops, the classic cluster outage worth surfacing.
+		if s := webhookConfigSummary(obj); s != "" {
+			return s
+		}
 		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
 		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
 		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.
