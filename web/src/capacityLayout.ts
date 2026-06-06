@@ -259,7 +259,15 @@ export function layoutGraphByCapacity(
     if (!podsByHost.has(key)) podsByHost.set(key, [])
     podsByHost.get(key)!.push(n)
   }
-  const hostNames = [...nodeByName.keys()].sort((a, b) => a.localeCompare(b))
+  // In a namespace view, float the nodes actually running THIS namespace's pods to the top, then
+  // alphabetical within each group — so "where do my pods run / what's their headroom" reads at a
+  // glance instead of hunting the 2 relevant nodes among a dozen that only host other namespaces
+  // (Contrast + Proximity). In cluster scope every pod is "own", so this is uniform and the order
+  // stays alphabetical — no reshuffle where every node is equally relevant.
+  const hostHasOwn = (host: string) => !clusterScope && (podsByHost.get(host) ?? []).some(isOwn)
+  const hostNames = [...nodeByName.keys()].sort(
+    (a, b) => Number(hostHasOwn(b)) - Number(hostHasOwn(a)) || a.localeCompare(b),
+  )
   if (podsByHost.has(ORPHAN)) hostNames.push(ORPHAN)
 
   // Global scale: the largest node's TOTAL capacity maps to CAP_TRACK_MAX, so every other node's track

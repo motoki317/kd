@@ -86,6 +86,25 @@ describe('layoutGraphByCapacity', () => {
     expect(row.useSegs.map((s) => s.node.id)).toEqual(['big-req', 'big-use'])
   })
 
+  it('floats nodes running THIS namespace’s pods to the top in namespace scope', () => {
+    // Alphabetically n-z would sort last, but it is the only node running a "shop" pod — in a
+    // namespace Nodes view it must lead so "where do my pods run" reads at the top, not buried among
+    // nodes that only host other namespaces.
+    const nodes = [
+      node('n-a', 1000, 1000),
+      node('n-m', 1000, 1000),
+      node('n-z', 1000, 1000),
+      pod('shop-pod', 'n-z', 'shop', { use: 100, req: 100 }),
+      pod('infra-pod', 'n-a', 'infra', { use: 50, req: 50 }),
+    ]
+    const usage = usageOf(['shop-pod', 100], ['infra-pod', 50])
+    const ns = layoutGraphByCapacity(nodes, usage, 'cpu', 'shop')
+    expect(ns.rows.map((r) => r.host)).toEqual(['n-z', 'n-a', 'n-m']) // own-pod node first, then alphabetical
+    // Cluster scope: every pod is "own", so the order stays plain alphabetical (no reshuffle).
+    const cluster = layoutGraphByCapacity(nodes, usage, 'cpu', '')
+    expect(cluster.rows.map((r) => r.host)).toEqual(['n-a', 'n-m', 'n-z'])
+  })
+
   it('folds other-namespace pods into one block in namespace scope, but not in cluster scope', () => {
     const nodes = [
       node('n1', 1000, 1000),
