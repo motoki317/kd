@@ -336,8 +336,20 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 				map[string]any{"match": "PathPrefix(`/mirror`)", "services": []any{
 					map[string]any{"name": "split", "kind": "TraefikService"},
 				}},
-				// a middleware-only route with no services at all still shows its match
-				map[string]any{"match": "PathPrefix(`/redirect`)"},
+				// a middleware-only route (no services) shows its match + the chain that processes it
+				map[string]any{"match": "PathPrefix(`/redirect`)", "middlewares": []any{
+					map[string]any{"name": "redirect-https"},
+				}},
+				// middlewares render as " · via …" in spec order; a cross-namespace one is ns-qualified
+				// (it never appears as a same-namespace edge, so this is its only surfacing)
+				map[string]any{
+					"match":    "Host(`auth.example.com`)",
+					"services": []any{map[string]any{"name": "api-svc", "port": int64(80)}},
+					"middlewares": []any{
+						map[string]any{"name": "ratelimit"},
+						map[string]any{"name": "auth-forward", "namespace": "infra"},
+					},
+				},
 			},
 		},
 	}}
@@ -345,7 +357,8 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 		"Host(`app.example.com`) && PathPrefix(`/api`) → api-svc:8080, api-canary:8080",
 		"Host(`app.example.com`) → web-svc:http",
 		"PathPrefix(`/mirror`) → split",
-		"PathPrefix(`/redirect`)",
+		"PathPrefix(`/redirect`) · via redirect-https",
+		"Host(`auth.example.com`) → api-svc:80 · via ratelimit, infra/auth-forward",
 	}
 	if got := routes(ir); !slices.Equal(got, want) {
 		t.Errorf("traefikIngressRouteRoutes =\n%v\nwant\n%v", got, want)

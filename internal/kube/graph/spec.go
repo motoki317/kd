@@ -294,13 +294,43 @@ func traefikIngressRouteRoutes(obj runtime.Object) []string {
 		if match == "" {
 			continue
 		}
+		mw := traefikRouteMiddlewares(route)
 		if svc := traefikRouteServices(route); svc != "" {
-			out = append(out, match+" → "+svc)
+			out = append(out, match+" → "+svc+mw)
 		} else {
-			out = append(out, match)
+			out = append(out, match+mw)
 		}
 	}
 	return out
+}
+
+// traefikRouteMiddlewares renders a route's middleware chain as " · via name[, ns/name…]" in spec
+// order (Traefik applies them in sequence — auth, rate-limit, header rewrites — so order is meaningful),
+// qualifying a cross-namespace middleware with its namespace. Empty when the route has none. The chain
+// is the "what processing happens to this request" the host→service mapping can't show; a cross-namespace
+// middleware (a shared auth gateway) never appears as a same-namespace graph edge, so the route row is
+// the only place it surfaces.
+func traefikRouteMiddlewares(route map[string]any) string {
+	mws, _ := route["middlewares"].([]any)
+	var names []string
+	for _, mi := range mws {
+		m, ok := mi.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			continue
+		}
+		if ns, _ := m["namespace"].(string); ns != "" {
+			name = ns + "/" + name
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return " · via " + strings.Join(names, ", ")
 }
 
 // traefikRouteServices renders an IngressRoute route's backend services as "name[:port]" joined by ", ".
