@@ -214,6 +214,26 @@ func nodeCapacity(obj runtime.Object) string {
 	return strings.Join(parts, " · ")
 }
 
+// nodeTaints summarizes a Node's scheduling taints as "key[=value]:Effect" entries joined by ", "
+// ("" for non-nodes or an untainted node) — the answer to "why won't a pod land here without a
+// matching toleration", otherwise buried in the manifest. A control-plane / unreachable / fargate /
+// dedicated taint is exactly what an operator hunts for when a pod stays Pending.
+func nodeTaints(obj runtime.Object) string {
+	n, ok := obj.(*corev1.Node)
+	if !ok || len(n.Spec.Taints) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(n.Spec.Taints))
+	for _, t := range n.Spec.Taints {
+		s := t.Key
+		if t.Value != "" {
+			s += "=" + t.Value
+		}
+		parts = append(parts, s+":"+string(t.Effect))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // nodeAllocatable returns a Node's schedulable capacity as structured canonical-unit quantities (nil
 // for non-nodes), the machine-readable counterpart of nodeCapacity that the capacity view does math
 // on. Mirrors nodeCapacity's zero-guard: a node that hasn't reported cpu+mem yet yields nil.

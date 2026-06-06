@@ -119,6 +119,25 @@ describe('ResourceSummary HPA', () => {
   })
 })
 
+describe('ResourceSummary Node', () => {
+  it('surfaces scheduling taints with the caution chip — why pods will not land here', () => {
+    const node: KNode = {
+      id: 'n', kind: 'Node', name: 'ip-10-8-69-217', health: 'Healthy',
+      taints: 'eks.amazonaws.com/compute-type=fargate:NoSchedule',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const caution = container.querySelector('.port-caution')
+    expect(caution?.querySelector('.addr-label')?.textContent).toBe('taints')
+    expect(caution?.textContent).toContain('fargate:NoSchedule')
+  })
+
+  it('omits the taints chip for an untainted node', () => {
+    const node: KNode = { id: 'n', kind: 'Node', name: 'worker-1', health: 'Healthy' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    expect(container.querySelector('.port-caution')).toBeNull()
+  })
+})
+
 describe('ResourceSummary StorageClass', () => {
   it('shows provisioner, reclaim, binding, and an expandable flag', () => {
     const node: KNode = {

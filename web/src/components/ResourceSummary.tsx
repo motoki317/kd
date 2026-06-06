@@ -313,6 +313,14 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A Node's scheduling taints — the answer to "why won't a pod land here without a matching
+          toleration", otherwise manifest-only. A NoSchedule/NoExecute taint blocks scheduling, so it
+          carries the caution colour like the PDB "can disrupt 0" state (explicit over implicit). */}
+      <Show when={props.node.taints}>
+        <div class="drawer-ports">
+          <MetaChip label="taints" value={props.node.taints!} title="Taints — a pod needs a matching toleration to schedule here" class="port-caution" />
+        </div>
+      </Show>
       {/* A StorageClass's essence: its provisioner (which CSI driver/plugin backs volumes), reclaim
           policy (does deleting a PVC destroy the data — Delete vs Retain), binding mode, and whether
           PVCs can grow. The class a PVC author clicks through to — manifest-only before. */}

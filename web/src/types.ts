@@ -78,6 +78,7 @@ export interface KNode {
   images?: string[]
   host?: string
   capacity?: string
+  taints?: string // a Node's scheduling taints ("key[=value]:Effect, …") — why pods won't schedule here
   // allocatable is a Node's schedulable capacity (capacity minus system-reserved) — drives the Req
   // bar's track + overcommit check. capacityRes is the node's TOTAL physical capacity (≥ allocatable)
   // — the Use bar gauges actual usage against it, since usage can spill into the reserved region

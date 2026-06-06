@@ -34,6 +34,23 @@ func TestNodeCapacity(t *testing.T) {
 	}
 }
 
+func TestNodeTaints(t *testing.T) {
+	// The real staging shapes: a valued fargate taint and a valueless unreachable taint, joined.
+	node := &corev1.Node{Spec: corev1.NodeSpec{Taints: []corev1.Taint{
+		{Key: "eks.amazonaws.com/compute-type", Value: "fargate", Effect: corev1.TaintEffectNoSchedule},
+		{Key: "node.kubernetes.io/unreachable", Effect: corev1.TaintEffectNoExecute},
+	}}}
+	if got, want := nodeTaints(node), "eks.amazonaws.com/compute-type=fargate:NoSchedule, node.kubernetes.io/unreachable:NoExecute"; got != want {
+		t.Errorf("nodeTaints = %q, want %q", got, want)
+	}
+	if got := nodeTaints(&corev1.Node{}); got != "" {
+		t.Errorf("nodeTaints(untainted) = %q, want empty", got)
+	}
+	if got := nodeTaints(&corev1.Pod{}); got != "" {
+		t.Errorf("nodeTaints(non-node) = %q, want empty", got)
+	}
+}
+
 func TestNodeAllocatable(t *testing.T) {
 	node := &corev1.Node{Status: corev1.NodeStatus{Allocatable: corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("2"),
