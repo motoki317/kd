@@ -122,8 +122,12 @@ Recent batches (newest first; `git log` has the commits):
   both containers, each labelled). (2) **bigger logs when expanded** (a84b7e6 — the drawer's expand-to-canvas
   mode already existed (icon button, 81% width), but the verbose resource summary ate ~half the height even
   expanded; cap it at 30vh + scroll when expanded so the active tab panel reclaims it. Verified live: a
-  22-label ES pod's summary capped 345→240px, log body +35% to 403px; lean pods unaffected). Remaining open
-  from this batch: control-bar rel-group collapse, pod sidebar CPU/mem bars + declutter.
+  22-label ES pod's summary capped 345→240px, log body +35% to 403px; lean pods unaffected). (3) **fold
+  secondary relationship lenses** (b92ce55 — the 6-chip relationship row read as a wall; mark RBAC/Disruption/
+  Monitoring secondary + fold inactive ones behind a dashed "+N more" disclosure (persisted), keeping the 3
+  core dimensions + any active lens inline. Verified live: team-a 6 chips → "Ownership/Network/Volumes/
+  +3 more", expands in place, an activated Monitoring stays inline as it folds to "+2 more"). Remaining open
+  from this batch: pod sidebar CPU/mem bars + declutter.
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
