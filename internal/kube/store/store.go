@@ -59,6 +59,7 @@ const ClusterScope = "__cluster__"
 var DefaultSkipKinds = []string{
 	"events",                                  // core/v1; we already query events on-demand
 	"leases",                                  // coordination.k8s.io/v1; controller-leader churn
+	"endpoints",                               // core/v1; same as endpointslices — readiness comes from Service selectors, so the per-Service Endpoints object is just an edgeless orphan card duplicating its Service
 	"endpointslices",                          // discovery.k8s.io/v1; high-cardinality and we use Service selectors
 	"controllerrevisions",                     // apps/v1; StatefulSet/DaemonSet rollout history
 }

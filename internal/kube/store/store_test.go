@@ -261,6 +261,18 @@ func TestStoreSkipKindsExcludesFromEager(t *testing.T) {
 	}
 }
 
+// Both forms of Service backing data are skipped by default: kd derives endpoint readiness from
+// Service selectors (serviceEdges), so the per-Service Endpoints object — and its modern
+// EndpointSlice equivalent — only adds edgeless orphan cards that duplicate the Service. This pins
+// the decision so neither silently rejoins the eager set (re-cluttering every namespace view).
+func TestDefaultSkipKindsHidesServiceBackingData(t *testing.T) {
+	for _, k := range []string{"endpoints", "endpointslices"} {
+		if !slices.Contains(DefaultSkipKinds, k) {
+			t.Errorf("%q must stay in DefaultSkipKinds (readiness comes from Service selectors)", k)
+		}
+	}
+}
+
 // TestStoreGroupForKindDeterministic locks the security-relevant invariant that two
 // registered resources sharing a Kind always resolve to the same group across calls (and
 // map iteration orders). Without sorting, a malicious CRD registering "Pod" in a foreign
