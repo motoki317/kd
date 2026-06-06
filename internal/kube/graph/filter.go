@@ -79,7 +79,8 @@ func SummarizeBuilt(g *Graph, clusterScope bool) Summary {
 // DescendantPodNames returns the names of every Pod reachable from the node with the given id by
 // following ownerReference edges downward — or just that pod's name if the id is itself a Pod. It
 // lets the API aggregate logs for a workload across all the pods it ultimately owns (Deployment →
-// ReplicaSet → Pod, CronJob → Job → Pod, ...). Historical pods are absent because Build drops them.
+// ReplicaSet → Pod, CronJob → Job → Pod, ...). Completed pods are absent under Build but present under
+// BuildForLogs, which the log aggregator uses so a finished run's logs are reachable.
 func (g *Graph) DescendantPodNames(id string) []string {
 	kind := make(map[string]string, len(g.Nodes))
 	name := make(map[string]string, len(g.Nodes))

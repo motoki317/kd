@@ -177,6 +177,69 @@ func TestDescendantPodNames(t *testing.T) {
 	}
 }
 
+// BuildForLogs keeps a completed controller-pod so a finished Job/CronJob/Workflow's logs stay
+// reachable, while the displayed Build still drops it as clutter. Without this, a finished run's
+// Logs tab (which has nothing but completed pods) was silently empty.
+func TestBuildForLogsKeepsCompletedPods(t *testing.T) {
+	const fixture = `
+apiVersion: batch/v1
+kind: Job
+metadata: { name: migrate, namespace: shop, uid: job-uid }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: migrate-xyz
+  namespace: shop
+  uid: pod-uid
+  ownerReferences:
+    - { apiVersion: batch/v1, kind: Job, name: migrate, uid: job-uid, controller: true }
+status: { phase: Succeeded }
+`
+	objs := decodeFixture(t, fixture)
+	if got := Build(objs).DescendantPodNames("job-uid"); len(got) != 0 {
+		t.Errorf("Build should drop the completed pod; DescendantPodNames = %v", got)
+	}
+	if got := BuildForLogs(objs).DescendantPodNames("job-uid"); !slices.Equal(got, []string{"migrate-xyz"}) {
+		t.Errorf("BuildForLogs should keep the completed pod; DescendantPodNames = %v, want [migrate-xyz]", got)
+	}
+}
+
+// BuildForLogs still drops a superseded (zero-replica) ReplicaSet, so a Deployment's aggregated logs
+// don't pull in the completed pods of an old rollout revision — that path stays broken on purpose.
+func TestBuildForLogsStillDropsSupersededReplicaSets(t *testing.T) {
+	const fixture = `
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: web, namespace: shop, uid: dep-uid }
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-old
+  namespace: shop
+  uid: oldrs-uid
+  ownerReferences:
+    - { apiVersion: apps/v1, kind: Deployment, name: web, uid: dep-uid, controller: true }
+spec: { replicas: 0 }
+status: { replicas: 0 }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-old-pod
+  namespace: shop
+  uid: oldpod-uid
+  ownerReferences:
+    - { apiVersion: apps/v1, kind: ReplicaSet, name: web-old, uid: oldrs-uid, controller: true }
+status: { phase: Succeeded }
+`
+	objs := decodeFixture(t, fixture)
+	if got := BuildForLogs(objs).DescendantPodNames("dep-uid"); len(got) != 0 {
+		t.Errorf("BuildForLogs must not reach a pod under a superseded ReplicaSet; got %v", got)
+	}
+}
+
 // DescendantIDs (used by the events handler to aggregate a controller's events across its whole
 // subtree) returns the node itself plus every owner-edge-reachable descendant, sorted. Distinct from
 // DescendantPodNames: it yields the controllers/ReplicaSets too, by id, not just leaf pod names.

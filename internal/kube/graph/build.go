@@ -22,7 +22,16 @@ import (
 // dynamic-informer store yields). Known kinds are converted to their typed struct at the
 // entry boundary so per-kind logic (health rules, edge inferrers) keeps working as-is;
 // unknown kinds (custom resources) stay unstructured and flow through the CR-specific paths.
-func Build(objs []runtime.Object) *Graph {
+func Build(objs []runtime.Object) *Graph { return buildGraph(objs, false) }
+
+// BuildForLogs is Build but keeps completed controller-pods — the finished Job/CronJob/Workflow runs
+// whose logs are the entire reason to inspect them (the displayed topology drops them as clutter, but
+// log aggregation MUST reach them or a completed run's Logs tab is silently empty). Superseded
+// ReplicaSets are still dropped, so a Deployment's aggregated logs don't pull in its old revisions'
+// pods. Used only for log/pod resolution (podsForResource), never for the displayed graph.
+func BuildForLogs(objs []runtime.Object) *Graph { return buildGraph(objs, true) }
+
+func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 	// Non-nil Nodes so an empty graph marshals `"nodes":[]`, not `null` (Edges is guarded after
 	// buildEdges below, which reassigns it).
 	g := &Graph{Nodes: []Node{}}
@@ -30,7 +39,7 @@ func Build(objs []runtime.Object) *Graph {
 	for i, o := range objs {
 		objs[i] = toTyped(o)
 	}
-	objs = slices.DeleteFunc(objs, isHistorical)
+	objs = slices.DeleteFunc(objs, func(o runtime.Object) bool { return isHistorical(o, keepCompletedPods) })
 	for _, obj := range objs {
 		kind, apiVersion, m, ok := describe(obj)
 		if !ok {
@@ -111,12 +120,19 @@ func Build(objs []runtime.Object) *Graph {
 //   - ReplicaSets scaled to zero with no pods (Deployment revision history, ~10 kept by default).
 //   - Pods that ran to completion under a controller (Job/CronJob/Workflow leftovers). Failed pods
 //     are kept (they are actionable) and ownerless succeeded pods are kept (someone ran them).
-func isHistorical(obj runtime.Object) bool {
+//
+// keepCompletedPods overrides the pod rule for log aggregation (BuildForLogs): a finished run's
+// completed pod IS its logs, so it must survive even though the topology hides it. The ReplicaSet
+// rule still applies, so a Deployment's old revisions never leak into its aggregated logs.
+func isHistorical(obj runtime.Object, keepCompletedPods bool) bool {
 	switch o := obj.(type) {
 	case *appsv1.ReplicaSet:
 		desiredZero := o.Spec.Replicas != nil && *o.Spec.Replicas == 0
 		return desiredZero && o.Status.Replicas == 0 && metav1.GetControllerOf(&o.ObjectMeta) != nil
 	case *corev1.Pod:
+		if keepCompletedPods {
+			return false
+		}
 		return o.Status.Phase == corev1.PodSucceeded && metav1.GetControllerOf(&o.ObjectMeta) != nil
 	default:
 		return false

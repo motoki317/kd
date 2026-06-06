@@ -156,14 +156,15 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 	}
 }
 
-// podsForResource returns the live pods whose logs represent the given resource: the pod itself if
-// kind is Pod, otherwise every pod reachable through ownerReferences. It resolves through the graph
-// so historical/completed pods (which Build drops) are excluded from the aggregate.
+// podsForResource returns the pods whose logs represent the given resource: the pod itself if kind is
+// Pod, otherwise every pod reachable through ownerReferences. It builds with BuildForLogs so a
+// COMPLETED run's pods are reachable — a finished Job/CronJob/Workflow has nothing but completed pods,
+// and excluding them (as the displayed graph does) made its Logs tab silently empty.
 func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 	// Snapshots arrive as *unstructured.Unstructured from the dynamic-informer store. Convert
 	// known kinds (Pod included) so the type assertion below works regardless of input shape.
 	objs = graph.AsTypedSlice(objs)
-	g := graph.Build(objs)
+	g := graph.BuildForLogs(objs)
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {
 		return nil
