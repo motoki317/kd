@@ -110,7 +110,10 @@ Recent batches (newest first; `git log` has the commits):
   that one edge in `edges.go` (`isAutoMountedRootCA`); the node still appears but folds among orphans.
   Verified live via the graph snapshot API on `team-a` (341 nodes, 20 pods): the node now carries **0
   incident edges** (was a 20-pod star). The same auto-mount-noise pattern may apply to other publisher-
-  injected resources — watch for them.
+  injected resources — watch for them. Also: **Karpenter NodeClaim capacity/instance type** (e98eedd — a
+  blank NodeClaim now reads "spot · r5dn.large" from its resolved labels, or the Ready=False reason while it
+  can't provision; verified live, all 9 staging claims read "spot · <type>", making spot/interruption
+  exposure scannable).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
