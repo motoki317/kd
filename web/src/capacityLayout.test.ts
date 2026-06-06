@@ -198,6 +198,13 @@ describe('layoutGraphByCapacity', () => {
     expect(last.useSegs.map((s) => s.node.id)).toContain('orphan')
   })
 
+  it('displays the FULL node name — the …compute.internal domain is kept, not stripped', () => {
+    const fqdn = 'ip-10-8-77-146.us-west-2.compute.internal'
+    const l = layoutGraphByCapacity([node(fqdn, 1000, 1000)], undefined, 'cpu', 'shop')
+    const row = l.rows.find((r) => r.host === fqdn)!
+    expect(row.label).toBe(fqdn) // not the short 'ip-10-8-77-146'
+  })
+
   it('lays out the memory resource off memBytes just like cpu', () => {
     const memNode: KNode = {
       id: 'node-m', kind: 'Node', name: 'm', health: 'Healthy',
