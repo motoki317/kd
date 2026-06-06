@@ -355,6 +355,89 @@ func traefikRouteServices(route map[string]any) string {
 	return strings.Join(out, ", ")
 }
 
+// traefikMiddlewareSummary renders a Traefik Middleware's essence — WHAT it does — as its type plus the
+// one parameter an operator checks ("rateLimit 10/1s, burst 20", "forwardAuth → http://auth/", "redirect
+// → https"). A Middleware's spec carries exactly one key: the middleware type. The common types are
+// enriched; any other (or a new one) falls back to the bare type name, still answering "what kind is
+// this" — which the card/drawer otherwise left blank, so clicking through from a route's "via <name>"
+// chain revealed nothing without opening the YAML. Empty for non-Traefik / non-Middleware kinds.
+func traefikMiddlewareSummary(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "Middleware")
+	if u == nil || !isTraefik(u) {
+		return ""
+	}
+	spec, found, _ := unstructured.NestedMap(u.Object, "spec")
+	if !found || len(spec) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(spec))
+	for k := range spec {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // exactly one key in practice; sorted for determinism if ever more
+	typ := keys[0]
+	str := func(path ...string) string {
+		s, _, _ := unstructured.NestedString(u.Object, append([]string{"spec", typ}, path...)...)
+		return s
+	}
+	num := func(path ...string) int64 {
+		full := append([]string{"spec", typ}, path...)
+		if v, ok, _ := unstructured.NestedInt64(u.Object, full...); ok {
+			return v
+		}
+		v, _, _ := unstructured.NestedFloat64(u.Object, full...)
+		return int64(v)
+	}
+	switch typ {
+	case "rateLimit":
+		period := str("period")
+		if period == "" {
+			period = "1s"
+		}
+		s := fmt.Sprintf("rateLimit %d/%s", num("average"), period)
+		if b := num("burst"); b > 0 {
+			s += fmt.Sprintf(", burst %d", b)
+		}
+		return s
+	case "redirectScheme":
+		if sc := str("scheme"); sc != "" {
+			return "redirect → " + sc
+		}
+		return "redirectScheme"
+	case "forwardAuth":
+		if a := str("address"); a != "" {
+			return "forwardAuth → " + a
+		}
+		return "forwardAuth"
+	case "stripPrefix":
+		if p, _, _ := unstructured.NestedStringSlice(u.Object, "spec", typ, "prefixes"); len(p) > 0 {
+			return "stripPrefix " + strings.Join(p, ", ")
+		}
+		return "stripPrefix"
+	case "addPrefix":
+		if p := str("prefix"); p != "" {
+			return "addPrefix " + p
+		}
+		return "addPrefix"
+	case "inFlightReq":
+		return fmt.Sprintf("inFlightReq %d", num("amount"))
+	case "retry":
+		return fmt.Sprintf("retry %d", num("attempts"))
+	case "ipAllowList", "ipWhiteList":
+		if r, _, _ := unstructured.NestedStringSlice(u.Object, "spec", typ, "sourceRange"); len(r) > 0 {
+			return typ + " " + strings.Join(r, ", ")
+		}
+		return typ
+	case "chain":
+		if ms, _, _ := unstructured.NestedSlice(u.Object, "spec", typ, "middlewares"); len(ms) > 0 {
+			return fmt.Sprintf("chain of %d", len(ms))
+		}
+		return "chain"
+	default:
+		return typ // bare type (headers, basicAuth, compress, circuitBreaker, …) — still the key fact
+	}
+}
+
 // isTraefik reports whether a CR belongs to Traefik's API group (the current traefik.io and the legacy
 // traefik.containo.us both ship IngressRoute).
 func isTraefik(u *unstructured.Unstructured) bool {

@@ -415,6 +415,45 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestTraefikMiddlewareSummary(t *testing.T) {
+	mw := func(spec map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "traefik.io/v1alpha1", "kind": "Middleware",
+			"metadata": map[string]any{"name": "m", "namespace": "shop"},
+			"spec":     spec,
+		}}
+	}
+	cases := []struct {
+		name string
+		spec map[string]any
+		want string
+	}{
+		// the real staging shape: a redis-backed rate limiter — average/period + burst
+		{"rateLimit", map[string]any{"rateLimit": map[string]any{"average": int64(10), "burst": int64(20), "period": "1s"}}, "rateLimit 10/1s, burst 20"},
+		{"rateLimit default period", map[string]any{"rateLimit": map[string]any{"average": int64(100)}}, "rateLimit 100/1s"},
+		{"forwardAuth", map[string]any{"forwardAuth": map[string]any{"address": "http://auth/verify"}}, "forwardAuth → http://auth/verify"},
+		{"redirectScheme", map[string]any{"redirectScheme": map[string]any{"scheme": "https"}}, "redirect → https"},
+		{"stripPrefix", map[string]any{"stripPrefix": map[string]any{"prefixes": []any{"/api", "/v1"}}}, "stripPrefix /api, /v1"},
+		{"ipAllowList", map[string]any{"ipAllowList": map[string]any{"sourceRange": []any{"10.0.0.0/8"}}}, "ipAllowList 10.0.0.0/8"},
+		// an un-enriched type still surfaces its kind — the key fact
+		{"headers falls back to type", map[string]any{"headers": map[string]any{"customRequestHeaders": map[string]any{"X-Foo": "bar"}}}, "headers"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := traefikMiddlewareSummary(mw(c.spec)); got != c.want {
+				t.Errorf("traefikMiddlewareSummary = %q, want %q", got, c.want)
+			}
+		})
+	}
+	// A non-Traefik CRD named Middleware (different group) is not one.
+	other := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "example.com/v1", "kind": "Middleware", "spec": map[string]any{"rateLimit": map[string]any{}},
+	}}
+	if got := traefikMiddlewareSummary(other); got != "" {
+		t.Errorf("traefikMiddlewareSummary(non-traefik) = %q, want \"\"", got)
+	}
+}
+
 func TestStorageClassSummary(t *testing.T) {
 	sc := func(provisioner string, def bool) *unstructured.Unstructured {
 		meta := map[string]any{"name": "sc"}

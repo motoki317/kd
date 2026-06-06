@@ -75,6 +75,11 @@ func statusSummary(obj runtime.Object) string {
 		if s := storageClassSummary(obj); s != "" {
 			return s
 		}
+		// A Traefik Middleware's status IS what it does (rateLimit 10/s, forwardAuth → …) — the answer
+		// to "I see 'via ratelimit' on a route, what is that?".
+		if s := traefikMiddlewareSummary(obj); s != "" {
+			return s
+		}
 		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
 		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
 		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.
