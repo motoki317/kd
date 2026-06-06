@@ -318,6 +318,8 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- A PriorityClass card/drawer now shows its value (comma-grouped) + globalDefault + never-preempts, the preemption-debugging facts, instead of just age (9a20ff0)
+- Persisted the display-vs-logs graph split (Build drops completed pods; use BuildForLogs) + main-container default in AGENTS.md "Common surprises" (36df784)
 - A CRD's card/drawer now shows what it defines ("Kind · Scope · servedVersions", e.g. "Workflow · Namespaced · v1alpha1") instead of just its age — a cluster-scope CRD sweep now reads as what each operator enables (719bedf)
 - The client log container picker now also prefers `main` (shared `defaultLogContainer` with the server), so a directly-selected step pod streams the same container as the aggregated workflow view — no longer `wait` vs `main` depending on how you reached it (59e3537)
 - Pod logs now default to the `main` container instead of the `wait` executor sidecar, so an Argo Workflow run's logs show the step's real output (was 459/510 lines of executor noise) (bc94db7)
