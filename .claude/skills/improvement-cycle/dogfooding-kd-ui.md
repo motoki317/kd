@@ -114,9 +114,9 @@ Key classes: `.cap-node-frame[.clickable][.expanded]`, `.cap-seg.use|.req[.other
 ## UX-gap patterns found by operator dogfooding (a different lens than the harness traps below)
 
 Distinct from the harness/measurement artifacts: these are *real* gaps a human feels by USING the app,
-that a source survey misses because the code "looks complete." The 2026-06-06 campaign found four in
-four cycles at a surface the source-survey called mature — the lens (run a real operator flow), not the
-code, surfaced them. Look for these shapes on any view:
+that a source survey misses because the code "looks complete." The 2026-06-06 campaign kept finding them
+at a surface the source-survey called mature — the lens (run a real operator flow), not the code,
+surfaced them. Look for these shapes on any view:
 
 - **A scrolling row with no overflow cue.** `overflow-x:auto` scrolls but macOS hides the scrollbar
   until use, so a truncated row (the Kinds filter) reads as "that's all there is" — actively misleading
@@ -147,6 +147,21 @@ code, surfaced them. Look for these shapes on any view:
   after a feature passes tests, dogfood it against the REAL resource that motivated it — the actual
   shape (empty selector, never-run cron, unset field) routinely differs from the tidy fixture, and only
   live data exercises the default you guessed. This is *why* the loop mandates live verification.
+- **A derived/auto-injected object kd never reads, shown as a node, is pure orphan or duplicate noise.**
+  Kubernetes auto-creates per-resource machinery the operator never manages: the kube-root-ca.crt
+  ConfigMap (every namespace), the core/v1 Endpoints object (one per Service). kd computes what it needs
+  another way — endpoint readiness from Service *selectors*, not the Endpoints object — so these objects
+  carry NO edge and NO spec rendering, surfacing only as edgeless orphan cards (6 Endpoints cluttered one
+  staging namespace) or a star hub (every pod mounts kube-root-ca). **Tell (canonical):** EndpointSlices
+  were already in `store.DefaultSkipKinds` ("we use Service selectors") while its twin Endpoints was not —
+  an existing skip whose rationale a sibling kind matches verbatim is the strongest signal. **Fix ladder:**
+  if kd reads the object nowhere and renders no spec → drop it at `DefaultSkipKinds` (cheapest, also frees
+  memory); if it's a real resource with useful drawer content but a pathological *edge* (the root-CA star)
+  → drop the node at the build filter so its edges fall away (`link` skips unknown targets) instead of
+  guarding each inferrer. **Check:** in any view, are there cards with no edges AND a bare name (no status/
+  ports/keys in the drawer)? Count them per namespace — one-per-Service or one-per-namespace cardinality
+  is the fingerprint. Owned children with a real parent (AWS CNI PolicyEndpoint under its NetworkPolicy)
+  are NOT this — they're structured, leave them.
 
 ## Recurring bug classes found live (check these on any UI change)
 
