@@ -145,6 +145,16 @@ Recent batches (newest first; `git log` has the commits):
   graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
   split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
+- **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
+  fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
+  resource's completed pods, and the client shows a Logs tab for `Workflow` via `LOGGABLE_KINDS`. But
+  any OTHER pod-owning workload CRD whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom
+  operator's job CRD) still hides its Logs tab: `hasDescendantPod` can't see the display-dropped pods
+  and the kind isn't in the hardcoded set. **Proper fix:** the server computes a per-node `hasLogs`
+  (ownership over `BuildForLogs`) and the client gates on `node.hasLogs` instead of the kind list +
+  client-side descendant walk. **Reopen when:** a non-Argo workload CRD with completed-only pods needs
+  logs, or the hardcoded `LOGGABLE_KINDS` Argo entry feels too special-cased.
+
 - **GRPCRoute has routing edges but no drawer routing table** — *follow-up to the 2026-06-06 routing
   trio; low value, deferred.* `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's
   `backendRefs` (it's in the *Route kind list), so the Network view connects it — but the drawer's
@@ -298,6 +308,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- Completed-run logs are now viewable: a finished Job/CronJob/Workflow's Logs tab aggregated zero pods (Build drops completed controller-pods) — added BuildForLogs that keeps them while still dropping superseded ReplicaSets (e5c190c), and Workflow now always offers a Logs tab since its finished pods are display-dropped (e792b9d)
 - Collapse pills now fade during health/search triage when they hide zero matches, so only match-bearing pills ("● N match") stay bright — the empty folds no longer bury the one worth expanding (Contrast) (e4e3d71)
 - ServiceMonitors/VMServiceScrapes now connect to the Services they scrape (EdgeScrapes, honoring namespaceSelector) under a new composable "Monitoring" relationship category — they were floating islands (8e3c3c1)
 - A ServiceMonitor/VMServiceScrape drawer now shows its scrape target (selected services + endpoint port/path/interval) — "what does this scrape, how often", reusing the route-row idiom for both CRDs (4f01788)
