@@ -149,6 +149,15 @@ Recent batches (newest first; `git log` has the commits):
   (Pod → limit/request, Node → allocatable); usage past allocatable flags as pressure. Verified live: a node
   drawer in cluster-scope shows "CPU 61m / 940m alloc", "Mem 1.1Gi / 7Gi alloc"). Pod-gauge configs all
   verified live too: unconstrained (dashed "unset"), request-only ("2m / 100m req"), request+limit (tick).
+  **Gauge unit consistency** (1a96e68 — the gauges used formatQuantity, so a 1-core node's 940m allocatable
+  read "940m" in the drawer but "0.94" in the capacity track: same number, two visual languages = Repetition
+  broken. Switched to formatPair keyed on total capacity → node reads "0.05 / 0.94 alloc" matching its track;
+  pods unaffected. Self-introduced inconsistency caught by dogfooding the node gauge against the capacity view).
+  **Dogfooded mature (docker-desktop + staging), no gap:** the degraded-PDB flow (opa-b "0/3 healthy" is
+  faithful — a real CalculateExpectedPodCountFailed misconfig; drawer surfaces the reason inline + Events badges
+  it), the failed-Workflow triage (status→drilled message→aggregated step logs), the Manifest tab (YAML/JSON/
+  find/copy), and the gauge on docker-desktop (metrics-server present). **Lesson: when adding a value display,
+  reuse the existing formatter (formatPair) for the same quantity — don't reach for a different one.**
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
