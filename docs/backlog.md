@@ -104,6 +104,13 @@ Recent batches (newest first; `git log` has the commits):
   (`metrics.k8s.io` → "→ metrics-server/metrics-server", `metrics.eks.amazonaws.com`) surface a backend,
   the ~70 built-in/CRD-backed groups stay silent; health already rode the catch-all Available reader so an
   unavailable aggregated API — a real group-wide outage breaking HPA/`kubectl top` — now explains its red dot).
+  **User-reported (dogfooding the volumes view):** the auto-injected **`kube-root-ca.crt`** ConfigMap —
+  published into every namespace and auto-mounted into every pod's projected SA-token volume — emitted a
+  mount edge per pod, becoming a star hub that dominated the volumes relationship view (955dc33). Suppressed
+  that one edge in `edges.go` (`isAutoMountedRootCA`); the node still appears but folds among orphans.
+  Verified live via the graph snapshot API on `team-a` (341 nodes, 20 pods): the node now carries **0
+  incident edges** (was a 20-pod star). The same auto-mount-noise pattern may apply to other publisher-
+  injected resources — watch for them.
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
