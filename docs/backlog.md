@@ -194,6 +194,17 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
+- **Workload-level usage gauges (aggregate descendant pods)** — *high value, feasible client-side; surfaced
+  dogfooding the new pod/node gauges (3b5386e/4ef6096/1a96e68).* The drawer now shows live CPU/memory gauges
+  for a Pod (vs request/limit) and a Node (vs allocatable). A Deployment/StatefulSet/DaemonSet/ReplicaSet has
+  no usage of its own, but the client already holds every descendant pod's usage (capacity feed, keyed by UID)
+  AND the ownership edges — so a workload gauge ("CPU 2.3 / 3.0 cores · summed across 3 pods", usage vs ΣpodA
+  requests) is a pure client-side aggregation, no server change. Answers "how much is my Deployment using?" at
+  a glance. **Build as:** walk descendant pods (a `DescendantPods`-style traversal exists for logs; mirror it
+  in App or pass the aggregate to the drawer), sum usage + requests/limits, reuse `UsageGauges` with a
+  "summed across N pods" caption; gate on the kind being a pod-owning workload AND ≥1 descendant having usage.
+  Use `formatPair` (per the unit-consistency lesson). Verify live on a multi-replica Deployment on staging.
+
 - **Triage-aware fold representatives in the connectivity/ownership view** — *follow-up to the
   kind-view fix (9d4438c); high value (default view), deferred on risk.* `layoutGraphByKind` now
   floats health-filter matches into a folded kind box's visible slots so the box's face shows the
