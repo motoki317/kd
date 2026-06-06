@@ -360,6 +360,28 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestStorageClassSummary(t *testing.T) {
+	sc := func(provisioner string, def bool) *unstructured.Unstructured {
+		meta := map[string]any{"name": "sc"}
+		if def {
+			meta["annotations"] = map[string]any{"storageclass.kubernetes.io/is-default-class": "true"}
+		}
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "storage.k8s.io/v1", "kind": "StorageClass",
+			"metadata": meta, "provisioner": provisioner,
+		}}
+	}
+	if got, want := statusSummary(sc("docker.io/hostpath", true)), "docker.io/hostpath · default"; got != want {
+		t.Errorf("default StorageClass status = %q, want %q", got, want)
+	}
+	if got, want := storageClassSummary(sc("ebs.csi.aws.com", false)), "ebs.csi.aws.com"; got != want {
+		t.Errorf("non-default StorageClass summary = %q, want %q", got, want)
+	}
+	if got := storageClassSummary(&corev1.Service{}); got != "" {
+		t.Errorf("storageClassSummary(non-SC) = %q, want empty", got)
+	}
+}
+
 func TestIngressClassSummary(t *testing.T) {
 	ic := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "networking.k8s.io/v1", "kind": "IngressClass",

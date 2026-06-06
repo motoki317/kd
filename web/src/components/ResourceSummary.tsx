@@ -322,12 +322,13 @@ export default function ResourceSummary(props: Props) {
           <MetaChip label="taints" value={props.node.taints!} title="Taints — a pod needs a matching toleration to schedule here" class="port-caution" />
         </div>
       </Show>
-      {/* A StorageClass's essence: its provisioner (which CSI driver/plugin backs volumes), reclaim
+      {/* A StorageClass's policy details. The provisioner (+ default marker) is the hero status now —
+          so it reads as the headline, not one chip among equals (Contrast) — leaving the reclaim
           policy (does deleting a PVC destroy the data — Delete vs Retain), binding mode, and whether
-          PVCs can grow. The class a PVC author clicks through to — manifest-only before. */}
+          PVCs can grow as the supporting chips. The `provisioner` field still gates the block (it marks
+          a StorageClass). */}
       <Show when={props.node.provisioner}>
         <div class="drawer-ports">
-          <MetaChip label="provisioner" value={props.node.provisioner!} title="Provisioner (CSI driver / volume plugin)" />
           <Show when={props.node.reclaimPolicy}>
             <MetaChip label="reclaim" value={props.node.reclaimPolicy!} title="Reclaim policy — what happens to the PV when its PVC is deleted" />
           </Show>

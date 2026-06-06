@@ -167,14 +167,17 @@ describe('ResourceSummary Node', () => {
 })
 
 describe('ResourceSummary StorageClass', () => {
-  it('shows provisioner, reclaim, binding, and an expandable flag', () => {
+  it('shows reclaim, binding, and an expandable flag as policy chips (provisioner is the hero status)', () => {
+    // The provisioner moved to the hero status (storageClassSummary) so it reads as the headline,
+    // not one chip among equals — see internal/kube/graph TestStorageClassSummary. The chips carry
+    // only the policy details now.
     const node: KNode = {
       id: 'sc', kind: 'StorageClass', name: 'gp3', health: 'Healthy',
       provisioner: 'ebs.csi.aws.com', reclaimPolicy: 'Retain', volumeBinding: 'WaitForFirstConsumer', expandable: true,
     }
     const { container } = render(() => <ResourceSummary node={node} {...base} />)
     const text = container.querySelector('.drawer-ports')?.textContent ?? ''
-    expect(text).toContain('ebs.csi.aws.com')
+    expect(text).not.toContain('ebs.csi.aws.com') // provisioner is the status headline, not a chip
     expect(text).toContain('Retain')
     expect(text).toContain('WaitForFirstConsumer')
     expect([...container.querySelectorAll('.port-chip')].some((c) => c.textContent === 'expandable')).toBe(true)

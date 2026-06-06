@@ -583,6 +583,26 @@ func storageClassProvisioner(obj runtime.Object) string {
 	return ""
 }
 
+// storageClassSummary renders a StorageClass's headline — its provisioner plus a "default" marker when
+// it's the cluster default (the class a PVC gets when it names none, via the is-default-class
+// annotation). The default marker was surfaced nowhere before, yet it's the key differentiator among
+// StorageClasses. Mirrors ingressClassSummary ("controller · default") so the cluster-scoped config
+// kinds read alike (Repetition); the drawer's reclaim/binding/expandable chips carry the rest.
+func storageClassSummary(obj runtime.Object) string {
+	u := asStorageClass(obj)
+	if u == nil {
+		return ""
+	}
+	provisioner, _, _ := unstructured.NestedString(u.Object, "provisioner")
+	if provisioner == "" {
+		return ""
+	}
+	if u.GetAnnotations()["storageclass.kubernetes.io/is-default-class"] == "true" {
+		return provisioner + " · default"
+	}
+	return provisioner
+}
+
 // storageClassReclaim returns a StorageClass's reclaim policy (Delete/Retain — does deleting a PVC
 // destroy the underlying data?). The API default is Delete when unset.
 func storageClassReclaim(obj runtime.Object) string {

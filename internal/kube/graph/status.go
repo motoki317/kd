@@ -69,6 +69,10 @@ func statusSummary(obj runtime.Object) string {
 		if s := ingressClassSummary(obj); s != "" {
 			return s
 		}
+		// A StorageClass's status IS its provisioner (+ default marker) — what backs its volumes.
+		if s := storageClassSummary(obj); s != "" {
+			return s
+		}
 		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
 		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
 		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.
