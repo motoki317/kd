@@ -2170,8 +2170,22 @@ button.conn.conn-retry:focus-visible {
 .pod-metrics {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 9px; /* between resource groups (CPU / Mem) */
   margin-top: 10px;
+}
+/* One resource's Use+Req bars, grouped under a CPU/Mem heading (Proximity) so the two read as a pair —
+   the same "Use over Req" stack the Nodes capacity view draws for each node. */
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.metric-group-label {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .metric-row {
   display: grid;
@@ -2180,9 +2194,14 @@ button.conn.conn-retry:focus-visible {
   gap: 8px;
   font-size: 11px;
 }
-.metric-label {
+/* "Use" / "Req" per-bar label — mirrors the capacity view's axis labels; the two bars share one fill
+   colour, so this word (and the Use-over-Req order) is what distinguishes them (Repetition + explicit). */
+.metric-sublabel {
   color: var(--text-dim);
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .metric-bar {
   position: relative;

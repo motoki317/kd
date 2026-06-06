@@ -4,6 +4,7 @@ import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
+import { drawerResourceBars, type ResGroupModel } from '../resourceBars'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
@@ -125,109 +126,56 @@ interface Props {
   // has no metrics of its own, so the drawer rolls up its replicas'. Absent for Pods/Nodes (they use
   // `usage`) and when no descendant pod has a reading yet.
   workloadUsage?: WorkloadUsage
+  // For a Node: the summed requests of every pod scheduled on it (the Req bar's fill) — computed from
+  // the cluster-wide capacity feed, since a node hosts pods from every namespace.
+  nodeReqSum?: Resources
+  // For a Pod: its host node's capacity — the track its Use/Req bars fall back to when the pod sets no
+  // limit or request, so an unconstrained pod still reads as a fraction of its node.
+  hostCapacity?: Resources
 }
 
-// A compact usage gauge per resource: the live value fills toward a ceiling reference, with an optional
-// faint tick at a secondary bound, so an operator sees "is this near its ceiling" at a glance — the
-// metrics-server read otherwise reachable only via `kubectl top`. Generic over what the ceiling is: a
-// Pod gauges against its limit (hard) or request (soft); a Node gauges against its allocatable (hard).
-// Returns null when there's nothing to gauge (no usage and no bounds).
-function metricBar(
-  use: number | undefined,
-  tick: number | undefined, // a secondary bound drawn as a faint tick (a pod's request when a limit is the ceiling)
-  ceil: number | undefined, // the gauge denominator (limit / request / allocatable); undefined → unconstrained
-  ceilLabel: string | null, // the word shown after the ceiling value ("lim" / "req" / "alloc")
-  hard: boolean, // a hard ceiling (limit/allocatable) recolours on breach; a soft one (request) never does
-  res: 'cpu' | 'memory',
-  unitRef?: number, // the value that decides the display unit, so a Node reads in cores like the capacity view
-) {
-  if (use == null && tick == null && ceil == null) return null
-  const u = use ?? 0
-  const unconstrained = ceil == null
-  // A full bar with no meaningful denominator would falsely read as "maxed", so an unconstrained row
-  // shows the value alone.
-  const track = Math.max(u, ceil ?? u, 1)
-  const pct = (v: number | undefined) => (v == null ? null : Math.min(100, (v / track) * 100))
-  // Only a HARD-ceiling breach is alarming (throttle/OOM, or spilling into a node's reserved capacity);
-  // bursting past a soft request is expected, so it stays the neutral accent — over-colouring it cries wolf.
-  const over = hard && ceil != null && u > ceil
-  const nearLimit = hard && ceil != null && u >= 0.9 * ceil && u <= ceil
-  // formatPair (the capacity view's formatter) keeps the value + ceiling in ONE unit chosen by unitRef,
-  // so a node's "0.06 / 0.94 alloc" reads in cores exactly as its capacity-view track does — Repetition,
-  // not "940m" here and "0.94" there for the same number.
-  const pair = formatPair(use, ceil, res, unitRef)
-  return {
-    res,
-    unconstrained,
-    fillPct: unconstrained ? 0 : pct(u) ?? 0,
-    reqPct: ceil != null ? pct(tick) : null, // the tick only reads as distinct when there's a separate ceiling
-    over,
-    nearLimit,
-    // Explicit values (explicit over implicit): the live use bright, the ceiling dim.
-    use: pair.value,
-    ref: ceil != null && ceilLabel != null ? `${pair.cap} ${ceilLabel}` : null,
-  }
-}
-
-// podGaugeRows builds a Pod's CPU/memory gauges: gauge against the limit (hard) when set, else the
-// request (soft); show the request as a faint tick when the limit is the ceiling.
-function podGaugeRows(usage: ResourceUsage, requests?: Resources, limits?: Resources) {
-  const row = (u: number | undefined, req: number | undefined, lim: number | undefined, res: 'cpu' | 'memory') => {
-    const ceil = lim ?? req
-    const label = lim != null ? 'lim' : req != null ? 'req' : null
-    return metricBar(u, lim != null ? req : undefined, ceil, label, lim != null, res)
-  }
-  return [
-    row(usage.cpuMilli, requests?.cpuMilli, limits?.cpuMilli, 'cpu'),
-    row(usage.memBytes, requests?.memBytes, limits?.memBytes, 'memory'),
-  ]
-}
-
-// nodeGaugeRows builds a Node's CPU/memory gauges against its allocatable (the schedulable ceiling) —
-// the "how loaded is this node" answer available in any view, not just the Nodes capacity layout. Usage
-// spilling past allocatable (into kubelet/system-reserved) is real pressure, so allocatable is a hard
-// ceiling. The unit reference is the node's TOTAL capacity, so the values read in cores exactly as the
-// capacity-view track does (a 1-core node: "0.06 / 0.94 alloc", not "61m / 940m").
-function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources, capacityRes?: Resources) {
-  return [
-    metricBar(usage.cpuMilli, undefined, allocatable?.cpuMilli, 'alloc', true, 'cpu', capacityRes?.cpuMilli),
-    metricBar(usage.memBytes, undefined, allocatable?.memBytes, 'alloc', true, 'memory', capacityRes?.memBytes),
-  ]
-}
-
-// UsageGauges renders the CPU + memory usage gauges for a Pod (vs request/limit) or a Node (vs
-// allocatable) when metrics are present. Each row aligns a fixed label, the bar, and a right-aligned
-// value (Alignment + Proximity: the number sits with its bar); the fill borrows the health palette under
-// pressure (Contrast) so a hot resource pulls the eye.
-function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources; capacityRes?: Resources; caption?: string }) {
-  const rows = createMemo(() =>
-    (props.kind === 'Node'
-      ? nodeGaugeRows(props.usage, props.allocatable, props.capacityRes)
-      : podGaugeRows(props.usage, props.requests, props.limits)
-    ).filter((r): r is NonNullable<typeof r> => r !== null),
-  )
-  const LABEL: Record<'cpu' | 'memory', string> = { cpu: 'CPU', memory: 'Mem' }
+// UsageGauges renders the CPU + memory resource bars as the Nodes capacity view does: per resource, a
+// Use bar (live usage) directly over a Req bar (reserved request) sharing ONE track, so reserved-vs-used
+// reads at a glance and the two never clash units (formatPair keys both off the group's unitRef). The
+// usage fill borrows the health palette under pressure (Contrast — a hot resource pulls the eye); a
+// Node's Req bar carries a faint allocatable tick (the overcommit line). Built by drawerResourceBars.
+const KIND_WORD: Record<'use' | 'req', string> = { use: 'Use', req: 'Req' }
+function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
   return (
-    <Show when={rows().length > 0}>
-      <div class="pod-metrics" role="group" aria-label="Live resource usage">
-        <For each={rows()}>
-          {(r) => (
-            <div class="metric-row">
-              <span class="metric-label">{LABEL[r.res]}</span>
-              {/* Unconstrained (no request/limit): an empty track + a dim "no limit set" note rather than
-                  a misleading full bar — the operator sees the value isn't being gauged against anything. */}
-              <div class="metric-bar" classList={{ unconstrained: r.unconstrained }} title={r.ref ? `${r.use} used · ${r.ref}` : `${r.use} used · no request/limit set`}>
-                <Show when={!r.unconstrained}>
-                  <div class="metric-fill" classList={{ over: r.over, near: r.nearLimit }} style={{ width: `${r.fillPct}%` }} />
-                  <Show when={r.reqPct != null}>
-                    <div class="metric-tick metric-tick-req" style={{ left: `${r.reqPct}%` }} />
-                  </Show>
-                </Show>
-              </div>
-              <span class="metric-val">
-                <b>{r.use}</b>
-                <span class="metric-ref"> / {r.ref ?? 'unset'}</span>
-              </span>
+    <Show when={props.groups.length > 0}>
+      <div class="pod-metrics" role="group" aria-label="Resource usage and requests">
+        <For each={props.groups}>
+          {(g) => (
+            <div class="metric-group">
+              {/* The resource heading groups its Use+Req bars (Proximity); the per-bar Use/Req label
+                  distinguishes them (the two share one colour scheme, as in the capacity view). */}
+              <div class="metric-group-label">{g.label}</div>
+              <For each={g.bars}>
+                {(b) => {
+                  const pair = formatPair(b.value, b.ceil, g.res, g.unitRef)
+                  const ref = b.ceil != null && b.ceilLabel != null ? `${pair.cap} ${b.ceilLabel}` : null
+                  return (
+                    <div class="metric-row">
+                      <span class="metric-sublabel">{KIND_WORD[b.kind]}</span>
+                      {/* A truly unconstrained Use bar (no limit/request/host capacity) shows a dashed
+                          empty track so it can't be misread as "maxed". */}
+                      <div class="metric-bar" classList={{ unconstrained: g.unconstrained && b.kind === 'use' }} title={ref ? `${pair.value} ${b.kind} · ${ref}` : `${pair.value} ${b.kind} · ungauged`}>
+                        <Show when={!(g.unconstrained && b.kind === 'use')}>
+                          <div class="metric-fill" classList={{ over: b.over, near: b.near, req: b.kind === 'req' }} style={{ width: `${b.pct}%` }} />
+                          {/* The allocatable line on a Node's Req bar — Σrequest past it is overcommit. */}
+                          <Show when={b.kind === 'req' && g.allocPct != null}>
+                            <div class="metric-tick metric-tick-req" style={{ left: `${g.allocPct}%` }} />
+                          </Show>
+                        </Show>
+                      </div>
+                      <span class="metric-val">
+                        <b>{pair.value}</b>
+                        <span class="metric-ref"> / {ref ?? 'unset'}</span>
+                      </span>
+                    </div>
+                  )
+                }}
+              </For>
             </div>
           )}
         </For>
@@ -341,17 +289,22 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
-      {/* Live CPU/memory usage gauges (metrics-server) — the "is this hot / near its ceiling" answer the
-          operator otherwise gets only from `kubectl top`. A Pod gauges against its request/limit, a Node
-          against its allocatable; shown when usage is present, absent when metrics-server is unavailable. */}
-      <Show when={props.usage && (props.node.kind === 'Pod' || props.node.kind === 'Node')}>
+      {/* CPU/memory resource bars (Use over Req, both resources) — the "is this hot / near its ceiling /
+          over-reserved" answer the operator otherwise gets only from `kubectl top` + `describe`. A Pod
+          gauges against its limit/request (falling back to its node), a Node against capacity/allocatable
+          (Σrequest = the Req fill). Shown when there's anything to gauge — usage OR a request. */}
+      <Show when={props.node.kind === 'Pod' || props.node.kind === 'Node'}>
         <UsageGauges
-          usage={props.usage!}
-          kind={props.node.kind}
-          requests={props.node.requests}
-          limits={props.node.limits}
-          allocatable={props.node.allocatable}
-          capacityRes={props.node.capacityRes}
+          groups={drawerResourceBars({
+            isNode: props.node.kind === 'Node',
+            usage: props.usage,
+            capacity: props.node.capacityRes,
+            allocatable: props.node.allocatable,
+            reqSum: props.nodeReqSum,
+            request: props.node.requests,
+            limit: props.node.limits,
+            hostCapacity: props.hostCapacity,
+          })}
         />
       </Show>
       {/* A workload's rolled-up usage (its replicas summed), gauged against the summed requests/limits —
@@ -360,10 +313,12 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.workloadUsage}>
         {(wu) => (
           <UsageGauges
-            usage={wu().usage}
-            kind="Pod"
-            requests={wu().requests}
-            limits={wu().limits}
+            groups={drawerResourceBars({
+              isNode: false,
+              usage: wu().usage,
+              request: wu().requests,
+              limit: wu().limits,
+            })}
             caption={
               wu().meteredPods < wu().podCount
                 ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`

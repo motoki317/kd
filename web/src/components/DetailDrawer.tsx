@@ -4,7 +4,7 @@ import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
-import type { KNode, ResourceUsage } from '../types'
+import type { KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
 import { LOGGABLE_KINDS } from '../loggable'
 import CopyButton from './CopyButton'
@@ -24,6 +24,10 @@ interface Props {
   // their own); threaded to the summary's rolled-up gauge. Undefined for Pods/Nodes and when no replica
   // has a reading yet.
   workloadUsage?: WorkloadUsage
+  // A Node's summed pod requests (its Req-bar fill) and a Pod's host-node capacity (its unconstrained
+  // track fallback) — both derived from the cluster-wide capacity feed, threaded to the resource bars.
+  nodeReqSum?: Resources
+  hostCapacity?: Resources
   onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
@@ -309,6 +313,8 @@ export default function DetailDrawer(props: Props) {
               owners={props.owners}
               usage={props.usage}
               workloadUsage={props.workloadUsage}
+              nodeReqSum={props.nodeReqSum}
+              hostCapacity={props.hostCapacity}
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />
