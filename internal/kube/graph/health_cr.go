@@ -30,9 +30,41 @@ func crHealth(u *unstructured.Unstructured) Health {
 		return flowControlHealth(u, gvk.Kind)
 	case gvk.Group == "wgpolicyk8s.io" || gvk.Group == "reports.kyverno.io":
 		return policyReportHealth(u)
+	case gvk.Group == "operator.victoriametrics.com":
+		return victoriaMetricsHealth(u)
 	default:
 		return crHealthFromConditions(u)
 	}
+}
+
+// victoriaMetricsHealth maps the VictoriaMetrics operator's CRs (every operator.victoriametrics.com
+// kind — VMAgent/VMAlert/VMSingle runtime components AND VMRule/VMServiceScrape/VMNodeScrape config
+// objects). They carry status.updateStatus (the operator's reconcile state: operational/expanding/
+// failed/paused) rather than a Ready/Available condition, and the config CRs instead carry a
+// "<qualified>/Applied" condition — so the generic heuristic called every one "Unknown", painting a
+// whole monitoring namespace gray (35 VMRules + a dozen scrapes on a stock victoria-metrics-k8s-stack).
+func victoriaMetricsHealth(u *unstructured.Unstructured) Health {
+	switch s, _, _ := unstructured.NestedString(u.Object, "status", "updateStatus"); s {
+	case "operational":
+		return HealthHealthy
+	case "failed":
+		return HealthDegraded
+	case "expanding":
+		return HealthProgressing
+	case "paused":
+		return HealthSuspended
+	}
+	// No updateStatus yet (e.g. VMCluster, or a freshly-applied CR): fall back to the operator's
+	// "<qualified>/Applied" reconcile condition, else Healthy by existence (a config object).
+	for typ, st := range conditionStatuses(u) {
+		if strings.HasSuffix(typ, "/Applied") {
+			if st == "False" {
+				return HealthDegraded
+			}
+			return HealthHealthy
+		}
+	}
+	return HealthHealthy
 }
 
 // policyReportHealth reads a policy report's result summary (the wgpolicyk8s.io PolicyReport/
@@ -475,6 +507,12 @@ func crKindStatus(u *unstructured.Unstructured) string {
 		return apiServiceStatus(u)
 	case gvk.Group == "karpenter.sh" && gvk.Kind == "NodeClaim":
 		return nodeClaimStatus(u)
+	case gvk.Group == "operator.victoriametrics.com":
+		// Surface the operator's reconcile state only when it isn't the all-clear "operational" — an
+		// expanding/failed/paused component explains its non-green dot; a healthy one stays silent.
+		if s, _, _ := unstructured.NestedString(u.Object, "status", "updateStatus"); s != "" && s != "operational" {
+			return s
+		}
 	}
 	return ""
 }

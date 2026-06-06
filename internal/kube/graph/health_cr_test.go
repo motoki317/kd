@@ -652,3 +652,46 @@ func TestNodeClaimStatus(t *testing.T) {
 		t.Errorf("stuck NodeClaim = %q, want %q", got, want)
 	}
 }
+
+// TestVictoriaMetricsHealth: VictoriaMetrics operator CRs expose status.updateStatus (or a
+// "<qualified>/Applied" condition for config objects), never Ready/Available — so the generic heuristic
+// called them all Unknown, graying a whole monitoring namespace. They must read Healthy when
+// operational/Applied, with the reconcile state surfaced only when it's not the all-clear.
+func TestVictoriaMetricsHealth(t *testing.T) {
+	vm := func(kind string, status map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "operator.victoriametrics.com/v1beta1",
+			"kind":       kind,
+			"metadata":   map[string]any{"name": "x"},
+			"status":     status,
+		}}
+	}
+	// A runtime component reporting operational → Healthy, silent status.
+	op := vm("VMAgent", map[string]any{"updateStatus": "operational"})
+	if got := health(op); got != HealthHealthy {
+		t.Errorf("operational VMAgent = %q, want Healthy", got)
+	}
+	if got := statusSummary(op); got != "" {
+		t.Errorf("operational VMAgent status = %q, want silent", got)
+	}
+	// expanding → Progressing, and the word surfaces; failed → Degraded.
+	if got := health(vm("VMAgent", map[string]any{"updateStatus": "expanding"})); got != HealthProgressing {
+		t.Errorf("expanding VMAgent = %q, want Progressing", got)
+	}
+	if got := statusSummary(vm("VMAgent", map[string]any{"updateStatus": "expanding"})); got != "expanding" {
+		t.Errorf("expanding VMAgent status = %q, want \"expanding\"", got)
+	}
+	if got := health(vm("VMSingle", map[string]any{"updateStatus": "failed"})); got != HealthDegraded {
+		t.Errorf("failed VMSingle = %q, want Degraded", got)
+	}
+	// A config CR (VMRule) with only the "<qualified>/Applied" condition → Healthy, not Unknown.
+	applied := vm("VMRule", map[string]any{"conditions": conds(map[string]any{
+		"type": "vms-stack.monitor.vmalert.victoriametrics.com/Applied", "status": "True",
+	})})
+	if got := health(applied); got != HealthHealthy {
+		t.Errorf("Applied VMRule = %q, want Healthy", got)
+	}
+	if got := statusSummary(applied); got != "" {
+		t.Errorf("Applied VMRule status = %q, want silent (was the bogus \"unknown state\")", got)
+	}
+}
