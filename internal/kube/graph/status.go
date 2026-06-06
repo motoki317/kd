@@ -33,6 +33,8 @@ func statusSummary(obj runtime.Object) string {
 		return string(o.Spec.Type) // ClusterIP / NodePort / LoadBalancer / ExternalName
 	case *corev1.Node:
 		return nodeStatusSummary(o)
+	case *corev1.Namespace:
+		return namespaceStatus(o)
 	case *networkingv1.Ingress:
 		return ingressStatus(o)
 	case *corev1.PersistentVolumeClaim:

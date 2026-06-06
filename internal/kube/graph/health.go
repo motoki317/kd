@@ -33,6 +33,8 @@ func health(obj runtime.Object) Health {
 		return HealthHealthy
 	case *corev1.Node:
 		return nodeHealth(o)
+	case *corev1.Namespace:
+		return namespaceHealth(o)
 	case *corev1.PersistentVolumeClaim:
 		return pvcHealth(o)
 	case *corev1.PersistentVolume:
@@ -44,6 +46,27 @@ func health(obj runtime.Object) Health {
 	default:
 		return HealthHealthy
 	}
+}
+
+// namespaceHealth flags a Terminating namespace as Progressing — deletion is a transient state, but a
+// namespace that lingers in it (blocked by a finalizer or an undeletable resource — the classic "stuck
+// namespace") is exactly what an operator hunts for, so it should not read as a calm green Active. An
+// Active namespace is healthy by existence.
+func namespaceHealth(n *corev1.Namespace) Health {
+	if n.Status.Phase == corev1.NamespaceTerminating || n.DeletionTimestamp != nil {
+		return HealthProgressing
+	}
+	return HealthHealthy
+}
+
+// namespaceStatus surfaces a namespace's phase as kubectl's STATUS column does — "Terminating" while
+// it's being deleted, "" for a healthy Active namespace (silent, since every namespace is normally
+// Active and a constant "Active" badge would be noise).
+func namespaceStatus(n *corev1.Namespace) string {
+	if n.Status.Phase == corev1.NamespaceTerminating || n.DeletionTimestamp != nil {
+		return "Terminating"
+	}
+	return ""
 }
 
 // pvHealth mirrors pvcHealth for the backing volume: Available (unbound) is healthy (it exists and is

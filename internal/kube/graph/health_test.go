@@ -192,6 +192,26 @@ func TestNodeHealthAndStatus(t *testing.T) {
 	}
 }
 
+// A Terminating namespace (the classic "stuck namespace" when a finalizer blocks it) reads as
+// Progressing with a "Terminating" status, so it doesn't hide as a calm Active green; an Active
+// namespace is healthy by existence and carries no status badge (every namespace is normally Active).
+func TestNamespaceHealthAndStatus(t *testing.T) {
+	active := &corev1.Namespace{Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive}}
+	if got := health(active); got != HealthHealthy {
+		t.Errorf("Active namespace health = %q, want Healthy", got)
+	}
+	if got := statusSummary(active); got != "" {
+		t.Errorf("Active namespace status = %q, want empty", got)
+	}
+	term := &corev1.Namespace{Status: corev1.NamespaceStatus{Phase: corev1.NamespaceTerminating}}
+	if got := health(term); got != HealthProgressing {
+		t.Errorf("Terminating namespace health = %q, want Progressing", got)
+	}
+	if got := statusSummary(term); got != "Terminating" {
+		t.Errorf("Terminating namespace status = %q, want Terminating", got)
+	}
+}
+
 func TestStatusSummaryIngress(t *testing.T) {
 	rules := func(hosts ...string) *networkingv1.Ingress {
 		ing := &networkingv1.Ingress{}
