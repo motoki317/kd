@@ -139,6 +139,11 @@ Recent batches (newest first; `git log` has the commits):
   Ready/Available, so the catch-all called all 49 of them Unknown — a whole-namespace gray false alarm.
   Mapped updateStatus→health + Applied fallback; verified live: monitor 49 Unknown → 0. Same class as the
   CRD/FlowSchema condition-less-config-CR fixes — **watch for other operators' non-standard status fields**).
+  **HPA + ApplicationSet health** (e629880 — the last two Unknown kinds on staging. HPA's ScalingActive=False
+  (silently stopped autoscaling, usually an unreadable metric) → Degraded, ScalingLimited=True (at a bound) is
+  normal/ignored; ApplicationSet's ErrorOccurred=True → Degraded. Verified live: **the whole staging cluster
+  now has 0 Unknown dots across every namespace** — the condition-less-control-CR false-alarm class is fully
+  drained on this cluster).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
