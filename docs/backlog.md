@@ -114,6 +114,14 @@ Recent batches (newest first; `git log` has the commits):
   blank NodeClaim now reads "spot · r5dn.large" from its resolved labels, or the Ready=False reason while it
   can't provision; verified live, all 9 staging claims read "spot · <type>", making spot/interruption
   exposure scannable).
+  **User-reported batch (dogfooding logs + control bar + sidebar):** (1) **merged multi-container pod logs**
+  (0c767a3 — a multi-container pod now defaults to "All containers": server fans out a streamer per app
+  container tagging each line, client labels by container + orders the merged buffer by emission time so
+  per-container tail dumps interleave; per-container filter chips generalize the per-pod mechanism. Verified
+  live on an `alloy` 2-container pod: picker defaults `__all__`, 204 lines monotonically time-ordered across
+  both containers, each labelled). Remaining open from this batch: control-bar rel-group collapse, pod
+  sidebar CPU/mem bars + declutter, bigger/expandable logs panel (the drawer already has an expand-to-canvas
+  mode — verify whether that satisfies it).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
