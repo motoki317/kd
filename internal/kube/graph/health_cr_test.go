@@ -625,3 +625,30 @@ func TestAPIServiceStatus(t *testing.T) {
 		t.Errorf("local APIService health = %q, want Healthy", got)
 	}
 }
+
+// TestNodeClaimStatus: a Karpenter NodeClaim surfaces its resolved capacity type + instance type once
+// Ready, the Ready reason while it can't provision, and stays silent before Karpenter has written its
+// resolution labels.
+func TestNodeClaimStatus(t *testing.T) {
+	claim := func(labels map[string]any, status map[string]any) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "karpenter.sh/v1",
+			"kind":       "NodeClaim",
+			"metadata":   map[string]any{"name": "default-x", "labels": labels},
+		}
+		if status != nil {
+			obj["status"] = status
+		}
+		return &unstructured.Unstructured{Object: obj}
+	}
+	ready := map[string]any{"conditions": conds(map[string]any{"type": "Ready", "status": "True", "reason": "Ready"})}
+	resolved := map[string]any{"karpenter.sh/capacity-type": "spot", "node.kubernetes.io/instance-type": "r5dn.large"}
+	if got, want := statusSummary(claim(resolved, ready)), "spot · r5dn.large"; got != want {
+		t.Errorf("ready NodeClaim = %q, want %q", got, want)
+	}
+	// Can't provision → the Ready=False reason is the triage signal.
+	stuck := map[string]any{"conditions": conds(map[string]any{"type": "Ready", "status": "False", "reason": "InsufficientCapacity"})}
+	if got, want := statusSummary(claim(nil, stuck)), "InsufficientCapacity"; got != want {
+		t.Errorf("stuck NodeClaim = %q, want %q", got, want)
+	}
+}

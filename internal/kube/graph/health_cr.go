@@ -473,8 +473,34 @@ func crKindStatus(u *unstructured.Unstructured) string {
 		return policyReportStatus(u)
 	case gvk.Group == "apiregistration.k8s.io" && gvk.Kind == "APIService":
 		return apiServiceStatus(u)
+	case gvk.Group == "karpenter.sh" && gvk.Kind == "NodeClaim":
+		return nodeClaimStatus(u)
 	}
 	return ""
+}
+
+// nodeClaimStatus summarizes a Karpenter NodeClaim — the in-flight request for a node. Until it is
+// Ready the Ready condition's reason is the "why" (still launching, insufficient capacity); once Ready
+// the resolved capacity type + instance type ("spot · r5dn.large") answers the operator's first
+// question about a node: how interruptible (spot vs on-demand) and how big. Both come from the labels
+// Karpenter writes onto the NodeClaim as it provisions, so an unlaunched claim falls back silently.
+func nodeClaimStatus(u *unstructured.Unstructured) string {
+	if crConditionStatus(u, "Ready") == "False" {
+		if r := crConditionReason(u, "Ready"); r != "" {
+			return r
+		}
+		return "NotReady"
+	}
+	labels := u.GetLabels()
+	capType, instType := labels["karpenter.sh/capacity-type"], labels["node.kubernetes.io/instance-type"]
+	switch {
+	case capType != "" && instType != "":
+		return capType + " · " + instType
+	case instType != "":
+		return instType
+	default:
+		return capType
+	}
 }
 
 // apiServiceStatus summarizes an aggregated APIService: which Service backs the API group, and — when
