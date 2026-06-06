@@ -94,7 +94,11 @@ Recent batches (newest first; `git log` has the commits):
   campaign: **node status text explains its Degraded dot** (e6b9290), **MetaChip extraction** for the
   drawer's labelled-fact chips (9322c65), **asUnstructuredKind** CR-essence access helper (64ed4e2),
   **aggregated Logs for any pod-owning resource** incl. Argo Workflows (f34bee8), **DescendantPodNames
-  built on DescendantIDs** (47868f0).
+  built on DescendantIDs** (47868f0), **admission-webhook-config summary** (b206cc4 — a blank
+  Validating/MutatingWebhookConfiguration now reads "N webhooks · Fail|Ignore"; verified live on staging:
+  `aws-load-balancer-webhook` = "3 webhooks · Fail", the Fargate/pod-identity/vpc configs = "·Ignore",
+  singular "1 webhook" — the same "surface the declarative essence, not a count" seam as the IngressRoute
+  middleware / NetworkPolicy peers / policy-report cycles).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
