@@ -36,11 +36,14 @@ afterEach(() => {
 const base = { namespace: 'shop', kind: 'Pod', name: 'web-1' }
 
 describe('LogViewer', () => {
-  it('offers a container picker only for a single multi-container pod', () => {
+  it('offers a container picker only for a single multi-container pod, defaulting to All containers', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'sidecar']} restarts={0} />)
-    const select = container.querySelector('.logs-container')
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
     expect(select).toBeTruthy()
-    expect(select!.querySelectorAll('option').length).toBe(2)
+    // "All containers" (the merged default) sits first, ahead of the two app containers.
+    const opts = [...select.querySelectorAll('option')].map((o) => o.textContent)
+    expect(opts).toEqual(['All containers', 'app', 'sidecar'])
+    expect(select.value).toBe('__all__')
   })
 
   it('hides the picker for a single-container pod and for aggregated logs', () => {
@@ -68,7 +71,8 @@ describe('LogViewer', () => {
     ))
     const select = container.querySelector('.logs-container')!
     expect(select.querySelectorAll('optgroup').length).toBe(0)
-    expect(select.querySelectorAll('option').length).toBe(2)
+    // "All containers" + the two app containers, flat (no init containers to split out).
+    expect(select.querySelectorAll('option').length).toBe(3)
   })
 
   it('always offers a timestamps toggle', () => {
@@ -157,6 +161,32 @@ describe('LogViewer', () => {
     reset.click()
     expect(container.querySelectorAll('.log-line').length).toBe(2)
     expect(container.querySelector('.logs-waiting')).toBeNull()
+  })
+
+  it('defaults a multi-container pod to a merged view, labelling and timestamp-ordering by container', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'sidecar']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    // Container tail dumps arrive grouped (all of sidecar, then app) and out of time order; the merged
+    // view must interleave them by emission time, and label each line with its source container.
+    es.emit('log', { container: 'sidecar', time: '2021-05-21T12:00:02Z', line: 'proxy up' })
+    es.emit('log', { container: 'app', time: '2021-05-21T12:00:01Z', line: 'app boot' })
+    es.emit('log', { container: 'app', time: '2021-05-21T12:00:03Z', line: 'app ready' })
+    await findByText('app boot', { exact: false })
+    const lines = [...container.querySelectorAll('.log-line')]
+    // Ordered by time (app boot @01, proxy up @02, app ready @03), not arrival order.
+    expect(lines.map((l) => l.textContent?.match(/app boot|proxy up|app ready/)?.[0])).toEqual([
+      'app boot',
+      'proxy up',
+      'app ready',
+    ])
+    // Each line carries its container as the source label.
+    const labels = lines.map((l) => l.querySelector('.log-pod')?.textContent)
+    expect(labels).toEqual(['app', 'sidecar', 'app'])
+    // A per-container filter chip row appears (one chip per container present).
+    const chips = [...container.querySelectorAll('.logs-pod-chip')].map((c) => c.textContent)
+    expect(chips.sort()).toEqual(['app', 'sidecar'])
   })
 
   it('shows the shown/total count for a level filter, not only a text filter', async () => {

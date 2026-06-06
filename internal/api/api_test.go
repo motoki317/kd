@@ -366,6 +366,52 @@ func TestAggregatedLogStream(t *testing.T) {
 	}
 }
 
+// TestAllContainersLogStream verifies a single multi-container pod's __all__ stream fans out one
+// streamer per app container, tagging each line with its source container so the client can label and
+// timestamp-order the merged view.
+func TestAllContainersLogStream(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-1", UID: "p1"},
+			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
+			Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+	}
+	srv := newServer(t, "", objs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	url := srv.URL + ctxPath + "/namespaces/shop/resources/Pod/web-1/log/stream?follow=false&container=__all__"
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("log stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	seen := map[string]bool{}
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var ll struct{ Container string }
+		if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ll) == nil && ll.Container != "" {
+			seen[ll.Container] = true
+		}
+		if seen["app"] && seen["sidecar"] {
+			break
+		}
+	}
+	if !seen["app"] || !seen["sidecar"] {
+		t.Errorf("all-containers stream tagged containers %v, want both app and sidecar", seen)
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestLogStreamForbidden(t *testing.T) {

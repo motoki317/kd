@@ -130,6 +130,7 @@ export function streamGraph(ctx: string, ns: string, h: GraphStreamHandlers): ()
 
 export interface LogEntry {
   pod: string
+  container?: string // source container, set when a single pod's logs are merged across all containers
   time?: string // RFC3339Nano emission time, present only when timestamps were requested
   line: string
 }

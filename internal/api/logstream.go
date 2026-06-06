@@ -25,11 +25,20 @@ type logLine struct {
 	// Pod names the source pod so the client can label lines when a workload's logs are
 	// aggregated across several pods. It is the pod's own name even for a single Pod.
 	Pod string `json:"pod"`
+	// Container names the source container, so the client can label and order the lines when a single
+	// multi-container pod's logs are merged across every container (the allContainers mode).
+	Container string `json:"container,omitempty"`
 	// Time is the line's emission timestamp (RFC3339Nano), set only when the client asked for
 	// timestamps; it lets the client order an interleaved aggregate by true emission time.
 	Time string `json:"time,omitempty"`
 	Line string `json:"line"`
 }
+
+// allContainers is the sentinel container value requesting a single pod's logs merged across every app
+// container (kubectl logs --all-containers): each line is tagged with its source container so the
+// client can label and timestamp-order them. It is the default view for a multi-container pod, where
+// picking one container hides the cross-talk (an app erroring because its sidecar isn't ready).
+const allContainers = "__all__"
 
 // handleResourceLogStream tails the logs of a resource as SSE `log` events. For a Pod that is the
 // pod's own log; for a workload (Deployment, ReplicaSet, StatefulSet, ...) it is the merged logs of
@@ -186,11 +195,32 @@ func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 // the stream ends or ctx is cancelled. A pod that fails to open is skipped, not fatal, so one bad
 // pod never aborts the rest of an aggregate.
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
+	// allContainers fans out one streamer per app container, merged into the same channel; the client
+	// timestamp-orders them. The supervisor still keys dedup on pod.Name, so a pod is followed once and
+	// this single call owns all its container streams.
+	if container == allContainers {
+		var wg sync.WaitGroup
+		for _, ct := range pod.Spec.Containers {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				streamContainerLogs(ctx, client, pod, name, follow, previous, timestamps, tail, out)
+			}(ct.Name)
+		}
+		wg.Wait()
+		return
+	}
 	c := container
 	if c == "" {
 		c = defaultLogContainer(pod)
 	}
-	opts := &corev1.PodLogOptions{Container: c, Follow: follow, Previous: previous, Timestamps: timestamps}
+	streamContainerLogs(ctx, client, pod, c, follow, previous, timestamps, tail, out)
+}
+
+// streamContainerLogs follows one container of one pod, tagging each line with both names so the client
+// can label by pod (aggregated workload) or by container (a single pod's merged all-container view).
+func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
+	opts := &corev1.PodLogOptions{Container: container, Follow: follow, Previous: previous, Timestamps: timestamps}
 	if tail != nil {
 		opts.TailLines = tail
 	}
@@ -202,7 +232,7 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		ll := logLine{Pod: pod.Name, Line: scanner.Text()}
+		ll := logLine{Pod: pod.Name, Container: container, Line: scanner.Text()}
 		if timestamps {
 			// kubelet prepends "<RFC3339Nano> " to each line; split it into its own field so the
 			// client can render it dimmed (and the raw line stays clean for copy).

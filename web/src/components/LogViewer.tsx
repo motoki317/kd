@@ -41,8 +41,20 @@ export default function LogViewer(props: Props) {
   // Count of new lines arrived while the operator was scrolled up — surfaced in the "Latest"
   // button so they know how much they're missing without scrolling to check.
   const [unseenLines, setUnseenLines] = createSignal(0)
-  // Selected container for a single multi-container pod (empty = server picks the first).
-  const [container, setContainer] = createSignal('')
+  // Selected container for a single multi-container pod. Defaults to ALL_CONTAINERS (merged across
+  // every container) when the pod has more than one — a single container hides the cross-talk that
+  // explains most multi-container failures (an app erroring because its sidecar/proxy isn't up yet).
+  const initialContainer = () =>
+    !props.aggregated && props.containers.length > 1 ? ALL_CONTAINERS : defaultLogContainer(props.containers)
+  const [container, setContainer] = createSignal(initialContainer())
+  // The merged all-container view (single pod) — labels each line by container and timestamp-orders
+  // them, since the per-container tail dumps otherwise arrive grouped, not interleaved.
+  const combined = createMemo(() => container() === ALL_CONTAINERS)
+  // A "grouped" stream carries per-line source labels: by pod for an aggregated workload, by container
+  // for a single pod's merged view. groupKey picks the right source for filtering/coloring/labeling.
+  const grouped = createMemo(() => props.aggregated || combined())
+  const groupKey = (l: LogEntry) => (combined() ? l.container ?? '' : l.pod)
+  const groupNoun = () => (combined() ? 'container' : 'pod')
   // Show the previous (crashed) container's logs — where a CrashLoopBackOff reason lives.
   const [previous, setPrevious] = createSignal(false)
   // Client-side line filter ("grep"): hide lines not containing this substring.
@@ -76,44 +88,51 @@ export default function LogViewer(props: Props) {
       writePref('kd:logsHideLevels', [...next].join(','))
       return next
     })
-  // Per-pod filtering for aggregated workload streams (cycle 328/R2): an aggregated Deployment/
-  // DaemonSet/Job view interleaves lines from every descendant pod, so isolating one misbehaving
-  // replica meant typing its pod-hash into the filter. hiddenPods is the set to suppress. NOT
-  // persisted — pod names are specific to the current rollout and churn on restart, so it resets when
-  // the resource changes (see the on(props.name) effect).
-  const [hiddenPods, setHiddenPods] = createSignal<Set<string>>(new Set<string>())
-  // Pods seen in the current buffer, sorted for a stable chip order. Only computed for aggregated
-  // streams; a single pod has nothing to toggle.
-  const presentPods = createMemo(() => {
-    if (!props.aggregated) return [] as string[]
+  // Per-source filtering for grouped streams (cycle 328/R2, generalized): an aggregated workload
+  // interleaves lines from every descendant pod, and a single pod's merged view interleaves every
+  // container — so isolating one noisy source meant typing its name into the filter. hiddenGroups is
+  // the set of source keys (pod, or container in combined mode) to suppress. NOT persisted — names are
+  // specific to the current rollout/pod and churn, so it resets when the resource changes (see the
+  // on(props.name) effect).
+  const [hiddenGroups, setHiddenGroups] = createSignal<Set<string>>(new Set<string>())
+  // Sources seen in the current buffer, sorted for a stable chip order. Only computed for a grouped
+  // stream; an ungrouped single-container view has nothing to toggle.
+  const presentGroups = createMemo(() => {
+    if (!grouped()) return [] as string[]
     const seen = new Set<string>()
-    for (const l of lines()) if (l.pod) seen.add(l.pod)
+    for (const l of lines()) {
+      const g = groupKey(l)
+      if (g) seen.add(g)
+    }
     return [...seen].sort()
   })
-  const togglePod = (pod: string) =>
-    setHiddenPods((prev) => {
+  const toggleGroup = (key: string) =>
+    setHiddenGroups((prev) => {
       const next = new Set(prev)
-      next.has(pod) ? next.delete(pod) : next.add(pod)
+      next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
-  // Shift-click solos a pod (show only it); shift-clicking the already-soloed pod clears the filter.
+  // Shift-click solos a source (show only it); shift-clicking the already-soloed one clears the filter.
   // Mirrors the topology kind-chip solo so the gesture is consistent across the app.
-  const soloPod = (pod: string) =>
-    setHiddenPods((prev) => {
-      const others = presentPods().filter((p) => p !== pod)
+  const soloGroup = (key: string) =>
+    setHiddenGroups((prev) => {
+      const others = presentGroups().filter((p) => p !== key)
       const alreadySolo = prev.size === others.length && others.every((p) => prev.has(p))
       return alreadySolo ? new Set<string>() : new Set(others)
     })
   const visibleLines = createMemo(() => {
-    const hp = hiddenPods()
-    const base = hp.size ? lines().filter((l) => !hp.has(l.pod)) : lines()
+    const hg = hiddenGroups()
+    let base = hg.size ? lines().filter((l) => !hg.has(groupKey(l))) : lines()
+    // The merged all-container view forces server-side timestamps (see the stream effect), so order by
+    // emission time to interleave the per-container tail dumps that otherwise arrive container-grouped.
+    // RFC3339Nano sorts correctly as a string; a copy keeps the source buffer in arrival order.
+    if (combined()) base = [...base].sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
     return filterLogLines(base, filter(), caseSensitive(), hiddenLevels())
   })
-  // Any filter is active — text grep, a dimmed level chip, or a hidden pod. Drives the "shown/total"
-  // count and the copy-button's "filtered" wording: all three filter kinds subset the buffer
-  // identically, so the operator deserves the same "you're seeing X of Y" feedback for each (the
-  // empty-state message already covers all three; the count readout used to lag behind on text-only).
-  const filtering = createMemo(() => !!filter() || hiddenLevels().size > 0 || hiddenPods().size > 0)
+  // Any filter is active — text grep, a dimmed level chip, or a hidden source. Drives the "shown/total"
+  // count and the copy-button's "filtered" wording: all kinds subset the buffer identically, so the
+  // operator deserves the same "you're seeing X of Y" feedback for each.
+  const filtering = createMemo(() => !!filter() || hiddenLevels().size > 0 || hiddenGroups().size > 0)
   // Reset every log filter at once — the recovery action when the active filters (often a level filter
   // PERSISTED from a previous pod via kd:logsHideLevels) have hidden the entire buffer, so a new pod's
   // output reads as empty. Clears the persisted level pref too; hidden-pods is per-resource so it just
@@ -123,7 +142,7 @@ export default function LogViewer(props: Props) {
     setCaseSensitive(false)
     setHiddenLevels(new Set<LogLevel>())
     writePref('kd:logsHideLevels', '')
-    setHiddenPods(new Set<string>())
+    setHiddenGroups(new Set<string>())
   }
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
@@ -194,11 +213,11 @@ export default function LogViewer(props: Props) {
     on(
       () => props.name,
       () => {
-        setContainer(defaultLogContainer(props.containers))
+        setContainer(initialContainer())
         setPrevious(false)
         setFilter('')
         setCaseSensitive(false)
-        setHiddenPods(new Set<string>())
+        setHiddenGroups(new Set<string>())
         setErrorCursor(-1)
       },
     ),
@@ -212,7 +231,10 @@ export default function LogViewer(props: Props) {
     const name = props.name
     const c = container()
     const prev = previous()
-    const ts = timestamps()
+    // The merged all-container view needs per-line timestamps to interleave the containers' tail dumps,
+    // so fetch them even when the operator hasn't toggled the (visible) timestamp column — the column's
+    // display stays gated on timestamps(), the ordering uses the time field regardless.
+    const ts = timestamps() || combined()
     setLines([])
     setError(false)
     setPinned(true)
@@ -294,6 +316,11 @@ export default function LogViewer(props: Props) {
             can tell which is which; with none, the flat list keeps the common case unchanged. */}
         <Show when={!props.aggregated && props.containers.length + (props.initContainers?.length ?? 0) > 1}>
           <select class="logs-container" aria-label="Container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
+            {/* "All containers" (the default for a multi-container pod) merges every app container,
+                colour-labelled and timestamp-ordered, so cross-container cause-and-effect is visible. */}
+            <Show when={props.containers.length > 1}>
+              <option value={ALL_CONTAINERS}>All containers</option>
+            </Show>
             <Show
               when={(props.initContainers?.length ?? 0) > 0}
               fallback={<For each={props.containers}>{(c) => <option value={c}>{c}</option>}</For>}
@@ -415,45 +442,45 @@ export default function LogViewer(props: Props) {
             </span>
           </Show>
           <Show when={visibleLines().length > 0}>
-            {/* Aggregated views (Deployment / DaemonSet / Job …) mix lines from several pods;
-                copying without the source-pod prefix would lose attribution and turn a useful
-                paste into noise. Cycle 297: prepend "<pod> | " for aggregated streams. The on-
-                screen pod chip already carries the same info, so the copy matches what the user
-                sees. */}
+            {/* Grouped views mix lines from several sources (pods in a workload, containers in a merged
+                pod); copying without the source prefix would lose attribution. Prepend "<source> | " so
+                the paste matches what the on-screen chip/label shows. Time is included only when the
+                (visible) timestamp column is on, so the copy mirrors the screen. */}
             <CopyButton
               text={() =>
                 visibleLines()
                   .map((l) => {
-                    const ts = l.time ? `${l.time} ` : ''
-                    const pod = props.aggregated ? `${l.pod} | ` : ''
-                    return `${pod}${ts}${l.line}`
+                    const ts = timestamps() && l.time ? `${l.time} ` : ''
+                    const src = grouped() ? `${groupKey(l)} | ` : ''
+                    return `${src}${ts}${l.line}`
                   })
                   .join('\n')
               }
               // Copy acts on the filtered view, so say so when ANY filter is active (text, level, or
-              // pod) — otherwise the static "Copy logs" hides that you're copying a subset, not the
-              // whole buffer (cycle 318; extended to level/pod filters so all three read alike).
+              // source) — otherwise the static "Copy logs" hides that you're copying a subset, not the
+              // whole buffer (cycle 318; extended to level/source filters so all three read alike).
               title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
           </Show>
         </span>
       </div>
-      {/* Per-pod toggles for aggregated streams (cycle 328/R2): one chip per pod present, colored with
-          the same hue as that pod's inline label so the connection is obvious. Click hides/shows a pod;
-          shift-click solos it. Only shown when more than one pod is interleaved. */}
-      <Show when={presentPods().length > 1}>
-        <div class="logs-pods" role="group" aria-label="Filter by pod">
-          <For each={presentPods()}>
-            {(pod) => (
+      {/* Per-source toggles for grouped streams (cycle 328/R2, generalized): one chip per source
+          present (pod for a workload, container for a merged pod), colored to match that source's inline
+          label so the connection is obvious. Click hides/shows it; shift-click solos it. Only shown
+          when more than one source is interleaved. */}
+      <Show when={presentGroups().length > 1}>
+        <div class="logs-pods" role="group" aria-label={`Filter by ${groupNoun()}`}>
+          <For each={presentGroups()}>
+            {(key) => (
               <button
                 class="logs-pod-chip"
-                classList={{ off: hiddenPods().has(pod) }}
-                aria-pressed={!hiddenPods().has(pod)}
-                title={`${pod}\n${hiddenPods().has(pod) ? 'click to show' : 'click to hide'} · shift-click to show only this pod`}
-                onClick={(e) => (e.shiftKey ? soloPod(pod) : togglePod(pod))}
+                classList={{ off: hiddenGroups().has(key) }}
+                aria-pressed={!hiddenGroups().has(key)}
+                title={`${key}\n${hiddenGroups().has(key) ? 'click to show' : 'click to hide'} · shift-click to show only this ${groupNoun()}`}
+                onClick={(e) => (e.shiftKey ? soloGroup(key) : toggleGroup(key))}
               >
-                <span class="logs-pod-dot" style={{ background: podColor(pod) }} />
-                {middleTruncate(pod, 22)}
+                <span class="logs-pod-dot" style={{ background: labelColor(key) }} />
+                {middleTruncate(key, 22)}
               </button>
             )}
           </For>
@@ -469,21 +496,21 @@ export default function LogViewer(props: Props) {
             return (
             <div
               class="log-line"
-              // Alt/Option-click copies just this line (with its pod/timestamp prefix, matching the
+              // Alt/Option-click copies just this line (with its source/timestamp prefix, matching the
               // bulk copy) — the fastest way to share one error line into a chat or ticket. Alt
               // rather than Shift so it doesn't fight Shift+click range text-selection (cycle 323).
               title="Alt-click to copy this line"
               onClick={(e) => {
                 if (!e.altKey) return
                 const el = e.currentTarget as HTMLElement
-                const ts = l.time ? `${l.time} ` : ''
-                const pod = props.aggregated ? `${l.pod} | ` : ''
+                const ts = timestamps() && l.time ? `${l.time} ` : ''
+                const src = grouped() ? `${groupKey(l)} | ` : ''
                 // Optional-chain the whole chain: in a non-secure context `navigator.clipboard` is
                 // undefined, so `?.writeText(…)` is undefined and a bare `.then` would throw a
                 // TypeError synchronously (the `.catch` can't catch a sync throw). Same guard as the
                 // App-level y-yank.
                 navigator.clipboard
-                  ?.writeText(`${pod}${ts}${l.line}`)
+                  ?.writeText(`${src}${ts}${l.line}`)
                   ?.then(() => {
                     el.classList.add('copied')
                     setTimeout(() => el.classList.remove('copied'), 700)
@@ -496,12 +523,14 @@ export default function LogViewer(props: Props) {
               <Show when={parseLogLevel(l.line)}>
                 {(lvl) => <span class={`log-level log-level-${lvl()}`}>{LEVEL_LABEL[lvl()]}</span>}
               </Show>
-              <Show when={props.aggregated}>
-                <span class="log-pod" style={{ color: podColor(l.pod) }} title={l.pod}>
-                  {middleTruncate(l.pod, 20)}
+              <Show when={grouped()}>
+                <span class="log-pod" style={{ color: labelColor(groupKey(l)) }} title={groupKey(l)}>
+                  {middleTruncate(groupKey(l), 20)}
                 </span>
               </Show>
-              <Show when={l.time}>
+              {/* Time column shows only when the operator toggled timestamps; the merged view fetches
+                  time for ordering but keeps the column hidden until asked, so it doesn't add noise. */}
+              <Show when={timestamps() && l.time}>
                 {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
                 <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>
               </Show>
@@ -600,11 +629,15 @@ export default function LogViewer(props: Props) {
 const LEVEL_LABEL: Record<LogLevel, string> = { error: 'ERR', warn: 'WRN', info: 'INF', debug: 'DBG' }
 // Severity order (most→least urgent) for the per-level filter chips, so the chip row reads ERR→DBG.
 const LEVEL_ORDER: LogLevel[] = ['error', 'warn', 'info', 'debug']
+// ALL_CONTAINERS is the sentinel container selection requesting a single pod's logs merged across every
+// container — the default for a multi-container pod, mirroring the server's allContainers value.
+const ALL_CONTAINERS = '__all__'
 
-// podColor maps a pod name to a stable hue so interleaved lines from different pods are easy to
-// tell apart at a glance (the same pod is always the same color).
-function podColor(pod: string): string {
+// labelColor maps a source name (pod, in an aggregated workload stream; container, in a single pod's
+// all-container view) to a stable hue so interleaved lines are easy to tell apart at a glance — the
+// same source is always the same color.
+function labelColor(key: string): string {
   let h = 0
-  for (let i = 0; i < pod.length; i++) h = (h * 31 + pod.charCodeAt(i)) % 360
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 360
   return `hsl(${h}, 70%, 70%)`
 }
