@@ -888,14 +888,17 @@ export default function Topology(props: Props) {
   //   - A selection owns the viewport (its own fit effect), so skip while one is active.
   //   - CLEARING a filter does not re-fit — leave the operator where they are (Fit/'f' reframe on
   //     demand), mirroring the deselect branch that preserves pan/zoom.
-  //   - READABILITY GUARD: only fit when the matches cluster tightly enough to frame at a legible
-  //     scale (≥ MIN_FIT_SCALE). When matches are SCATTERED across a tall layout (e.g. 11 degraded
-  //     resources spread down a 142-workflow namespace), their bounding box spans the whole canvas,
-  //     so fitting it zooms to an unreadable speck (~0.04×) — strictly worse than not moving. In
-  //     that case we leave the view untouched; the operator keeps their pan/zoom and can Fit or
-  //     keyboard-navigate. (Found live: the naive fit-to-bbox produced exactly that speck.) The
-  //     manual Fit keeps no floor — an explicit Fit may zoom out to a speck, but an automatic move
-  //     must never make the view worse than it was.
+  //   - READABILITY GUARD: only fit-ALL when the matches cluster tightly enough to frame at a legible
+  //     scale (≥ MIN_FIT_SCALE). When matches are SCATTERED across a tall layout (e.g. 55 degraded
+  //     resources spread down a 340-resource namespace), their bounding box spans the whole canvas,
+  //     so fitting it zooms to an unreadable speck (~0.04×) — strictly worse than not moving. But
+  //     LEAVING the view put is its own dead end: the matches sit off-screen behind faded healthy
+  //     cards, and the Enter-cycle / clickable-count affordance that would reach them is search-only
+  //     (absent under a health/kind filter) — so a "show me what's Degraded" triage in a big namespace
+  //     stranded the operator staring at greyed-out healthy resources (found live on team-a). So
+  //     instead of bailing, we frame the SINGLE most-troubled match (severity-ordered) at a legible
+  //     scale: a triage filter then ALWAYS lands the operator on a real result — the worst one — from
+  //     which they can drill in or pan to the rest. (The manual Fit still frames all, speck or not.)
   // This does not weaken the "preserve pan/zoom on churn" rule: it keys on the filter signature, not
   // node count, so an SSE add/remove or a collapse expand never triggers it.
   const filterKey = () =>
@@ -910,7 +913,18 @@ export default function Topology(props: Props) {
       if (lit.length === 0) return // filter matched nothing laid out — don't fly to an empty box
       const target = fitNodeSet(lit, 1.4)
       target.scale *= 0.92 // a touch of breathing room, matching the manual Fit
-      if (target.scale < MIN_FIT_SCALE) return // scattered matches → would be a speck; leave the view
+      if (target.scale < MIN_FIT_SCALE) {
+        // Scattered: framing all of them is a speck. Fall back to the single worst match so the
+        // operator lands on a real result instead of faded healthy cards (see the guard comment).
+        const litIds = new Set(lit.map((n) => n.id))
+        const worst = orderedForNav(props.nodes.filter((n) => litIds.has(n.id)))[0]
+        const ln = worst && lit.find((n) => n.id === worst.id)
+        if (!ln) return
+        const one = fitNodeSet([ln], selectionMaxScale)
+        cancelAnimationFrame(selFitFrame)
+        selFitFrame = requestAnimationFrame(() => animateTo(one))
+        return
+      }
       cancelAnimationFrame(selFitFrame)
       selFitFrame = requestAnimationFrame(() => animateTo(target))
     }, { defer: true }),
