@@ -695,3 +695,48 @@ func TestVictoriaMetricsHealth(t *testing.T) {
 		t.Errorf("Applied VMRule status = %q, want silent (was the bogus \"unknown state\")", got)
 	}
 }
+
+// TestHPAHealth: an HPA's conditions are AbleToScale/ScalingActive/ScalingLimited, never Ready/Available,
+// so the generic heuristic called it Unknown. ScalingActive=False (can't read metrics → silently not
+// autoscaling) is the real fault; ScalingLimited=True (sitting at a min/max bound) is the normal state.
+func TestHPAHealth(t *testing.T) {
+	hpa := func(cs ...map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler",
+			"metadata": map[string]any{"name": "x"},
+			"status":   map[string]any{"conditions": conds(cs...)},
+		}}
+	}
+	// At a bound (ScalingLimited=True) but actively scaling → Healthy, not a fault.
+	atBound := hpa(
+		map[string]any{"type": "AbleToScale", "status": "True"},
+		map[string]any{"type": "ScalingActive", "status": "True"},
+		map[string]any{"type": "ScalingLimited", "status": "True"},
+	)
+	if got := health(atBound); got != HealthHealthy {
+		t.Errorf("at-bound HPA = %q, want Healthy", got)
+	}
+	// ScalingActive=False (e.g. FailedGetResourceMetric) → Degraded: it's not autoscaling.
+	noMetrics := hpa(map[string]any{"type": "ScalingActive", "status": "False", "reason": "FailedGetResourceMetric"})
+	if got := health(noMetrics); got != HealthDegraded {
+		t.Errorf("metric-less HPA = %q, want Degraded", got)
+	}
+}
+
+// TestApplicationSetHealth: an ApplicationSet's ErrorOccurred condition (not Ready/Available) drives its
+// health — True means generation failed and its child Applications are stale.
+func TestApplicationSetHealth(t *testing.T) {
+	appset := func(errStatus string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationSet",
+			"metadata": map[string]any{"name": "x"},
+			"status":   map[string]any{"conditions": conds(map[string]any{"type": "ErrorOccurred", "status": errStatus})},
+		}}
+	}
+	if got := health(appset("False")); got != HealthHealthy {
+		t.Errorf("healthy ApplicationSet = %q, want Healthy", got)
+	}
+	if got := health(appset("True")); got != HealthDegraded {
+		t.Errorf("errored ApplicationSet = %q, want Degraded", got)
+	}
+}

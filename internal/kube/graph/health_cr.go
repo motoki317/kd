@@ -32,9 +32,24 @@ func crHealth(u *unstructured.Unstructured) Health {
 		return policyReportHealth(u)
 	case gvk.Group == "operator.victoriametrics.com":
 		return victoriaMetricsHealth(u)
+	case gvk.Group == "autoscaling":
+		return hpaHealth(u)
 	default:
 		return crHealthFromConditions(u)
 	}
+}
+
+// hpaHealth reads a HorizontalPodAutoscaler's conditions (AbleToScale/ScalingActive/ScalingLimited,
+// never Ready/Available, so the generic heuristic called it Unknown). ScalingActive=False is the real
+// fault — the HPA can't compute a desired replica count (usually a missing/unreadable metric), so it
+// has silently stopped autoscaling; AbleToScale=False means it can't actuate a scale. ScalingLimited is
+// deliberately ignored: it's True whenever the HPA sits at its min/max bound, the normal steady state.
+func hpaHealth(u *unstructured.Unstructured) Health {
+	cs := conditionStatuses(u)
+	if cs["ScalingActive"] == "False" || cs["AbleToScale"] == "False" {
+		return HealthDegraded
+	}
+	return HealthHealthy
 }
 
 // victoriaMetricsHealth maps the VictoriaMetrics operator's CRs (every operator.victoriametrics.com
@@ -348,6 +363,15 @@ func argoHealth(u *unstructured.Unstructured, kind string) Health {
 			return HealthSuspended
 		}
 		if crConditionStatus(u, "SubmissionError") == "True" {
+			return HealthDegraded
+		}
+		return HealthHealthy
+	case "ApplicationSet":
+		// An ApplicationSet generates Applications from a template; its conditions are
+		// ErrorOccurred/ParametersGenerated/ResourcesUpToDate (never Ready/Available). ErrorOccurred=True
+		// means generation/templating failed — the child Applications are stale or missing — otherwise
+		// the generator is doing its job.
+		if crConditionStatus(u, "ErrorOccurred") == "True" {
 			return HealthDegraded
 		}
 		return HealthHealthy
