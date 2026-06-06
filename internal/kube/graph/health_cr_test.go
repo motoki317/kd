@@ -181,6 +181,58 @@ func TestArgoWorkflowMessage(t *testing.T) {
 	}
 }
 
+// TestPolicyReportHealth proves a policy report is classified by its result summary: a failed or
+// errored rule (the reported resource violates policy) is Degraded; an all-pass/skip report is Healthy.
+// Covers both the wgpolicyk8s.io PolicyReport and Kyverno's reports.kyverno.io EphemeralReport, which
+// share the top-level summary schema. Before this, every report read Healthy-by-existence — a real
+// policy failure was invisible in the health tally.
+func TestPolicyReportHealth(t *testing.T) {
+	// Kyverno's reports.kyverno.io nests the summary under spec; the wgpolicyk8s.io schema puts it at
+	// the top level. Both must read the same — the spec-vs-top-level path gap blanked the status live.
+	report := func(group string, summary map[string]any) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": group + "/v1", "kind": "EphemeralReport",
+			"metadata": map[string]any{"name": "r"},
+		}
+		if group == "reports.kyverno.io" {
+			obj["spec"] = map[string]any{"summary": summary}
+		} else {
+			obj["summary"] = summary
+		}
+		return &unstructured.Unstructured{Object: obj}
+	}
+	// A clean background scan: one skipped rule, nothing failed → Healthy, status names the tally.
+	clean := report("reports.kyverno.io", map[string]any{"pass": int64(0), "fail": int64(0), "skip": int64(1)})
+	if got := health(clean); got != HealthHealthy {
+		t.Errorf("clean report health = %q, want Healthy", got)
+	}
+	if got := statusSummary(clean); got != "1 skip" {
+		t.Errorf("clean report status = %q, want \"1 skip\"", got)
+	}
+	// A violation: a failed rule → Degraded, status leads with the failure.
+	failing := report("wgpolicyk8s.io", map[string]any{"pass": int64(3), "fail": int64(2), "skip": int64(0)})
+	if got := health(failing); got != HealthDegraded {
+		t.Errorf("failing report health = %q, want Degraded", got)
+	}
+	if got := statusSummary(failing); got != "2 fail, 3 pass" {
+		t.Errorf("failing report status = %q, want \"2 fail, 3 pass\"", got)
+	}
+	// An evaluation error is also a problem worth surfacing.
+	errored := report("reports.kyverno.io", map[string]any{"error": int64(1)})
+	if got := health(errored); got != HealthDegraded {
+		t.Errorf("errored report health = %q, want Degraded", got)
+	}
+	// The dynamic informer decodes real cluster counts as float64, not int64 — both must read the same,
+	// or the status silently blanks against live data (the dogfooding regression this guards).
+	floatCounts := report("reports.kyverno.io", map[string]any{"fail": float64(2), "pass": float64(3)})
+	if got := health(floatCounts); got != HealthDegraded {
+		t.Errorf("float64-count report health = %q, want Degraded", got)
+	}
+	if got := statusSummary(floatCounts); got != "2 fail, 3 pass" {
+		t.Errorf("float64-count report status = %q, want \"2 fail, 3 pass\"", got)
+	}
+}
+
 // TestCRDHealth proves a CustomResourceDefinition is classified by its Established/NamesAccepted
 // conditions (not left "Unknown" by the Ready/Available catch-all): an established CRD with accepted
 // names is Healthy; a name conflict or a not-established CRD is Degraded. This is what cleared 49
