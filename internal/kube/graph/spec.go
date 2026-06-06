@@ -719,12 +719,13 @@ func roleRules(obj runtime.Object) []string {
 	return out
 }
 
-// networkPolicySummary distills a NetworkPolicy into the lines an operator debugging "why can't A
-// reach B" needs without opening the YAML: which pods it applies to (podSelector), and for each
-// GOVERNED direction whether it denies all (the type is listed but carries no rules — a lockdown) or
-// allows N rule-sets. A direction not in policyTypes isn't governed at all, so it's omitted rather
-// than shown as "allow all", which would misread an ungoverned direction as an explicit allow. nil
-// for non-NetworkPolicies.
+// networkPolicySummary distills a NetworkPolicy into the lines an operator debugging "why can't A reach
+// B" needs without opening the YAML: which pods it applies to (podSelector), and for each GOVERNED
+// direction the actual peers each rule allows — "Ingress 50051/TCP ← ui-a, team-b/api-b,
+// …" — because "who can reach these pods" is the whole question a NetworkPolicy answers, and a bare rule
+// COUNT ("1 rule") left it unanswered (and hid that an empty rule is actually allow-from-anywhere). A
+// governed direction with no rules denies all (a lockdown); a direction not in policyTypes isn't
+// governed, so it's omitted rather than read as an explicit "allow all". nil for non-NetworkPolicies.
 func networkPolicySummary(obj runtime.Object) []string {
 	np, ok := obj.(*networkingv1.NetworkPolicy)
 	if !ok {
@@ -740,12 +741,106 @@ func networkPolicySummary(obj runtime.Object) []string {
 	}
 	out := []string{"targets: " + selectorSummary(&np.Spec.PodSelector)}
 	if governs(networkingv1.PolicyTypeIngress) {
-		out = append(out, "Ingress: "+ruleCountSummary(len(np.Spec.Ingress)))
+		if len(np.Spec.Ingress) == 0 {
+			out = append(out, "Ingress: deny all")
+		} else {
+			for _, r := range np.Spec.Ingress {
+				out = append(out, npRule("Ingress", "←", npPorts(r.Ports), npPeers(r.From)))
+			}
+		}
 	}
 	if governs(networkingv1.PolicyTypeEgress) {
-		out = append(out, "Egress: "+ruleCountSummary(len(np.Spec.Egress)))
+		if len(np.Spec.Egress) == 0 {
+			out = append(out, "Egress: deny all")
+		} else {
+			for _, r := range np.Spec.Egress {
+				out = append(out, npRule("Egress", "→", npPorts(r.Ports), npPeers(r.To)))
+			}
+		}
 	}
 	return out
+}
+
+// npRule formats one NetworkPolicy rule as "<dir>[ ports] <arrow> <peers>". Empty peers (an empty
+// from/to selects every source) reads "anywhere"; empty ports (all ports) is omitted.
+func npRule(dir, arrow, ports, peers string) string {
+	s := dir
+	if ports != "" {
+		s += " " + ports
+	}
+	if peers == "" {
+		peers = "anywhere"
+	}
+	return s + " " + arrow + " " + peers
+}
+
+// npPeers joins a rule's peers with ", " ("" when the list is empty — the caller renders "anywhere").
+func npPeers(peers []networkingv1.NetworkPolicyPeer) string {
+	out := make([]string, 0, len(peers))
+	for _, p := range peers {
+		if s := npPeer(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// npPeer renders one NetworkPolicyPeer: an ipBlock CIDR, a cross-namespace "<namespace>/<pods>" selector,
+// a "<namespace>/all pods" when only a namespace is named, or just the pod selector for a same-namespace
+// peer. The namespace shows by name when the idiomatic kubernetes.io/metadata.name label is used.
+func npPeer(p networkingv1.NetworkPolicyPeer) string {
+	if p.IPBlock != nil {
+		s := p.IPBlock.CIDR
+		if len(p.IPBlock.Except) > 0 {
+			s += " except " + strings.Join(p.IPBlock.Except, ", ")
+		}
+		return s
+	}
+	if p.NamespaceSelector != nil {
+		ns := npNamespace(p.NamespaceSelector)
+		if p.PodSelector != nil {
+			return ns + "/" + selectorSummary(p.PodSelector)
+		}
+		return ns + "/all pods"
+	}
+	if p.PodSelector != nil {
+		return selectorSummary(p.PodSelector)
+	}
+	return ""
+}
+
+// npNamespace names a peer's namespaceSelector: the namespace's own name when it uses the idiomatic
+// immutable kubernetes.io/metadata.name label ("namespace named X"), "all ns" when empty (every
+// namespace), else the raw label match.
+func npNamespace(sel *metav1.LabelSelector) string {
+	if sel != nil && len(sel.MatchExpressions) == 0 && len(sel.MatchLabels) == 1 {
+		if name, ok := sel.MatchLabels["kubernetes.io/metadata.name"]; ok {
+			return name
+		}
+	}
+	if sel == nil || (len(sel.MatchLabels) == 0 && len(sel.MatchExpressions) == 0) {
+		return "all ns"
+	}
+	return selectorSummary(sel)
+}
+
+// npPorts renders a rule's ports as "port/proto[, …]" ("" when none → all ports). A port may be numeric
+// or a named port; the protocol defaults to TCP as Kubernetes does. A protocol-only entry (no port)
+// shows just the protocol.
+func npPorts(ports []networkingv1.NetworkPolicyPort) string {
+	out := make([]string, 0, len(ports))
+	for _, p := range ports {
+		proto := "TCP"
+		if p.Protocol != nil {
+			proto = string(*p.Protocol)
+		}
+		if p.Port == nil {
+			out = append(out, proto)
+		} else {
+			out = append(out, p.Port.String()+"/"+proto)
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 // ingressClassSummary renders an IngressClass's essence — the controller that handles Ingresses of
@@ -921,19 +1016,6 @@ func unstructuredSelectorSummary(obj map[string]any, fields ...string) string {
 	return "all services"
 }
 
-// ruleCountSummary names a governed direction's rule set: zero rules under a listed policyType is a
-// deny-all lockdown (the operationally critical case), otherwise the count of allow rule-sets.
-func ruleCountSummary(n int) string {
-	switch n {
-	case 0:
-		return "deny all"
-	case 1:
-		return "1 rule"
-	default:
-		return fmt.Sprintf("%d rules", n)
-	}
-}
-
 // selectorSummary renders a LabelSelector as "k=v, k2=v2" (matchExpressions appended as "key op
 // (values)"), or "all pods" when empty — which for a NetworkPolicy podSelector means every pod in the
 // namespace. matchLabels are sorted so the string is stable across SSE patches.
@@ -951,7 +1033,12 @@ func selectorSummary(sel *metav1.LabelSelector) string {
 		parts = append(parts, k+"="+sel.MatchLabels[k])
 	}
 	for _, e := range sel.MatchExpressions {
-		parts = append(parts, fmt.Sprintf("%s %s (%s)", e.Key, strings.ToLower(string(e.Operator)), strings.Join(e.Values, ",")))
+		// Exists / DoesNotExist carry no values, so the "(…)" would be an empty pair of parens — drop it.
+		if len(e.Values) == 0 {
+			parts = append(parts, e.Key+" "+strings.ToLower(string(e.Operator)))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s %s (%s)", e.Key, strings.ToLower(string(e.Operator)), strings.Join(e.Values, ",")))
+		}
 	}
 	return strings.Join(parts, ", ")
 }

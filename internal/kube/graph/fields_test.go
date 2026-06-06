@@ -36,14 +36,56 @@ func TestNodeCapacity(t *testing.T) {
 
 func TestNetworkPolicySummary(t *testing.T) {
 	sel := func(kv map[string]string) metav1.LabelSelector { return metav1.LabelSelector{MatchLabels: kv} }
-	// The real staging shape: target a labelled app, govern ingress with one allow rule.
-	ingressOne := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+	selP := func(kv map[string]string) *metav1.LabelSelector { s := sel(kv); return &s }
+	ns := func(name string) *metav1.LabelSelector { return selP(map[string]string{"kubernetes.io/metadata.name": name}) }
+	port := func(p int) *networkingv1.NetworkPolicyPort {
+		v := intstr.FromInt(p)
+		return &networkingv1.NetworkPolicyPort{Port: &v}
+	}
+	// The real staging shape: target a labelled app; one ingress rule that allows a same-namespace pod,
+	// a cross-namespace pod, and any workflow pod cluster-wide, on a single port. The peers — "who can
+	// reach these pods" — are the whole point, so they render in full rather than as a bare "1 rule".
+	ingressPeers := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+		PodSelector: sel(map[string]string{"app.kubernetes.io/name": "api-a"}),
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{{
+			Ports: []networkingv1.NetworkPolicyPort{*port(50051)},
+			From: []networkingv1.NetworkPolicyPeer{
+				{PodSelector: selP(map[string]string{"app.kubernetes.io/name": "ui-a"})},
+				{NamespaceSelector: ns("team-b"), PodSelector: selP(map[string]string{"app.kubernetes.io/name": "api-b"})},
+				{PodSelector: &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "workflows.argoproj.io/workflow", Operator: metav1.LabelSelectorOpExists}}}},
+			},
+		}},
+	}}
+	want := []string{
+		"targets: app.kubernetes.io/name=api-a",
+		"Ingress 50051/TCP ← app.kubernetes.io/name=ui-a, team-b/app.kubernetes.io/name=api-b, workflows.argoproj.io/workflow exists",
+	}
+	if got := networkPolicySummary(ingressPeers); !slices.Equal(got, want) {
+		t.Errorf("networkPolicySummary =\n%v\nwant\n%v", got, want)
+	}
+	// An EMPTY ingress rule selects every source on every port — allow-from-anywhere, which the old
+	// "1 rule" hid. It must read as the wide-open allow it is.
+	openRule := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
 		PodSelector: sel(map[string]string{"app.kubernetes.io/name": "api-a"}),
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
 	}}
-	if got, want := networkPolicySummary(ingressOne), []string{"targets: app.kubernetes.io/name=api-a", "Ingress: 1 rule"}; !slices.Equal(got, want) {
-		t.Errorf("networkPolicySummary = %v, want %v", got, want)
+	if got, want := networkPolicySummary(openRule), []string{"targets: app.kubernetes.io/name=api-a", "Ingress ← anywhere"}; !slices.Equal(got, want) {
+		t.Errorf("networkPolicySummary(open rule) = %v, want %v", got, want)
+	}
+	// Egress to an ipBlock + a namespace-only peer (all pods in those namespaces), shown with the → arrow.
+	egress := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+		Egress: []networkingv1.NetworkPolicyEgressRule{{
+			To: []networkingv1.NetworkPolicyPeer{
+				{IPBlock: &networkingv1.IPBlock{CIDR: "10.0.0.0/8", Except: []string{"10.1.0.0/16"}}},
+				{NamespaceSelector: ns("kube-system")},
+			},
+		}},
+	}}
+	if got, want := networkPolicySummary(egress), []string{"targets: all pods", "Egress → 10.0.0.0/8 except 10.1.0.0/16, kube-system/all pods"}; !slices.Equal(got, want) {
+		t.Errorf("networkPolicySummary(egress) = %v, want %v", got, want)
 	}
 	// A default-deny lockdown: empty selector (all pods), both directions governed with no rules.
 	denyAll := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
