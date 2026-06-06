@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js'
-import { formatQuantity } from '../capacityLayout'
+import { formatPair } from '../capacityLayout'
 import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
@@ -134,6 +134,7 @@ function metricBar(
   ceilLabel: string | null, // the word shown after the ceiling value ("lim" / "req" / "alloc")
   hard: boolean, // a hard ceiling (limit/allocatable) recolours on breach; a soft one (request) never does
   res: 'cpu' | 'memory',
+  unitRef?: number, // the value that decides the display unit, so a Node reads in cores like the capacity view
 ) {
   if (use == null && tick == null && ceil == null) return null
   const u = use ?? 0
@@ -146,6 +147,10 @@ function metricBar(
   // bursting past a soft request is expected, so it stays the neutral accent — over-colouring it cries wolf.
   const over = hard && ceil != null && u > ceil
   const nearLimit = hard && ceil != null && u >= 0.9 * ceil && u <= ceil
+  // formatPair (the capacity view's formatter) keeps the value + ceiling in ONE unit chosen by unitRef,
+  // so a node's "0.06 / 0.94 alloc" reads in cores exactly as its capacity-view track does — Repetition,
+  // not "940m" here and "0.94" there for the same number.
+  const pair = formatPair(use, ceil, res, unitRef)
   return {
     res,
     unconstrained,
@@ -154,8 +159,8 @@ function metricBar(
     over,
     nearLimit,
     // Explicit values (explicit over implicit): the live use bright, the ceiling dim.
-    use: formatQuantity(use, res),
-    ref: ceil != null && ceilLabel != null ? `${formatQuantity(ceil, res)} ${ceilLabel}` : null,
+    use: pair.value,
+    ref: ceil != null && ceilLabel != null ? `${pair.cap} ${ceilLabel}` : null,
   }
 }
 
@@ -175,11 +180,13 @@ function podGaugeRows(usage: ResourceUsage, requests?: Resources, limits?: Resou
 
 // nodeGaugeRows builds a Node's CPU/memory gauges against its allocatable (the schedulable ceiling) —
 // the "how loaded is this node" answer available in any view, not just the Nodes capacity layout. Usage
-// spilling past allocatable (into kubelet/system-reserved) is real pressure, so allocatable is a hard ceiling.
-function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources) {
+// spilling past allocatable (into kubelet/system-reserved) is real pressure, so allocatable is a hard
+// ceiling. The unit reference is the node's TOTAL capacity, so the values read in cores exactly as the
+// capacity-view track does (a 1-core node: "0.06 / 0.94 alloc", not "61m / 940m").
+function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources, capacityRes?: Resources) {
   return [
-    metricBar(usage.cpuMilli, undefined, allocatable?.cpuMilli, 'alloc', true, 'cpu'),
-    metricBar(usage.memBytes, undefined, allocatable?.memBytes, 'alloc', true, 'memory'),
+    metricBar(usage.cpuMilli, undefined, allocatable?.cpuMilli, 'alloc', true, 'cpu', capacityRes?.cpuMilli),
+    metricBar(usage.memBytes, undefined, allocatable?.memBytes, 'alloc', true, 'memory', capacityRes?.memBytes),
   ]
 }
 
@@ -187,10 +194,10 @@ function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources) {
 // allocatable) when metrics are present. Each row aligns a fixed label, the bar, and a right-aligned
 // value (Alignment + Proximity: the number sits with its bar); the fill borrows the health palette under
 // pressure (Contrast) so a hot resource pulls the eye.
-function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources }) {
+function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources; capacityRes?: Resources }) {
   const rows = createMemo(() =>
     (props.kind === 'Node'
-      ? nodeGaugeRows(props.usage, props.allocatable)
+      ? nodeGaugeRows(props.usage, props.allocatable, props.capacityRes)
       : podGaugeRows(props.usage, props.requests, props.limits)
     ).filter((r): r is NonNullable<typeof r> => r !== null),
   )
@@ -334,6 +341,7 @@ export default function ResourceSummary(props: Props) {
           requests={props.node.requests}
           limits={props.node.limits}
           allocatable={props.node.allocatable}
+          capacityRes={props.node.capacityRes}
         />
       </Show>
       {/* A Service's reachable address and port mappings — the network view's core question

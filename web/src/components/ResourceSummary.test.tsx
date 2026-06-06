@@ -71,21 +71,25 @@ describe('ResourceSummary pod usage gauges', () => {
     const withUsage = render(() => <ResourceSummary node={svc} {...base} usage={{ cpuMilli: 50 }} />)
     expect(withUsage.container.querySelector('.pod-metrics')).toBeNull()
   })
-  it('gauges a Node against its allocatable, flagging usage that spills past it', () => {
+  it('gauges a Node against its allocatable, in cores (matching the capacity view), flagging spillover', () => {
     const node: KNode = {
       id: 'n1',
       kind: 'Node',
       name: 'ip-10-0-0-1',
       health: 'Healthy',
-      allocatable: { cpuMilli: 1000, memBytes: 4 * 1024 * 1024 * 1024 },
+      allocatable: { cpuMilli: 940, memBytes: 7 * 1024 * 1024 * 1024 },
+      capacityRes: { cpuMilli: 1000, memBytes: 8 * 1024 * 1024 * 1024 }, // total capacity → the unit reference
     }
-    // CPU 1100m exceeds the 1000m allocatable (spilling into reserved) → the fill is flagged over.
+    // CPU 1100m exceeds the 940m allocatable (spilling into reserved) → flagged over.
     const { container } = render(() => <ResourceSummary node={node} {...base} usage={{ cpuMilli: 1100, memBytes: 2 * 1024 * 1024 * 1024 }} />)
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     expect(rows.length).toBe(2)
-    expect(rows[0].textContent).toContain('alloc')
+    // Cores, not millicores: capacityRes (1000m ≥ 1 core) drives the unit, so "0.94 alloc" not "940m"
+    // — the same value the Nodes capacity track shows (Repetition).
+    expect(rows[0].textContent).toContain('0.94 alloc')
+    expect(rows[0].textContent).not.toContain('940m')
     expect(rows[0].querySelector('.metric-fill.over')).toBeTruthy()
-    expect(rows[1].querySelector('.metric-fill.over')).toBeNull() // mem 2Gi of 4Gi — fine
+    expect(rows[1].querySelector('.metric-fill.over')).toBeNull() // mem 2Gi of 7Gi — fine
   })
 })
 
