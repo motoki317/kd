@@ -165,6 +165,49 @@ func TestTraefikIngressRouteEdges(t *testing.T) {
 	}
 }
 
+// TestServiceMonitorScrapesEdges proves a ServiceMonitor/VMServiceScrape links to the Services its
+// selector matches (EdgeScrapes), honoring the namespaceSelector so a scrape aimed only at other
+// namespaces doesn't draw a spurious edge to a same-labelled local Service.
+func TestServiceMonitorScrapesEdges(t *testing.T) {
+	sm := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "monitoring.coreos.com/v1", "kind": "ServiceMonitor",
+		"metadata": map[string]any{"name": "es-mon", "namespace": "shop", "uid": "sm-uid"},
+		"spec": map[string]any{
+			"selector":          map[string]any{"matchLabels": map[string]any{"app": "es"}},
+			"namespaceSelector": map[string]any{"matchNames": []any{"shop"}},
+			"endpoints":         []any{map[string]any{"port": "http"}},
+		},
+	}}
+	// Same label match, but its namespaceSelector targets only another namespace → no local edge.
+	elsewhere := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMServiceScrape",
+		"metadata": map[string]any{"name": "elsewhere", "namespace": "shop", "uid": "vm-uid"},
+		"spec": map[string]any{
+			"selector":          map[string]any{"matchLabels": map[string]any{"app": "es"}},
+			"namespaceSelector": map[string]any{"matchNames": []any{"other-ns"}},
+		},
+	}}
+	esSvc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Service",
+		"metadata": map[string]any{"name": "es", "namespace": "shop", "uid": "es-uid", "labels": map[string]any{"app": "es"}},
+	}}
+	webSvc := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "v1", "kind": "Service",
+		"metadata": map[string]any{"name": "web", "namespace": "shop", "uid": "web-uid", "labels": map[string]any{"app": "web"}},
+	}}
+	g := Build([]runtime.Object{sm, elsewhere, esSvc, webSvc})
+
+	if !hasEdge(g, EdgeScrapes, "ServiceMonitor", "es-mon", "Service", "es") {
+		t.Errorf("a ServiceMonitor should scrape the Service its selector matches; edges = %+v", g.Edges)
+	}
+	if hasEdge(g, EdgeScrapes, "ServiceMonitor", "es-mon", "Service", "web") {
+		t.Error("a ServiceMonitor must NOT scrape a Service its selector doesn't match")
+	}
+	if hasEdge(g, EdgeScrapes, "VMServiceScrape", "elsewhere", "Service", "es") {
+		t.Error("a scrape targeting only other namespaces must not link a local Service")
+	}
+}
+
 // TestConventionRefEdges_IgnoresNameValuePair proves the scanner doesn't mistake a
 // generic name/value parameter for a reference (Workflow.spec.arguments[].parameters
 // have name+value; they aren't refs).

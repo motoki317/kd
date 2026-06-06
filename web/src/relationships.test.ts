@@ -12,6 +12,7 @@ const sample: KEdge[] = [
   e('pod', 'cm', 'mounts'),
   e('rb', 'role', 'binds'),
   e('pdb', 'pod', 'guards'),
+  e('mon', 'svc', 'scrapes'),
   e('pod', 'node', 'scheduledOn'), // present in the graph but mapped to NO category (see below)
 ]
 

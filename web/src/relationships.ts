@@ -26,6 +26,7 @@ export const REL_CATEGORIES: RelCategoryDef[] = [
   { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount', edges: ['mounts'] },
   { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'] },
   { id: 'scheduling', label: 'Disruption', hint: 'PodDisruptionBudgets → the pods they guard (pod↔node lives in the Nodes view)', edges: ['guards'] },
+  { id: 'monitoring', label: 'Monitoring', hint: 'ServiceMonitors/VMServiceScrapes → the Services they scrape', edges: ['scrapes'] },
 ]
 
 const BY_ID = new Map(REL_CATEGORIES.map((c) => [c.id, c]))

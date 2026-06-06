@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"slices"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -128,6 +130,12 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			// backend Services. Emit EdgeRoutes and skip the generic scanners, for the same reasons.
 			if o.GetKind() == "IngressRoute" && isTraefik(o) {
 				b.traefikIngressRouteEdges(id, ns, o)
+				break
+			}
+			// A ServiceMonitor/VMServiceScrape selects the Services it scrapes — its whole reference
+			// surface — so emit EdgeScrapes and skip the generic scanners (they'd find nothing).
+			if o.GetKind() == "ServiceMonitor" || o.GetKind() == "VMServiceScrape" {
+				b.scrapeEdges(id, ns, o, nodes)
 				break
 			}
 			// Custom resource. Try the curated registry first (deterministic, hand-coded
@@ -337,6 +345,49 @@ func (b *edgeBuilder) networkPolicyEdges(id, ns string, np *networkingv1.Network
 			b.link(id, EdgeGoverns, "Pod", ns, n.Name)
 		}
 	}
+}
+
+// scrapeEdges links a ServiceMonitor/VMServiceScrape to each Service in this namespace that its
+// spec.selector matches — the monitoring wiring, otherwise a floating island in topology. The
+// spec.namespaceSelector can point the scrape at OTHER namespaces (matchNames); those Services have
+// no node in a single-namespace snapshot, so when the selector excludes this namespace no local edge
+// is drawn (the drawer's scrape text still names the target namespaces). Uses LabelSelectorAsSelector
+// so matchExpressions match exactly what the drawer's scrape summary describes.
+func (b *edgeBuilder) scrapeEdges(id, ns string, u *unstructured.Unstructured, nodes []Node) {
+	if !scrapeSelectsNamespace(u, ns) {
+		return
+	}
+	raw, ok, _ := unstructured.NestedMap(u.Object, "spec", "selector")
+	if !ok {
+		return // no selector → scrape nothing; don't link every Service
+	}
+	var ls metav1.LabelSelector
+	if runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &ls) != nil {
+		return
+	}
+	sel, err := metav1.LabelSelectorAsSelector(&ls)
+	if err != nil {
+		return
+	}
+	for _, n := range nodes {
+		if n.Kind == "Service" && n.Namespace == ns && sel.Matches(labels.Set(n.Labels)) {
+			b.link(id, EdgeScrapes, "Service", ns, n.Name)
+		}
+	}
+}
+
+// scrapeSelectsNamespace reports whether a scrape config's spec.namespaceSelector includes ns. An
+// empty selector defaults to the scrape's own namespace (which is the snapshot's), `any: true` is
+// every namespace; an explicit matchNames list must contain ns.
+func scrapeSelectsNamespace(u *unstructured.Unstructured, ns string) bool {
+	if any, _, _ := unstructured.NestedBool(u.Object, "spec", "namespaceSelector", "any"); any {
+		return true
+	}
+	names, found, _ := unstructured.NestedStringSlice(u.Object, "spec", "namespaceSelector", "matchNames")
+	if !found || len(names) == 0 {
+		return true
+	}
+	return slices.Contains(names, ns)
 }
 
 func (b *edgeBuilder) subjectEdges(id, bindingNS string, subjects []rbacv1.Subject) {

@@ -34,6 +34,11 @@ const (
 	// disconnected island — the operator sees which pods' traffic it controls (the Network view's
 	// "what does this protect" answer). A traffic concern, distinct from EdgeGuards' disruption one.
 	EdgeGoverns EdgeType = "governs"
+	// EdgeScrapes links a ServiceMonitor/VMServiceScrape to the Services its selector targets, so a
+	// scrape config isn't a disconnected island — the operator sees which Services it monitors (the
+	// Monitoring view's "what does this scrape" answer). An observability concern, distinct from
+	// traffic and disruption.
+	EdgeScrapes EdgeType = "scrapes"
 )
 
 // Health is the normalized status shared across kinds, so the UI colors nodes uniformly.

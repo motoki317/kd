@@ -19,6 +19,9 @@ export type EdgeType =
   // 'governs' links a NetworkPolicy to the pods its podSelector applies to (a traffic concern, in the
   // Network category) — so a policy connects to what it protects instead of floating disconnected.
   | 'governs'
+  // 'scrapes' links a ServiceMonitor/VMServiceScrape to the Services it selects (an observability
+  // concern, in the Monitoring category) — so a scrape config isn't a floating island.
+  | 'scrapes'
 
 // How the topology arranges resources. Replaces the old fixed `View` enum: grouping (the layout
 // strategy) is now orthogonal to which relationships are drawn (see RelCategory + relationships.ts).
@@ -29,7 +32,7 @@ export type GroupBy = 'relationship' | 'nodes' | 'kind'
 
 // A relationship category the operator can toggle on/off; each maps to one or more EdgeType
 // (see REL_CATEGORIES in relationships.ts). Composable — several can be active at once.
-export type RelCategory = 'ownership' | 'network' | 'volumes' | 'rbac' | 'scheduling'
+export type RelCategory = 'ownership' | 'network' | 'volumes' | 'rbac' | 'scheduling' | 'monitoring'
 
 // Resources are canonical-unit resource quantities: CPU in millicores, memory in bytes, and a pod
 // count (allocatable only). Every field is optional so "no CPU request set" stays distinguishable
