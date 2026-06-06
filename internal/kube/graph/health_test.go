@@ -311,11 +311,12 @@ func TestPDBHealthAndStatus(t *testing.T) {
 		wantHealth Health
 		wantStatus string
 	}{
-		// At the floor → Healthy (no longer the old "Unknown" noise).
-		{"meets floor exactly", pdb(8, 8), HealthHealthy, "8/8 healthy"},
-		// Above the floor (current can exceed the minimum) → still Healthy.
-		{"above floor", pdb(10, 8), HealthHealthy, "10/8 healthy"},
-		// Below the floor → the protected workload is under its minimum → Degraded.
+		// At the floor → Healthy; satisfied, so just the count (no inverted "8/8" fraction).
+		{"meets floor exactly", pdb(8, 8), HealthHealthy, "8 healthy"},
+		// Above the floor (current can exceed the minimum) → Healthy, count only — a "10/8" fraction
+		// would read as an impossible "10 of 8"; the headroom lives on the "can disrupt" chip.
+		{"above floor", pdb(10, 8), HealthHealthy, "10 healthy"},
+		// Below the floor → Degraded, and HERE the fraction reads correctly as the shortfall.
 		{"below floor", pdb(6, 8), HealthDegraded, "6/8 healthy"},
 		// A zero floor (e.g. a maxUnavailable PDB over one replica) drops the noisy "/0" denominator.
 		{"zero floor with a healthy pod", pdb(1, 0), HealthHealthy, "1 healthy"},

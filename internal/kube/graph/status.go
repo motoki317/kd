@@ -312,15 +312,18 @@ func ingressStatus(ing *networkingv1.Ingress) string {
 	}
 }
 
-// pdbStatus shows currentHealthy over the desiredHealthy floor, mirroring the replica "ready/desired"
-// form operators know: "10/8" reads "10 healthy, floor 8" (satisfied); "6/8" shows the deficit. When
-// the floor is 0 (e.g. a maxUnavailable PDB over a single replica) the "/0" denominator is noise, so
-// drop it and show just the count.
+// pdbStatus shows the "current/floor" fraction ONLY when the budget is in deficit (fewer healthy than
+// the desiredHealthy floor), where it reads as the shortfall it is ("6/8 healthy"). When the budget is
+// satisfied it shows just the count ("2 healthy"). The fraction was previously shown always, to mirror
+// the replica "ready/desired" form — but that mirror inverts: replicas have ready ≤ desired (approaching
+// a target), a PDB has current ≥ floor, so a satisfied "2/1 healthy" read as an impossible "2 of 1". The
+// spare headroom a satisfied fraction conveyed is already on the drawer's "can disrupt N" chip, so the
+// count alone loses nothing. (A 0 floor likewise never produces a fraction here.)
 func pdbStatus(p *policyv1.PodDisruptionBudget) string {
-	if p.Status.DesiredHealthy == 0 {
-		return fmt.Sprintf("%d healthy", p.Status.CurrentHealthy)
+	if p.Status.CurrentHealthy < p.Status.DesiredHealthy {
+		return fmt.Sprintf("%d/%d healthy", p.Status.CurrentHealthy, p.Status.DesiredHealthy)
 	}
-	return fmt.Sprintf("%d/%d healthy", p.Status.CurrentHealthy, p.Status.DesiredHealthy)
+	return fmt.Sprintf("%d healthy", p.Status.CurrentHealthy)
 }
 
 // pvcStatus shows the claim phase plus the bound capacity when known (e.g. "Bound 10Gi"), the
