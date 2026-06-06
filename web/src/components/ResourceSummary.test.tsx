@@ -29,6 +29,50 @@ describe('ResourceSummary hero health gloss', () => {
   })
 })
 
+describe('ResourceSummary pod usage gauges', () => {
+  const pod: KNode = {
+    id: 'p1',
+    kind: 'Pod',
+    name: 'web-1',
+    health: 'Healthy',
+    requests: { cpuMilli: 100, memBytes: 256 * 1024 * 1024 },
+    limits: { cpuMilli: 500, memBytes: 512 * 1024 * 1024 },
+  }
+  it('renders CPU + memory gauges with live values when usage is present', () => {
+    const usage = { cpuMilli: 120, memBytes: 300 * 1024 * 1024 }
+    const { container } = render(() => <ResourceSummary node={pod} {...base} usage={usage} />)
+    const rows = container.querySelectorAll('.pod-metrics .metric-row')
+    expect(rows.length).toBe(2)
+    // Live value bright, the limit as the dim reference.
+    expect(rows[0].querySelector('.metric-val b')?.textContent).toBe('120m')
+    expect(rows[0].textContent).toContain('500m lim')
+    expect(rows[1].querySelector('.metric-val b')?.textContent).toBe('300Mi')
+  })
+  it('marks an over-limit resource so it reads as pressure (Contrast)', () => {
+    // CPU usage 600m exceeds the 500m limit → the fill carries the degraded class.
+    const usage = { cpuMilli: 600, memBytes: 100 * 1024 * 1024 }
+    const { container } = render(() => <ResourceSummary node={pod} {...base} usage={usage} />)
+    expect(container.querySelector('.metric-fill.over')).toBeTruthy()
+  })
+  it('marks a resource with no request/limit as unconstrained instead of a misleading full bar', () => {
+    // A pod with usage but NO cpu request/limit — the bar must not read as "maxed".
+    const noBounds: KNode = { id: 'p2', kind: 'Pod', name: 'web-2', health: 'Healthy' }
+    const { container } = render(() => <ResourceSummary node={noBounds} {...base} usage={{ cpuMilli: 18 }} />)
+    const cpu = container.querySelector('.pod-metrics .metric-row')!
+    expect(cpu.querySelector('.metric-bar.unconstrained')).toBeTruthy()
+    expect(cpu.querySelector('.metric-fill')).toBeNull() // no fill at all
+    expect(cpu.textContent).toContain('unset')
+  })
+  it('shows no gauges without usage, and never for a non-Pod', () => {
+    const noUsage = render(() => <ResourceSummary node={pod} {...base} />)
+    expect(noUsage.container.querySelector('.pod-metrics')).toBeNull()
+    cleanup()
+    const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
+    const withUsage = render(() => <ResourceSummary node={svc} {...base} usage={{ cpuMilli: 50 }} />)
+    expect(withUsage.container.querySelector('.pod-metrics')).toBeNull()
+  })
+})
+
 describe('ResourceSummary labels', () => {
   it('renders labels in a collapsed-by-default <details> (a Pod can carry 20+ operator-internal labels)', () => {
     // The drawer must not lead with a wall of labels — they live behind a "Labels · N" disclosure that

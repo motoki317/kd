@@ -413,6 +413,12 @@ export default function App() {
     if (!id) return null
     return graph.nodes[id] ?? capById().get(id) ?? null
   })
+  // Live usage for the selected resource — the capacity feed keys it by UID (== node.id). Drives the
+  // drawer's CPU/memory gauges for a Pod; undefined when metrics-server is absent.
+  const selectedUsage = createMemo(() => {
+    const n = selectedNode()
+    return n ? capacity()?.usage?.items[n.id] : undefined
+  })
   // Announce the current selection for assistive tech. j/k stepping deliberately keeps focus on the
   // body (so repeated presses work — see the keydown handler), and the drawer is a complementary
   // landmark, not a live region, so without this a screen-reader operator hears nothing as the
@@ -641,6 +647,7 @@ export default function App() {
             ctx={ctx() ?? ''}
             node={selectedNode()}
             owners={ownerNodes()}
+            usage={selectedUsage()}
             // Owner-chip clicks should push history (cycle 300) so Alt+Left walks back to the
             // descendant the operator came from. The cycle-300 helper pushes the prior selection
             // only when changing to a different node — so re-selecting the same node is a no-op.

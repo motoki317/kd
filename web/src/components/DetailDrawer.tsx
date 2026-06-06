@@ -4,7 +4,7 @@ import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
-import type { KNode } from '../types'
+import type { KNode, ResourceUsage } from '../types'
 import { LOGGABLE_KINDS } from '../loggable'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
@@ -16,6 +16,9 @@ interface Props {
   ctx: string
   node: KNode | null
   owners: KNode[]
+  // Live metrics-server consumption for the selected node (Pods), from the capacity feed; threaded to
+  // the summary's usage gauges. Undefined when metrics are unavailable or the kind isn't a Pod.
+  usage?: ResourceUsage
   onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
@@ -299,6 +302,7 @@ export default function DetailDrawer(props: Props) {
             <ResourceSummary
               node={node()}
               owners={props.owners}
+              usage={props.usage}
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />

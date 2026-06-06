@@ -1,10 +1,11 @@
 import { createMemo, For, Show } from 'solid-js'
+import { formatQuantity } from '../capacityLayout'
 import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
 import { relativeAge } from '../time'
-import type { ContainerStatus, Health, KNode } from '../types'
+import type { ContainerStatus, Health, KNode, Resources, ResourceUsage } from '../types'
 import CopyButton from './CopyButton'
 
 // containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
@@ -116,6 +117,83 @@ interface Props {
   onNavigate: (id: string) => void
   // Optional "Kind/name" → select navigator; lets the host meta jump to its Node when present.
   onNavigateRef?: (kindSlashName: string) => boolean
+  // Live metrics-server consumption for this resource (Pods), keyed into by the drawer from the
+  // capacity feed. Absent when metrics-server is unavailable or the kind isn't a Pod.
+  usage?: ResourceUsage
+}
+
+// A compact usage gauge per resource: the live value fills toward the request/limit reference, with a
+// faint tick at the other bound, so an operator sees "is this pod near its limit / over its request" at
+// a glance — the metrics-server read otherwise reachable only via `kubectl top`. Returns null when the
+// resource has neither a usage value nor a request/limit (nothing to gauge).
+function metricBar(use: number | undefined, req: number | undefined, lim: number | undefined, res: 'cpu' | 'memory') {
+  if (use == null && req == null && lim == null) return null
+  const u = use ?? 0
+  // Gauge against the limit (the hard ceiling) when set, else the request. With NEITHER set the bar has
+  // no meaningful denominator — a full bar would falsely read as "maxed" — so the row shows the value
+  // alone (unconstrained).
+  const ceil = lim ?? req
+  const unconstrained = ceil == null
+  const track = Math.max(u, ceil ?? u, 1)
+  const pct = (v: number | undefined) => (v == null ? null : Math.min(100, (v / track) * 100))
+  // Only a real LIMIT breach is alarming (throttle/OOM); bursting past a request when no limit exists is
+  // expected, so it stays the neutral accent — over-colouring normal bursting would cry wolf.
+  const over = lim != null && u > lim
+  const nearLimit = lim != null && u >= 0.9 * lim && u <= lim
+  return {
+    res,
+    unconstrained,
+    fillPct: unconstrained ? 0 : pct(u) ?? 0,
+    // The request reads as a distinct tick only when the limit is the gauge (else request IS the ceiling).
+    reqPct: lim != null ? pct(req) : null,
+    over,
+    nearLimit,
+    // Explicit values (explicit over implicit): the live use bright, the bounds dim. The reference shown
+    // is the ceiling the bar gauges against — limit when set, else request.
+    use: formatQuantity(use, res),
+    ref: lim != null ? `${formatQuantity(lim, res)} lim` : req != null ? `${formatQuantity(req, res)} req` : null,
+  }
+}
+
+// PodMetrics renders the CPU + memory usage gauges for a Pod when metrics are present. Each row aligns
+// a fixed label, the bar, and a right-aligned value (Alignment + Proximity: the number sits with its
+// bar); the fill borrows the health palette under pressure (Contrast) so an over-request or near-limit
+// pod pulls the eye.
+function PodMetrics(props: { usage: ResourceUsage; requests?: Resources; limits?: Resources }) {
+  const rows = createMemo(() =>
+    [
+      metricBar(props.usage.cpuMilli, props.requests?.cpuMilli, props.limits?.cpuMilli, 'cpu'),
+      metricBar(props.usage.memBytes, props.requests?.memBytes, props.limits?.memBytes, 'memory'),
+    ].filter((r): r is NonNullable<typeof r> => r !== null),
+  )
+  const LABEL: Record<'cpu' | 'memory', string> = { cpu: 'CPU', memory: 'Mem' }
+  return (
+    <Show when={rows().length > 0}>
+      <div class="pod-metrics" role="group" aria-label="Live resource usage">
+        <For each={rows()}>
+          {(r) => (
+            <div class="metric-row">
+              <span class="metric-label">{LABEL[r.res]}</span>
+              {/* Unconstrained (no request/limit): an empty track + a dim "no limit set" note rather than
+                  a misleading full bar — the operator sees the value isn't being gauged against anything. */}
+              <div class="metric-bar" classList={{ unconstrained: r.unconstrained }} title={r.ref ? `${r.use} used · ${r.ref}` : `${r.use} used · no request/limit set`}>
+                <Show when={!r.unconstrained}>
+                  <div class="metric-fill" classList={{ over: r.over, near: r.nearLimit }} style={{ width: `${r.fillPct}%` }} />
+                  <Show when={r.reqPct != null}>
+                    <div class="metric-tick metric-tick-req" style={{ left: `${r.reqPct}%` }} />
+                  </Show>
+                </Show>
+              </div>
+              <span class="metric-val">
+                <b>{r.use}</b>
+                <span class="metric-ref"> / {r.ref ?? 'unset'}</span>
+              </span>
+            </div>
+          )}
+        </For>
+      </div>
+    </Show>
+  )
 }
 
 // ResourceSummary is the drawer header's "what is this resource" block: identity, the runtime meta
@@ -218,6 +296,12 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
+      {/* Live CPU/memory usage gauges (metrics-server) — the "is this pod hot / near its limit" answer
+          the operator otherwise gets only from `kubectl top`. Shown for a Pod when usage is present;
+          absent when metrics-server is unavailable. */}
+      <Show when={props.usage && props.node.kind === 'Pod'}>
+        <PodMetrics usage={props.usage!} requests={props.node.requests} limits={props.node.limits} />
+      </Show>
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address
           is copyable for pasting into a curl/port-forward. */}

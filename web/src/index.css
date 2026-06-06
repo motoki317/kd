@@ -2146,6 +2146,77 @@ button.conn.conn-retry:focus-visible {
   color: var(--text-dim);
   margin-top: 8px;
 }
+/* Live CPU/memory usage gauges for a Pod (cycle: pod metrics). One row per resource: a fixed-width
+   label, the bar, and a right-aligned value — aligned columns so CPU and Mem read as a small table. */
+.pod-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.metric-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.metric-label {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.metric-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+/* No request/limit to gauge against — a dashed, empty track signals "ungauged" so the bar can't be
+   misread as "at capacity". */
+.metric-bar.unconstrained {
+  border-style: dashed;
+  background: transparent;
+}
+/* Fill = live usage. Default accent; recolours under pressure (Contrast): amber within 90% of the
+   limit, red once it exceeds the limit/request — the eye lands on the pod that's running hot. */
+.metric-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 4px 0 0 4px;
+  transition: width 0.2s;
+}
+.metric-fill.near {
+  background: var(--health-progressing);
+}
+.metric-fill.over {
+  background: var(--health-degraded);
+}
+/* A faint tick marking the request when the bar gauges against the limit, so "reserved vs ceiling"
+   stays visible without a second bar. The over-fill can sit above it (z-order) — keep it on top. */
+.metric-tick-req {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: var(--text-dim);
+  opacity: 0.7;
+  z-index: 1;
+}
+.metric-val {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.metric-val b {
+  color: var(--text);
+  font-weight: 600;
+}
+.metric-ref {
+  color: var(--text-dim);
+}
 /* Cycle 146: each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
    the row reads as a strip of discrete facts instead of a dot-separated run-on. */
 .drawer-meta > span,
