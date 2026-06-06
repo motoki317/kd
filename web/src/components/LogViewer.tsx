@@ -64,6 +64,13 @@ export default function LogViewer(props: Props) {
   const [caseSensitive, setCaseSensitive] = createSignal(false)
   // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
   const [timestamps, setTimestamps] = createSignal(false)
+  // Combined mode interleaves several containers' streams BY TIME, so the timestamp is what makes the
+  // resulting order legible — without it the merge reads as an arbitrarily shuffled blob (dogfooded on a
+  // 3-container pod: init/wait/main lines jumbled with no anchor explaining the order). So default the
+  // column ON when entering combined mode, honestly reflected in the toggle and still overridable — the
+  // user asked for "combined log of all containers sorted by timestamps", and the sort is invisible
+  // without the stamps. Only fires on the transition INTO combined, so a deliberate toggle-off sticks.
+  createEffect(on(combined, (c) => { if (c) setTimestamps(true) }))
   // Soft-wrap long lines (default) vs. single-line-per-entry with horizontal scroll. Operators reading
   // structured/columnar logs (or stack traces) often want no-wrap so column alignment survives and one
   // 4 KB line can't push everything else off-screen. Persisted (a display habit, unlike the per-pod
@@ -528,8 +535,8 @@ export default function LogViewer(props: Props) {
                   {middleTruncate(groupKey(l), 20)}
                 </span>
               </Show>
-              {/* Time column shows only when the operator toggled timestamps; the merged view fetches
-                  time for ordering but keeps the column hidden until asked, so it doesn't add noise. */}
+              {/* Time column shows when timestamps are on — toggled by the operator, or defaulted on in
+                  combined mode (the merge is time-ordered, so the stamp is what makes the order legible). */}
               <Show when={timestamps() && l.time}>
                 {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
                 <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>

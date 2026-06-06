@@ -187,6 +187,24 @@ describe('LogViewer', () => {
     // A per-container filter chip row appears (one chip per container present).
     const chips = [...container.querySelectorAll('.logs-pod-chip')].map((c) => c.textContent)
     expect(chips.sort()).toEqual(['app', 'sidecar'])
+    // The time-ordered merge is illegible without visible stamps, so combined mode defaults the time
+    // column ON (toggle reflects it) — every line shows its time, the anchor explaining the interleave.
+    expect(container.querySelector('.logs-ts')?.getAttribute('aria-pressed')).toBe('true')
+    expect(lines.every((l) => l.querySelector('.log-time'))).toBe(true)
+  })
+
+  it('lets the operator turn the combined-mode timestamps back off', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'sidecar']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { container: 'app', time: '2021-05-21T12:00:01Z', line: 'app boot' })
+    await findByText('app boot', { exact: false })
+    const toggle = container.querySelector('.logs-ts') as HTMLButtonElement
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    toggle.click()
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(container.querySelector('.log-time')).toBeNull()
   })
 
   it('shows the shown/total count for a level filter, not only a text filter', async () => {
