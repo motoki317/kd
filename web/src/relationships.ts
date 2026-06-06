@@ -22,7 +22,7 @@ export interface RelCategoryDef {
 // "Disruption" to name what actually remains.
 export const REL_CATEGORIES: RelCategoryDef[] = [
   { id: 'ownership', label: 'Ownership', hint: 'Parent→child workload tree (ownerReferences + CRD refs)', edges: ['ownerReference', 'refers'] },
-  { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic flow', edges: ['routes', 'selects'] },
+  { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic + the NetworkPolicies that govern pods', edges: ['routes', 'selects', 'governs'] },
   { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount', edges: ['mounts'] },
   { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'] },
   { id: 'scheduling', label: 'Disruption', hint: 'PodDisruptionBudgets → the pods they guard (pod↔node lives in the Nodes view)', edges: ['guards'] },

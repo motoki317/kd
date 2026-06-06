@@ -352,6 +352,60 @@ spec:
 	}
 }
 
+func TestNetworkPolicyGovernsEdges(t *testing.T) {
+	const fixture = `
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-np
+  namespace: shop
+  uid: np-uid
+spec:
+  podSelector:
+    matchLabels: { app: api }
+  policyTypes: [Ingress]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: shop
+  uid: api1-uid
+  labels: { app: api }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: web1-uid
+  labels: { app: web }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: shop
+  uid: denyall-uid
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+`
+	g := Build(decodeFixture(t, fixture))
+
+	if !hasEdge(g, EdgeGoverns, "NetworkPolicy", "api-np", "Pod", "api-1") {
+		t.Error("a NetworkPolicy should govern the pod its podSelector matches")
+	}
+	if hasEdge(g, EdgeGoverns, "NetworkPolicy", "api-np", "Pod", "web-1") {
+		t.Error("a NetworkPolicy must NOT govern a pod its podSelector doesn't match")
+	}
+	// An empty podSelector applies to every pod in the namespace (the default-deny shape).
+	if !hasEdge(g, EdgeGoverns, "NetworkPolicy", "deny-all", "Pod", "api-1") ||
+		!hasEdge(g, EdgeGoverns, "NetworkPolicy", "deny-all", "Pod", "web-1") {
+		t.Error("an empty-podSelector NetworkPolicy should govern every pod in its namespace")
+	}
+}
+
 func TestSelectsRequiresLabelMatch(t *testing.T) {
 	// A service whose selector matches no pod produces no selects edge.
 	const fixture = `

@@ -30,6 +30,10 @@ const (
 	// EdgeGuards links a PodDisruptionBudget to the Pods its selector protects, so a degraded PDB
 	// ("0/3 healthy") leads to the failing pods that explain it instead of being a triage dead-end.
 	EdgeGuards EdgeType = "guards"
+	// EdgeGoverns links a NetworkPolicy to the Pods its podSelector applies to, so a policy isn't a
+	// disconnected island — the operator sees which pods' traffic it controls (the Network view's
+	// "what does this protect" answer). A traffic concern, distinct from EdgeGuards' disruption one.
+	EdgeGoverns EdgeType = "governs"
 )
 
 // Health is the normalized status shared across kinds, so the UI colors nodes uniformly.

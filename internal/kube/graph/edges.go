@@ -98,6 +98,8 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			b.ingressEdges(id, ns, o)
 		case *policyv1.PodDisruptionBudget:
 			b.pdbEdges(id, ns, o, nodes)
+		case *networkingv1.NetworkPolicy:
+			b.networkPolicyEdges(id, ns, o, nodes)
 		case *corev1.PersistentVolumeClaim:
 			// A bound PVC carries its target PV's name in spec.volumeName, completing the
 			// Pod → PVC → PV chain in the Volumes view (cycle 235). Modeled as a `mounts`
@@ -316,6 +318,23 @@ func (b *edgeBuilder) pdbEdges(id, ns string, pdb *policyv1.PodDisruptionBudget,
 	for _, n := range nodes {
 		if n.Kind == "Pod" && n.Namespace == ns && sel.Matches(labels.Set(n.Labels)) {
 			b.link(id, EdgeGuards, "Pod", ns, n.Name)
+		}
+	}
+}
+
+// networkPolicyEdges links a NetworkPolicy to the Pods its podSelector applies to (EdgeGoverns),
+// mirroring pdbEdges so a policy connects to the workloads whose traffic it controls instead of
+// floating disconnected. An EMPTY podSelector ({}) applies to EVERY pod in the namespace — the
+// default-deny / namespace-wide shape — so it links to all of them, not skipped as noise (the Network
+// relationship is opt-in). A malformed selector maps to matches-nothing via the apimachinery helper.
+func (b *edgeBuilder) networkPolicyEdges(id, ns string, np *networkingv1.NetworkPolicy, nodes []Node) {
+	sel, err := metav1.LabelSelectorAsSelector(&np.Spec.PodSelector)
+	if err != nil {
+		return
+	}
+	for _, n := range nodes {
+		if n.Kind == "Pod" && n.Namespace == ns && sel.Matches(labels.Set(n.Labels)) {
+			b.link(id, EdgeGoverns, "Pod", ns, n.Name)
 		}
 	}
 }

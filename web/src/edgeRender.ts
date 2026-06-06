@@ -46,6 +46,7 @@ export const DASHED: Partial<Record<EdgeType, boolean>> = {
   scheduledOn: true,
   refers: true,
   guards: true,
+  governs: true,
 }
 
 // Human-readable label for an edge type, so operators don't need to know the graph package's edge
@@ -60,6 +61,7 @@ export const EDGE_LABELS: Record<EdgeType, string> = {
   binds: 'binds',
   refers: 'refers to',
   guards: 'guards',
+  governs: 'governs',
 }
 
 // The human verbs for every non-ownership (dashed) edge type, derived from DASHED so the help

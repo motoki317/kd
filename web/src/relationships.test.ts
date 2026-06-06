@@ -20,8 +20,8 @@ const set = (...c: RelCategory[]) => new Set(c)
 describe('activeEdgeTypes', () => {
   it('unions the selected categories edge types', () => {
     expect([...activeEdgeTypes(set('ownership'))].sort()).toEqual(['ownerReference', 'refers'])
-    expect([...activeEdgeTypes(set('network'))].sort()).toEqual(['routes', 'selects'])
-    expect([...activeEdgeTypes(set('ownership', 'network'))].sort()).toEqual(['ownerReference', 'refers', 'routes', 'selects'])
+    expect([...activeEdgeTypes(set('network'))].sort()).toEqual(['governs', 'routes', 'selects'])
+    expect([...activeEdgeTypes(set('ownership', 'network'))].sort()).toEqual(['governs', 'ownerReference', 'refers', 'routes', 'selects'])
     // The Disruption category (id still 'scheduling') is PDB-only — pod→node moved to the Nodes view.
     expect([...activeEdgeTypes(set('scheduling'))].sort()).toEqual(['guards'])
   })

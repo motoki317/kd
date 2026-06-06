@@ -16,6 +16,9 @@ export type EdgeType =
   | 'refers'
   // 'guards' links a PodDisruptionBudget to the pods it protects (a node-drain/disruption concern).
   | 'guards'
+  // 'governs' links a NetworkPolicy to the pods its podSelector applies to (a traffic concern, in the
+  // Network category) — so a policy connects to what it protects instead of floating disconnected.
+  | 'governs'
 
 // How the topology arranges resources. Replaces the old fixed `View` enum: grouping (the layout
 // strategy) is now orthogonal to which relationships are drawn (see RelCategory + relationships.ts).
