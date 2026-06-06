@@ -341,6 +341,7 @@ single commit maps cleanly; otherwise search the title in git log.
 - An aria-live region announces the current selection (kind/name/status/reason) as j/k steps
 - logfmt log lines render message-first (msg emphasised, time/level dimmed) — like JSON
 - Node drawer surfaces scheduling taints (caution chip) — why pods won't land here
+- Empty events list explains the ~1h Kubernetes event TTL (aged-out ≠ never-happened)
 
 ### Earlier cycles (2026-05 and before — see git log for detail)
 - Filter count undercounted when matches were folded
