@@ -64,6 +64,7 @@ type Node struct {
 	Host       string            `json:"host,omitempty"`       // node a pod is scheduled on (spec.nodeName)
 	Capacity   string            `json:"capacity,omitempty"`   // a Node's CPU/memory/pod capacity, for "how big is this node"
 	Taints     string            `json:"taints,omitempty"`     // a Node's scheduling taints ("key[=value]:Effect, …"), "why won't pods land here"
+	NetPol     []string          `json:"netpol,omitempty"`     // a NetworkPolicy's target + per-direction rule summary, "what does this allow/deny"
 	ClusterIP  string            `json:"clusterIP,omitempty"`  // a Service's reachable address ("headless"/ExternalName target for those)
 	ExternalIP string            `json:"externalIP,omitempty"` // a Service's external address (LoadBalancer ingress / externalIPs / "pending")
 	Ports      []string          `json:"ports,omitempty"`      // a Service's port mappings, "port→target[:nodePort]/proto"

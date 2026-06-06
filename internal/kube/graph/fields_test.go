@@ -34,6 +34,37 @@ func TestNodeCapacity(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicySummary(t *testing.T) {
+	sel := func(kv map[string]string) metav1.LabelSelector { return metav1.LabelSelector{MatchLabels: kv} }
+	// The real staging shape: target a labelled app, govern ingress with one allow rule.
+	ingressOne := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+		PodSelector: sel(map[string]string{"app.kubernetes.io/name": "api-a"}),
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
+	}}
+	if got, want := networkPolicySummary(ingressOne), []string{"targets: app.kubernetes.io/name=api-a", "Ingress: 1 rule"}; !slices.Equal(got, want) {
+		t.Errorf("networkPolicySummary = %v, want %v", got, want)
+	}
+	// A default-deny lockdown: empty selector (all pods), both directions governed with no rules.
+	denyAll := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+	}}
+	if got, want := networkPolicySummary(denyAll), []string{"targets: all pods", "Ingress: deny all", "Egress: deny all"}; !slices.Equal(got, want) {
+		t.Errorf("networkPolicySummary(deny-all) = %v, want %v", got, want)
+	}
+	// An ungoverned direction is omitted, not shown as "allow all".
+	ingressOnly := &networkingv1.NetworkPolicy{Spec: networkingv1.NetworkPolicySpec{
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Egress:      []networkingv1.NetworkPolicyEgressRule{{}}, // present but not in policyTypes
+	}}
+	if got := networkPolicySummary(ingressOnly); slices.Contains(got, "Egress: 1 rule") {
+		t.Errorf("networkPolicySummary should omit an ungoverned Egress direction, got %v", got)
+	}
+	if got := networkPolicySummary(&corev1.Pod{}); got != nil {
+		t.Errorf("networkPolicySummary(non-netpol) = %v, want nil", got)
+	}
+}
+
 func TestNodeTaints(t *testing.T) {
 	// The real staging shapes: a valued fargate taint and a valueless unreachable taint, joined.
 	node := &corev1.Node{Spec: corev1.NodeSpec{Taints: []corev1.Taint{

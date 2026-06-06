@@ -134,6 +134,19 @@ describe('ResourceSummary RBAC', () => {
   })
 })
 
+describe('ResourceSummary NetworkPolicy', () => {
+  it('renders the target + per-direction summary lines', () => {
+    const node: KNode = {
+      id: 'np', kind: 'NetworkPolicy', name: 'api-a', health: 'Healthy',
+      netpol: ['targets: app.kubernetes.io/name=api-a', 'Ingress: 1 rule'],
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = [...container.querySelectorAll('.route-row')].map((r) => r.textContent)
+    expect(text).toContain('targets: app.kubernetes.io/name=api-a')
+    expect(text).toContain('Ingress: 1 rule')
+  })
+})
+
 describe('ResourceSummary Node', () => {
   it('surfaces scheduling taints with the caution chip — why pods will not land here', () => {
     const node: KNode = {

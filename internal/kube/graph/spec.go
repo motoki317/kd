@@ -11,6 +11,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -634,6 +635,70 @@ func roleRules(obj runtime.Object) []string {
 		out = append(out, line+": "+verbs)
 	}
 	return out
+}
+
+// networkPolicySummary distills a NetworkPolicy into the lines an operator debugging "why can't A
+// reach B" needs without opening the YAML: which pods it applies to (podSelector), and for each
+// GOVERNED direction whether it denies all (the type is listed but carries no rules — a lockdown) or
+// allows N rule-sets. A direction not in policyTypes isn't governed at all, so it's omitted rather
+// than shown as "allow all", which would misread an ungoverned direction as an explicit allow. nil
+// for non-NetworkPolicies.
+func networkPolicySummary(obj runtime.Object) []string {
+	np, ok := obj.(*networkingv1.NetworkPolicy)
+	if !ok {
+		return nil
+	}
+	governs := func(t networkingv1.PolicyType) bool {
+		for _, p := range np.Spec.PolicyTypes {
+			if p == t {
+				return true
+			}
+		}
+		return false
+	}
+	out := []string{"targets: " + selectorSummary(&np.Spec.PodSelector)}
+	if governs(networkingv1.PolicyTypeIngress) {
+		out = append(out, "Ingress: "+ruleCountSummary(len(np.Spec.Ingress)))
+	}
+	if governs(networkingv1.PolicyTypeEgress) {
+		out = append(out, "Egress: "+ruleCountSummary(len(np.Spec.Egress)))
+	}
+	return out
+}
+
+// ruleCountSummary names a governed direction's rule set: zero rules under a listed policyType is a
+// deny-all lockdown (the operationally critical case), otherwise the count of allow rule-sets.
+func ruleCountSummary(n int) string {
+	switch n {
+	case 0:
+		return "deny all"
+	case 1:
+		return "1 rule"
+	default:
+		return fmt.Sprintf("%d rules", n)
+	}
+}
+
+// selectorSummary renders a LabelSelector as "k=v, k2=v2" (matchExpressions appended as "key op
+// (values)"), or "all pods" when empty — which for a NetworkPolicy podSelector means every pod in the
+// namespace. matchLabels are sorted so the string is stable across SSE patches.
+func selectorSummary(sel *metav1.LabelSelector) string {
+	if sel == nil || (len(sel.MatchLabels) == 0 && len(sel.MatchExpressions) == 0) {
+		return "all pods"
+	}
+	keys := make([]string, 0, len(sel.MatchLabels))
+	for k := range sel.MatchLabels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys)+len(sel.MatchExpressions))
+	for _, k := range keys {
+		parts = append(parts, k+"="+sel.MatchLabels[k])
+	}
+	for _, e := range sel.MatchExpressions {
+		parts = append(parts, fmt.Sprintf("%s %s (%s)", e.Key, strings.ToLower(string(e.Operator)), strings.Join(e.Values, ",")))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // bindingRoleRef renders a RoleBinding/ClusterRoleBinding's target role as "Kind/name" ("" otherwise).

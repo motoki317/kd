@@ -368,6 +368,14 @@ export default function ResourceSummary(props: Props) {
           </For>
         </div>
       </Show>
+      {/* A NetworkPolicy's essence for "why can't A reach B": which pods it targets and, per governed
+          direction, whether it denies all or allows N rule-sets — otherwise buried in the manifest.
+          Same route-row idiom as Role rules / Ingress routes (repetition). */}
+      <Show when={(props.node.netpol?.length ?? 0) > 0}>
+        <div class="drawer-routes">
+          <For each={props.node.netpol}>{(r) => <code class="route-row">{r}</code>}</For>
+        </div>
+      </Show>
       {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
           only place they're visible — the "who got access" answer for an RBAC audit. Each row
           prepends the kind's icon so Role/CR vs User/Group/SA reads at a glance, matching the
