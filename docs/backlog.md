@@ -126,8 +126,14 @@ Recent batches (newest first; `git log` has the commits):
   secondary relationship lenses** (b92ce55 — the 6-chip relationship row read as a wall; mark RBAC/Disruption/
   Monitoring secondary + fold inactive ones behind a dashed "+N more" disclosure (persisted), keeping the 3
   core dimensions + any active lens inline. Verified live: team-a 6 chips → "Ownership/Network/Volumes/
-  +3 more", expands in place, an activated Monitoring stays inline as it folds to "+2 more"). Remaining open
-  from this batch: pod sidebar CPU/mem bars + declutter.
+  +3 more", expands in place, an activated Monitoring stays inline as it folds to "+2 more"). (4) **pod
+  CPU/memory usage gauges** (3b5386e — the pod drawer now shows a compact gauge per resource: live usage
+  fills toward the limit (or request) with a request tick, recolouring amber near-limit / red past-limit; a
+  resource with no request/limit reads as a dashed "unset" track, not a misleading full bar; usage keyed from
+  the capacity feed by UID == node.id. Verified live: ES pod "Mem 2.6Gi / 4Gi lim" @64%, "CPU 23m / unset").
+  The batch's "declutter the sidebar" half is **left open pending the user's specifics** — ResourceSummary is
+  already kind-gated (a Pod shows only pod-relevant blocks), so blindly removing facts risks dropping ones
+  other operators rely on; the metrics gauge added the "nicest feature" half of the ask.
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
