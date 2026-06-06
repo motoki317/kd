@@ -2,7 +2,7 @@ import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Sh
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
-import { filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
+import { defaultLogContainer, filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
 import CopyButton from './CopyButton'
 
@@ -194,7 +194,7 @@ export default function LogViewer(props: Props) {
     on(
       () => props.name,
       () => {
-        setContainer(props.containers[0] ?? '')
+        setContainer(defaultLogContainer(props.containers))
         setPrevious(false)
         setFilter('')
         setCaseSensitive(false)

@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch } from './logs'
+import { defaultLogContainer, filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch } from './logs'
 import type { LogEntry } from './api'
+
+describe('defaultLogContainer', () => {
+  it('prefers "main" over a leading sidecar (the Argo wait/main order), matching the server', () => {
+    expect(defaultLogContainer(['wait', 'main'])).toBe('main')
+  })
+  it('falls back to the first container when there is no "main" (ordinary app+sidecar)', () => {
+    expect(defaultLogContainer(['app', 'istio-proxy'])).toBe('app')
+    expect(defaultLogContainer(['only'])).toBe('only')
+  })
+  it('is empty for a pod with no containers (server then picks)', () => {
+    expect(defaultLogContainer([])).toBe('')
+  })
+})
 
 const lines: LogEntry[] = [
   { pod: 'a', line: 'starting server on :8080' },

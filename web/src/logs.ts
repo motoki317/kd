@@ -4,6 +4,17 @@ import type { LogEntry } from './api'
 // trace into debug so the badge palette stays small.
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug'
 
+// defaultLogContainer picks which container the viewer streams when the operator hasn't chosen one.
+// It mirrors the server's defaultLogContainer (internal/api/logstream.go): prefer a container named
+// "main" — the Argo Workflows step that does the real work, sitting behind a `wait` executor sidecar
+// that's listed FIRST — so a workflow pod's logs aren't pure executor noise. Falls back to the first
+// container for an ordinary app+sidecar pod (no `main`). Keeping the two in lockstep means the picker
+// shows the same container the server actually streams, whether the stream is a single pod or an
+// aggregated workload.
+export function defaultLogContainer(containers: string[]): string {
+  return containers.includes('main') ? 'main' : (containers[0] ?? '')
+}
+
 function classifyLevel(word: string): LogLevel {
   const w = word.toLowerCase()
   if (w === 'error' || w === 'err' || w === 'fatal' || w === 'panic') return 'error'
