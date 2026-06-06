@@ -65,6 +65,10 @@ func statusSummary(obj runtime.Object) string {
 		if s := priorityClassSummary(obj); s != "" {
 			return s
 		}
+		// An IngressClass's status IS its controller (+ default marker) — "who serves my Ingress".
+		if s := ingressClassSummary(obj); s != "" {
+			return s
+		}
 		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
 		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
 		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.

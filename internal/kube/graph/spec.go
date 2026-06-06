@@ -698,6 +698,27 @@ func networkPolicySummary(obj runtime.Object) []string {
 	return out
 }
 
+// ingressClassSummary renders an IngressClass's essence — the controller that handles Ingresses of
+// this class, and whether it's the cluster default (the `is-default-class` annotation, i.e. the
+// controller that picks up an Ingress with no className). This answers "which controller serves my
+// Ingress" — otherwise the IngressClass card showed only its age. Empty for any other kind. An
+// IngressClass arrives unstructured (networking types beyond the few kd converts stay unstructured).
+func ingressClassSummary(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "IngressClass")
+	if u == nil {
+		return ""
+	}
+	controller, _, _ := unstructured.NestedString(u.Object, "spec", "controller")
+	if controller == "" {
+		return ""
+	}
+	parts := []string{controller}
+	if u.GetAnnotations()["ingressclass.kubernetes.io/is-default-class"] == "true" {
+		parts = append(parts, "default")
+	}
+	return strings.Join(parts, " · ")
+}
+
 // priorityClassSummary renders a PriorityClass's essence — its priority value (the number that decides
 // preemption: higher wins), whether it's the cluster's globalDefault (the priority pods get when they
 // name none — the single most useful fact for "why did my pod get this priority"), and a "never

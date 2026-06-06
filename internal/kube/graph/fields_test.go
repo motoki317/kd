@@ -360,6 +360,32 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestIngressClassSummary(t *testing.T) {
+	ic := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "networking.k8s.io/v1", "kind": "IngressClass",
+		"metadata": map[string]any{
+			"name":        "traefik",
+			"annotations": map[string]any{"ingressclass.kubernetes.io/is-default-class": "true"},
+		},
+		"spec": map[string]any{"controller": "traefik.io/ingress-controller"},
+	}}
+	if got, want := statusSummary(ic), "traefik.io/ingress-controller · default"; got != want {
+		t.Errorf("IngressClass status = %q, want %q", got, want)
+	}
+	// A non-default class shows just its controller.
+	plain := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "networking.k8s.io/v1", "kind": "IngressClass",
+		"metadata": map[string]any{"name": "nginx"},
+		"spec":     map[string]any{"controller": "k8s.io/ingress-nginx"},
+	}}
+	if got, want := ingressClassSummary(plain), "k8s.io/ingress-nginx"; got != want {
+		t.Errorf("IngressClass (non-default) summary = %q, want %q", got, want)
+	}
+	if got := ingressClassSummary(&corev1.Service{}); got != "" {
+		t.Errorf("ingressClassSummary(non-IC) = %q, want empty", got)
+	}
+}
+
 func TestPriorityClassSummary(t *testing.T) {
 	pc := func(spec map[string]any) *unstructured.Unstructured {
 		spec["apiVersion"] = "scheduling.k8s.io/v1"
