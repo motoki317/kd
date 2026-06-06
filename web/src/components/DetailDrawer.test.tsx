@@ -385,6 +385,17 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer')).toBeTruthy()
   })
 
+  it('explains the ~1h event TTL under an empty events list (not just "No recent events")', async () => {
+    // Default beforeEach mock returns {events: []} → the empty state. The hint stops an operator from
+    // reading an aged-out resource's empty tab as "nothing ever happened / broken feed".
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    await findByText('No recent events.')
+    const hint = container.querySelector('.events-empty-hint')
+    expect(hint?.textContent).toContain('about an hour')
+  })
+
   it('shows "unavailable" when the manifest fetch fails, without crashing', async () => {
     vi.stubGlobal('fetch', (url: string) =>
       Promise.resolve(

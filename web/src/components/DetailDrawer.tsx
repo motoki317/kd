@@ -468,7 +468,22 @@ export default function DetailDrawer(props: Props) {
                     </button>
                   </div>
                 </Show>
-                <Show when={shownEvents().length > 0} fallback={<div class="events-empty">{warnOnly() ? 'No warnings.' : 'No recent events.'}</div>}>
+                <Show
+                  when={shownEvents().length > 0}
+                  fallback={
+                    <div class="events-empty">
+                      {warnOnly() ? 'No warnings.' : 'No recent events.'}
+                      {/* "No warnings" means events exist (just none are warnings) — no TTL caveat there.
+                          But a bare "No recent events" on an aged-out resource reads as "nothing ever
+                          happened", when Kubernetes simply expires events (~1h default). Say so, or the
+                          operator suspects a broken feed and stops trusting the tab. */}
+                      <Show when={!warnOnly()}>
+                        <span class="events-empty-hint">Kubernetes keeps events for about an hour, so older ones expire.</span>
+                      </Show>
+                    </div>
+                  }
+                >
+
                   <ul class="event-list">
                     <For each={shownEvents()}>
                       {(ev) => {
