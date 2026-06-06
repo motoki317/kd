@@ -37,6 +37,8 @@ spec:
               name: web-projcm
           - secret:
               name: web-projsec
+          - configMap: # auto-injected root CA — must NOT produce a mount edge (every pod has it)
+              name: kube-root-ca.crt
   containers:
     - name: app
       image: web:latest
@@ -219,6 +221,12 @@ func TestBuildInferredEdges(t *testing.T) {
 		if !hasEdge(g, c.typ, c.fromKind, c.fromName, c.toKind, c.toName) {
 			t.Errorf("%s: missing %s edge %s/%s -> %s/%s", c.desc, c.typ, c.fromKind, c.fromName, c.toKind, c.toName)
 		}
+	}
+
+	// The auto-injected root-CA bundle is mounted by every pod; a mount edge to it would make it a
+	// star hub dominating the volumes view, so it must NOT be emitted (cycle: root-CA star suppression).
+	if hasEdge(g, EdgeMounts, "Pod", "web-1", "ConfigMap", "kube-root-ca.crt") {
+		t.Error("auto-mounted kube-root-ca.crt must not produce a mount edge")
 	}
 }
 
