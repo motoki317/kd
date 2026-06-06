@@ -1708,7 +1708,7 @@ export default function Topology(props: Props) {
                     >
                       <rect
                         class="cap-node-frame"
-                        classList={{ clickable: expandable, expanded: row.expanded }}
+                        classList={{ clickable: expandable, expanded: row.expanded, selected: !!row.node && row.node.id === props.selectedId }}
                         x={fx}
                         y={fy}
                         width={fw}
@@ -1718,11 +1718,20 @@ export default function Topology(props: Props) {
                       {/* Node name packed into the card's top-left (no caret); CAP_HEADER_INSET=26 in
                           layout.ts reserves the matching left offset + card width so it never overflows. */}
                       <text class="cap-row-label" classList={{ clickable: expandable }} x={row.x - 26} y={row.y + 14}>
-                        {/* Full node name (the display label drops the repeated DNS domain) on hover. */}
-                        <Show when={row.host !== row.label}>
-                          <title>{row.host}</title>
-                        </Show>
-                        <tspan class="cap-row-host">{row.label}</tspan>
+                        {/* The node NAME selects the Node resource (opens its drawer) — clicking a name to
+                            inspect that thing mirrors how a pod segment selects its pod; the rest of the
+                            card still toggles expand/collapse. stopPropagation keeps the two apart. The
+                            orphan "Unscheduled" bucket has no Node, so its name stays inert. */}
+                        <tspan
+                          class="cap-row-host"
+                          classList={{ clickable: !!row.node, selected: !!row.node && row.node.id === props.selectedId }}
+                          onClick={row.node ? (e) => { e.stopPropagation(); props.onSelect(row.node!.id) } : undefined}
+                        >
+                          <Show when={row.node}>
+                            <title>Open node details</title>
+                          </Show>
+                          {row.label}
+                        </tspan>
                         {/* Node-level totals (capacity, use, req) used to live here, crowding the name;
                             they now sit next to the Req/Use bars they describe (proximity). The header
                             keeps only the node's identity + pod count. */}

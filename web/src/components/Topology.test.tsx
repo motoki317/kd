@@ -584,6 +584,36 @@ describe('Topology', () => {
     expect(selected).toBe('p1')
   })
 
+  it('Nodes view: clicking the node name selects the Node (opens its drawer), not expand', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 80 } } } }
+    let selected: string | null = null
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" onSelect={(id) => (selected = id)} />
+    ))
+    const name = container.querySelector('.cap-row-host') as Element
+    fireEvent.click(name)
+    expect(selected).toBe('node-a') // the Node, not a pod
+    // The frame must NOT have expanded from the same click (stopPropagation keeps select ≠ expand).
+    expect(container.querySelector('.cap-node-frame.expanded')).toBeNull()
+  })
+
+  it('Nodes view: the selected Node accents both its name and its card frame', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 80 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" selectedId="node-a" />
+    ))
+    expect(container.querySelector('.cap-row-host.selected')).not.toBeNull()
+    expect(container.querySelector('.cap-node-frame.selected')).not.toBeNull()
+  })
+
   it('Nodes view: the node-usage backdrop shows an overhead tooltip (node total − pod sum)', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },

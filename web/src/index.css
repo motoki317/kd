@@ -817,6 +817,19 @@ button.conn.conn-retry:focus-visible {
   fill: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+/* The node name is a link to its drawer. The parent .cap-row-label sets pointer-events:none so the
+   card beneath stays the expand target; re-enable it on the name alone, with an underline-on-hover +
+   accent-when-selected affordance mirroring a selected pod segment. */
+.cap-row-host.clickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.cap-row-host.clickable:hover {
+  text-decoration: underline;
+}
+.cap-row-host.selected {
+  fill: var(--accent);
+}
 /* Each node is a bordered card; the entire card is the expand/collapse hit target (a tiny caret was
    too small to click). A faint accent tint on hover signals the whole row is clickable. */
 .cap-node-frame {
@@ -842,6 +855,12 @@ button.conn.conn-retry:focus-visible {
 }
 .cap-node-frame.expanded {
   fill: color-mix(in srgb, var(--text-dim) 5%, transparent);
+}
+/* The Node resource itself is selected (its name clicked) — accent the card frame so the selected
+   node reads at a glance, the same Contrast cue a selected pod segment gets. */
+.cap-node-frame.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 .cap-warn {
   fill: var(--health-degraded);
