@@ -98,7 +98,12 @@ Recent batches (newest first; `git log` has the commits):
   Validating/MutatingWebhookConfiguration now reads "N webhooks · Fail|Ignore"; verified live on staging:
   `aws-load-balancer-webhook` = "3 webhooks · Fail", the Fargate/pod-identity/vpc configs = "·Ignore",
   singular "1 webhook" — the same "surface the declarative essence, not a count" seam as the IngressRoute
-  middleware / NetworkPolicy peers / policy-report cycles).
+  middleware / NetworkPolicy peers / policy-report cycles), **aggregated-APIService backend + unavailable
+  reason** (2ba815f — a blank APIService now reads "→ ns/svc" when healthy and "Unavailable · <reason>"
+  when Available=False; verified live on staging: only the 2 genuinely aggregated APIServices
+  (`metrics.k8s.io` → "→ metrics-server/metrics-server", `metrics.eks.amazonaws.com`) surface a backend,
+  the ~70 built-in/CRD-backed groups stay silent; health already rode the catch-all Available reader so an
+  unavailable aggregated API — a real group-wide outage breaking HPA/`kubectl top` — now explains its red dot).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
