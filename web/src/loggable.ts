@@ -4,7 +4,11 @@ import type { KNode } from './types'
 // logs the server aggregates. Kept as the fast path AND the floor — a Pod owns no pods, and a workload
 // scaled to 0 (or whose pod hasn't been created yet) still conceptually has logs, so it stays loggable
 // even when hasDescendantPod is momentarily false.
-export const LOGGABLE_KINDS = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob'])
+//
+// Argo's Workflow is included though it's a CRD: a FINISHED Workflow owns only completed pods, which
+// the displayed graph drops, so hasDescendantPod can't see them — without this a running Workflow
+// showed a Logs tab but a finished one didn't. The server's BuildForLogs still reaches those pods.
+export const LOGGABLE_KINDS = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'Workflow'])
 
 // hasDescendantPod reports whether rootId transitively owns any Pod in the current graph — the client
 // mirror of the server's podsForResource (graph.DescendantPodNames). It walks ownerUIDs downward, so a

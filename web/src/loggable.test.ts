@@ -46,6 +46,13 @@ describe('isLoggable', () => {
     expect(isLoggable(node('cm', 'ConfigMap'), nodes)).toBe(false)
   })
 
+  it('is true for a FINISHED Workflow whose completed pods the graph dropped (kind floor, not descendants)', () => {
+    // The display graph drops a finished Workflow's completed pods, so hasDescendantPod sees none —
+    // the Workflow itself must still be loggable or a finished run loses its Logs tab (the server's
+    // BuildForLogs reaches those pods). Only the Workflow node is present; no Pod descendant exists.
+    expect(isLoggable(node('wf', 'Workflow'), [node('wf', 'Workflow')])).toBe(true)
+  })
+
   it('is false for a null selection', () => {
     expect(isLoggable(null, [])).toBe(false)
   })
