@@ -697,6 +697,76 @@ func networkPolicySummary(obj runtime.Object) []string {
 	return out
 }
 
+// scrapeConfig renders a Prometheus-Operator ServiceMonitor or a VictoriaMetrics VMServiceScrape's
+// scrape target — the operator's "what does this scrape, on which port/path, how often?", otherwise
+// buried in the manifest. Both CRs share the same spec shape (a service selector + a list of
+// endpoints), so one extractor covers both. The first row is the target ("selects k=v [in ns,…]");
+// each endpoint follows as ":port/path every interval". Empty for any other kind. Both are CRDs, so
+// they arrive unstructured.
+func scrapeConfig(obj runtime.Object) []string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil
+	}
+	switch u.GetKind() {
+	case "ServiceMonitor", "VMServiceScrape":
+	default:
+		return nil
+	}
+	target := "selects " + unstructuredSelectorSummary(u.Object, "spec", "selector")
+	if names, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "namespaceSelector", "matchNames"); len(names) > 0 {
+		target += " in " + strings.Join(names, ", ")
+	}
+	out := []string{target}
+	eps, _, _ := unstructured.NestedSlice(u.Object, "spec", "endpoints")
+	for _, ei := range eps {
+		if ep, ok := ei.(map[string]any); ok {
+			out = append(out, scrapeEndpoint(ep))
+		}
+	}
+	return out
+}
+
+// scrapeEndpoint renders one scrape endpoint as ":port/path every interval", dropping any part the
+// endpoint leaves unset (a port-less endpoint scrapes the pod's declared port; a missing path defaults
+// to /metrics in both operators).
+func scrapeEndpoint(ep map[string]any) string {
+	port, _ := ep["port"].(string)
+	if port == "" {
+		port = intStrString(ep["targetPort"])
+	}
+	path, _ := ep["path"].(string)
+	if path == "" {
+		path = "/metrics"
+	}
+	row := path
+	if port != "" {
+		row = ":" + port + path
+	}
+	if iv, _ := ep["interval"].(string); iv != "" {
+		row += " every " + iv
+	}
+	return row
+}
+
+// unstructuredSelectorSummary reads a LabelSelector out of an unstructured spec by field path and
+// formats it with selectorSummary. An empty/absent selector means "all services" here (a monitor with
+// no selector scrapes everything), not selectorSummary's pod-centric "all pods".
+func unstructuredSelectorSummary(obj map[string]any, fields ...string) string {
+	raw, ok, _ := unstructured.NestedMap(obj, fields...)
+	if !ok {
+		return "all services"
+	}
+	var sel metav1.LabelSelector
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &sel); err != nil {
+		return "all services"
+	}
+	if s := selectorSummary(&sel); s != "all pods" {
+		return s
+	}
+	return "all services"
+}
+
 // ruleCountSummary names a governed direction's rule set: zero rules under a listed policyType is a
 // deny-all lockdown (the operationally critical case), otherwise the count of allow rule-sets.
 func ruleCountSummary(n int) string {

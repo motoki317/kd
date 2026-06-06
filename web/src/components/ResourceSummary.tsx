@@ -376,6 +376,14 @@ export default function ResourceSummary(props: Props) {
           <For each={props.node.netpol}>{(r) => <code class="route-row">{r}</code>}</For>
         </div>
       </Show>
+      {/* A ServiceMonitor/VMServiceScrape's scrape target: which services it selects and each
+          endpoint's port/path/interval — the "what does this scrape, how often" answer for a metrics
+          gap, otherwise buried in the manifest. Same route-row idiom (repetition). */}
+      <Show when={(props.node.scrapes?.length ?? 0) > 0}>
+        <div class="drawer-routes">
+          <For each={props.node.scrapes}>{(r) => <code class="route-row">{r}</code>}</For>
+        </div>
+      </Show>
       {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
           only place they're visible — the "who got access" answer for an RBAC audit. Each row
           prepends the kind's icon so Role/CR vs User/Group/SA reads at a glance, matching the

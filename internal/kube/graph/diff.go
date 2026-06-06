@@ -82,6 +82,7 @@ func nodeEqual(a, b Node) bool {
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
 		slices.Equal(a.Routes, b.Routes) && // an Ingress rule edit must repaint
 		slices.Equal(a.NetPol, b.NetPol) && // a NetworkPolicy rule edit must repaint
+		slices.Equal(a.Scrapes, b.Scrapes) && // a ServiceMonitor target/endpoint edit must repaint
 		slices.Equal(a.Rules, b.Rules) && // a Role rule edit must repaint
 		a.RoleRef == b.RoleRef &&
 		slices.Equal(a.Subjects, b.Subjects) && // a binding's subject edit must repaint

@@ -360,6 +360,42 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestScrapeConfig(t *testing.T) {
+	// A Prometheus-Operator ServiceMonitor: label selector, a same-namespace target, one endpoint.
+	sm := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "monitoring.coreos.com/v1", "kind": "ServiceMonitor",
+		"metadata": map[string]any{"name": "es", "namespace": "shop"},
+		"spec": map[string]any{
+			"selector":          map[string]any{"matchLabels": map[string]any{"app": "es", "tier": "metrics"}},
+			"namespaceSelector": map[string]any{"matchNames": []any{"shop"}},
+			"endpoints":         []any{map[string]any{"port": "http", "path": "/metrics", "interval": "1m"}},
+		},
+	}}
+	want := []string{"selects app=es, tier=metrics in shop", ":http/metrics every 1m"}
+	if got := scrapeConfig(sm); !slices.Equal(got, want) {
+		t.Errorf("scrapeConfig(ServiceMonitor) =\n%v\nwant\n%v", got, want)
+	}
+
+	// A VictoriaMetrics VMServiceScrape shares the shape; a path-less endpoint defaults to /metrics, an
+	// empty selector reads as "all services", and a numeric targetPort substitutes for a named port.
+	vm := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMServiceScrape",
+		"metadata": map[string]any{"name": "all", "namespace": "shop"},
+		"spec": map[string]any{
+			"endpoints": []any{map[string]any{"targetPort": int64(9100)}},
+		},
+	}}
+	want = []string{"selects all services", ":9100/metrics"}
+	if got := scrapeConfig(vm); !slices.Equal(got, want) {
+		t.Errorf("scrapeConfig(VMServiceScrape) =\n%v\nwant\n%v", got, want)
+	}
+
+	// Not a scrape CR → no rows.
+	if got := scrapeConfig(&corev1.Service{}); got != nil {
+		t.Errorf("scrapeConfig(non-scrape) = %v, want nil", got)
+	}
+}
+
 func TestDataKeys(t *testing.T) {
 	cm := &corev1.ConfigMap{
 		Data:       map[string]string{"Corefile": "abcde", "extra.conf": "x"},

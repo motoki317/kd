@@ -83,6 +83,7 @@ export interface KNode {
   capacity?: string
   taints?: string // a Node's scheduling taints ("key[=value]:Effect, …") — why pods won't schedule here
   netpol?: string[] // a NetworkPolicy's target + per-direction rule summary — what it allows/denies
+  scrapes?: string[] // a ServiceMonitor/VMServiceScrape's target selector + endpoints — what it scrapes
   // allocatable is a Node's schedulable capacity (capacity minus system-reserved) — drives the Req
   // bar's track + overcommit check. capacityRes is the node's TOTAL physical capacity (≥ allocatable)
   // — the Use bar gauges actual usage against it, since usage can spill into the reserved region

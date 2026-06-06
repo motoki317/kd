@@ -64,6 +64,7 @@ func Build(objs []runtime.Object) *Graph {
 			ExternalIP:        serviceExternalAddress(obj),
 			Ports:             servicePorts(obj),
 			Routes:            routes(obj),
+			Scrapes:           scrapeConfig(obj),
 			Rules:             roleRules(obj),
 			RoleRef:           bindingRoleRef(obj),
 			Subjects:          bindingSubjects(obj),
