@@ -298,6 +298,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- An Argo CronWorkflow's status text is now its schedule + timezone, and the CronJob "last run" chip is reused for status.lastScheduledTime — one visual language for both scheduled kinds, no new model fields (a174c88)
 - Node headers (capacity view + drawer host) show the short hostname, dropping the repeated DNS domain; full FQDN on hover (d68f01a)
 - Init-container restarts now count in a pod's restart total, so an init-crashloop shows the crash signal + gets the "previous logs" button (bed6cf4)
 - A JSON log's level badge/filter/jump-to-error now works even when `level` trails a long message (message-first loggers like pino/bunyan) (6a5c5f3)
