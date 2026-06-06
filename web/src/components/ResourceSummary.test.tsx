@@ -22,6 +22,25 @@ describe('ResourceSummary hero health gloss', () => {
   })
 })
 
+describe('ResourceSummary labels', () => {
+  it('renders labels in a collapsed-by-default <details> (a Pod can carry 20+ operator-internal labels)', () => {
+    // The drawer must not lead with a wall of labels — they live behind a "Labels · N" disclosure that
+    // is closed until the operator asks. The CSS hides the chips while closed; the DOM contract that
+    // enables it is the <details> having NO `open` attribute. Regression guard: a stray `open` (or
+    // dropping the <details>) brings the noise wall back.
+    const node: KNode = {
+      id: 'p', kind: 'Pod', name: 'es-0', health: 'Healthy',
+      labels: { 'app.kubernetes.io/name': 'es', 'node-data': 'true', 'node-master': 'true' },
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const details = container.querySelector('details.drawer-labels')
+    expect(details).toBeTruthy()
+    expect(details?.hasAttribute('open')).toBe(false) // collapsed by default
+    expect(details?.querySelector('summary')?.textContent).toBe('Labels · 3')
+    expect(details?.querySelectorAll('.label-chip')).toHaveLength(3)
+  })
+})
+
 describe('ResourceSummary data keys', () => {
   it('lists a ConfigMap\'s keys with the size split into a dim suffix', () => {
     const node: KNode = {

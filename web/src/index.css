@@ -2493,6 +2493,14 @@ button.drawer-host:hover {
   max-height: 132px;
   overflow: auto;
 }
+/* The <details> defaults to closed (labels are noise until asked for — a Pod can carry 20+ operator-
+   internal labels). But setting `display: flex` above on a direct child of <details> overrides the UA
+   stylesheet's low-specificity `details:not([open]) > :not(summary) { display: none }`, so the chips
+   stayed visible whether open or closed and the "Labels · N" summary was a dead toggle. Re-hide them
+   while collapsed. */
+.drawer-labels:not([open]) .label-chips {
+  display: none;
+}
 .label-chip {
   display: inline-flex;
   align-items: stretch;
