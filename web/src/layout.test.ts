@@ -624,6 +624,27 @@ describe('same-kind collapse (+N more)', () => {
     expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true)
   })
 
+  it('triage filter floats matching cards into the visible slots instead of name-ordinal head+tail', () => {
+    // 12 pods; the 3 Degraded ones sit mid-pack by name (pod-04..pod-06) so the default fold would
+    // BURY them behind the pill (head=pod-00, tail=pod-10,pod-11). With a health-filter predicate the
+    // box's visible representatives must become the matches — what the operator filtered for — not
+    // arbitrary healthy siblings.
+    const ps = pods(12).map((p, i) => (i >= 4 && i <= 6 ? { ...p, health: 'Degraded' as const } : p))
+    const l = layoutGraphByKind(ps, [], new Set(), (n) => n.health === 'Degraded')
+    const visible = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse)
+    expect(visible.map((n) => n.id).sort()).toEqual(['p4', 'p5', 'p6']) // the matches, not p0/p10/p11
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapse!.hidden).toHaveLength(9)
+    expect(pill.collapse!.hidden.every((n) => n.health === 'Healthy')).toBe(true) // only non-matches folded
+  })
+
+  it('triage filter falls back to name-ordinal head+tail when nothing matches', () => {
+    // A box with no card to triage must not reshuffle — keep the stable natural-name fold.
+    const l = layoutGraphByKind(pods(12), [], new Set(), (n) => n.health === 'Degraded')
+    const visible = l.nodes.filter((n) => n.kind === 'Pod' && !n.collapse).map((n) => n.id).sort()
+    expect(visible).toEqual(['p0', 'p10', 'p11'])
+  })
+
   it('keeps the pill inside its kind box, with no phantom __collapse__ group', () => {
     const l = layoutGraphByKind(pods(12), [])
     const groups = kindGroups(l)

@@ -147,10 +147,25 @@ function splitForFold(
   nodes: KNode[],
   expanded: boolean,
   cmp: (a: KNode, b: KNode) => number = byName,
+  prioritize?: (n: KNode) => boolean,
 ): { visible: KNode[]; hidden: KNode[]; pillIndex: number } {
   const sorted = [...nodes].sort(cmp)
   if (sorted.length < COLLAPSE_VISIBLE + COLLAPSE_MIN_HIDDEN) {
     return { visible: sorted, hidden: [], pillIndex: sorted.length }
+  }
+  // Triage mode: when a filter marks a SUBSET of the cluster as matches (e.g. the Degraded health
+  // legend), float those matches to the visible slots instead of the name-ordinal head+tail — so a
+  // folded group shows its matching cards as the representatives, not arbitrary healthy ones buried
+  // behind the "+N more" pill. Matches keep their natural order and stay put when the pill expands
+  // (expand only reveals the folded remainder below them), preserving the no-reshuffle invariant.
+  if (prioritize) {
+    const matchSet = new Set(sorted.filter(prioritize).map((n) => n.id))
+    if (matchSet.size > 0 && matchSet.size < sorted.length) {
+      const ordered = [...sorted.filter((n) => matchSet.has(n.id)), ...sorted.filter((n) => !matchSet.has(n.id))]
+      const hidden = ordered.slice(COLLAPSE_VISIBLE)
+      if (expanded) return { visible: ordered, hidden, pillIndex: ordered.length }
+      return { visible: ordered.slice(0, COLLAPSE_VISIBLE), hidden, pillIndex: COLLAPSE_VISIBLE }
+    }
   }
   const hidden = sorted.slice(COLLAPSE_HEAD, sorted.length - COLLAPSE_TAIL)
   if (expanded) return { visible: sorted, hidden, pillIndex: sorted.length }
@@ -287,7 +302,12 @@ function placeGridCells(cells: Array<KNode & { _collapse?: CollapseMeta }>, grid
 // per-kind grid, then shelf-packed into the viewport. Cross-kind edges (ownership backbone,
 // CR references) draw as straight lines across the kind boxes so the topology backbone stays
 // visible even in the broadest view. This is the v1 antidote to the previous "All" hairball.
-export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string> = new Set()): Layout {
+export function layoutGraphByKind(
+  nodes: KNode[],
+  edges: KEdge[],
+  expanded: ReadonlySet<string> = new Set(),
+  prioritize?: (n: KNode) => boolean,
+): Layout {
   if (nodes.length === 0) return { nodes: [], edges: [], width: 0, height: 0 }
 
   // Group nodes by kind; splitForFold sorts each group by natural name order for a stable layout
@@ -305,7 +325,7 @@ export function layoutGraphByKind(nodes: KNode[], edges: KEdge[], expanded: Read
     // the first and last cards in place so expanding only fills the gap — same order both ways.
     const key = `kind:${kind}`
     const isExpanded = expanded.has(key)
-    const { visible, hidden, pillIndex } = splitForFold(list, isExpanded)
+    const { visible, hidden, pillIndex } = splitForFold(list, isExpanded, byName, prioritize)
     const cells: Array<KNode & { _collapse?: CollapseMeta }> = [...visible]
     if (hidden.length) cells.splice(pillIndex, 0, pillCell({ key, groupKind: kind, hidden, expanded: isExpanded }))
 

@@ -208,7 +208,15 @@ export default function Topology(props: Props) {
     const edges = displayEdges()
     // Kind grouping: every resource in a per-kind box; the projected edges still draw on top
     // (suppressed until selection — see renderedEdges) so the cross-kind matrix stays readable.
-    if (props.groupBy === 'kind') return layoutGraphByKind(props.nodes, edges, expandedClusters())
+    // While triaging by the health legend ("show me Degraded"), bias each kind box's folded
+    // representatives toward matching cards so the box's face shows the trouble, not arbitrary
+    // healthy siblings. Health-filter only (a discrete click); live search stays fade-only (no
+    // per-keystroke relayout — see the fade comment below). Reading healthFilter only on this
+    // branch keeps the connectivity/Nodes layouts from recomputing when the filter toggles.
+    if (props.groupBy === 'kind') {
+      const hf = props.healthFilter
+      return layoutGraphByKind(props.nodes, edges, expandedClusters(), hf ? (n) => n.health === hf : undefined)
+    }
     // Nodes grouping: the capacity & usage visualization — node tracks (length ∝ allocatable) with
     // pods as usage-sized segments, reserved-vs-actual bars, expandable to per-pod bullets. Driven by
     // the live metrics-server usage feed (props.usage) + the active resource/mode toggles.
