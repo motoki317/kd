@@ -360,6 +360,32 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestPriorityClassSummary(t *testing.T) {
+	pc := func(spec map[string]any) *unstructured.Unstructured {
+		spec["apiVersion"] = "scheduling.k8s.io/v1"
+		spec["kind"] = "PriorityClass"
+		spec["metadata"] = map[string]any{"name": "p"}
+		return &unstructured.Unstructured{Object: spec}
+	}
+	// A huge system value comma-grouped; not the global default.
+	if got, want := statusSummary(pc(map[string]any{"value": int64(2000000000)})), "2,000,000,000"; got != want {
+		t.Errorf("PriorityClass status = %q, want %q", got, want)
+	}
+	// globalDefault + Never preemption both annotate the value.
+	if got, want := priorityClassSummary(pc(map[string]any{
+		"value": int64(0), "globalDefault": true, "preemptionPolicy": "Never",
+	})), "0 · default · never preempts"; got != want {
+		t.Errorf("PriorityClass (default, never) = %q, want %q", got, want)
+	}
+	// A negative user priority keeps its sign and grouping.
+	if got, want := priorityClassSummary(pc(map[string]any{"value": int64(-12345)})), "-12,345"; got != want {
+		t.Errorf("PriorityClass (negative) = %q, want %q", got, want)
+	}
+	if got := priorityClassSummary(&corev1.Service{}); got != "" {
+		t.Errorf("priorityClassSummary(non-PC) = %q, want empty", got)
+	}
+}
+
 func TestCRDSummary(t *testing.T) {
 	crd := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",

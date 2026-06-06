@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -695,6 +696,52 @@ func networkPolicySummary(obj runtime.Object) []string {
 		out = append(out, "Egress: "+ruleCountSummary(len(np.Spec.Egress)))
 	}
 	return out
+}
+
+// priorityClassSummary renders a PriorityClass's essence — its priority value (the number that decides
+// preemption: higher wins), whether it's the cluster's globalDefault (the priority pods get when they
+// name none — the single most useful fact for "why did my pod get this priority"), and a "never
+// preempts" note when preemptionPolicy is Never. The value is comma-grouped because these are often
+// billions (system-cluster-critical = 2,000,000,000) and a raw 2000000000 hides the magnitude. Empty
+// for any other kind. A PriorityClass arrives unstructured (scheduling.k8s.io types aren't typed here).
+func priorityClassSummary(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "PriorityClass")
+	if u == nil {
+		return ""
+	}
+	val, found, _ := unstructured.NestedInt64(u.Object, "value")
+	if !found {
+		return ""
+	}
+	parts := []string{groupThousands(val)}
+	if gd, _, _ := unstructured.NestedBool(u.Object, "globalDefault"); gd {
+		parts = append(parts, "default")
+	}
+	if pp, _, _ := unstructured.NestedString(u.Object, "preemptionPolicy"); pp == "Never" {
+		parts = append(parts, "never preempts")
+	}
+	return strings.Join(parts, " · ")
+}
+
+// groupThousands formats an integer with comma thousands-separators ("2000000000" → "2,000,000,000"),
+// so a large magnitude reads at a glance. Sign-aware.
+func groupThousands(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte(s[i])
+	}
+	if neg {
+		return "-" + b.String()
+	}
+	return b.String()
 }
 
 // crdSummary renders a CustomResourceDefinition's essence — the Kind it defines, its scope, and its
