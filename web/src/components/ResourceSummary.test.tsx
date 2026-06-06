@@ -63,13 +63,29 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(cpu.querySelector('.metric-fill')).toBeNull() // no fill at all
     expect(cpu.textContent).toContain('unset')
   })
-  it('shows no gauges without usage, and never for a non-Pod', () => {
+  it('shows no gauges without usage, and never for an unrelated kind', () => {
     const noUsage = render(() => <ResourceSummary node={pod} {...base} />)
     expect(noUsage.container.querySelector('.pod-metrics')).toBeNull()
     cleanup()
     const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
     const withUsage = render(() => <ResourceSummary node={svc} {...base} usage={{ cpuMilli: 50 }} />)
     expect(withUsage.container.querySelector('.pod-metrics')).toBeNull()
+  })
+  it('gauges a Node against its allocatable, flagging usage that spills past it', () => {
+    const node: KNode = {
+      id: 'n1',
+      kind: 'Node',
+      name: 'ip-10-0-0-1',
+      health: 'Healthy',
+      allocatable: { cpuMilli: 1000, memBytes: 4 * 1024 * 1024 * 1024 },
+    }
+    // CPU 1100m exceeds the 1000m allocatable (spilling into reserved) → the fill is flagged over.
+    const { container } = render(() => <ResourceSummary node={node} {...base} usage={{ cpuMilli: 1100, memBytes: 2 * 1024 * 1024 * 1024 }} />)
+    const rows = container.querySelectorAll('.pod-metrics .metric-row')
+    expect(rows.length).toBe(2)
+    expect(rows[0].textContent).toContain('alloc')
+    expect(rows[0].querySelector('.metric-fill.over')).toBeTruthy()
+    expect(rows[1].querySelector('.metric-fill.over')).toBeNull() // mem 2Gi of 4Gi — fine
   })
 })
 

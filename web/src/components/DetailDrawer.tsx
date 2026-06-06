@@ -16,8 +16,8 @@ interface Props {
   ctx: string
   node: KNode | null
   owners: KNode[]
-  // Live metrics-server consumption for the selected node (Pods), from the capacity feed; threaded to
-  // the summary's usage gauges. Undefined when metrics are unavailable or the kind isn't a Pod.
+  // Live metrics-server consumption for the selected resource (Pods/Nodes), from the capacity feed;
+  // threaded to the summary's usage gauges. Undefined when metrics are unavailable or the kind has none.
   usage?: ResourceUsage
   onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns

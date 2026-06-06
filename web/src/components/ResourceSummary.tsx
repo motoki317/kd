@@ -117,54 +117,82 @@ interface Props {
   onNavigate: (id: string) => void
   // Optional "Kind/name" → select navigator; lets the host meta jump to its Node when present.
   onNavigateRef?: (kindSlashName: string) => boolean
-  // Live metrics-server consumption for this resource (Pods), keyed into by the drawer from the
-  // capacity feed. Absent when metrics-server is unavailable or the kind isn't a Pod.
+  // Live metrics-server consumption for this resource (Pods and Nodes), keyed into by the drawer from
+  // the capacity feed. Absent when metrics-server is unavailable or the kind has no usage gauge.
   usage?: ResourceUsage
 }
 
-// A compact usage gauge per resource: the live value fills toward the request/limit reference, with a
-// faint tick at the other bound, so an operator sees "is this pod near its limit / over its request" at
-// a glance — the metrics-server read otherwise reachable only via `kubectl top`. Returns null when the
-// resource has neither a usage value nor a request/limit (nothing to gauge).
-function metricBar(use: number | undefined, req: number | undefined, lim: number | undefined, res: 'cpu' | 'memory') {
-  if (use == null && req == null && lim == null) return null
+// A compact usage gauge per resource: the live value fills toward a ceiling reference, with an optional
+// faint tick at a secondary bound, so an operator sees "is this near its ceiling" at a glance — the
+// metrics-server read otherwise reachable only via `kubectl top`. Generic over what the ceiling is: a
+// Pod gauges against its limit (hard) or request (soft); a Node gauges against its allocatable (hard).
+// Returns null when there's nothing to gauge (no usage and no bounds).
+function metricBar(
+  use: number | undefined,
+  tick: number | undefined, // a secondary bound drawn as a faint tick (a pod's request when a limit is the ceiling)
+  ceil: number | undefined, // the gauge denominator (limit / request / allocatable); undefined → unconstrained
+  ceilLabel: string | null, // the word shown after the ceiling value ("lim" / "req" / "alloc")
+  hard: boolean, // a hard ceiling (limit/allocatable) recolours on breach; a soft one (request) never does
+  res: 'cpu' | 'memory',
+) {
+  if (use == null && tick == null && ceil == null) return null
   const u = use ?? 0
-  // Gauge against the limit (the hard ceiling) when set, else the request. With NEITHER set the bar has
-  // no meaningful denominator — a full bar would falsely read as "maxed" — so the row shows the value
-  // alone (unconstrained).
-  const ceil = lim ?? req
   const unconstrained = ceil == null
+  // A full bar with no meaningful denominator would falsely read as "maxed", so an unconstrained row
+  // shows the value alone.
   const track = Math.max(u, ceil ?? u, 1)
   const pct = (v: number | undefined) => (v == null ? null : Math.min(100, (v / track) * 100))
-  // Only a real LIMIT breach is alarming (throttle/OOM); bursting past a request when no limit exists is
-  // expected, so it stays the neutral accent — over-colouring normal bursting would cry wolf.
-  const over = lim != null && u > lim
-  const nearLimit = lim != null && u >= 0.9 * lim && u <= lim
+  // Only a HARD-ceiling breach is alarming (throttle/OOM, or spilling into a node's reserved capacity);
+  // bursting past a soft request is expected, so it stays the neutral accent — over-colouring it cries wolf.
+  const over = hard && ceil != null && u > ceil
+  const nearLimit = hard && ceil != null && u >= 0.9 * ceil && u <= ceil
   return {
     res,
     unconstrained,
     fillPct: unconstrained ? 0 : pct(u) ?? 0,
-    // The request reads as a distinct tick only when the limit is the gauge (else request IS the ceiling).
-    reqPct: lim != null ? pct(req) : null,
+    reqPct: ceil != null ? pct(tick) : null, // the tick only reads as distinct when there's a separate ceiling
     over,
     nearLimit,
-    // Explicit values (explicit over implicit): the live use bright, the bounds dim. The reference shown
-    // is the ceiling the bar gauges against — limit when set, else request.
+    // Explicit values (explicit over implicit): the live use bright, the ceiling dim.
     use: formatQuantity(use, res),
-    ref: lim != null ? `${formatQuantity(lim, res)} lim` : req != null ? `${formatQuantity(req, res)} req` : null,
+    ref: ceil != null && ceilLabel != null ? `${formatQuantity(ceil, res)} ${ceilLabel}` : null,
   }
 }
 
-// PodMetrics renders the CPU + memory usage gauges for a Pod when metrics are present. Each row aligns
-// a fixed label, the bar, and a right-aligned value (Alignment + Proximity: the number sits with its
-// bar); the fill borrows the health palette under pressure (Contrast) so an over-request or near-limit
-// pod pulls the eye.
-function PodMetrics(props: { usage: ResourceUsage; requests?: Resources; limits?: Resources }) {
+// podGaugeRows builds a Pod's CPU/memory gauges: gauge against the limit (hard) when set, else the
+// request (soft); show the request as a faint tick when the limit is the ceiling.
+function podGaugeRows(usage: ResourceUsage, requests?: Resources, limits?: Resources) {
+  const row = (u: number | undefined, req: number | undefined, lim: number | undefined, res: 'cpu' | 'memory') => {
+    const ceil = lim ?? req
+    const label = lim != null ? 'lim' : req != null ? 'req' : null
+    return metricBar(u, lim != null ? req : undefined, ceil, label, lim != null, res)
+  }
+  return [
+    row(usage.cpuMilli, requests?.cpuMilli, limits?.cpuMilli, 'cpu'),
+    row(usage.memBytes, requests?.memBytes, limits?.memBytes, 'memory'),
+  ]
+}
+
+// nodeGaugeRows builds a Node's CPU/memory gauges against its allocatable (the schedulable ceiling) —
+// the "how loaded is this node" answer available in any view, not just the Nodes capacity layout. Usage
+// spilling past allocatable (into kubelet/system-reserved) is real pressure, so allocatable is a hard ceiling.
+function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources) {
+  return [
+    metricBar(usage.cpuMilli, undefined, allocatable?.cpuMilli, 'alloc', true, 'cpu'),
+    metricBar(usage.memBytes, undefined, allocatable?.memBytes, 'alloc', true, 'memory'),
+  ]
+}
+
+// UsageGauges renders the CPU + memory usage gauges for a Pod (vs request/limit) or a Node (vs
+// allocatable) when metrics are present. Each row aligns a fixed label, the bar, and a right-aligned
+// value (Alignment + Proximity: the number sits with its bar); the fill borrows the health palette under
+// pressure (Contrast) so a hot resource pulls the eye.
+function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources }) {
   const rows = createMemo(() =>
-    [
-      metricBar(props.usage.cpuMilli, props.requests?.cpuMilli, props.limits?.cpuMilli, 'cpu'),
-      metricBar(props.usage.memBytes, props.requests?.memBytes, props.limits?.memBytes, 'memory'),
-    ].filter((r): r is NonNullable<typeof r> => r !== null),
+    (props.kind === 'Node'
+      ? nodeGaugeRows(props.usage, props.allocatable)
+      : podGaugeRows(props.usage, props.requests, props.limits)
+    ).filter((r): r is NonNullable<typeof r> => r !== null),
   )
   const LABEL: Record<'cpu' | 'memory', string> = { cpu: 'CPU', memory: 'Mem' }
   return (
@@ -296,11 +324,17 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
-      {/* Live CPU/memory usage gauges (metrics-server) — the "is this pod hot / near its limit" answer
-          the operator otherwise gets only from `kubectl top`. Shown for a Pod when usage is present;
-          absent when metrics-server is unavailable. */}
-      <Show when={props.usage && props.node.kind === 'Pod'}>
-        <PodMetrics usage={props.usage!} requests={props.node.requests} limits={props.node.limits} />
+      {/* Live CPU/memory usage gauges (metrics-server) — the "is this hot / near its ceiling" answer the
+          operator otherwise gets only from `kubectl top`. A Pod gauges against its request/limit, a Node
+          against its allocatable; shown when usage is present, absent when metrics-server is unavailable. */}
+      <Show when={props.usage && (props.node.kind === 'Pod' || props.node.kind === 'Node')}>
+        <UsageGauges
+          usage={props.usage!}
+          kind={props.node.kind}
+          requests={props.node.requests}
+          limits={props.node.limits}
+          allocatable={props.node.allocatable}
+        />
       </Show>
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address
