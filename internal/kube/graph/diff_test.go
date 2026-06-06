@@ -96,6 +96,7 @@ func TestNodeEqualDetectsFieldChanges(t *testing.T) {
 		{"Routes", func(n *Node) { n.Routes = []string{"h/p → s:443"} }},
 		{"NetPol", func(n *Node) { n.NetPol = []string{"Egress: deny all"} }},
 		{"Taints", func(n *Node) { n.Taints = "node.kubernetes.io/unschedulable:NoSchedule" }},
+		{"Scrapes", func(n *Node) { n.Scrapes = []string{":http/metrics every 30s"} }},
 		{"Rules", func(n *Node) { n.Rules = []string{"pods: list"} }},
 		{"RoleRef", func(n *Node) { n.RoleRef = "ClusterRole/admin" }},
 		{"Subjects", func(n *Node) { n.Subjects = []string{"Group: b"} }},
