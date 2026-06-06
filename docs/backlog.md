@@ -269,6 +269,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 | Candidate | Verdict |
 |---|---|
+| Flag an Unavailable APIService (broken aggregated API) | already-handled (2026-06-06) — `crHealthFromConditions` reads the `Available` condition (False → Degraded) and surfaces its message; no APIService-specific rule needed |
 | Unknown `?ctx=` "silently shows another cluster's data" (trust problem) | refuted (cycle 26) — App.tsx:96-99 validates ctx against the fetched list and `setCtx(info.default)`; verified live the breadcrumb + URL self-correct to the real fallback context (no "bogus" anywhere), so there is no mislead |
 | Persist substring filter + case-toggle across resource navigation | wrong (misreads Solid reactivity — components remount) |
 | Export / download visible logs as text | low-value |
@@ -318,6 +319,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- An IngressClass card/drawer now shows its controller + default marker ("traefik.io/ingress-controller · default") — "which controller serves my Ingress" — completing the cluster-scoped legibility set with CRD + PriorityClass (7ea29b0)
 - A PriorityClass card/drawer now shows its value (comma-grouped) + globalDefault + never-preempts, the preemption-debugging facts, instead of just age (9a20ff0)
 - Persisted the display-vs-logs graph split (Build drops completed pods; use BuildForLogs) + main-container default in AGENTS.md "Common surprises" (36df784)
 - A CRD's card/drawer now shows what it defines ("Kind · Scope · servedVersions", e.g. "Workflow · Namespaced · v1alpha1") instead of just its age — a cluster-scope CRD sweep now reads as what each operator enables (719bedf)
