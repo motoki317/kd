@@ -319,6 +319,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- Filtering the Kind view by a health legend (e.g. Degraded) now floats matching cards into each kind box's visible slots instead of the name-ordinal head+tail — a 145-Workflow box that read "2 succeeded + 1 failed" now shows 3 failed reps + "● 51 match" pill, so the box's face matches what the operator filtered for (splitForFold prioritize predicate, wired through layoutGraphByKind, health-filter-gated to keep live search fade-only); verified live on staging (9d4438c)
 - A Terminating namespace now reads as Progressing health + "Terminating" status (matching kubectl's STATUS column) instead of a calm green Active — the "stuck namespace" blocked by a finalizer is exactly what an operator hunts for; verified live against a deliberately-wedged namespace (d3c5536). Closed a leftover test gap: nodesEqual's Scrapes comparison was uncovered (1b830e1)
 - A StorageClass now surfaces its default marker (was invisible everywhere) + provisioner as the hero status, dropping the redundant provisioner chip so it reads as the headline; completes the cluster-scoped legibility set CRD/PriorityClass/IngressClass/StorageClass (fad924f)
 - An IngressClass card/drawer now shows its controller + default marker ("traefik.io/ingress-controller · default") — "which controller serves my Ingress" — completing the cluster-scoped legibility set with CRD + PriorityClass (7ea29b0)
