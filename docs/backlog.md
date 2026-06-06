@@ -134,6 +134,11 @@ Recent batches (newest first; `git log` has the commits):
   The batch's "declutter the sidebar" half is **left open pending the user's specifics** — ResourceSummary is
   already kind-gated (a Pod shows only pod-relevant blocks), so blindly removing facts risks dropping ones
   other operators rely on; the metrics gauge added the "nicest feature" half of the ask.
+  **Dogfooding the monitor namespace:** **VictoriaMetrics operator CR health** (1e589dd — VMAgent/VMAlert/
+  VMRule/VMServiceScrape/VMNodeScrape report `status.updateStatus` or a `<qualified>/Applied` condition, not
+  Ready/Available, so the catch-all called all 49 of them Unknown — a whole-namespace gray false alarm.
+  Mapped updateStatus→health + Applied fallback; verified live: monitor 49 Unknown → 0. Same class as the
+  CRD/FlowSchema condition-less-config-CR fixes — **watch for other operators' non-standard status fields**).
   The high-value finding rate is now clearly tapering —
   most flows verify mature; keep dogfooding for genuine gaps but do NOT manufacture filler. (Removed the
   Nodes-view Relationships facet + arrows and Kind-view arrows earlier per direct user request; see git
