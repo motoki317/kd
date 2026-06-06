@@ -131,6 +131,21 @@ Recent batches (newest first; `git log` has the commits):
 
 ## Open
 
+- **Triage-aware fold representatives in the connectivity/ownership view** — *follow-up to the
+  kind-view fix (9d4438c); high value (default view), deferred on risk.* `layoutGraphByKind` now
+  floats health-filter matches into a folded kind box's visible slots so the box's face shows the
+  trouble. The connectivity view (`layoutGraph`) has the SAME gap in its three fold paths —
+  `foldSiblingSubtrees` (explicitly "status-agnostic", layout.ts:166, the Workflows-under-
+  WorkflowTemplate case), `orphanBlock`, and `collapseHubLeaves` (via `layoutComponent`). The
+  `splitForFold` `prioritize` predicate already exists and caps visible at `COLLAPSE_VISIBLE` (no
+  layout explosion); the work is purely plumbing it through those four functions, health-filter-gated
+  in Topology's connectivity branch (a click → dagre relayout, acceptable; keep live search fade-only).
+  **Why deferred:** 4× the plumbing of the kind-view fix, touching the most intricate dagre / subtree-
+  dragging / hub-leaf edge-bundling code with the default view as blast radius — and the connectivity
+  view already has the badge ("● N match") + Enter-cycle auto-expand + auto-fit mitigations, so the
+  value/risk ratio is lower than the kind-view fix was. **Reopen as:** a dedicated cycle with live
+  verification across all three fold paths (sibling subtrees, orphan blocks, hub leaves) on staging.
+
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
   (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
