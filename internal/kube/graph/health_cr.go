@@ -158,6 +158,7 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 	type cand struct {
 		text     string
 		isPod    bool
+		isHook   bool
 		finished string
 	}
 	var best *cand
@@ -177,12 +178,17 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 			continue
 		}
 		text := msg
-		if name, _ := n["displayName"].(string); name != "" {
-			text = name + ": " + msg
+		if display, _ := n["displayName"].(string); display != "" {
+			text = display + ": " + msg
 		}
+		// Exit-handler / lifecycle-hook leaves run AFTER (and because of) the primary failure; Argo
+		// names them "<wf>.onExit…" / "<wf>.hooks.…". A failing notification handler (a Slack post that
+		// can't create workflowtaskresults) must not eclipse the real job error it's reporting on.
+		nodeName, _ := n["name"].(string)
+		isHook := strings.Contains(nodeName, ".onExit") || strings.Contains(nodeName, ".hooks.")
 		fin, _ := n["finishedAt"].(string)
-		c := cand{text: text, isPod: n["type"] == "Pod", finished: fin}
-		if best == nil || moreRelevantFailure(c.isPod, c.finished, c.text, best.isPod, best.finished, best.text) {
+		c := cand{text: text, isPod: n["type"] == "Pod", isHook: isHook, finished: fin}
+		if best == nil || moreRelevantFailure(c.isHook, c.isPod, c.finished, c.text, best.isHook, best.isPod, best.finished, best.text) {
 			cc := c
 			best = &cc
 		}
@@ -193,9 +199,14 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 	return best.text
 }
 
-// moreRelevantFailure orders two failed Workflow leaves: a Pod (container) execution outranks a
-// parent step; then the most recently finished failure; then a stable name order for determinism.
-func moreRelevantFailure(aPod bool, aFin, aText string, bPod bool, bFin, bText string) bool {
+// moreRelevantFailure orders two failed Workflow leaves: a primary-pipeline failure outranks an
+// exit-handler/hook failure (which runs after, and reports on, the real error); then a Pod
+// (container) execution outranks a parent step; then the most recently finished failure; then a
+// stable name order for determinism.
+func moreRelevantFailure(aHook, aPod bool, aFin, aText string, bHook, bPod bool, bFin, bText string) bool {
+	if aHook != bHook {
+		return !aHook
+	}
 	if aPod != bPod {
 		return aPod
 	}

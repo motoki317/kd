@@ -119,6 +119,11 @@ func TestArgoWorkflowMessage(t *testing.T) {
 	node := func(typ, phase, name, msg, fin string) map[string]any {
 		return map[string]any{"type": typ, "phase": phase, "displayName": name, "message": msg, "finishedAt": fin}
 	}
+	// nodeN also sets the hierarchical name field, which carries the ".onExit"/".hooks." marker that
+	// distinguishes an exit-handler/lifecycle-hook leaf from a primary-pipeline one.
+	nodeN := func(typ, phase, display, name, msg, fin string) map[string]any {
+		return map[string]any{"type": typ, "phase": phase, "displayName": display, "name": name, "message": msg, "finishedAt": fin}
+	}
 	const ver = "argoproj.io/v1alpha1"
 	withLeaf := cr(ver, "Workflow", map[string]any{
 		"phase":   "Failed",
@@ -144,6 +149,21 @@ func TestArgoWorkflowMessage(t *testing.T) {
 	})
 	if got := statusMessage(podOverStep, HealthDegraded); got != "compile: exec format error" {
 		t.Errorf("statusMessage = %q, want the Pod leaf over the parent step", got)
+	}
+	// An onExit / lifecycle-hook leaf runs AFTER and reports ON the real failure; its own error (a
+	// notifier that itself can't reach the API) must not eclipse the primary step's error even though
+	// it finished later — otherwise the operator triages a red-herring RBAC denial instead of the job
+	// that actually failed. This is the real staging-cluster auth-sync case.
+	hookAfterMain := cr(ver, "Workflow", map[string]any{
+		"phase":   "Failed",
+		"message": "child 'wf-main' failed",
+		"nodes": map[string]any{
+			"wf-main":   nodeN("Pod", "Failed", "auth-sync-apply", "wf.auth-sync-apply", "main: Error (exit code 1)", "2026-06-06T01:00:39Z"),
+			"wf-notify": nodeN("Pod", "Error", "notify", "wf.onExit[0].notify", "wait: Error (exit code 64): workflowtaskresults.argoproj.io is forbidden", "2026-06-06T01:00:58Z"),
+		},
+	})
+	if got := statusMessage(hookAfterMain, HealthDegraded); got != "auth-sync-apply: main: Error (exit code 1)" {
+		t.Errorf("statusMessage = %q, want the primary step's error, not the later onExit hook's", got)
 	}
 	// No leaf message (status offloaded/compressed) → keep the top-level pointer rather than blanking.
 	noLeaf := cr(ver, "Workflow", map[string]any{
