@@ -145,6 +145,16 @@ Recent batches (newest first; `git log` has the commits):
   graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
   split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
+- **Container / step picker for multi-container pod logs** — *surfaced dogfooding the Workflow logs
+  flow; medium value, deferred.* The server already accepts `?container=` and now defaults to `main`
+  (bc94db7), but the client offers no UI to switch containers, so an operator can't read a pod's
+  sidecar (istio-proxy, a log-shipper) or a specific Workflow step. The general fix is a container
+  dropdown in the log toolbar. **Blocker for the aggregated/completed case:** the client can't populate
+  it — a finished Workflow's pods are display-dropped, so their container names aren't in the client
+  graph; needs the server to expose the available containers (pairs naturally with the per-node
+  `hasLogs` flag below). **Reopen when:** an operator needs sidecar logs or to isolate one workflow
+  step.
+
 - **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
   fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
   resource's completed pods, and the client shows a Logs tab for `Workflow` via `LOGGABLE_KINDS`. But
@@ -308,6 +318,7 @@ live here was redundant with the commits and is trimmed (2026-06-06 condensation
 single commit maps cleanly; otherwise search the title in git log.
 
 ### 2026-06-06 operator-dogfooding campaign
+- Pod logs now default to the `main` container instead of the `wait` executor sidecar, so an Argo Workflow run's logs show the step's real output (was 459/510 lines of executor noise) (bc94db7)
 - Completed-run logs are now viewable: a finished Job/CronJob/Workflow's Logs tab aggregated zero pods (Build drops completed controller-pods) — added BuildForLogs that keeps them while still dropping superseded ReplicaSets (e5c190c), and Workflow now always offers a Logs tab since its finished pods are display-dropped (e792b9d)
 - Collapse pills now fade during health/search triage when they hide zero matches, so only match-bearing pills ("● N match") stay bright — the empty folds no longer bury the one worth expanding (Contrast) (e4e3d71)
 - ServiceMonitors/VMServiceScrapes now connect to the Services they scrape (EdgeScrapes, honoring namespaceSelector) under a new composable "Monitoring" relationship category — they were floating islands (8e3c3c1)
