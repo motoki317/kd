@@ -14,6 +14,10 @@
   --health-degraded: #e5544b;
   --health-suspended: #f0a92a;
   --health-unknown: #9aa5b1;
+  /* Caution colour used as TEXT (not a border/fill/dot). The vivid --health-suspended amber reads on a
+     dark surface but drops to ~1.9:1 on the light theme's near-white surfaces, so caution TEXT uses
+     this darker amber in light mode (≥4.5:1) while borders/fills/dots keep the vivid hue. */
+  --caution-text: #9a6700;
 
   /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
@@ -48,6 +52,7 @@
   --accent: #4d8bf0;
   --edge-color: #3f4654;
   --pod-accent: #8593f5;
+  --caution-text: #f0a92a; /* on dark, the vivid amber reads fine as text */
   color-scheme: dark;
 }
 
@@ -2282,7 +2287,7 @@ button.drawer-host:hover {
 .container-last-terminated {
   padding-left: 16px;
   font-size: 11px;
-  color: var(--health-suspended);
+  color: var(--caution-text);
 }
 /* The container's running image, indented under the name (past the status dot) so the card reads as
    "this container → runs this image". Same chip look as the workload image list for consistency. */
@@ -2352,7 +2357,7 @@ button.drawer-host:hover {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--health-suspended);
+  color: var(--caution-text);
   background: color-mix(in srgb, var(--health-suspended) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--health-suspended) 55%, var(--border));
   border-radius: 6px;
@@ -2439,7 +2444,7 @@ button.drawer-host:hover {
    taint/PDB chips already speak (repetition). */
 .route-row.route-priv {
   border-color: var(--health-suspended);
-  color: var(--health-suspended);
+  color: var(--caution-text);
 }
 .route-priv-tag {
   flex: none;
@@ -2467,7 +2472,7 @@ button.drawer-host:hover {
 /* A PDB allowing 0 disruptions isn't broken, but it's a heads-up — a node drain blocks here — so the
    count takes the caution (suspended) colour rather than the alarming degraded red. */
 .port-addr.port-caution code {
-  color: var(--health-suspended);
+  color: var(--caution-text);
 }
 .drawer-labels {
   margin-top: 8px;
