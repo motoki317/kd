@@ -182,6 +182,12 @@ format + lifecycle. Stop generating when a strict re-survey yields ≈0 high-val
 Genuinely surprising, cross-cutting gotchas. (Topology-canvas mechanics — capacity view, LR layout,
 collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/frontend-internals.md).)
 
+- **A CR field's real nesting comes from the object, not the drawer's YAML view.** When writing an
+  unstructured reader (`unstructured.Nested…(u.Object, path…)`), confirm the path with `kubectl get …
+  -o json` (or `-o jsonpath`). The drawer's YAML viewer indents `spec:`'s children to a shallow level,
+  so a `spec.summary` reads like a top-level `summary` — a unit test written from that wrong assumption
+  passes while the real card stays blank live (the policy-report `spec.summary` vs wgpolicy top-level
+  `summary` bug). Numbers may decode as int64 OR float64, so try both.
 - **`embed_web` build tag**: the default `go build` does NOT embed the client (placeholder page).
   `just build` sets the tag.
 - **Events are queried LIVE, not from the cache**: `"events"` is in `store.DefaultSkipKinds`
