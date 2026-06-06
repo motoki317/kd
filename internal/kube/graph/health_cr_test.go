@@ -263,6 +263,42 @@ func TestArgoCronWorkflowHealth(t *testing.T) {
 	}
 }
 
+// TestCronWorkflowScheduleAndLastRun proves a non-suspended Argo CronWorkflow surfaces its schedule
+// as the status text (mirroring a CronJob, whose status column is its schedule) and its
+// lastScheduledTime through the reused LastRun field, so the drawer answers "when does it run / when
+// did it last fire". Covers the Argo v3 spec.schedules list, the older singular spec.schedule, and
+// the timezone suffix.
+func TestCronWorkflowScheduleAndLastRun(t *testing.T) {
+	cw := func(spec, status map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "CronWorkflow",
+			"metadata": map[string]any{"name": "c"},
+			"spec":     spec, "status": status,
+		}}
+	}
+	// Argo v3: spec.schedules (a list) + timezone, with a last fire time.
+	v3 := cw(
+		map[string]any{"schedules": []any{"0 5 * * *"}, "timezone": "Asia/Tokyo"},
+		map[string]any{"lastScheduledTime": "2026-06-06T00:00:00Z"},
+	)
+	if got, want := statusSummary(v3), "0 5 * * * (Asia/Tokyo)"; got != want {
+		t.Errorf("CronWorkflow status = %q, want the schedule %q", got, want)
+	}
+	if got, want := cronLastRun(v3), "2026-06-06T00:00:00Z"; got != want {
+		t.Errorf("cronLastRun(CronWorkflow) = %q, want %q", got, want)
+	}
+	// Older singular spec.schedule, no timezone.
+	v2 := cw(map[string]any{"schedule": "*/15 * * * *"}, nil)
+	if got, want := statusSummary(v2), "*/15 * * * *"; got != want {
+		t.Errorf("CronWorkflow (singular schedule) status = %q, want %q", got, want)
+	}
+	// Suspended still wins over the schedule.
+	susp := cw(map[string]any{"schedules": []any{"0 5 * * *"}, "suspend": true}, nil)
+	if got := statusSummary(susp); got != "Suspended" {
+		t.Errorf("suspended CronWorkflow status = %q, want Suspended", got)
+	}
+}
+
 // TestArgoRolloutHealth: phase Paused is Suspended (a deliberate gate), not a fault.
 func TestArgoRolloutHealth(t *testing.T) {
 	tests := map[string]Health{

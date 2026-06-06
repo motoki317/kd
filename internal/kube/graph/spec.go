@@ -450,13 +450,44 @@ func batchFailed(obj runtime.Object) int32 {
 	return 0
 }
 
-// cronLastRun returns a CronJob's last schedule time as RFC3339 (empty when it has never fired or for
-// other kinds) — the "did my cron actually run?" answer the schedule expression alone can't give.
+// cronLastRun returns a cron resource's last schedule time as RFC3339 (empty when it has never fired
+// or for other kinds) — the "did my cron actually run?" answer the schedule expression alone can't
+// give. Covers both a typed batch/v1 CronJob and an Argo CronWorkflow (a CR, navigated by field path:
+// status.lastScheduledTime), so the drawer's "last run" chip works for both.
 func cronLastRun(obj runtime.Object) string {
 	if o, ok := obj.(*batchv1.CronJob); ok && o.Status.LastScheduleTime != nil {
 		return o.Status.LastScheduleTime.UTC().Format(time.RFC3339)
 	}
+	if u := asUnstructuredKind(obj, "CronWorkflow"); u != nil {
+		if t, ok, _ := unstructured.NestedString(u.Object, "status", "lastScheduledTime"); ok {
+			return t
+		}
+	}
 	return ""
+}
+
+// cronWorkflowSchedule renders an Argo CronWorkflow's cron schedule(s) with its timezone, the "when
+// does this run" the status line otherwise omits. Argo v3 uses spec.schedules (a list); older
+// CronWorkflows used the singular spec.schedule — both are handled. Empty for non-CronWorkflows.
+func cronWorkflowSchedule(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "CronWorkflow")
+	if u == nil {
+		return ""
+	}
+	var crons []string
+	if list, ok, _ := unstructured.NestedStringSlice(u.Object, "spec", "schedules"); ok {
+		crons = list
+	} else if one, ok, _ := unstructured.NestedString(u.Object, "spec", "schedule"); ok && one != "" {
+		crons = []string{one}
+	}
+	if len(crons) == 0 {
+		return ""
+	}
+	sched := strings.Join(crons, ", ")
+	if tz, ok, _ := unstructured.NestedString(u.Object, "spec", "timezone"); ok && tz != "" {
+		sched += " (" + tz + ")"
+	}
+	return sched
 }
 
 // asUnstructuredKind returns obj as an unstructured object when it is one AND its kind matches — the

@@ -395,6 +395,9 @@ func crKindStatus(u *unstructured.Unstructured) string {
 			if b, _, _ := unstructured.NestedBool(u.Object, "spec", "suspend"); b {
 				return "Suspended"
 			}
+			// Mirror a CronJob, whose status column IS its schedule — the operator's first question
+			// about a scheduled resource is "when does it run".
+			return cronWorkflowSchedule(u)
 		}
 	case strings.HasSuffix(gvk.Group, "k8s.elastic.co"):
 		// Pair the orchestration phase with the cluster color when the color isn't the all-clear
