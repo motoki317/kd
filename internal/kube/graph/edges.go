@@ -148,16 +148,6 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 	return b.edges, b.endpoints
 }
 
-// isAutoMountedRootCA reports whether a mounted ConfigMap is the cluster root-CA bundle that the
-// root-ca-cert-publisher controller injects into every namespace and the kubelet auto-mounts into
-// every pod's projected SA-token volume. Emitting a mount edge from every pod to this single ConfigMap
-// turns it into a star hub that dominates the volumes view with a relationship the operator never
-// authored and can do nothing about — so the edge is suppressed. The ConfigMap node itself still
-// appears (it is a real namespace resource), just folded among orphans instead of wired to every pod.
-func isAutoMountedRootCA(name string) bool {
-	return name == "kube-root-ca.crt"
-}
-
 func (b *edgeBuilder) podEdges(id, ns string, p *corev1.Pod) {
 	if p.Spec.NodeName != "" {
 		b.link(id, EdgeScheduledOn, "Node", "", p.Spec.NodeName)
@@ -167,7 +157,7 @@ func (b *edgeBuilder) podEdges(id, ns string, p *corev1.Pod) {
 	}
 	for _, v := range p.Spec.Volumes {
 		switch {
-		case v.ConfigMap != nil && !isAutoMountedRootCA(v.ConfigMap.Name):
+		case v.ConfigMap != nil:
 			b.link(id, EdgeMounts, "ConfigMap", ns, v.ConfigMap.Name)
 		case v.Secret != nil:
 			b.link(id, EdgeMounts, "Secret", ns, v.Secret.SecretName)
@@ -175,7 +165,7 @@ func (b *edgeBuilder) podEdges(id, ns string, p *corev1.Pod) {
 			b.link(id, EdgeMounts, "PersistentVolumeClaim", ns, v.PersistentVolumeClaim.ClaimName)
 		case v.Projected != nil:
 			for _, src := range v.Projected.Sources {
-				if src.ConfigMap != nil && !isAutoMountedRootCA(src.ConfigMap.Name) {
+				if src.ConfigMap != nil {
 					b.link(id, EdgeMounts, "ConfigMap", ns, src.ConfigMap.Name)
 				}
 				if src.Secret != nil {

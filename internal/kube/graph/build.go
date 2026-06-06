@@ -39,7 +39,7 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 	for i, o := range objs {
 		objs[i] = toTyped(o)
 	}
-	objs = slices.DeleteFunc(objs, func(o runtime.Object) bool { return isHistorical(o, keepCompletedPods) })
+	objs = slices.DeleteFunc(objs, func(o runtime.Object) bool { return isHistorical(o, keepCompletedPods) || isAutoInjectedNoise(o) })
 	for _, obj := range objs {
 		kind, apiVersion, m, ok := describe(obj)
 		if !ok {
@@ -137,6 +137,19 @@ func isHistorical(obj runtime.Object, keepCompletedPods bool) bool {
 	default:
 		return false
 	}
+}
+
+// isAutoInjectedNoise reports whether an object is cluster machinery that every namespace carries
+// identically and an operator never manages — currently the kube-root-ca.crt ConfigMap that the
+// root-ca-cert-publisher controller injects into every namespace and the kubelet auto-mounts into
+// every pod's projected SA-token volume. Dropping its node keeps it out of the graph entirely (no
+// node → its mount edges drop with it, since `link` skips unknown targets), so it can't appear as a
+// star hub wired to every pod NOR as the lone orphan ConfigMap it otherwise floated as — pure noise
+// the operator asked to hide. Filtered here, the single source of truth, rather than re-checked per
+// edge inferrer.
+func isAutoInjectedNoise(obj runtime.Object) bool {
+	cm, ok := obj.(*corev1.ConfigMap)
+	return ok && cm.Name == "kube-root-ca.crt"
 }
 
 // KindOf returns an object's Kubernetes kind, recovered from TypeMeta or the Go type. It lets

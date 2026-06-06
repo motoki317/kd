@@ -139,6 +139,13 @@ metadata:
   uid: projcm-uid
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-root-ca.crt # auto-injected into every namespace — must be dropped from the graph entirely
+  namespace: shop
+  uid: rootca-uid
+---
+apiVersion: v1
 kind: Secret
 metadata:
   name: web-projsec
@@ -223,8 +230,15 @@ func TestBuildInferredEdges(t *testing.T) {
 		}
 	}
 
-	// The auto-injected root-CA bundle is mounted by every pod; a mount edge to it would make it a
-	// star hub dominating the volumes view, so it must NOT be emitted (cycle: root-CA star suppression).
+	// The auto-injected root-CA bundle every namespace carries is pure noise (a lone orphan ConfigMap,
+	// or a star hub wired to every pod via its projected SA-token volume), so its node is dropped from
+	// the graph entirely. With no node, no mount edge to it can survive either. The fixture includes a
+	// real kube-root-ca.crt ConfigMap object AND a pod projecting it, so this exercises both.
+	for _, n := range g.Nodes {
+		if n.Kind == "ConfigMap" && n.Name == "kube-root-ca.crt" {
+			t.Error("auto-injected kube-root-ca.crt must be dropped from the graph, not emitted as a node")
+		}
+	}
 	if hasEdge(g, EdgeMounts, "Pod", "web-1", "ConfigMap", "kube-root-ca.crt") {
 		t.Error("auto-mounted kube-root-ca.crt must not produce a mount edge")
 	}
