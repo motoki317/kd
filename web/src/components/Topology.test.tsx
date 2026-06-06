@@ -658,6 +658,32 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-count')?.textContent).toBe('1 of 3 resources match')
   })
 
+  it('fades a collapse pill that hides no filter match, keeping match-bearing pills bright (Contrast)', () => {
+    // Six same-kind cards fold into a "+ show N more" pill (COLLAPSE triggers at ≥5). Under a Degraded
+    // health filter a pill that hides only Healthy cards holds nothing the operator is triaging for, so
+    // it should dim like a non-matching card. Regression: pills only ever faded on a KIND filter, so
+    // during health triage every fold stayed bright and the eye couldn't find the one hiding trouble.
+    const healthy: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `h${i}`, kind: 'ConfigMap', name: `cm-${i}`, health: 'Healthy' }))
+    const r1 = render(() => (
+      <Topology nodes={healthy} edges={[]} search="" {...base} groupBy="kind" healthFilter="Degraded" onHealthFilter={() => {}} />
+    ))
+    const pill = r1.container.querySelector('.collapse-pill')
+    expect(pill).toBeTruthy() // the six folded into one pill
+    expect(pill!.classList.contains('faded')).toBe(true)
+    cleanup()
+
+    // Converse: six Degraded cards fold; under the Degraded filter the pill hides matches, so it stays
+    // bright AND carries the "● N match" badge that points the operator at the fold.
+    const degraded: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `d${i}`, kind: 'ConfigMap', name: `cm-${i}`, health: 'Degraded' }))
+    const r2 = render(() => (
+      <Topology nodes={degraded} edges={[]} search="" {...base} groupBy="kind" healthFilter="Degraded" onHealthFilter={() => {}} />
+    ))
+    const pill2 = r2.container.querySelector('.collapse-pill')
+    expect(pill2).toBeTruthy()
+    expect(pill2!.classList.contains('faded')).toBe(false)
+    expect(pill2!.querySelector('.collapse-pill-match')?.textContent).toMatch(/match/)
+  })
+
   // The match count is a polite live region so screen readers hear it update as the filter narrows.
   it('marks the resource count as an atomic polite live region (cycle 335/R8)', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)

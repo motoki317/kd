@@ -555,6 +555,17 @@ export default function Topology(props: Props) {
     }
     return meta.hidden.reduce((c, n) => c + (hit(n) ? 1 : 0), 0)
   }
+  // Whether a collapse pill should dim. A kind filter fades a pill of an unselected kind (composing
+  // like individual cards do). Additionally, while triaging by an explicit query (search or the health
+  // legend), a COLLAPSED pill that hides zero matches is noise — fade it so the eye lands on the badged
+  // pills that actually hold results (Contrast), exactly as non-matching cards fade. An expanded pill's
+  // members are shown as real cards that fade individually, so the refold control is left alone.
+  const pillFaded = (meta: CollapseMeta): boolean => {
+    const ak = activeKinds()
+    if (ak && !ak.has(meta.groupKind)) return true
+    if (!meta.expanded && (query().trim() || props.healthFilter) && collapseMatchCount(meta) === 0) return true
+    return false
+  }
   // One id→node map per layout, so the per-edge lookups below (the kind-fade test and each edge's
   // hover title) are O(1) instead of a linear find apiece — they run for every edge on every render,
   // so the old finds were O(edges×nodes) on each SSE patch / selection change.
@@ -2067,7 +2078,7 @@ export default function Topology(props: Props) {
                     <g
                       class="collapse-pill"
                       classList={{
-                        faded: !!activeKinds() && !activeKinds()!.has(meta().groupKind),
+                        faded: pillFaded(meta()),
                         expanded: meta().expanded,
                       }}
                       style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
