@@ -188,6 +188,23 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
   aren't there, and the Events tab silently goes empty (the f80bab1→42ee8a2 regression). The handler
   test must run WITHOUT `EagerKinds:["events"]` — eager-loading events is a config real deploys never
   use, and it masks exactly this bug.
+- **`Build` drops completed pods; log/pod resolution needs `BuildForLogs`**: `graph.Build` runs
+  `isHistorical`, which deletes finished controller-pods (`Succeeded` phase under a controller — Job/
+  CronJob/Workflow leftovers) and zero-replica ReplicaSets, because they dominate real namespaces and
+  never reflect current state. Great for the displayed topology; **wrong for log aggregation** — a
+  finished Job/CronJob/Workflow has nothing BUT completed pods, so `podsForResource` resolving through
+  `Build` aggregated zero pods and the Logs tab was silently empty (e5c190c). Use `graph.BuildForLogs`
+  (keeps completed pods, still drops superseded ReplicaSets so a Deployment's old revisions don't leak)
+  for anything that resolves pods to read their logs. Two twists that compound it: (1) an Argo step
+  pod's phase is `Succeeded` even when the step container exits non-zero (the `wait` sidecar completes
+  the pod), so a FAILED workflow's failure logs live in a pod `isHistorical` would drop; (2) the client
+  can't see these pods at all (they're absent from the SSE display graph), so `hasDescendantPod` returns
+  false — a finished Workflow needs `Workflow` in `LOGGABLE_KINDS` to show the tab.
+- **Pod log container defaults to `main`, not the first container**: an Argo pod lists its `wait`
+  executor sidecar (and `init`) BEFORE `main`, so defaulting to `pod.Spec.Containers[0]` streamed pure
+  executor noise. Both server (`defaultLogContainer` in `logstream.go`) and client (`defaultLogContainer`
+  in `web/src/logs.ts`) prefer a container named `main`, falling back to the first — keep the two in
+  lockstep or the picker shows a different container than the server streams.
 - **SSE `summary` event**: the server emits a per-stream `summary` computed on the UNFILTERED graph; the
   client overrides the sidebar entry with it. Never roll up filtered nodes on the client — that bug is
   the whole reason `rollupHealth` was deleted.
