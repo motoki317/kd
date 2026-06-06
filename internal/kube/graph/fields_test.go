@@ -360,6 +360,43 @@ func TestTraefikIngressRouteRoutes(t *testing.T) {
 	}
 }
 
+func TestCRDSummary(t *testing.T) {
+	crd := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+		"metadata": map[string]any{"name": "workflows.argoproj.io"},
+		"spec": map[string]any{
+			"group": "argoproj.io",
+			"names": map[string]any{"kind": "Workflow", "plural": "workflows"},
+			"scope": "Namespaced",
+			"versions": []any{
+				map[string]any{"name": "v1alpha1", "served": true, "storage": true},
+				map[string]any{"name": "v1beta1", "served": false}, // not served → omitted
+			},
+		},
+	}}
+	if got, want := statusSummary(crd), "Workflow · Namespaced · v1alpha1"; got != want {
+		t.Errorf("CRD status = %q, want %q", got, want)
+	}
+	// Two served versions join; scope carries through.
+	multi := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+		"metadata": map[string]any{"name": "things.example.com"},
+		"spec": map[string]any{
+			"names": map[string]any{"kind": "Thing"}, "scope": "Cluster",
+			"versions": []any{
+				map[string]any{"name": "v1", "served": true},
+				map[string]any{"name": "v2", "served": true},
+			},
+		},
+	}}
+	if got, want := crdSummary(multi), "Thing · Cluster · v1, v2"; got != want {
+		t.Errorf("CRD (multi-version) summary = %q, want %q", got, want)
+	}
+	if got := crdSummary(&corev1.Service{}); got != "" {
+		t.Errorf("crdSummary(non-CRD) = %q, want empty", got)
+	}
+}
+
 func TestScrapeConfig(t *testing.T) {
 	// A Prometheus-Operator ServiceMonitor: label selector, a same-namespace target, one endpoint.
 	sm := &unstructured.Unstructured{Object: map[string]any{

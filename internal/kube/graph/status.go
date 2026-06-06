@@ -56,6 +56,11 @@ func statusSummary(obj runtime.Object) string {
 		}
 		return o.Spec.Schedule
 	default:
+		// A CustomResourceDefinition's status IS what it defines (Kind · Scope · versions) — far more
+		// useful than its Established condition, and the answer to "what is this CRD for".
+		if s := crdSummary(obj); s != "" {
+			return s
+		}
 		// Custom resources: a kind-specific status string (Workflow phase, Elasticsearch color,
 		// Gateway attach state) when kd has a rule, else "unknown state" for an uninterpretable
 		// CR and silence for a healthy-by-existence one. See crStatusSummary in health_cr.go.

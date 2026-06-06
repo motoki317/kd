@@ -697,6 +697,42 @@ func networkPolicySummary(obj runtime.Object) []string {
 	return out
 }
 
+// crdSummary renders a CustomResourceDefinition's essence — the Kind it defines, its scope, and its
+// served versions — as "Kind · Scope · v1[, v1beta1]", the answer to "what custom resource does this
+// enable, and is it namespaced?" A CRD's own name is only `plural.group`, so the Kind and (crucially)
+// the Cluster-vs-Namespaced scope are otherwise invisible without opening the manifest. Empty for any
+// other kind. A CRD arrives unstructured (apiextensions types aren't in kd's typed factories).
+func crdSummary(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "CustomResourceDefinition")
+	if u == nil {
+		return ""
+	}
+	var parts []string
+	if kind, _, _ := unstructured.NestedString(u.Object, "spec", "names", "kind"); kind != "" {
+		parts = append(parts, kind)
+	}
+	if scope, _, _ := unstructured.NestedString(u.Object, "spec", "scope"); scope != "" {
+		parts = append(parts, scope)
+	}
+	versions, _, _ := unstructured.NestedSlice(u.Object, "spec", "versions")
+	var served []string
+	for _, vi := range versions {
+		v, ok := vi.(map[string]any)
+		if !ok {
+			continue
+		}
+		if on, _, _ := unstructured.NestedBool(v, "served"); on {
+			if name, _, _ := unstructured.NestedString(v, "name"); name != "" {
+				served = append(served, name)
+			}
+		}
+	}
+	if len(served) > 0 {
+		parts = append(parts, strings.Join(served, ", "))
+	}
+	return strings.Join(parts, " · ")
+}
+
 // scrapeConfig renders a Prometheus-Operator ServiceMonitor or a VictoriaMetrics VMServiceScrape's
 // scrape target — the operator's "what does this scrape, on which port/path, how often?", otherwise
 // buried in the manifest. Both CRs share the same spec shape (a service selector + a list of
