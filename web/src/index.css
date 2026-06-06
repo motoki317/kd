@@ -2217,6 +2217,14 @@ button.conn.conn-retry:focus-visible {
 .metric-ref {
   color: var(--text-dim);
 }
+/* Names what a rolled-up workload gauge sums ("summed across N pods") so its bars aren't misread as
+   a single pod's. Right-aligned under the value column it qualifies. */
+.metric-caption {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-align: right;
+  margin-top: 1px;
+}
 /* Cycle 146: each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
    the row reads as a strip of discrete facts instead of a dot-separated run-on. */
 .drawer-meta > span,

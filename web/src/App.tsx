@@ -1,7 +1,8 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
-import { hasDescendantPod } from './loggable'
+import { descendantPods, hasDescendantPod } from './loggable'
+import { aggregateWorkloadUsage } from './usageAggregate'
 import { selectionLabel, setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
@@ -419,6 +420,15 @@ export default function App() {
     const n = selectedNode()
     return n ? capacity()?.usage?.items[n.id] : undefined
   })
+  // A workload controller has no usage of its own, but the client already holds every descendant pod's
+  // usage (capacity feed, keyed by UID) and the ownership edges — so its rolled-up gauge is a pure
+  // client-side sum. Skip Pods/Nodes (they gauge their own `usage`); returns undefined when the kind
+  // owns no pods or none have a reading yet, so the drawer shows nothing rather than an empty gauge.
+  const selectedWorkloadUsage = createMemo(() => {
+    const n = selectedNode()
+    if (!n || n.kind === 'Pod' || n.kind === 'Node') return undefined
+    return aggregateWorkloadUsage(descendantPods(n.id, nodes()), capacity()?.usage?.items) ?? undefined
+  })
   // Announce the current selection for assistive tech. j/k stepping deliberately keeps focus on the
   // body (so repeated presses work — see the keydown handler), and the drawer is a complementary
   // landmark, not a live region, so without this a screen-reader operator hears nothing as the
@@ -648,6 +658,7 @@ export default function App() {
             node={selectedNode()}
             owners={ownerNodes()}
             usage={selectedUsage()}
+            workloadUsage={selectedWorkloadUsage()}
             // Owner-chip clicks should push history (cycle 300) so Alt+Left walks back to the
             // descendant the operator came from. The cycle-300 helper pushes the prior selection
             // only when changing to a different node — so re-selecting the same node is a no-op.

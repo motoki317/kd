@@ -46,3 +46,31 @@ export function isLoggable(node: KNode | null | undefined, nodes: KNode[]): bool
   if (!node) return false
   return LOGGABLE_KINDS.has(node.kind) || hasDescendantPod(node.id, nodes)
 }
+
+// descendantPods collects every Pod transitively owned by rootId in the current graph — the list form of
+// hasDescendantPod, used to aggregate a workload's resource usage from its replicas. Walks ownerUIDs
+// downward (Deployment→ReplicaSet→Pod, or any owner chain), de-duping so a diamond owner graph counts
+// each pod once.
+export function descendantPods(rootId: string, nodes: KNode[]): KNode[] {
+  const childrenOf = new Map<string, KNode[]>()
+  for (const n of nodes) {
+    for (const owner of n.ownerUIDs ?? []) {
+      const arr = childrenOf.get(owner)
+      if (arr) arr.push(n)
+      else childrenOf.set(owner, [n])
+    }
+  }
+  const pods: KNode[] = []
+  const seen = new Set<string>()
+  const stack = [rootId]
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    for (const child of childrenOf.get(id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      if (child.kind === 'Pod') pods.push(child)
+      else stack.push(child.id)
+    }
+  }
+  return pods
+}

@@ -5,6 +5,7 @@ import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
 import type { KNode, ResourceUsage } from '../types'
+import type { WorkloadUsage } from '../usageAggregate'
 import { LOGGABLE_KINDS } from '../loggable'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
@@ -19,6 +20,10 @@ interface Props {
   // Live metrics-server consumption for the selected resource (Pods/Nodes), from the capacity feed;
   // threaded to the summary's usage gauges. Undefined when metrics are unavailable or the kind has none.
   usage?: ResourceUsage
+  // A workload's usage rolled up from its descendant pods (Deployment/StatefulSet/… have no metrics of
+  // their own); threaded to the summary's rolled-up gauge. Undefined for Pods/Nodes and when no replica
+  // has a reading yet.
+  workloadUsage?: WorkloadUsage
   onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
@@ -303,6 +308,7 @@ export default function DetailDrawer(props: Props) {
               node={node()}
               owners={props.owners}
               usage={props.usage}
+              workloadUsage={props.workloadUsage}
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />

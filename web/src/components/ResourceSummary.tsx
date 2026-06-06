@@ -6,6 +6,7 @@ import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode, Resources, ResourceUsage } from '../types'
+import type { WorkloadUsage } from '../usageAggregate'
 import CopyButton from './CopyButton'
 
 // containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
@@ -120,6 +121,10 @@ interface Props {
   // Live metrics-server consumption for this resource (Pods and Nodes), keyed into by the drawer from
   // the capacity feed. Absent when metrics-server is unavailable or the kind has no usage gauge.
   usage?: ResourceUsage
+  // A workload's (Deployment/StatefulSet/…) usage summed across its descendant pods — the controller
+  // has no metrics of its own, so the drawer rolls up its replicas'. Absent for Pods/Nodes (they use
+  // `usage`) and when no descendant pod has a reading yet.
+  workloadUsage?: WorkloadUsage
 }
 
 // A compact usage gauge per resource: the live value fills toward a ceiling reference, with an optional
@@ -194,7 +199,7 @@ function nodeGaugeRows(usage: ResourceUsage, allocatable?: Resources, capacityRe
 // allocatable) when metrics are present. Each row aligns a fixed label, the bar, and a right-aligned
 // value (Alignment + Proximity: the number sits with its bar); the fill borrows the health palette under
 // pressure (Contrast) so a hot resource pulls the eye.
-function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources; capacityRes?: Resources }) {
+function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Resources; limits?: Resources; allocatable?: Resources; capacityRes?: Resources; caption?: string }) {
   const rows = createMemo(() =>
     (props.kind === 'Node'
       ? nodeGaugeRows(props.usage, props.allocatable, props.capacityRes)
@@ -226,6 +231,11 @@ function UsageGauges(props: { usage: ResourceUsage; kind: string; requests?: Res
             </div>
           )}
         </For>
+        {/* For a rolled-up workload gauge: name what the bars sum so the operator doesn't read a
+            Deployment's "3 cores" as one pod's (explicit over implicit). */}
+        <Show when={props.caption}>
+          <div class="metric-caption">{props.caption}</div>
+        </Show>
       </div>
     </Show>
   )
@@ -343,6 +353,24 @@ export default function ResourceSummary(props: Props) {
           allocatable={props.node.allocatable}
           capacityRes={props.node.capacityRes}
         />
+      </Show>
+      {/* A workload's rolled-up usage (its replicas summed), gauged against the summed requests/limits —
+          the "how much is this Deployment actually using vs reserving?" answer no single pod can give.
+          Rendered like a Pod gauge (same request/limit semantics) with a caption naming the rollup. */}
+      <Show when={props.workloadUsage}>
+        {(wu) => (
+          <UsageGauges
+            usage={wu().usage}
+            kind="Pod"
+            requests={wu().requests}
+            limits={wu().limits}
+            caption={
+              wu().meteredPods < wu().podCount
+                ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`
+                : `summed across ${wu().podCount} ${wu().podCount === 1 ? 'pod' : 'pods'}`
+            }
+          />
+        )}
       </Show>
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address

@@ -71,6 +71,34 @@ describe('ResourceSummary pod usage gauges', () => {
     const withUsage = render(() => <ResourceSummary node={svc} {...base} usage={{ cpuMilli: 50 }} />)
     expect(withUsage.container.querySelector('.pod-metrics')).toBeNull()
   })
+  it('renders a workload rollup gauge with a "summed across N pods" caption', () => {
+    const dep: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const workloadUsage = {
+      usage: { cpuMilli: 240, memBytes: 600 * 1024 * 1024 },
+      requests: { cpuMilli: 200, memBytes: 512 * 1024 * 1024 },
+      limits: { cpuMilli: 1000, memBytes: 1024 * 1024 * 1024 },
+      podCount: 3,
+      meteredPods: 3,
+    }
+    const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
+    const rows = container.querySelectorAll('.pod-metrics .metric-row')
+    expect(rows.length).toBe(2)
+    // formatPair keeps value + summed-limit in one unit; the 1-core summed limit drives cores ("0.24 / 1 lim").
+    expect(rows[0].querySelector('.metric-val b')?.textContent).toBe('0.24')
+    expect(rows[0].textContent).toContain('1 lim')
+    expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 3 pods')
+  })
+  it('caption notes partial metering when some replicas have no reading yet', () => {
+    const dep: KNode = { id: 'd2', kind: 'StatefulSet', name: 'db', health: 'Healthy' }
+    const workloadUsage = {
+      usage: { cpuMilli: 100, memBytes: 200 * 1024 * 1024 },
+      requests: { cpuMilli: 100 },
+      podCount: 3,
+      meteredPods: 2,
+    }
+    const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
+    expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 2 of 3 pods')
+  })
   it('gauges a Node against its allocatable, in cores (matching the capacity view), flagging spillover', () => {
     const node: KNode = {
       id: 'n1',
