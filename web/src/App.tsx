@@ -3,7 +3,7 @@ import { createStore, reconcile } from 'solid-js/store'
 import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
 import { descendantPods, hasDescendantPod } from './loggable'
 import { aggregateWorkloadUsage } from './usageAggregate'
-import { hostNodeCapacity, nodeRequestSum } from './resourceBars'
+import { hostNodeCapacity } from './resourceBars'
 import { selectionLabel, setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
@@ -430,16 +430,8 @@ export default function App() {
     if (!n || n.kind === 'Pod' || n.kind === 'Node') return undefined
     return aggregateWorkloadUsage(descendantPods(n.id, nodes()), capacity()?.usage?.items) ?? undefined
   })
-  // A selected Node's Req-bar fill = the summed requests of every pod scheduled on it, read from the
-  // cluster-wide capacity feed (a node hosts pods from every namespace, so the namespace graph can't
-  // give it). Only for Nodes; the drawer's resource bars gauge this against allocatable.
-  const selectedNodeReqSum = createMemo(() => {
-    const n = selectedNode()
-    if (!n || n.kind !== 'Node') return undefined
-    return nodeRequestSum(n.name, capacity()?.nodes ?? [])
-  })
-  // A selected Pod's host-node capacity, the track its bars fall back to when the pod sets no
-  // limit/request (so an unconstrained pod reads as a fraction of its node, not a fake-full bar).
+  // A selected Pod's host-node capacity, the ceiling its bar falls back to when the pod sets no
+  // limit/request (so an unconstrained pod reads as a fraction of its node, not a bare value).
   const selectedHostCapacity = createMemo(() => {
     const n = selectedNode()
     if (!n || n.kind !== 'Pod') return undefined
@@ -675,7 +667,6 @@ export default function App() {
             owners={ownerNodes()}
             usage={selectedUsage()}
             workloadUsage={selectedWorkloadUsage()}
-            nodeReqSum={selectedNodeReqSum()}
             hostCapacity={selectedHostCapacity()}
             // Owner-chip clicks should push history (cycle 300) so Alt+Left walks back to the
             // descendant the operator came from. The cycle-300 helper pushes the prior selection

@@ -1,123 +1,103 @@
-// The drawer's CPU/memory resource bars. Mirrors the Nodes capacity view's "Use over Req" idiom: per
-// resource, a Use bar (live usage) sits directly over a Req bar (reserved request), BOTH sharing one
-// track (the same px scale) so the two read against each other at a glance — exactly the node bars in
-// the Nodes group-by, brought into the drawer. A Node gauges Use against its total capacity and Req
-// against allocatable (Σ pod requests vs schedulable, the overcommit line); a Pod/workload gauges both
-// against its limit, falling back to its request, then to its HOST NODE's capacity when neither is set
-// (an unconstrained pod still reads as a fraction of what its node can give, rather than a fake-full bar).
+// The drawer's CPU/memory resource bars. Each bar gauges LIVE USAGE (metrics-server) against ONE bound,
+// and the bound IS the bar's full length (its ceiling) — a Pod shows a "Lim" bar (ceiling = limit) and a
+// "Req" bar (ceiling = request); a Node shows "Cap" (capacity) and "Alloc" (allocatable). When usage
+// overshoots a bar's ceiling the fill WRAPS into a new "lap" drawn in an escalating colour (blue → yellow
+// → orange → red), so "using 1.4× my request" or "spilling past allocatable" reads at a glance — the
+// failure modes a flat clamped bar hides. The fill is always usage; the two bars differ only in which
+// bound they measure it against (so the Req bar, with the smaller ceiling, wraps first).
 import type { KNode, Resources, ResourceUsage } from './types'
 import type { CapResource } from './capacityLayout'
 
 const RES: CapResource[] = ['cpu', 'memory']
 const LABEL: Record<CapResource, string> = { cpu: 'CPU', memory: 'Mem' }
 
+// Lap colours: lap 0 (0–100% of the ceiling) is the neutral accent; each further lap escalates
+// yellow → orange → red, clamped at red for anything ≥3× over. Indexes a CSS `.lap-N` class.
+export const MAX_LAP = 3
+
 const pick = (r: Resources | ResourceUsage | undefined, res: CapResource): number | undefined =>
   !r ? undefined : res === 'cpu' ? r.cpuMilli : r.memBytes
 
 export interface ResBarModel {
-  kind: 'use' | 'req'
-  value: number // the bar's quantity in canonical units (usage, or request / Σ request)
-  pct: number // value / track, clamped to [0, 100]
-  ceil?: number // this bar's OWN ceiling for the label (Use: limit/capacity; Req: request/allocatable)
-  ceilLabel: string | null // the word after the ceiling value ("lim" / "req" / "cap" / "alloc" / "node")
-  over: boolean // value past a HARD ceiling — recolour red (usage > limit/capacity; Σreq > allocatable)
-  near: boolean // within 90% of a hard ceiling — amber
+  key: string // 'lim' | 'req' | 'cap' | 'alloc' | 'node'
+  label: string // the per-bar sublabel ("Lim" / "Req" / "Cap" / "Alloc" / "Node")
+  ceil?: number // the bound = the bar's full length; undefined only for the unconstrained placeholder
+  usage?: number // live usage (the fill); undefined when metrics are unavailable → an empty bar
+  laps: number // completed full laps = floor(usage/ceil); the base layer's colour is lap (laps-1)
+  frac: number // the current lap's progress in [0, 1) — the foreground fill width
+  over: boolean // usage exceeds the ceiling (ratio > 1) — at least one wrap
+  unconstrained?: boolean // no bound at all (no limit/request/host capacity) — render a dashed empty track
 }
 
 export interface ResGroupModel {
   res: CapResource
   label: string // "CPU" / "Mem"
-  track: number // shared denominator for both bars (the resource's ceiling)
-  unitRef: number // the value formatPair keys its unit off, so both bars read in one unit (cores/Gi)
-  bars: ResBarModel[] // Use first, then Req — each present only when its value is known
-  allocPct?: number // a Node's allocatable line on the track (Σreq past it = overcommit); absent for pods
-  unconstrained?: boolean // no real ceiling exists (no limit/request/host-capacity) — show a dashed empty track
+  unitRef: number // the value formatPair keys its unit off, so a group's bars read in one unit (cores/Gi)
+  bars: ResBarModel[]
 }
 
-// Inputs already resolved by the caller, so this stays a pure transform. A Node passes capacity +
-// allocatable + the summed pod requests; a Pod/workload passes its (own or summed) request + limit and
-// its host node's capacity for the unconstrained fallback. `usage` is the live read for either.
 export interface ResBarInputs {
   isNode: boolean
   usage?: ResourceUsage
-  // Node:
-  capacity?: Resources // total physical capacity (Use track + ceiling)
-  allocatable?: Resources // schedulable (Req ceiling + overcommit line)
-  reqSum?: Resources // Σ pod requests scheduled on the node (Req fill)
-  // Pod / workload:
-  request?: Resources // own or summed request (Req fill, soft ceiling)
-  limit?: Resources // own or summed limit (Use hard ceiling)
-  hostCapacity?: Resources // host node capacity, the unconstrained-pod track fallback
+  // Node bounds:
+  capacity?: Resources // total physical capacity → the "Cap" bar's ceiling
+  allocatable?: Resources // schedulable → the "Alloc" bar's ceiling
+  // Pod / workload bounds:
+  request?: Resources // own or summed request → the "Req" bar's ceiling
+  limit?: Resources // own or summed limit → the "Lim" bar's ceiling
+  hostCapacity?: Resources // host node capacity — the fallback ceiling for an unconstrained pod
 }
 
-function bar(kind: 'use' | 'req', value: number, track: number, ceil: number | undefined, ceilLabel: string | null, hardCeil: number | undefined): ResBarModel {
-  const pct = Math.min(100, Math.max(0, (value / track) * 100))
-  const over = hardCeil != null && value > hardCeil
-  const near = hardCeil != null && value >= 0.9 * hardCeil && value <= hardCeil
-  return { kind, value, pct, ceil, ceilLabel, over, near }
+// makeBar gauges usage against one ceiling, computing the lap (how many times the usage has wrapped the
+// ceiling) and the current lap's partial fill. Returns null when the ceiling isn't a positive number.
+function makeBar(key: string, label: string, ceil: number | undefined, usage: number | undefined): ResBarModel | null {
+  if (ceil == null || ceil <= 0) return null
+  const ratio = usage != null ? usage / ceil : 0
+  const laps = Math.floor(ratio)
+  return { key, label, ceil, usage, laps, frac: ratio - laps, over: ratio > 1 }
 }
 
 export function drawerResourceBars(input: ResBarInputs): ResGroupModel[] {
   const groups: ResGroupModel[] = []
   for (const res of RES) {
     const use = pick(input.usage, res)
+    let bars: ResBarModel[]
+    let unitRef: number | undefined
     if (input.isNode) {
-      const cap = pick(input.capacity, res) ?? pick(input.allocatable, res)
+      // A node has no limit/request — its bounds are the physical capacity and the schedulable
+      // allocatable. Usage past allocatable (into kubelet/system-reserved) wraps the Alloc bar first.
+      const cap = pick(input.capacity, res)
       const alloc = pick(input.allocatable, res)
-      const reqSum = pick(input.reqSum, res)
-      const track = cap ?? Math.max(use ?? 0, reqSum ?? 0, 1)
-      const bars: ResBarModel[] = []
-      // Use gauges against total capacity (a hard ceiling — usage spilling past it is real pressure).
-      if (use != null) bars.push(bar('use', use, track, cap, cap != null ? 'cap' : null, cap))
-      // Req = Σ pod requests, gauged against allocatable; past it is overcommit (hard, recolours red).
-      if (reqSum != null) bars.push(bar('req', reqSum, track, alloc, alloc != null ? 'alloc' : null, alloc))
-      if (bars.length === 0) continue
-      // The allocatable line is only a distinct marker when it sits short of the capacity track.
-      const allocPct = alloc != null && cap != null && alloc < cap ? (alloc / track) * 100 : undefined
-      groups.push({ res, label: LABEL[res], track, unitRef: cap ?? track, bars, allocPct })
+      bars = [makeBar('cap', 'Cap', cap, use), makeBar('alloc', 'Alloc', alloc, use)].filter((b): b is ResBarModel => b !== null)
+      unitRef = cap ?? alloc
+    } else {
+      // Lim first (the larger ceiling), Req below — mirroring the capacity view's larger-bound-on-top
+      // stack. Each present bound becomes a bar; an unconstrained pod falls back to its node's capacity.
+      const lim = pick(input.limit, res)
+      const req = pick(input.request, res)
+      const hostCap = pick(input.hostCapacity, res)
+      bars = [makeBar('lim', 'Lim', lim, use), makeBar('req', 'Req', req, use)].filter((b): b is ResBarModel => b !== null)
+      if (bars.length === 0) {
+        const fb = makeBar('node', 'Node', hostCap, use)
+        if (fb) bars = [fb]
+      }
+      unitRef = lim ?? req ?? hostCap
+    }
+    if (bars.length > 0) {
+      groups.push({ res, label: LABEL[res], unitRef: unitRef ?? bars[0].ceil ?? 1, bars })
       continue
     }
-    // Pod / workload: both bars share the resource's ceiling — limit, else request, else the host node's
-    // capacity (so an unconstrained pod still reads against what its node can give, per the fallback rule).
-    const lim = pick(input.limit, res)
-    const req = pick(input.request, res)
-    const hostCap = pick(input.hostCapacity, res)
-    const ceil = lim ?? req ?? hostCap
-    const ceilLabel = lim != null ? 'lim' : req != null ? 'req' : hostCap != null ? 'node' : null
-    const track = ceil ?? Math.max(use ?? 0, 1)
-    const bars: ResBarModel[] = []
+    // No bound to gauge against. If there's still a usage reading, show it on a dashed "ungauged" track
+    // (so it can't be misread as maxed); with neither bound nor usage, the resource is omitted entirely.
     if (use != null) {
-      // Usage recolours only against a HARD ceiling (the limit). Bursting past a soft request is expected.
-      const hard = lim != null ? lim : undefined
-      bars.push(bar('use', use, track, ceil, ceilLabel, hard))
+      groups.push({ res, label: LABEL[res], unitRef: use || 1, bars: [{ key: 'none', label: 'Use', usage: use, laps: 0, frac: 0, over: false, unconstrained: true }] })
     }
-    if (req != null) bars.push(bar('req', req, track, ceil, ceilLabel, undefined))
-    if (bars.length === 0) continue
-    groups.push({ res, label: LABEL[res], track, unitRef: ceil ?? track, bars, unconstrained: ceil == null })
   }
   return groups
 }
 
-// nodeRequestSum totals the requests of every pod scheduled on a node (matched by host name), across
-// the cluster-wide capacity feed — the Node's "Req" fill, the same Σrequest the Nodes capacity view
-// draws. Cluster-wide because a node hosts pods from every namespace, so its true reservation can only
-// be read from all of them. Returns undefined when no scheduled pod sets a request for either resource.
-export function nodeRequestSum(nodeName: string, capacityNodes: KNode[]): Resources | undefined {
-  let cpu: number | undefined
-  let mem: number | undefined
-  for (const n of capacityNodes) {
-    if (n.kind !== 'Pod' || n.host !== nodeName) continue
-    const c = n.requests?.cpuMilli
-    const m = n.requests?.memBytes
-    if (c != null) cpu = (cpu ?? 0) + c
-    if (m != null) mem = (mem ?? 0) + m
-  }
-  if (cpu == null && mem == null) return undefined
-  return { cpuMilli: cpu, memBytes: mem }
-}
-
 // hostNodeCapacity finds a pod's host node in the cluster-wide capacity feed and returns its physical
-// capacity (falling back to allocatable) — the track an unconstrained pod's bars gauge against.
+// capacity (falling back to allocatable) — the ceiling an unconstrained pod's bar gauges usage against.
 export function hostNodeCapacity(hostName: string | undefined, capacityNodes: KNode[]): Resources | undefined {
   if (!hostName) return undefined
   const node = capacityNodes.find((n) => n.kind === 'Node' && n.name === hostName)

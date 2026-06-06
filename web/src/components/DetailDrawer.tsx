@@ -24,9 +24,8 @@ interface Props {
   // their own); threaded to the summary's rolled-up gauge. Undefined for Pods/Nodes and when no replica
   // has a reading yet.
   workloadUsage?: WorkloadUsage
-  // A Node's summed pod requests (its Req-bar fill) and a Pod's host-node capacity (its unconstrained
-  // track fallback) — both derived from the cluster-wide capacity feed, threaded to the resource bars.
-  nodeReqSum?: Resources
+  // A Pod's host-node capacity (the unconstrained-bar fallback ceiling), derived from the cluster-wide
+  // capacity feed, threaded to the resource bars.
   hostCapacity?: Resources
   onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
@@ -313,7 +312,6 @@ export default function DetailDrawer(props: Props) {
               owners={props.owners}
               usage={props.usage}
               workloadUsage={props.workloadUsage}
-              nodeReqSum={props.nodeReqSum}
               hostCapacity={props.hostCapacity}
               onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}

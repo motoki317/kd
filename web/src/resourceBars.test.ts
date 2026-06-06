@@ -1,93 +1,68 @@
 import { describe, it, expect } from 'vitest'
-import { drawerResourceBars, nodeRequestSum, hostNodeCapacity } from './resourceBars'
+import { drawerResourceBars, hostNodeCapacity } from './resourceBars'
 import type { KNode } from './types'
 
 const Gi = 1024 ** 3
 
-describe('drawerResourceBars — Node', () => {
-  it('builds a Use bar (usage / capacity) over a Req bar (Σrequest / allocatable) per resource', () => {
-    const g = drawerResourceBars({
-      isNode: true,
-      usage: { cpuMilli: 600, memBytes: 2 * Gi },
-      capacity: { cpuMilli: 4000, memBytes: 8 * Gi },
-      allocatable: { cpuMilli: 3800, memBytes: 7 * Gi },
-      reqSum: { cpuMilli: 1900, memBytes: 3 * Gi },
-    })
-    expect(g.map((x) => x.res)).toEqual(['cpu', 'memory'])
-    const cpu = g[0]
-    expect(cpu.track).toBe(4000) // shared track = total capacity
-    expect(cpu.bars.map((b) => b.kind)).toEqual(['use', 'req'])
-    expect(cpu.bars[0].pct).toBeCloseTo(15) // 600 / 4000
-    expect(cpu.bars[1].pct).toBeCloseTo(47.5) // 1900 / 4000, gauged on the SAME track as Use
-    expect(cpu.bars[0].ceilLabel).toBe('cap')
-    expect(cpu.bars[1].ceilLabel).toBe('alloc')
-    // The allocatable line sits short of the capacity track (3800/4000).
-    expect(cpu.allocPct).toBeCloseTo(95)
-  })
-
-  it('flags node overcommit — Σrequest past allocatable recolours the Req bar (hard breach)', () => {
-    const g = drawerResourceBars({
-      isNode: true,
-      usage: { cpuMilli: 500 },
-      capacity: { cpuMilli: 4000 },
-      allocatable: { cpuMilli: 3800 },
-      reqSum: { cpuMilli: 4200 }, // promised more than schedulable
-    })
-    const req = g[0].bars.find((b) => b.kind === 'req')!
-    expect(req.over).toBe(true)
-    expect(req.pct).toBe(100) // clamped — the bar fills the whole capacity track
-  })
-
-  it('falls back to allocatable as the track when total capacity is unknown', () => {
-    const g = drawerResourceBars({ isNode: true, usage: { cpuMilli: 100 }, allocatable: { cpuMilli: 2000 }, reqSum: { cpuMilli: 500 } })
-    expect(g[0].track).toBe(2000)
-    expect(g[0].allocPct).toBeUndefined() // alloc == track, so no distinct marker
-  })
-})
-
 describe('drawerResourceBars — Pod / workload', () => {
-  it('builds Use + Req bars sharing the limit as the track', () => {
+  it('builds a Lim bar (ceiling=limit) over a Req bar (ceiling=request), both filled by usage', () => {
     const g = drawerResourceBars({
       isNode: false,
-      usage: { cpuMilli: 120, memBytes: 1 * Gi },
+      usage: { cpuMilli: 300, memBytes: 1 * Gi },
       request: { cpuMilli: 200, memBytes: 1 * Gi },
       limit: { cpuMilli: 400, memBytes: 2 * Gi },
     })
-    const cpu = g[0]
-    expect(cpu.track).toBe(400) // limit is the shared ceiling
-    expect(cpu.bars[0].pct).toBeCloseTo(30) // use 120/400
-    expect(cpu.bars[1].pct).toBeCloseTo(50) // req 200/400
-    expect(cpu.bars.every((b) => b.ceilLabel === 'lim')).toBe(true)
+    const cpu = g.find((x) => x.res === 'cpu')!
+    expect(cpu.bars.map((b) => b.label)).toEqual(['Lim', 'Req']) // Lim on top, Req below
+    const [lim, req] = cpu.bars
+    expect(lim.ceil).toBe(400)
+    expect(req.ceil).toBe(200)
+    // SAME usage (300) gauged against each bound: 300/400 = 0.75 lap, 300/200 = 1.5 laps.
+    expect(lim.usage).toBe(300)
+    expect(req.usage).toBe(300)
+    expect(lim.frac).toBeCloseTo(0.75)
+    expect(lim.over).toBe(false)
+    expect(req.laps).toBe(1) // wrapped once past the request
+    expect(req.frac).toBeCloseTo(0.5)
+    expect(req.over).toBe(true)
   })
 
-  it('recolours the Use bar past the limit but never the Req bar (request is soft)', () => {
-    const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 500 }, request: { cpuMilli: 200 }, limit: { cpuMilli: 400 } })
-    const cpu = g[0]
-    expect(cpu.bars.find((b) => b.kind === 'use')!.over).toBe(true)
-    expect(cpu.bars.find((b) => b.kind === 'req')!.over).toBe(false)
+  it('counts laps as usage wraps each ceiling repeatedly (2.5× the request → lap 2)', () => {
+    const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 500 }, request: { cpuMilli: 200 } })
+    const req = g[0].bars[0]
+    expect(req.laps).toBe(2) // 500 / 200 = 2.5
+    expect(req.frac).toBeCloseTo(0.5)
+    expect(req.over).toBe(true)
   })
 
-  it('gauges against the request when no limit is set (soft ceiling, no recolour on burst)', () => {
-    const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 300 }, request: { cpuMilli: 200 } })
-    const cpu = g[0]
-    expect(cpu.track).toBe(200)
-    expect(cpu.bars.find((b) => b.kind === 'use')!.over).toBe(false) // request is soft — bursting is fine
-    expect(cpu.bars[0].ceilLabel).toBe('req')
+  it('reads exactly at the ceiling as a full first lap, not yet over', () => {
+    const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 200 }, limit: { cpuMilli: 200 } })
+    const lim = g[0].bars[0]
+    expect(lim.laps).toBe(1)
+    expect(lim.frac).toBeCloseTo(0)
+    expect(lim.over).toBe(false) // ratio == 1 is full, not over
   })
 
-  it('falls back to the HOST NODE capacity when neither limit nor request is set', () => {
+  it('falls back to the HOST NODE capacity as the ceiling when neither limit nor request is set', () => {
     const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 250 }, hostCapacity: { cpuMilli: 4000 } })
-    const cpu = g[0]
-    expect(cpu.track).toBe(4000) // the node's capacity, not the bare usage
-    expect(cpu.bars[0].pct).toBeCloseTo(6.25) // 250 / 4000 — reads as a small slice of the node
-    expect(cpu.bars[0].ceilLabel).toBe('node')
-    expect(cpu.unconstrained).toBe(false) // it IS gauged, against the node
-    expect(cpu.bars.some((b) => b.kind === 'req')).toBe(false) // no request → no Req bar
+    const bar = g[0].bars[0]
+    expect(bar.label).toBe('Node')
+    expect(bar.ceil).toBe(4000)
+    expect(bar.frac).toBeCloseTo(0.0625) // 250 / 4000 — a small slice of the node
+    expect(bar.unconstrained).toBeFalsy()
   })
 
-  it('marks a truly unconstrained resource (no limit/request/host capacity) so the track shows dashed', () => {
+  it('marks a truly unconstrained resource (no bound, no host capacity) so the track shows dashed', () => {
     const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 250 } })
-    expect(g[0].unconstrained).toBe(true)
+    expect(g[0].bars[0].unconstrained).toBe(true)
+    expect(g[0].bars[0].usage).toBe(250)
+  })
+
+  it('still shows the bars (empty) from spec bounds when metrics are unavailable', () => {
+    const g = drawerResourceBars({ isNode: false, request: { cpuMilli: 200 }, limit: { cpuMilli: 400 } })
+    const cpu = g[0]
+    expect(cpu.bars.map((b) => b.label)).toEqual(['Lim', 'Req'])
+    expect(cpu.bars.every((b) => b.usage === undefined && b.frac === 0)).toBe(true)
   })
 
   it('omits a resource entirely when it has neither usage nor any bound', () => {
@@ -96,20 +71,32 @@ describe('drawerResourceBars — Pod / workload', () => {
   })
 })
 
-describe('nodeRequestSum', () => {
-  const feed: KNode[] = [
-    { id: 'n', kind: 'Node', name: 'host-1', health: 'Healthy' },
-    { id: 'p1', kind: 'Pod', name: 'p1', host: 'host-1', health: 'Healthy', requests: { cpuMilli: 100, memBytes: 1 * Gi } },
-    { id: 'p2', kind: 'Pod', name: 'p2', host: 'host-1', health: 'Healthy', requests: { cpuMilli: 200 } },
-    { id: 'p3', kind: 'Pod', name: 'p3', host: 'host-2', health: 'Healthy', requests: { cpuMilli: 999 } }, // other node
-  ]
-
-  it('sums requests of pods scheduled on the node, ignoring other nodes', () => {
-    expect(nodeRequestSum('host-1', feed)).toEqual({ cpuMilli: 300, memBytes: 1 * Gi })
+describe('drawerResourceBars — Node', () => {
+  it('builds a Cap bar (ceiling=capacity) over an Alloc bar (ceiling=allocatable), filled by node usage', () => {
+    const g = drawerResourceBars({
+      isNode: true,
+      usage: { cpuMilli: 600, memBytes: 2 * Gi },
+      capacity: { cpuMilli: 4000, memBytes: 8 * Gi },
+      allocatable: { cpuMilli: 3800, memBytes: 7 * Gi },
+    })
+    const cpu = g.find((x) => x.res === 'cpu')!
+    expect(cpu.bars.map((b) => b.label)).toEqual(['Cap', 'Alloc'])
+    expect(cpu.bars[0].ceil).toBe(4000)
+    expect(cpu.bars[1].ceil).toBe(3800)
+    expect(cpu.bars.every((b) => b.usage === 600)).toBe(true) // same usage, two ceilings
   })
 
-  it('returns undefined when no scheduled pod sets a request', () => {
-    expect(nodeRequestSum('host-3', feed)).toBeUndefined()
+  it('wraps the Alloc bar first when node usage spills past allocatable into reserved', () => {
+    const g = drawerResourceBars({
+      isNode: true,
+      usage: { cpuMilli: 3900 }, // > allocatable (3800), < capacity (4000)
+      capacity: { cpuMilli: 4000 },
+      allocatable: { cpuMilli: 3800 },
+    })
+    const [cap, alloc] = g[0].bars
+    expect(cap.over).toBe(false) // 3900 < 4000 capacity
+    expect(alloc.over).toBe(true) // 3900 > 3800 allocatable → wrapped
+    expect(alloc.laps).toBe(1)
   })
 })
 
@@ -122,11 +109,9 @@ describe('hostNodeCapacity', () => {
   it('returns the host node total capacity (preferring capacityRes)', () => {
     expect(hostNodeCapacity('host-1', feed)).toEqual({ cpuMilli: 4000 })
   })
-
   it('falls back to allocatable when capacityRes is absent', () => {
     expect(hostNodeCapacity('host-2', feed)).toEqual({ cpuMilli: 2000 })
   })
-
   it('returns undefined for an unknown or absent host', () => {
     expect(hostNodeCapacity('ghost', feed)).toBeUndefined()
     expect(hostNodeCapacity(undefined, feed)).toBeUndefined()

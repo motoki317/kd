@@ -4,7 +4,7 @@ import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
-import { drawerResourceBars, type ResGroupModel } from '../resourceBars'
+import { drawerResourceBars, MAX_LAP, type ResGroupModel } from '../resourceBars'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
@@ -126,51 +126,50 @@ interface Props {
   // has no metrics of its own, so the drawer rolls up its replicas'. Absent for Pods/Nodes (they use
   // `usage`) and when no descendant pod has a reading yet.
   workloadUsage?: WorkloadUsage
-  // For a Node: the summed requests of every pod scheduled on it (the Req bar's fill) — computed from
-  // the cluster-wide capacity feed, since a node hosts pods from every namespace.
-  nodeReqSum?: Resources
-  // For a Pod: its host node's capacity — the track its Use/Req bars fall back to when the pod sets no
-  // limit or request, so an unconstrained pod still reads as a fraction of its node.
+  // For a Pod: its host node's capacity — the ceiling its bar falls back to when the pod sets no limit
+  // or request, so an unconstrained pod still reads as a fraction of its node rather than a bare value.
   hostCapacity?: Resources
 }
 
-// UsageGauges renders the CPU + memory resource bars as the Nodes capacity view does: per resource, a
-// Use bar (live usage) directly over a Req bar (reserved request) sharing ONE track, so reserved-vs-used
-// reads at a glance and the two never clash units (formatPair keys both off the group's unitRef). The
-// usage fill borrows the health palette under pressure (Contrast — a hot resource pulls the eye); a
-// Node's Req bar carries a faint allocatable tick (the overcommit line). Built by drawerResourceBars.
-const KIND_WORD: Record<'use' | 'req', string> = { use: 'Use', req: 'Req' }
+// UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
+// Req, a Node's Cap + Alloc), each gauging LIVE USAGE against that bound. The bound is the bar's full
+// length; when usage overshoots, the fill WRAPS into a new lap drawn in an escalating colour (.lap-N:
+// blue → yellow → orange → red), so bursting past a request or spilling past allocatable reads at a
+// glance instead of clamping flat. A full base layer carries the last completed lap's colour; the
+// foreground is the current lap's partial fill. Built by drawerResourceBars.
+const lapClass = (n: number) => `lap-${Math.min(n, MAX_LAP)}`
 function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
   return (
     <Show when={props.groups.length > 0}>
-      <div class="pod-metrics" role="group" aria-label="Resource usage and requests">
+      <div class="pod-metrics" role="group" aria-label="Resource usage against limits and requests">
         <For each={props.groups}>
           {(g) => (
             <div class="metric-group">
-              {/* The resource heading groups its Use+Req bars (Proximity); the per-bar Use/Req label
-                  distinguishes them (the two share one colour scheme, as in the capacity view). */}
+              {/* The resource heading groups its bars (Proximity); the per-bar Lim/Req (or Cap/Alloc)
+                  label names which bound each measures usage against. */}
               <div class="metric-group-label">{g.label}</div>
               <For each={g.bars}>
                 {(b) => {
-                  const pair = formatPair(b.value, b.ceil, g.res, g.unitRef)
-                  const ref = b.ceil != null && b.ceilLabel != null ? `${pair.cap} ${b.ceilLabel}` : null
+                  const pair = formatPair(b.usage, b.ceil, g.res, g.unitRef)
+                  const ref = b.unconstrained ? 'unset' : `${pair.cap} ${b.label.toLowerCase()}`
+                  // The fill wraps the bar each lap: a full base layer in the last completed lap's colour,
+                  // then the current lap's partial fill on top. At lap 0 there's no base — just the fill.
+                  const fillW = b.usage == null ? 0 : b.frac * 100
                   return (
                     <div class="metric-row">
-                      <span class="metric-sublabel">{KIND_WORD[b.kind]}</span>
-                      {/* A truly unconstrained Use bar (no limit/request/host capacity) shows a dashed
-                          empty track so it can't be misread as "maxed". */}
-                      <div class="metric-bar" classList={{ unconstrained: g.unconstrained && b.kind === 'use' }} title={ref ? `${pair.value} ${b.kind} · ${ref}` : `${pair.value} ${b.kind} · ungauged`}>
-                        <Show when={!(g.unconstrained && b.kind === 'use')}>
-                          <div class="metric-fill" classList={{ over: b.over, near: b.near, req: b.kind === 'req' }} style={{ width: `${b.pct}%` }} />
-                          {/* The allocatable line on a Node's Req bar — Σrequest past it is overcommit. */}
-                          <Show when={b.kind === 'req' && g.allocPct != null}>
-                            <div class="metric-tick metric-tick-req" style={{ left: `${g.allocPct}%` }} />
+                      <span class="metric-sublabel">{b.label}</span>
+                      {/* An unconstrained bar (no bound) shows a dashed empty track — never a fake-full bar. */}
+                      <div class="metric-bar" classList={{ unconstrained: b.unconstrained }} title={b.unconstrained ? `${pair.value} used · ungauged` : `${pair.value} used · ${ref}${b.over ? ` · ${(b.laps + b.frac).toFixed(1)}× over` : ''}`}>
+                        <Show when={!b.unconstrained && b.usage != null}>
+                          <Show when={b.laps >= 1}>
+                            <div class="metric-fill metric-fill-base" classList={{ [lapClass(b.laps - 1)]: true }} />
                           </Show>
+                          <div class="metric-fill" classList={{ [lapClass(b.laps)]: true }} style={{ width: `${fillW}%` }} />
                         </Show>
                       </div>
                       <span class="metric-val">
                         <b>{pair.value}</b>
-                        <span class="metric-ref"> / {ref ?? 'unset'}</span>
+                        <span class="metric-ref"> / {ref}</span>
                       </span>
                     </div>
                   )
@@ -289,10 +288,10 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
-      {/* CPU/memory resource bars (Use over Req, both resources) — the "is this hot / near its ceiling /
-          over-reserved" answer the operator otherwise gets only from `kubectl top` + `describe`. A Pod
-          gauges against its limit/request (falling back to its node), a Node against capacity/allocatable
-          (Σrequest = the Req fill). Shown when there's anything to gauge — usage OR a request. */}
+      {/* CPU/memory resource bars — live usage gauged against each bound (a Pod's Lim + Req, a Node's
+          Cap + Alloc), wrapping into coloured laps when usage overshoots. The "am I bursting past my
+          request / spilling past allocatable" answer the operator otherwise gets only from `kubectl top`
+          + `describe`. Shown when there's anything to gauge — usage OR a declared bound. */}
       <Show when={props.node.kind === 'Pod' || props.node.kind === 'Node'}>
         <UsageGauges
           groups={drawerResourceBars({
@@ -300,7 +299,6 @@ export default function ResourceSummary(props: Props) {
             usage: props.usage,
             capacity: props.node.capacityRes,
             allocatable: props.node.allocatable,
-            reqSum: props.nodeReqSum,
             request: props.node.requests,
             limit: props.node.limits,
             hostCapacity: props.hostCapacity,

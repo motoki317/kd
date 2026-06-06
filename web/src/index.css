@@ -2217,8 +2217,9 @@ button.conn.conn-retry:focus-visible {
   border-style: dashed;
   background: transparent;
 }
-/* Fill = live usage. Default accent; recolours under pressure (Contrast): amber within 90% of the
-   limit, red once it exceeds the limit/request — the eye lands on the pod that's running hot. */
+/* Fill = live usage, wrapping into laps as it overshoots the ceiling. The foreground is the current
+   lap's partial fill; .metric-fill-base is a full-width layer beneath it carrying the last completed
+   lap's colour, so a bar reads "fully through lap N, partway into lap N+1". */
 .metric-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -2226,22 +2227,23 @@ button.conn.conn-retry:focus-visible {
   border-radius: 4px 0 0 4px;
   transition: width 0.2s;
 }
-.metric-fill.near {
-  background: var(--health-progressing);
+.metric-fill-base {
+  width: 100%;
+  border-radius: 4px;
 }
-.metric-fill.over {
+/* Lap palette (Contrast): lap 0 is the neutral accent; each wrap past the ceiling escalates
+   yellow → orange → red, so "1.5× the request" / "spilling past allocatable" pulls the eye. */
+.metric-fill.lap-0 {
+  background: var(--accent);
+}
+.metric-fill.lap-1 {
+  background: #e6c149;
+}
+.metric-fill.lap-2 {
+  background: #e8893c;
+}
+.metric-fill.lap-3 {
   background: var(--health-degraded);
-}
-/* A faint tick marking the request when the bar gauges against the limit, so "reserved vs ceiling"
-   stays visible without a second bar. The over-fill can sit above it (z-order) — keep it on top. */
-.metric-tick-req {
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  width: 2px;
-  background: var(--text-dim);
-  opacity: 0.7;
-  z-index: 1;
 }
 .metric-val {
   color: var(--text-dim);
