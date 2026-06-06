@@ -1393,6 +1393,16 @@ button.conn.conn-retry:focus-visible {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+/* The "+N more" disclosure is a control, not a filter — a dashed, fill-less chip so it reads as
+   distinct from the togglable relationship chips beside it (contrast: different function, different
+   look) and never looks "active". */
+.rel-more {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+.rel-more:hover {
+  color: var(--text);
+}
 .topology-kinds {
   /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". A strict
      single line that scrolls horizontally when the kinds overflow — keeps the bar exactly one row

@@ -15,6 +15,7 @@ import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
 import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
 import { isNodeFaded } from '../fade'
+import { readRawPref, writePref } from '../prefs'
 import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
@@ -344,6 +345,23 @@ export default function Topology(props: Props) {
       return { ...c, count: props.edges.filter((e) => types.has(e.type)).length }
     })
   })
+  // Fold the specialized (secondary) relationship lenses behind a "+N more" disclosure so the row stays
+  // scannable — the user's "collapse the minor ones" ask. An ACTIVE secondary always shows inline (so
+  // the operator never loses sight of what's drawn); only inactive ones hide. Persisted like the other
+  // display habits so the choice sticks across reloads.
+  const [relsExpanded, setRelsExpanded] = createSignal(readRawPref('kd:relsExpanded') === '1')
+  const toggleRelsExpanded = () =>
+    setRelsExpanded((v) => {
+      writePref('kd:relsExpanded', v ? '0' : '1')
+      return !v
+    })
+  const relActive = (id: RelCategory) => props.relFilter?.has(id) ?? false
+  const visibleRelChips = createMemo(() =>
+    relChips().filter((c) => !c.secondary || relActive(c.id) || relsExpanded()),
+  )
+  // Inactive secondary lenses present in this graph — the ones the disclosure folds away. The toggle
+  // appears only when there is at least one (else the row already shows everything).
+  const foldableRelCount = createMemo(() => relChips().filter((c) => c.secondary && !relActive(c.id)).length)
   // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
   // We snapshot the prior layout each time createEffect runs and diff against the new one.
@@ -1462,7 +1480,7 @@ export default function Topology(props: Props) {
           <div class="toolbar-facet">
             <span class="toolbar-label">Relationships</span>
             <div class="topology-rels" role="toolbar" aria-label="Relationship filter" onKeyDown={onToolbarKey}>
-            <For each={relChips()}>
+            <For each={visibleRelChips()}>
               {(c, i) => (
                 <button
                   class="rel-chip"
@@ -1477,6 +1495,19 @@ export default function Topology(props: Props) {
                 </button>
               )}
             </For>
+            {/* Disclosure for the folded secondary lenses (RBAC/Disruption/Monitoring). Shown only when
+                at least one is foldable; "+N more" reveals them inline, "less" folds them back. */}
+            <Show when={foldableRelCount() > 0 || relsExpanded()}>
+              <button
+                class="rel-chip rel-more"
+                tabindex={-1}
+                aria-expanded={relsExpanded()}
+                onClick={toggleRelsExpanded}
+                title={relsExpanded() ? 'Hide the specialized relationship lenses' : 'Show RBAC, Disruption, Monitoring'}
+              >
+                {relsExpanded() ? 'less' : `+${foldableRelCount()} more`}
+              </button>
+            </Show>
             </div>
           </div>
         </Show>

@@ -11,6 +11,10 @@ export interface RelCategoryDef {
   label: string
   hint: string
   edges: EdgeType[]
+  // secondary categories are the specialized lenses (RBAC, Disruption, Monitoring) an operator reaches
+  // for less often than the core topology (Ownership/Network/Volumes). The toolbar folds them behind a
+  // "+N more" expander so the relationship row stays scannable; an ACTIVE secondary still shows inline.
+  secondary?: boolean
 }
 
 // Order = display order of the toggle buttons. Ownership first (the default, the backbone), then
@@ -24,9 +28,9 @@ export const REL_CATEGORIES: RelCategoryDef[] = [
   { id: 'ownership', label: 'Ownership', hint: 'Parent→child workload tree (ownerReferences + CRD refs)', edges: ['ownerReference', 'refers'] },
   { id: 'network', label: 'Network', hint: 'Ingress→Service→Pod traffic + the NetworkPolicies that govern pods', edges: ['routes', 'selects', 'governs'] },
   { id: 'volumes', label: 'Volumes', hint: 'Pods and the ConfigMaps/Secrets/PVCs they mount', edges: ['mounts'] },
-  { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'] },
-  { id: 'scheduling', label: 'Disruption', hint: 'PodDisruptionBudgets → the pods they guard (pod↔node lives in the Nodes view)', edges: ['guards'] },
-  { id: 'monitoring', label: 'Monitoring', hint: 'ServiceMonitors/VMServiceScrapes → the Services they scrape', edges: ['scrapes'] },
+  { id: 'rbac', label: 'RBAC', hint: 'Bindings → Roles and the ServiceAccounts they grant', edges: ['binds', 'usesServiceAccount'], secondary: true },
+  { id: 'scheduling', label: 'Disruption', hint: 'PodDisruptionBudgets → the pods they guard (pod↔node lives in the Nodes view)', edges: ['guards'], secondary: true },
+  { id: 'monitoring', label: 'Monitoring', hint: 'ServiceMonitors/VMServiceScrapes → the Services they scrape', edges: ['scrapes'], secondary: true },
 ]
 
 const BY_ID = new Map(REL_CATEGORIES.map((c) => [c.id, c]))

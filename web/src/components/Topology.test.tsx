@@ -447,6 +447,36 @@ describe('Topology', () => {
     expect(inRel.container.querySelector('.topology-rels')).not.toBeNull()
   })
 
+  it('folds the secondary relationship lenses behind a "+N more" disclosure, expandable in place', () => {
+    localStorage.removeItem('kd:relsExpanded')
+    const ns: KNode[] = [
+      { id: 'd', kind: 'Deployment', name: 'web', health: 'Healthy' },
+      { id: 'p', kind: 'Pod', name: 'web-1', health: 'Healthy' },
+      { id: 'svc', kind: 'Service', name: 'web', health: 'Healthy' },
+      { id: 'sm', kind: 'ServiceMonitor', name: 'web', health: 'Healthy' },
+    ]
+    // Ownership (primary) + Monitoring (secondary) both present in the graph.
+    const es: KEdge[] = [
+      { from: 'd', to: 'p', type: 'ownerReference' },
+      { from: 'sm', to: 'svc', type: 'scrapes' },
+    ]
+    const { container } = render(() => (
+      <Topology nodes={ns} edges={es} search="" {...base} groupBy="relationship" onRelFilter={() => {}} />
+    ))
+    const labels = () => [...container.querySelectorAll('.topology-rels .rel-chip')].map((c) => c.textContent?.replace(/\d+$/, '').trim())
+    // Collapsed: the primary Ownership chip shows; Monitoring is folded behind "+1 more".
+    expect(labels()).toContain('Ownership')
+    expect(labels().some((l) => l?.startsWith('Monitoring'))).toBe(false)
+    const more = container.querySelector('.rel-more') as HTMLButtonElement
+    expect(more.textContent).toBe('+1 more')
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    // Expanding reveals Monitoring inline and flips the disclosure to "less".
+    fireEvent.click(more)
+    expect(labels().some((l) => l?.startsWith('Monitoring'))).toBe(true)
+    expect((container.querySelector('.rel-more') as HTMLButtonElement).textContent).toBe('less')
+    localStorage.removeItem('kd:relsExpanded')
+  })
+
   it('Nodes view tallies Health over the displayed set only (cluster Nodes + own-namespace Pods)', () => {
     // props.nodes carries the full namespace inventory the Nodes view never draws — a Degraded
     // Deployment and a Progressing Service here must NOT leak into the health pills/stripe.
