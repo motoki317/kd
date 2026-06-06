@@ -2432,6 +2432,26 @@ button.drawer-host:hover {
 .route-row.data-key {
   justify-content: space-between;
 }
+/* A wildcard-verb RBAC rule (can do anything to its resources) wears the caution colour + an explicit
+   filled tag, so an over-privileged grant stands out from the bounded rules around it (contrast). The
+   tag text is a fixed dark tone because amber needs dark contrast in BOTH themes (--bg would flip to a
+   light tone in light mode and wash out). Reuses --health-suspended — the one caution vocabulary the
+   taint/PDB chips already speak (repetition). */
+.route-row.route-priv {
+  border-color: var(--health-suspended);
+  color: var(--health-suspended);
+}
+.route-priv-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #1c1300;
+  background: var(--health-suspended);
+  border-radius: 3px;
+  padding: 0 4px;
+}
 .data-key-name {
   overflow-wrap: anywhere;
 }

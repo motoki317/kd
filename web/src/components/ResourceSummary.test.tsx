@@ -119,6 +119,21 @@ describe('ResourceSummary HPA', () => {
   })
 })
 
+describe('ResourceSummary RBAC', () => {
+  it('flags a wildcard-verb rule with an explicit tag + caution class, leaving bounded rules plain', () => {
+    const node: KNode = {
+      id: 'cr', kind: 'ClusterRole', name: 'admin', health: 'Healthy',
+      rules: ['*.*: *', 'pods, pods/log: get, list, watch'],
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const rows = [...container.querySelectorAll('.route-row')]
+    expect(rows[0].classList.contains('route-priv')).toBe(true)
+    expect(rows[0].querySelector('.route-priv-tag')?.textContent).toBe('wildcard')
+    expect(rows[1].classList.contains('route-priv')).toBe(false)
+    expect(rows[1].querySelector('.route-priv-tag')).toBeNull()
+  })
+})
+
 describe('ResourceSummary Node', () => {
   it('surfaces scheduling taints with the caution chip — why pods will not land here', () => {
     const node: KNode = {

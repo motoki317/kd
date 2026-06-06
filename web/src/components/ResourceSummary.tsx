@@ -2,6 +2,7 @@ import { createMemo, For, Show } from 'solid-js'
 import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
+import { ruleHasWildcardVerb } from '../rbac'
 import { relativeAge } from '../time'
 import type { ContainerStatus, Health, KNode } from '../types'
 import CopyButton from './CopyButton'
@@ -346,10 +347,25 @@ export default function ResourceSummary(props: Props) {
         </div>
       </Show>
       {/* A Role/ClusterRole's grants ("resources: verbs") — the whole point of the resource,
-          surfaced for the RBAC view instead of buried in the manifest. */}
+          surfaced for the RBAC view instead of buried in the manifest. A rule granting the `*` verb
+          can do ANYTHING to its resources (the cluster-admin shape), so it carries a caution tint and
+          an explicit "wildcard" tag — the over-privilege an auditor scans for, made to look different
+          (contrast) rather than hiding as one more identical row. */}
       <Show when={(props.node.rules?.length ?? 0) > 0}>
         <div class="drawer-routes">
-          <For each={props.node.rules}>{(r) => <code class="route-row">{r}</code>}</For>
+          <For each={props.node.rules}>
+            {(r) => {
+              const broad = ruleHasWildcardVerb(r)
+              return (
+                <code class="route-row" classList={{ 'route-priv': broad }} title={broad ? 'Wildcard verb — this rule grants every action on its resources' : undefined}>
+                  <Show when={broad}>
+                    <span class="route-priv-tag">wildcard</span>
+                  </Show>
+                  {r}
+                </code>
+              )
+            }}
+          </For>
         </div>
       </Show>
       {/* A binding's target role and grantees: User/Group subjects have no node, so this is the
