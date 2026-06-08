@@ -2427,6 +2427,11 @@ button.drawer-host:hover {
   background: color-mix(in srgb, var(--health-progressing) 7%, var(--surface));
   border-left-color: var(--health-progressing);
 }
+/* A cleanly-exited container is DONE, not running: a quiet gray left border, no tinted background —
+   it must not compete with a live (green) or broken (red) container for the eye. */
+.container-card.done {
+  border-left-color: var(--text-dim);
+}
 .container-card-head {
   display: flex;
   align-items: center;

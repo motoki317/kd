@@ -29,6 +29,38 @@ describe('ResourceSummary hero health gloss', () => {
   })
 })
 
+describe('ResourceSummary container status dots', () => {
+  const podWith = (statuses: KNode['containerStatuses']): KNode => ({
+    id: 'p', kind: 'Pod', name: 'job-x', health: 'Healthy', containerStatuses: statuses,
+  })
+  it('grays a cleanly-terminated container — green is reserved for a live, running container', () => {
+    const { container } = render(() => (
+      <ResourceSummary node={podWith([{ name: 'main', ready: false, state: 'Terminated: Completed' }])} {...base} />
+    ))
+    const card = container.querySelector('.container-card')!
+    expect(card.classList.contains('done')).toBe(true)
+    expect(card.classList.contains('h-healthy')).toBe(false) // not green
+    const dot = card.querySelector('.dot') as HTMLElement
+    expect(dot.style.background).toContain('--text-dim') // gray
+    // A done container is not flagged "not-ready" either — it's finished, not broken.
+    expect(card.classList.contains('not-ready')).toBe(false)
+  })
+  it('keeps green for a running, ready container and red for a failed termination', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'app', ready: true, state: 'Running' },
+          { name: 'sidecar', ready: false, state: 'Terminated: Error' },
+        ])}
+        {...base}
+      />
+    ))
+    const cards = container.querySelectorAll('.container-card')
+    expect(cards[0].classList.contains('h-healthy')).toBe(true) // running+ready stays green
+    expect(cards[1].classList.contains('h-degraded')).toBe(true) // failed exit stays red, not gray
+  })
+})
+
 describe('ResourceSummary pod usage gauges', () => {
   const pod: KNode = {
     id: 'p1',

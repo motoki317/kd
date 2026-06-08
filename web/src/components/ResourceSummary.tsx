@@ -4,20 +4,38 @@ import { healthColor, healthHint } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
-import { drawerResourceBars, MAX_LAP, type ResGroupModel } from '../resourceBars'
+import { drawerResourceBars, type ResGroupModel } from '../resourceBars'
 import { relativeAge } from '../time'
+import { useNow } from '../clock'
 import type { ContainerStatus, Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
 import CopyButton from './CopyButton'
 
 // containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
 // same colors as the rest of the UI: a crash-loop or non-Completed exit is Degraded, a not-yet-ready
-// Running container is Progressing, a completed init container is Healthy (done).
+// Running container is Progressing. A clean exit (Terminated: Completed) is NOT Healthy here — green
+// is reserved for a live, ready container (see containerDot); it resolves to Unknown and is recoloured.
 function containerHealth(cs: ContainerStatus): Health {
   if (cs.state.startsWith('Waiting:')) return 'Degraded'
-  if (cs.state.startsWith('Terminated:')) return cs.state.includes('Completed') ? 'Healthy' : 'Degraded'
+  if (cs.state.startsWith('Terminated:')) return cs.state.includes('Completed') ? 'Unknown' : 'Degraded'
   if (cs.state === 'Running') return cs.ready ? 'Healthy' : 'Progressing'
   return 'Unknown'
+}
+
+// isDone is a container that exited cleanly (a completed init container, or a Job/CronJob pod's main
+// container after success). It is finished, not running — so it reads as a neutral gray "done", never
+// the live green that an operator scans for to mean "this is up right now".
+function isDone(cs: ContainerStatus): boolean {
+  return cs.state.startsWith('Terminated:') && cs.state.includes('Completed')
+}
+
+// containerDot returns the dot/state colour and the card's status class in lockstep, so a completed
+// container is gray everywhere on its card. A done container is gray (--text-dim); everything else
+// uses its health hue. Reserving green for running is the whole point of the gray-for-done rule.
+function containerDot(cs: ContainerStatus): { color: string; cls: string } {
+  if (isDone(cs)) return { color: 'var(--text-dim)', cls: 'done' }
+  const h = containerHealth(cs)
+  return { color: healthColor(h), cls: `h-${h.toLowerCase()}` }
 }
 
 // endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
@@ -587,18 +605,20 @@ export default function ResourceSummary(props: Props) {
                     <span class="container-group-count">{group.items.length}</span>
                   </div>
                   <For each={group.items}>
-                    {(cs) => (
+                    {(cs) => {
+                      const dot = containerDot(cs)
+                      return (
                       <div
                         class="container-card"
                         classList={{
-                          'not-ready': !cs.ready && !cs.init,
-                          [`h-${containerHealth(cs).toLowerCase()}`]: true,
+                          'not-ready': !cs.ready && !cs.init && !isDone(cs),
+                          [dot.cls]: true,
                         }}
                       >
                         <div class="container-card-head">
-                          <span class="dot" style={{ background: healthColor(containerHealth(cs)) }} />
+                          <span class="dot" style={{ background: dot.color }} />
                           <span class="container-name">{cs.name}</span>
-                          <span class="container-state" style={{ color: healthColor(containerHealth(cs)) }}>
+                          <span class="container-state" style={{ color: dot.color }}>
                             {cs.state}
                           </span>
                           <Show when={(cs.restarts ?? 0) > 0}>
@@ -618,7 +638,8 @@ export default function ResourceSummary(props: Props) {
                           <ImageRef image={cs.image!} wrapClass="container-image" />
                         </Show>
                       </div>
-                    )}
+                      )
+                    }}
                   </For>
                 </div>
               </Show>
