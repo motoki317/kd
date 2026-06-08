@@ -226,7 +226,7 @@ describe('layoutGraph', () => {
   })
 
   it('keeps ONE pill when a mixed leaf/non-leaf sibling fold is expanded (no leaf-grid re-fold)', () => {
-    // Regression (arrove-duo Workflows): a WorkflowTemplate owns one RUNNING Workflow (owns a Pod →
+    // Regression (a Workflows namespace): a WorkflowTemplate owns one RUNNING Workflow (owns a Pod →
     // non-leaf, so foldSiblingSubtrees engages) plus many SUCCEEDED Workflows (degree-1 leaves). When
     // collapsed, the sibling fold removes the hidden ones and all is well. When EXPANDED it kept them
     // visible, and the downstream leaf-grid fold — which keys identically (sib:<hub>:Workflow) — folded
