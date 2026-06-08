@@ -185,8 +185,11 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
                               <div class="metric-burst" style={{ left: pct(b.tickFrac!), width: `${Math.min(100, b.fillFrac * 100) - b.tickFrac! * 100}%` }} />
                             </Show>
                           </Show>
-                          {/* The bound itself, as a tick — its position IS the bar's relative ceiling length. */}
-                          <Show when={b.tickFrac != null}>
+                          {/* The bound itself, as a tick — its position IS the bar's relative ceiling
+                              length. Skip it when the bound is the group max (tick at the far right): the
+                              bar's full length already says so, and a tick at left:100% clips against the
+                              bar's overflow:hidden into a 1px edge sliver. */}
+                          <Show when={b.tickFrac != null && b.tickFrac < 0.999}>
                             <div class="metric-tick" style={{ left: pct(b.tickFrac!) }} />
                           </Show>
                         </Show>

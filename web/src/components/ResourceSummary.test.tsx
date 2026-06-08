@@ -89,10 +89,13 @@ describe('ResourceSummary pod usage gauges', () => {
     const usage = { cpuMilli: 120, memBytes: 100 * 1024 * 1024 }
     const { container } = render(() => <ResourceSummary node={pod} {...base} usage={usage} />)
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
-    // Both bars carry one fill and one bound tick; equal usage ⇒ equal fill width (24%).
+    // Both bars carry one fill; equal usage ⇒ equal fill width (24%).
     expect((rows[0].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
     expect((rows[1].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
-    expect(rows[0].querySelector('.metric-tick')).toBeTruthy()
+    // The Lim bound IS the group max → its tick sits at the bar's right edge, so it's suppressed (the
+    // full-length bar already says so, and a tick at 100% would clip into an edge sliver). The Req
+    // tick, inside the bar at 0.2, still renders.
+    expect(rows[0].querySelector('.metric-tick')).toBeNull()
     expect(rows[1].querySelector('.metric-tick')).toBeTruthy()
     // Lim bar: usage under the limit → no overshoot hatch. Req bar: usage over the request → hatched.
     expect(rows[0].querySelector('.metric-burst')).toBeNull()
@@ -123,8 +126,9 @@ describe('ResourceSummary pod usage gauges', () => {
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     expect(rows.length).toBe(4)
     expect([...rows].every((r) => r.querySelector('.metric-fill') === null)).toBe(true) // empty, no fill
-    // The bound ticks still render — even without metrics, the bars encode the relative limit/request lengths.
-    expect([...rows].every((r) => r.querySelector('.metric-tick') !== null)).toBe(true)
+    // The Req tick still renders (inside the bar) even without metrics, encoding the relative bound
+    // length; the Lim tick is suppressed as the group max (its full-length bar already conveys it).
+    expect([...rows].map((r) => r.querySelector('.metric-tick') !== null)).toEqual([false, true, false, true])
     expect(rows[0].textContent).toContain('500m lim') // the bound still reads
     cleanup()
     const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
