@@ -853,8 +853,17 @@ export default function Topology(props: Props) {
           if (podBox) {
             fitCapBox(podBox)
           } else {
-            cancelAnimationFrame(selFitFrame)
-            selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
+            // Selecting the node NAME (opening its drawer) frames the row exactly like CLICKING the row
+            // does (toggleCapRow): width-driven + top-anchored when expanded, centred when collapsed.
+            // Framing the row's FULL height (the old fitNodeSet path) zoomed an expanded many-pod stack
+            // so far out the bars and text were unreadable — the user's report.
+            const row = capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
+            if (row && expandedClusters().has(`host:${row.host}`)) fitCapRowExpanded(row)
+            else if (row) fitCapBox({ x: row.x, y: row.y, width: row.width, height: row.height })
+            else {
+              cancelAnimationFrame(selFitFrame)
+              selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
+            }
           }
           return
         }
