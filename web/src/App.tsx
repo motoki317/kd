@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceSummary } from './api'
+import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceInfo, type NamespaceSummary } from './api'
 import { descendantPods, hasDescendantPod } from './loggable'
 import { aggregateWorkloadUsage } from './usageAggregate'
 import { hostNodeCapacity } from './resourceBars'
@@ -463,12 +463,18 @@ export default function App() {
   // value — fixes the old bug where opening a degraded namespace in ownership view "healed" it
   // because the filtered topology omitted the actually-degraded resource (e.g. an endpointless
   // Service that lives in network view).
-  const sidebarNamespaces = createMemo(() => {
+  // Held in a RECONCILED store (keyed by name) rather than a plain memo: the memo rebuilt the selected
+  // namespace as a fresh object on every `summary` event, so the Sidebar's <For> tore down and recreated
+  // that row each tick (the namespace-list "flicker"). reconcile patches only the changed row's health
+  // in place, so <For> keeps the DOM and the dot recolours surgically — the same fix the canvas cards got.
+  const [sidebarNs, setSidebarNs] = createStore<NamespaceInfo[]>([])
+  createEffect(() => {
     const list = namespaceList()
     const ns = namespace()
     const live = liveSummary()
-    if (!connected() || !ns || !live) return list
-    return list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
+    const next =
+      !connected() || !ns || !live ? list : list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
+    setSidebarNs(reconcile(next, { key: 'name' }))
   })
 
   // Health distribution across the view, kept here for the favicon attention badge. The toolbar's
@@ -627,7 +633,7 @@ export default function App() {
 
       <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }}>
         <Sidebar
-          namespaces={sidebarNamespaces()}
+          namespaces={sidebarNs}
           selected={namespace()}
           onSelect={setNamespace}
           loading={namespaces.loading}

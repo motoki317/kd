@@ -2192,7 +2192,7 @@ export default function Topology(props: Props) {
                 while fading out — operators see "what left" rather than a card vanishing. The Nodes
                 group-by draws its own bar visualization above (cap-view), so the card renderer is
                 skipped there — its layout().nodes are segment hit-boxes, not cards. */}
-            <For each={props.groupBy === 'nodes' ? [] : [...layout().nodes, ...exiting()]}>
+            <For each={renderNodes}>
               {(n) => (
                 <Show
                   when={n.collapse}
