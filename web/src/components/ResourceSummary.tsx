@@ -150,12 +150,12 @@ interface Props {
 }
 
 // UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
-// Req, a Node's Cap + Alloc), each gauging LIVE USAGE against that bound. The bound is the bar's full
-// length; when usage overshoots, the fill WRAPS into a new lap drawn in an escalating colour (.lap-N:
-// blue → yellow → orange → red), so bursting past a request or spilling past allocatable reads at a
-// glance instead of clamping flat. A full base layer carries the last completed lap's colour; the
-// foreground is the current lap's partial fill. Built by drawerResourceBars.
-const lapClass = (n: number) => `lap-${Math.min(n, MAX_LAP)}`
+// Req, a Node's Cap + Alloc). Every bar in a group shares ONE linear scale (like the Nodes capacity
+// view), so the fill — LIVE USAGE — draws the SAME length on both bars and each bound shows as a TICK at
+// its true relative position (a 256Mi limit reads visibly shorter than a 281Mi request). Usage past a
+// bound runs the fill PAST that tick, with the overshoot hatched — the "over its request/limit" signal.
+// Built by drawerResourceBars.
+const pct = (f: number) => `${Math.min(100, f * 100)}%`
 function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
   return (
     <Show when={props.groups.length > 0}>
@@ -416,7 +416,7 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.lastRun || (props.node.active ?? 0) > 0 || (props.node.failed ?? 0) > 0}>
         <div class="drawer-ports">
           <Show when={props.node.lastRun}>
-            <MetaChip label="last run" value={`${relativeAge(props.node.lastRun!)} ago`} title="Last schedule time" />
+            <MetaChip label="last run" value={`${relativeAge(props.node.lastRun!, useNow())} ago`} title="Last schedule time" />
           </Show>
           <Show when={(props.node.active ?? 0) > 0}>
             <MetaChip label="active" value={props.node.active!} title="Running now" />

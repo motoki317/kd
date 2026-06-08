@@ -2231,12 +2231,19 @@ button.conn.conn-retry:focus-visible {
 }
 /* One resource's Use+Req bars, grouped under a CPU/Mem heading (Proximity) so the two read as a pair —
    the same "Use over Req" stack the Nodes capacity view draws for each node. */
+/* The group is a grid; each row borrows its columns via subgrid so EVERY bar's track shares one left
+   gutter AND one right edge — the shared ruler that makes equal usage draw equal length across the
+   Lim/Req (or Cap/Alloc) bars. Without it, per-row `auto` value columns of differing width would skew
+   each track and break the comparison. The group label spans all columns as a heading row. */
 .metric-group {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 3px;
 }
 .metric-group-label {
+  grid-column: 1 / -1;
   color: var(--text-dim);
   font-weight: 600;
   font-size: 10px;
@@ -2245,9 +2252,9 @@ button.conn.conn-retry:focus-visible {
 }
 .metric-row {
   display: grid;
-  grid-template-columns: 34px 1fr auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  gap: 8px;
   font-size: 11px;
 }
 /* "Use" / "Req" per-bar label — mirrors the capacity view's axis labels; the two bars share one fill
@@ -2273,9 +2280,9 @@ button.conn.conn-retry:focus-visible {
   border-style: dashed;
   background: transparent;
 }
-/* Fill = live usage, wrapping into laps as it overshoots the ceiling. The foreground is the current
-   lap's partial fill; .metric-fill-base is a full-width layer beneath it carrying the last completed
-   lap's colour, so a bar reads "fully through lap N, partway into lap N+1". */
+/* Fill = live usage on the group's shared scale, so its length is directly comparable across the bars
+   (and to nothing else on screen — it is the same usage on Lim and Req). A single neutral accent; the
+   "over a bound" signal is the hatched overshoot past that bound's tick, not a colour change. */
 .metric-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -2283,23 +2290,29 @@ button.conn.conn-retry:focus-visible {
   border-radius: 4px 0 0 4px;
   transition: width 0.2s;
 }
-.metric-fill-base {
-  width: 100%;
-  border-radius: 4px;
+/* The bound tick: a thin vertical mark at the bound's position on the shared scale, so the bar's
+   relative ceiling length is legible even at a glance and an overshoot reads as the fill running past
+   it. Drawn on top of the fill. */
+.metric-tick {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text-dim);
+  border-radius: 1px;
 }
-/* Lap palette (Contrast): lap 0 is the neutral accent; each wrap past the ceiling escalates
-   yellow → orange → red, so "1.5× the request" / "spilling past allocatable" pulls the eye. */
-.metric-fill.lap-0 {
-  background: var(--accent);
-}
-.metric-fill.lap-1 {
-  background: #e6c149;
-}
-.metric-fill.lap-2 {
-  background: #e8893c;
-}
-.metric-fill.lap-3 {
-  background: var(--health-degraded);
+/* Overshoot: the slice of the fill beyond the tick, hatched (colour-independent) so "past its
+   request/limit" pulls the eye the same way the Nodes view's burst overlay does. */
+.metric-burst {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--health-degraded) 75%, transparent) 0 2px,
+    transparent 2px 5px
+  );
 }
 .metric-val {
   color: var(--text-dim);

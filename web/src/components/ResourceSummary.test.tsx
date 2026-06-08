@@ -83,17 +83,20 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows[1].querySelector('.metric-val b')?.textContent).toBe('120m') // usage again, not the request
     expect(rows[1].textContent).toContain('100m req')
   })
-  it('wraps usage into escalating lap colours as it overshoots each bound', () => {
-    // CPU 120m: 0.24 of the 500m limit (lap 0, blue), 1.2× the 100m request (lap 1, yellow).
+  it('draws one shared-scale fill plus a bound tick, hatching the overshoot past a crossed bound', () => {
+    // CPU 120m, limit 500m, request 100m → groupMax 500. The fill (0.24) is the SAME on both bars; only
+    // the tick differs (limit at 1.0, request at 0.2). Usage is under the limit but over the request.
     const usage = { cpuMilli: 120, memBytes: 100 * 1024 * 1024 }
     const { container } = render(() => <ResourceSummary node={pod} {...base} usage={usage} />)
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
-    // Lim bar: under the limit → a single lap-0 fill, no base layer.
-    expect(rows[0].querySelector('.metric-fill.lap-0')).toBeTruthy()
-    expect(rows[0].querySelector('.metric-fill-base')).toBeNull()
-    // Req bar: over the request → a full lap-0 base under a lap-1 (yellow) foreground.
-    expect(rows[1].querySelector('.metric-fill-base.lap-0')).toBeTruthy()
-    expect(rows[1].querySelector('.metric-fill.lap-1')).toBeTruthy()
+    // Both bars carry one fill and one bound tick; equal usage ⇒ equal fill width (24%).
+    expect((rows[0].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
+    expect((rows[1].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
+    expect(rows[0].querySelector('.metric-tick')).toBeTruthy()
+    expect(rows[1].querySelector('.metric-tick')).toBeTruthy()
+    // Lim bar: usage under the limit → no overshoot hatch. Req bar: usage over the request → hatched.
+    expect(rows[0].querySelector('.metric-burst')).toBeNull()
+    expect(rows[1].querySelector('.metric-burst')).toBeTruthy()
   })
   it('falls back to the host-node capacity as the ceiling for an unconstrained pod', () => {
     const noBounds: KNode = { id: 'p2', kind: 'Pod', name: 'web-2', health: 'Healthy', host: 'ip-10-0-0-1' }
@@ -120,6 +123,8 @@ describe('ResourceSummary pod usage gauges', () => {
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     expect(rows.length).toBe(4)
     expect([...rows].every((r) => r.querySelector('.metric-fill') === null)).toBe(true) // empty, no fill
+    // The bound ticks still render — even without metrics, the bars encode the relative limit/request lengths.
+    expect([...rows].every((r) => r.querySelector('.metric-tick') !== null)).toBe(true)
     expect(rows[0].textContent).toContain('500m lim') // the bound still reads
     cleanup()
     const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
@@ -172,8 +177,8 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows.length).toBe(4)
     expect([...rows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Cap', 'Alloc', 'Cap', 'Alloc'])
     expect(rows[0].textContent).toContain('3.9 / 4 cap') // cores, capacityRes drives the unit
-    expect(rows[0].querySelector('.metric-fill-base')).toBeNull() // under capacity → lap 0, no wrap
-    expect(rows[1].querySelector('.metric-fill.lap-1')).toBeTruthy() // past allocatable → wrapped to yellow
+    expect(rows[0].querySelector('.metric-burst')).toBeNull() // under capacity → no overshoot
+    expect(rows[1].querySelector('.metric-burst')).toBeTruthy() // past allocatable → fill runs past the Alloc tick
   })
 })
 
