@@ -4,6 +4,7 @@ import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
+import { useNow } from '../clock'
 import type { KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
 import { LOGGABLE_KINDS } from '../loggable'
@@ -537,7 +538,7 @@ export default function DetailDrawer(props: Props) {
                                 )}
                               </Show>
                               <span class="event-age" title={ev.last}>
-                                {relativeAge(ev.last)}
+                                {relativeAge(ev.last, useNow())}
                               </span>
                             </div>
                             <div class="event-message">{ev.message}</div>

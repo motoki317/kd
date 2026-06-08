@@ -34,7 +34,9 @@ const configMap: KNode = {
   name: 'settings',
   namespace: 'shop',
   health: 'Healthy',
-  createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
+  // 3 days + a margin: ages off the shared app clock (captured at import, a hair before render), so an
+  // exactly-3-day fixture could tip to "2d". The margin keeps it unambiguously in the "3d" bucket.
+  createdAt: new Date(Date.now() - (3 * 86400_000 + 3600_000)).toISOString(),
 }
 
 describe('DetailDrawer', () => {

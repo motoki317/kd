@@ -164,25 +164,31 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
           {(g) => (
             <div class="metric-group">
               {/* The resource heading groups its bars (Proximity); the per-bar Lim/Req (or Cap/Alloc)
-                  label names which bound each measures usage against. */}
+                  label names which bound each tick marks. */}
               <div class="metric-group-label">{g.label}</div>
               <For each={g.bars}>
                 {(b) => {
                   const pair = formatPair(b.usage, b.ceil, g.res, g.unitRef)
                   const ref = b.unconstrained ? 'unset' : `${pair.cap} ${b.label.toLowerCase()}`
-                  // The fill wraps the bar each lap: a full base layer in the last completed lap's colour,
-                  // then the current lap's partial fill on top. At lap 0 there's no base — just the fill.
-                  const fillW = b.usage == null ? 0 : b.frac * 100
+                  const ratio = b.usage != null && b.ceil ? b.usage / b.ceil : 0
                   return (
                     <div class="metric-row">
                       <span class="metric-sublabel">{b.label}</span>
                       {/* An unconstrained bar (no bound) shows a dashed empty track — never a fake-full bar. */}
-                      <div class="metric-bar" classList={{ unconstrained: b.unconstrained }} title={b.unconstrained ? `${pair.value} used · ungauged` : `${pair.value} used · ${ref}${b.over ? ` · ${(b.laps + b.frac).toFixed(1)}× over` : ''}`}>
-                        <Show when={!b.unconstrained && b.usage != null}>
-                          <Show when={b.laps >= 1}>
-                            <div class="metric-fill metric-fill-base" classList={{ [lapClass(b.laps - 1)]: true }} />
+                      <div class="metric-bar" classList={{ unconstrained: b.unconstrained }} title={b.unconstrained ? `${pair.value} used · ungauged` : `${pair.value} used · ${ref}${b.over ? ` · ${ratio.toFixed(1)}× over` : ''}`}>
+                        <Show when={!b.unconstrained}>
+                          {/* Usage fill on the shared scale (same length across this group's bars). */}
+                          <Show when={b.usage != null}>
+                            <div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />
+                            {/* Overshoot: hatch the portion of the fill beyond this bound's tick. */}
+                            <Show when={b.over && b.tickFrac != null}>
+                              <div class="metric-burst" style={{ left: pct(b.tickFrac!), width: `${Math.min(100, b.fillFrac * 100) - b.tickFrac! * 100}%` }} />
+                            </Show>
                           </Show>
-                          <div class="metric-fill" classList={{ [lapClass(b.laps)]: true }} style={{ width: `${fillW}%` }} />
+                          {/* The bound itself, as a tick — its position IS the bar's relative ceiling length. */}
+                          <Show when={b.tickFrac != null}>
+                            <div class="metric-tick" style={{ left: pct(b.tickFrac!) }} />
+                          </Show>
                         </Show>
                       </div>
                       <span class="metric-val">
@@ -281,7 +287,7 @@ export default function ResourceSummary(props: Props) {
         </Show>
         <Show when={props.node.createdAt}>
           <span class="drawer-age" title={props.node.createdAt}>
-            {relativeAge(props.node.createdAt!)} old
+            {relativeAge(props.node.createdAt!, useNow())} old
           </span>
         </Show>
         <Show when={(props.node.restarts ?? 0) > 0}>

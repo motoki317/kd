@@ -1,6 +1,8 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
+import { createStore, reconcile } from 'solid-js/store'
 import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
 import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatPair, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
+import { useNow } from '../clock'
 import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
@@ -451,15 +453,26 @@ export default function Topology(props: Props) {
   })
   const exitingIds = createMemo(() => new Set(exiting().map((n) => n.id)))
 
+  // Render the cards from a RECONCILED store keyed by id, NOT straight off layout(). layout() is a pure
+  // recompute that rebuilds every PositionedNode object each run, so a <For each={layout().nodes}> keyed
+  // by object reference tore down and recreated EVERY card on any structural (add/remove) patch — the
+  // canvas "flicker" the operator saw (measured: a single pod scaling rebuilt all 45 cards). reconcile
+  // with key:'id' preserves each surviving card's object identity across recomputes, so <For> keeps its
+  // DOM and Solid surgically patches only the changed fields (x/y/health/…) on the cards that actually
+  // moved. Empty in the Nodes group-by — its own bar renderer draws there, not these cards.
+  const [renderNodes, setRenderNodes] = createStore<import('../layout').PositionedNode[]>([])
+  createEffect(() => {
+    const next = props.groupBy === 'nodes' ? [] : [...layout().nodes, ...exiting()]
+    setRenderNodes(reconcile(next, { key: 'id' }))
+  })
+
   // Map each node to the longest PREFIX-PARENT name (prefixParentNames), so a child renders relative to
   // its parent in the tree. Walks the full edge set — see names.ts for the prefix/longest-match rules.
   const ownerName = createMemo(() => prefixParentNames(props.nodes, props.edges))
 
-  // Re-evaluate age on a slow ticker so cards age in place without a reload. 30s matches the
-  // resolution of the smallest unit relativeAge can shift across ("5s"→"6s") cheaply enough.
-  const [now, setNow] = createSignal(new Date())
-  const tick = setInterval(() => setNow(new Date()), 30_000)
-  onCleanup(() => clearInterval(tick))
+  // Age cards in place off the shared app clock (one 30s ticker for the whole UI — the drawer reads the
+  // same one, so canvas and sidebar ages stay in lockstep). now() re-runs age memos when it ticks.
+  const now = useNow
   const ageOf = (n: KNode) => (n.createdAt ? relativeAge(n.createdAt, now()) : '')
   // Right-side badge on the name line: combine restart count (when present) and age (when known).
   // Operators read either as a "needs a look" signal — a high restart count or a freshly-restarted
