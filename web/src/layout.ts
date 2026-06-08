@@ -223,6 +223,19 @@ function foldSiblingSubtrees(
   // Visible siblings to frame together with their pill (id → collapse key), so connGroups draws the
   // SAME dashed grouping border the leaf-block fold gets — without it the pill floated unframed.
   const framed = new Map<string, string>()
+  // FOLD OWNERSHIP: a node is covered by AT MOST ONE pill. `claimed` records every node this pass has
+  // already folded (visible + hidden members), which closes two double-fold holes that share a root
+  // cause — the same nodes reached by two fold decisions:
+  //   1. A group reachable from TWO parents (Karpenter NodeClaims own a Node, so they reach here, AND
+  //      are children of both a NodePool and an EC2NodeClass). Without this each parent minted its own
+  //      pill over the same set under a different key; since each key removes those nodes, expanding
+  //      one left the other still hiding them — two stacked pills that did nothing.
+  //   2. The downstream leaf-grid fold (findHubs/collapseHubLeaves) re-folding the SAME group: it keys
+  //      identically (`sib:<hub>:<kind>`), so when this pass kept a group expanded (nodes not removed),
+  //      the leaf path folded its leaves again into a second pill on the same key — two "show N fewer".
+  // Members this pass keeps are tagged with `collapseGroup` (below), and the leaf path skips any
+  // collapseGroup-tagged leaf — so ownership, once taken here, is honored everywhere.
+  const claimed = new Set<string>()
   const pills: Array<KNode & { _collapse: CollapseMeta; _pillSlot: number; collapseGroup: string }> = []
   const pillEdges: KEdge[] = []
   for (const [parentId, childEdges] of childEdgesOf) {
@@ -238,10 +251,13 @@ function foldSiblingSubtrees(
       // Only groups the leaf-block path can't fold: at least one sibling owns a subtree. Pure-leaf
       // groups keep their compact grid fold via findHubs/collapseHubLeaves.
       if (!group.some((g) => isParent.has(g.node.id))) continue
+      // Skip a group whose members another parent already folded (shared-children case, see `claimed`).
+      if (group.every((g) => claimed.has(g.node.id))) continue
       const key = `sib:${parentId}:${kind}`
       const isExpanded = expanded.has(key)
       const { visible, hidden, pillIndex } = splitForFold(group.map((g) => g.node), isExpanded)
       if (hidden.length < COLLAPSE_MIN_HIDDEN) continue
+      for (const g of group) claimed.add(g.node.id) // own every member (visible + hidden) — fold it once
 
       const descendants = descendantsOf(hidden.map((n) => n.id))
       // _pillSlot is the pill's position among the visible siblings (between head and tail while
@@ -753,6 +769,10 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
   for (const e of edges) {
     const leaf = byId.get(e.to)
     if (!leaf || leaf.kind === COLLAPSE_KIND) continue // missing or a pre-folded pill is not a wrappable leaf
+    // Fold ownership: a leaf already framed by foldSiblingSubtrees (its sibling group reached here
+    // because a sibling owns a subtree) is OFF-LIMITS — re-folding it would mint a second pill on the
+    // same `sib:<hub>:<kind>` key. Skip it; the sibling fold already gave it a pill + frame.
+    if ((leaf as { collapseGroup?: string }).collapseGroup) continue
     if ((outdeg.get(e.to) ?? 0) !== 0) continue // a node with children of its own is not a leaf
     const list = parentsOf.get(e.to)
     if (list) list.push(e)
@@ -929,11 +949,17 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     const par = parentOf.get(n.id)
     // A foldSiblingSubtrees pill joins its siblings' column group (keyed by the real kind it stands in
     // for) so it shares their frame and slots in by row, rather than forming a stray __collapse__ group.
-    const meta = n as KNode & { _collapse?: CollapseMeta; _pillSlot?: number }
+    const meta = n as KNode & { _collapse?: CollapseMeta; _pillSlot?: number; collapseGroup?: string }
     const isPill = n.kind === COLLAPSE_KIND && !!meta._collapse
     const groupKind = isPill ? meta._collapse!.groupKind : n.kind
+    // A folded sibling group carries ONE collapseGroup key on every member AND its pill. Group by that
+    // key when present so the pill always lands in its siblings' column — keying by primary parent
+    // splits them when the pill's owning parent differs from the siblings' shallowest parent (a
+    // multi-parent group: NodeClaims' pill hangs off the NodePool, but the cards' shallowest parent is
+    // the EC2NodeClass, so the pill stranded at the column's bottom instead of between head and tail).
+    const group = meta.collapseGroup ?? (par !== undefined ? `${par}|${groupKind}` : `root:${n.id}`)
     units.push({
-      rank: r, kind: groupKind, group: par !== undefined ? `${par}|${groupKind}` : `root:${n.id}`, name: n.name,
+      rank: r, kind: groupKind, group, name: n.name,
       w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0, id: n.id, parent: par,
       pillSlot: isPill ? meta._pillSlot : undefined,
       place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),

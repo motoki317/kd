@@ -225,6 +225,88 @@ describe('layoutGraph', () => {
     expect(connGroups(l).map((f) => f.key)).toEqual(['sib:wt:Workflow']) // still one frame
   })
 
+  it('keeps ONE pill when a mixed leaf/non-leaf sibling fold is expanded (no leaf-grid re-fold)', () => {
+    // Regression (arrove-duo Workflows): a WorkflowTemplate owns one RUNNING Workflow (owns a Pod →
+    // non-leaf, so foldSiblingSubtrees engages) plus many SUCCEEDED Workflows (degree-1 leaves). When
+    // collapsed, the sibling fold removes the hidden ones and all is well. When EXPANDED it kept them
+    // visible, and the downstream leaf-grid fold — which keys identically (sib:<hub>:Workflow) — folded
+    // those revealed leaves into a SECOND pill: two "show N fewer" toggles in one frame. Fold ownership
+    // (the leaf path skips collapseGroup-tagged leaves) must leave exactly one pill in either state.
+    const wt: KNode = { id: 'wt', kind: 'WorkflowTemplate', name: 'reproject', health: 'Healthy' }
+    const wfs: KNode[] = []
+    const extra: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 20; i++) {
+      const id = `wf${String(i).padStart(2, '0')}`
+      wfs.push({ id, kind: 'Workflow', name: `wf-${String(i).padStart(2, '0')}`, health: 'Healthy' })
+      e.push({ from: 'wt', to: id, type: 'refers' })
+    }
+    // wf00 is the lone non-leaf (owns a Pod) — what makes the group reach foldSiblingSubtrees at all.
+    extra.push({ id: 'wf00-pod', kind: 'Pod', name: 'wf00-pod', health: 'Healthy' })
+    e.push({ from: 'wf00', to: 'wf00-pod', type: 'ownerReference' })
+
+    const key = 'sib:wt:Workflow'
+    for (const [label, exp] of [['collapsed', new Set<string>()], ['expanded', new Set([key])]] as const) {
+      const l = layoutGraph([wt, ...wfs, ...extra], e, 'LR', exp)
+      const pills = l.nodes.filter((n) => n.collapse)
+      expect(pills, `${label}: exactly one pill`).toHaveLength(1)
+      expect(pills[0].collapse!.key).toBe(key)
+      // Every framed Workflow shares the one collapse key — no second leaf-grid frame on a rival key.
+      expect(new Set(connGroups(l).map((f) => f.key))).toEqual(new Set([key]))
+    }
+    // Expanding reveals all 20 Workflows under that single pill (now a "show fewer" toggle).
+    const expanded = layoutGraph([wt, ...wfs, ...extra], e, 'LR', new Set([key]))
+    expect(expanded.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(20)
+    expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true)
+  })
+
+  it('folds a same-kind group shared by TWO parents ONCE, not one dead pill per parent', () => {
+    // Regression (Karpenter cluster scope): NodeClaims own a Node (degree > 1, so they reach the
+    // non-leaf sibling fold) AND are children of BOTH a NodePool and an EC2NodeClass. The fold ran
+    // per parent, minting two identical "+6 more" pills under different collapse keys; because each
+    // key independently removed the hidden NodeClaims, expanding one pill left the other still hiding
+    // them — two misaligned pills that did nothing. The shared member set must fold exactly once.
+    const np: KNode = { id: 'np', kind: 'NodePool', name: 'default', health: 'Healthy' }
+    const nc: KNode = { id: 'nc', kind: 'EC2NodeClass', name: 'default', health: 'Healthy' }
+    const claims: KNode[] = []
+    const nodes: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 9; i++) {
+      const id = `claim${i}`
+      claims.push({ id, kind: 'NodeClaim', name: `claim-${String(i).padStart(2, '0')}`, health: 'Healthy' })
+      nodes.push({ id: `node${i}`, kind: 'Node', name: `node-${i}`, health: 'Healthy' })
+      e.push({ from: 'np', to: id, type: 'refers' }) // np seen first → it owns the surviving pill
+      e.push({ from: id, to: `node${i}`, type: 'ownerReference' }) // makes each claim non-leaf
+    }
+    // EC2NodeClass is the SHALLOWER parent (nc → np → claims), so the claim cards' primary parent is nc
+    // while the pill hangs off np — the exact mismatch that stranded the pill at the column's bottom.
+    e.push({ from: 'nc', to: 'np', type: 'refers' })
+    for (let i = 0; i < 9; i++) e.push({ from: 'nc', to: `claim${i}`, type: 'refers' })
+    const l = layoutGraph([np, nc, ...claims, ...nodes], e, 'LR')
+
+    // Exactly ONE pill, not one per parent.
+    const pills = l.nodes.filter((n) => n.collapse)
+    expect(pills).toHaveLength(1)
+    expect(connGroups(l).map((f) => f.key)).toEqual(['sib:np:NodeClaim']) // single frame
+    const visibleClaims = l.nodes.filter((n) => n.kind === 'NodeClaim')
+    expect(visibleClaims).toHaveLength(COLLAPSE_VISIBLE) // 3 shown, 6 hidden behind the one pill
+    expect(pills[0].collapse!.hidden).toHaveLength(6)
+
+    // The pill sits BETWEEN head and tail in the claims column — NOT stranded at the bottom. It hangs
+    // off the NodePool while the cards' shallowest parent is the EC2NodeClass, so grouping by primary
+    // parent split the pill from its siblings; grouping by the shared collapseGroup keeps them together.
+    const headCard = visibleClaims.find((n) => n.name === 'claim-00')!
+    const tailCards = visibleClaims.filter((n) => n.name !== 'claim-00').sort((a, b) => a.y - b.y)
+    expect(headCard.y).toBeLessThan(pills[0].y) // head above the pill
+    expect(pills[0].y).toBeLessThan(tailCards[0].y) // pill above the tail
+    expect(new Set(visibleClaims.concat(pills[0]).map((n) => Math.round(n.x))).size).toBe(1) // one column
+
+    // Expanding that single key restores ALL claims (and their Node subtrees) — the pill is live.
+    const expanded = layoutGraph([np, nc, ...claims, ...nodes], e, 'LR', new Set([pills[0].collapse!.key]))
+    expect(expanded.nodes.filter((n) => n.kind === 'NodeClaim')).toHaveLength(9)
+    expect(expanded.nodes.filter((n) => n.collapse)).toHaveLength(1) // still just one toggle
+  })
+
   it('does NOT fold a fan-IN hub: its many parents stay aligned in the leftmost depth column', () => {
     // The Volumes "weird grouping" fix: a shared target (one Secret mounted by 12 Pods) must not fold
     // its degree-1 PARENTS behind a pill. Folding a subset of the Pod kind — while other Pods in the
