@@ -168,6 +168,63 @@ describe('layoutGraph', () => {
     expect(expanded.nodes.find((n) => n.collapse)!.collapse!.expanded).toBe(true) // pill is now a "show fewer" toggle
   })
 
+  it('frames a folded non-leaf sibling group and slots its pill between head and tail', () => {
+    // Regression: the non-leaf sibling fold used to emit the pill as a bare graph node, so it floated
+    // to the top of the column UNFRAMED (its own __collapse__ group) instead of reading head → pill →
+    // tail inside one dashed border — the way the leaf-block fold already renders.
+    const tmpl: KNode = { id: 'wt', kind: 'WorkflowTemplate', name: 'build', health: 'Healthy' }
+    const wfs: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 8; i++) {
+      const id = `wf${i}`
+      wfs.push({ id, kind: 'Workflow', name: `wf-${String(i).padStart(2, '0')}`, health: 'Healthy' })
+      e.push({ from: 'wt', to: id, type: 'refers' })
+      // Every Workflow owns a Pod so the whole group is non-leaf (the foldSiblingSubtrees path).
+      e.push({ from: id, to: `${id}-pod`, type: 'ownerReference' })
+    }
+    const pods: KNode[] = wfs.map((w) => ({ id: `${w.id}-pod`, kind: 'Pod', name: `${w.id}-pod`, health: 'Healthy' as const }))
+    const l = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR')
+
+    // The visible Workflows AND the pill share ONE collapse frame — no stray __collapse__ group.
+    const frames = connGroups(l)
+    expect(frames.map((f) => f.key)).toEqual(['sib:wt:Workflow'])
+    const pill = l.nodes.find((n) => n.collapse)!
+    expect(pill.collapseGroup).toBe('sib:wt:Workflow')
+    const visibleWfs = l.nodes.filter((n) => n.kind === 'Workflow')
+    expect(visibleWfs).toHaveLength(COLLAPSE_VISIBLE)
+    expect(visibleWfs.every((n) => n.collapseGroup === 'sib:wt:Workflow')).toBe(true)
+
+    // Column reads head (wf-00) → pill → tail (wf-06, wf-07), all in one depth column.
+    const head = visibleWfs.find((n) => n.name === 'wf-00')!
+    const tail = visibleWfs.filter((n) => n.name !== 'wf-00').sort((a, b) => a.y - b.y)
+    expect(head.y).toBeLessThan(pill.y) // head above the pill
+    expect(pill.y).toBeLessThan(tail[0].y) // pill above the tail
+    expect(new Set(visibleWfs.concat(pill).map((n) => Math.round(n.x))).size).toBe(1) // one column
+
+    // The frame hugs just the 4 cards (head + pill + 2 tail), not their Pod subtrees off to the right.
+    const podX = l.nodes.find((n) => n.kind === 'Pod')!.x
+    expect(frames[0].x + frames[0].width).toBeLessThan(podX)
+  })
+
+  it('moves the pill to the bottom of the framed group when the sibling fold is expanded', () => {
+    const tmpl: KNode = { id: 'wt', kind: 'WorkflowTemplate', name: 'build', health: 'Healthy' }
+    const wfs: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 8; i++) {
+      const id = `wf${i}`
+      wfs.push({ id, kind: 'Workflow', name: `wf-${String(i).padStart(2, '0')}`, health: 'Healthy' })
+      e.push({ from: 'wt', to: id, type: 'refers' })
+      e.push({ from: id, to: `${id}-pod`, type: 'ownerReference' })
+    }
+    const pods: KNode[] = wfs.map((w) => ({ id: `${w.id}-pod`, kind: 'Pod', name: `${w.id}-pod`, health: 'Healthy' as const }))
+    const l = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR', new Set(['sib:wt:Workflow']))
+    const pill = l.nodes.find((n) => n.collapse)!
+    const wfYs = l.nodes.filter((n) => n.kind === 'Workflow').map((n) => n.y)
+    expect(l.nodes.filter((n) => n.kind === 'Workflow')).toHaveLength(8) // all shown
+    expect(pill.y).toBeGreaterThan(Math.max(...wfYs)) // pill sits below every (now visible) sibling
+    expect(connGroups(l).map((f) => f.key)).toEqual(['sib:wt:Workflow']) // still one frame
+  })
+
   it('does NOT fold a fan-IN hub: its many parents stay aligned in the leftmost depth column', () => {
     // The Volumes "weird grouping" fix: a shared target (one Secret mounted by 12 Pods) must not fold
     // its degree-1 PARENTS behind a pill. Folding a subset of the Pod kind — while other Pods in the

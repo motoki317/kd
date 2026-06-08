@@ -220,7 +220,10 @@ function foldSiblingSubtrees(
   }
 
   const removed = new Set<string>()
-  const pills: Array<KNode & { _collapse: CollapseMeta }> = []
+  // Visible siblings to frame together with their pill (id → collapse key), so connGroups draws the
+  // SAME dashed grouping border the leaf-block fold gets — without it the pill floated unframed.
+  const framed = new Map<string, string>()
+  const pills: Array<KNode & { _collapse: CollapseMeta; _pillSlot: number; collapseGroup: string }> = []
   const pillEdges: KEdge[] = []
   for (const [parentId, childEdges] of childEdgesOf) {
     const byKind = new Map<string, { node: KNode; type: EdgeType }[]>()
@@ -237,18 +240,24 @@ function foldSiblingSubtrees(
       if (!group.some((g) => isParent.has(g.node.id))) continue
       const key = `sib:${parentId}:${kind}`
       const isExpanded = expanded.has(key)
-      const { hidden } = splitForFold(group.map((g) => g.node), isExpanded)
+      const { visible, hidden, pillIndex } = splitForFold(group.map((g) => g.node), isExpanded)
       if (hidden.length < COLLAPSE_MIN_HIDDEN) continue
 
       const descendants = descendantsOf(hidden.map((n) => n.id))
+      // _pillSlot is the pill's position among the visible siblings (between head and tail while
+      // collapsed, at the bottom once expanded). placeColumns reads it to splice the pill into its
+      // sibling column at the right row, instead of letting it float as its own __collapse__ group.
       pills.push({
         id: `${COLLAPSE_KIND}:${key}`,
         kind: COLLAPSE_KIND,
         name: `+${hidden.length} more`,
         health: 'Healthy',
         _collapse: { key, groupKind: kind, hidden, expanded: isExpanded, hiddenDescendants: descendants },
+        _pillSlot: pillIndex,
+        collapseGroup: key,
       })
       pillEdges.push({ from: parentId, to: `${COLLAPSE_KIND}:${key}`, type: group[0].type })
+      for (const n of visible) framed.set(n.id, key)
       if (!isExpanded) {
         for (const n of hidden) removed.add(n.id)
         for (const n of descendants) removed.add(n.id)
@@ -257,7 +266,9 @@ function foldSiblingSubtrees(
   }
   if (pills.length === 0) return { nodes, edges }
 
-  const keptNodes = nodes.filter((n) => !removed.has(n.id))
+  const keptNodes = nodes
+    .filter((n) => !removed.has(n.id))
+    .map((n) => (framed.has(n.id) ? ({ ...n, collapseGroup: framed.get(n.id) } as KNode) : n))
   const keptEdges = edges.filter((e) => !removed.has(e.from) && !removed.has(e.to))
   return { nodes: [...keptNodes, ...pills], edges: [...keptEdges, ...pillEdges] }
 }
@@ -280,7 +291,7 @@ function pillCell(meta: CollapseMeta, host?: string): KNode & { _collapse: Colla
 // _collapse tag onto the PositionedNode (real cards have no _collapse, so they pass straight
 // through). Used by both placers so a foldSiblingSubtrees pill carries its CollapseMeta into render.
 function placeSkeletonNode(n: KNode, cx: number, cy: number): PositionedNode {
-  const { _collapse, ...rest } = n as KNode & { _collapse?: CollapseMeta }
+  const { _collapse, _pillSlot, ...rest } = n as KNode & { _collapse?: CollapseMeta; _pillSlot?: number }
   return { ...rest, x: cx, y: cy, width: NODE_WIDTH, height: NODE_HEIGHT, ...(_collapse ? { collapse: _collapse } : {}) }
 }
 
@@ -874,6 +885,9 @@ interface ColUnit {
   seedY: number
   id?: string
   parent?: string
+  // Set on a foldSiblingSubtrees pill: its target row among the visible siblings of its group, so the
+  // pill slots between head and tail (collapsed) / at the bottom (expanded) instead of sorting by name.
+  pillSlot?: number
   place: (left: number, top: number) => void
 }
 
@@ -913,9 +927,15 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   for (const n of skeleton) {
     const r = rank.get(n.id) ?? 0
     const par = parentOf.get(n.id)
+    // A foldSiblingSubtrees pill joins its siblings' column group (keyed by the real kind it stands in
+    // for) so it shares their frame and slots in by row, rather than forming a stray __collapse__ group.
+    const meta = n as KNode & { _collapse?: CollapseMeta; _pillSlot?: number }
+    const isPill = n.kind === COLLAPSE_KIND && !!meta._collapse
+    const groupKind = isPill ? meta._collapse!.groupKind : n.kind
     units.push({
-      rank: r, kind: n.kind, group: par !== undefined ? `${par}|${n.kind}` : `root:${n.id}`, name: n.name,
+      rank: r, kind: groupKind, group: par !== undefined ? `${par}|${groupKind}` : `root:${n.id}`, name: n.name,
       w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0, id: n.id, parent: par,
+      pillSlot: isPill ? meta._pillSlot : undefined,
       place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),
     })
   }
@@ -965,8 +985,13 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     const col = units.filter((u) => u.rank === r)
     const groups = new Map<string, ColUnit[]>()
     for (const u of col) (groups.get(u.group) ?? groups.set(u.group, []).get(u.group)!).push(u)
-    const blocks = [...groups.entries()].map(([key, gus]) => {
-      gus.sort((a, b) => byName(a, b) || a.seedY - b.seedY)
+    const blocks = [...groups.entries()].map(([key, gusRaw]) => {
+      // Real cards order by natural name; pills splice into their slot (ascending) afterwards, so a
+      // folded sibling group reads head → "+N more" → tail down the column.
+      const reals = gusRaw.filter((u) => u.pillSlot === undefined).sort((a, b) => byName(a, b) || a.seedY - b.seedY)
+      const pillsInGroup = gusRaw.filter((u) => u.pillSlot !== undefined).sort((a, b) => a.pillSlot! - b.pillSlot!)
+      for (const p of pillsInGroup) reals.splice(Math.min(p.pillSlot!, reals.length), 0, p)
+      const gus = reals
       const h = gus.reduce((s, u) => s + u.h, 0) + Math.max(0, gus.length - 1) * COL_V_GAP
       const parent = gus[0].parent
       const desired = parent !== undefined && placedCenter.has(parent)
