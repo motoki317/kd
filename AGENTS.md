@@ -29,7 +29,7 @@ push detail to those.
 | Surface a kind's "declarative essence" in the drawer | extractor in `internal/kube/graph/spec.go` (typed kinds type-assert; CRs like HPA navigate `*unstructured`) → field on `Node` in `model.go` → wire in `build.go` → add to the `nodesEqual` repaint check in `diff.go` → render a labelled chip in `web/src/components/ResourceSummary.tsx` (+ `web/src/types.ts` field). The pattern (routes/rules → ports → DataKeys/SecretType → access/class → batch → HPA → PDB → node taints → NetworkPolicy): show the spec fact the status line buries, as a chip reusing the address-row idiom. NEVER emit secret values (key names + sizes only). Use a string field, not `omitempty` int, when `0` is meaningful (PDB disruptions). **If the extractor type-asserts a kind NOT already converted, register it in `unstructured.go` `typedFactories`** — the dynamic-informer store yields `*unstructured`, so an unregistered kind leaves the assertion failing and the field silently empty on real data, while typed-fixture unit tests still pass (cost a live-verify round on NetworkPolicy). |
 | Add a CR/CRD health rule | `internal/kube/graph/health_cr.go` (group/kind dispatch) + `health_cr_test.go` |
 | Add an SSE event | `internal/api/sse.go` (server) + `web/src/api.ts` (client handler) |
-| Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `deploy/policy-configmap.yaml` |
+| Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `charts/kd/values.yaml` (`policy.csv`) |
 | ADR for a decision | `docs/ADR/YYYYMMDD-title.md` (template at `_template.md`) |
 
 ## Build / test

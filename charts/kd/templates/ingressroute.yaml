@@ -1,0 +1,29 @@
+{{- if .Values.ingressRoute.enabled }}
+# Exposes kd behind a Traefik forward-auth middleware (see ingressRoute.middlewares), so the proxy
+# injects the identity header and kd never sees an unauthenticated request.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "kd.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kd.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingressRoute.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingressRoute.host }}`)
+      {{- with .Values.ingressRoute.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        - kind: Service
+          name: {{ include "kd.fullname" . }}
+          port: {{ .Values.service.port }}
+  {{- if not (kindIs "invalid" .Values.ingressRoute.tls) }}
+  tls:
+    {{- toYaml .Values.ingressRoute.tls | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,31 @@
+kd has been deployed as {{ include "kd.fullname" . }} in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingressRoute.enabled }}
+
+Reachable via the Traefik IngressRoute at: https://{{ .Values.ingressRoute.host }}
+{{- else if .Values.ingress.enabled }}
+
+Reachable via Ingress at:
+{{- range .Values.ingress.hosts }}
+  - http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+No ingress is enabled. Port-forward to reach the UI locally:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "kd.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then open http://localhost:8080
+{{- end }}
+
+Authorization:
+{{- if .Values.policy.enabled }}
+  policy.csv is mounted from ConfigMap {{ include "kd.fullname" . }}-policy and hot-reloaded —
+  edit it and re-apply (no restart). Every authenticated user implicitly has role "{{ .Values.config.defaultRole | default "(none — locked down)" }}".
+{{- else }}
+  Running on built-in defaults only (policy.enabled=false). Every authenticated user has role
+  "{{ .Values.config.defaultRole | default "(none — locked down)" }}".
+{{- end }}
+
+kd trusts the "{{ .Values.config.userHeader }}" request header for identity. Make sure a
+forward-auth proxy sets it{{ if not .Values.config.trustedProxies }}, and set config.trustedProxies to the proxy's CIDR if kd is reachable directly{{ end }}.

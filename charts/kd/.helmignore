@@ -1,0 +1,8 @@
+# Patterns to ignore when building packages.
+*.tmpl
+.git/
+.gitignore
+.vscode/
+.idea/
+*.tgz
+ci/

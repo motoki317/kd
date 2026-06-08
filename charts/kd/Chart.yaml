@@ -1,0 +1,19 @@
+apiVersion: v2
+name: kd
+description: A read-only, ArgoCD-style Kubernetes topology dashboard behind a forward-auth proxy.
+type: application
+# Chart version: bump on any chart change (templates/values). SemVer.
+version: 0.1.0
+# The kd server image this chart defaults to. Override image.tag to pin a different build.
+appVersion: "latest"
+home: https://github.com/motoki317/kd
+sources:
+  - https://github.com/motoki317/kd
+keywords:
+  - kubernetes
+  - dashboard
+  - topology
+  - observability
+maintainers:
+  - name: motoki317
+    url: https://github.com/motoki317

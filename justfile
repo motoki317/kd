@@ -42,6 +42,10 @@ check:
     golangci-lint run ./... || true
     cd web && npx tsc -b --noEmit
 
+# Regenerate the Helm chart's values.schema.json from values.yaml, then lint the chart.
+chart-schema:
+    cd charts/kd && helm schema && helm lint .
+
 # Format Go and client sources.
 fmt:
     go fmt ./...

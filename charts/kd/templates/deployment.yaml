@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kd.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kd.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kd.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "kd.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: kd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- if .Values.policy.enabled }}
+            - --policy=/etc/kd/policy.csv
+            {{- end }}
+            {{- with .Values.config.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: KD_ADDR
+              value: {{ .Values.config.addr | quote }}
+            - name: KD_USER_HEADER
+              value: {{ .Values.config.userHeader | quote }}
+            - name: KD_GROUPS_HEADER
+              value: {{ .Values.config.groupsHeader | quote }}
+            - name: KD_GROUPS_DELIMITER
+              value: {{ .Values.config.groupsDelimiter | quote }}
+            - name: KD_TRUSTED_PROXIES
+              value: {{ .Values.config.trustedProxies | quote }}
+            - name: KD_DEFAULT_ROLE
+              value: {{ .Values.config.defaultRole | quote }}
+            - name: KD_POLICY_RELOAD_INTERVAL
+              value: {{ .Values.config.policyReloadInterval | quote }}
+            - name: KD_RESYNC
+              value: {{ .Values.config.resync | quote }}
+            - name: KD_SKIP_KINDS
+              value: {{ .Values.config.skipKinds | quote }}
+            - name: KD_EAGER_KINDS
+              value: {{ .Values.config.eagerKinds | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ include "kd.port" . | int }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.policy.enabled }}
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/kd
+              readOnly: true
+          {{- end }}
+      {{- if .Values.policy.enabled }}
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ include "kd.fullname" . }}-policy
+            items:
+              - key: policy.csv
+                path: policy.csv
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

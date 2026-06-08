@@ -1,0 +1,190 @@
+# Default values for kd.
+# This is a YAML-formatted file. Every key carries `# @schema` annotations consumed by the
+# helm-values-schema-json plugin (`helm schema`) to regenerate values.schema.json.
+
+# -- Number of kd replicas. kd is stateless (informer cache rebuilds on start), so it scales
+# horizontally, but a single replica is plenty for most clusters.
+replicaCount: 1 # @schema type:integer; minimum:1
+
+image:
+  # -- Container image repository for the kd server.
+  repository: ghcr.io/motoki317/kd
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent # @schema enum:[Always, IfNotPresent, Never]
+  # -- Image tag. Defaults to the chart's appVersion when empty.
+  tag: "" # @schema type:string
+
+# -- Image pull secrets for a private registry.
+imagePullSecrets: [] # @schema type:array; item:object
+
+# -- Override the chart name portion of resource names.
+nameOverride: "" # @schema type:string
+# -- Override the full generated resource name.
+fullnameOverride: "" # @schema type:string
+
+# kd server configuration. Each field maps to a CLI flag / KD_* env var on the binary.
+config:
+  # -- HTTP listen address. The container port is derived from this.
+  addr: ":9123"
+  # -- Request header carrying the authenticated username (set by the forward-auth proxy).
+  userHeader: "X-Forwarded-User"
+  # -- Optional request header carrying the user's groups. Empty disables group-based policy.
+  groupsHeader: "" # @schema type:string
+  # -- Delimiter splitting the groups header value.
+  groupsDelimiter: ","
+  # -- Comma-separated CIDRs allowed to assert the identity header. Empty trusts all sources —
+  # set this whenever kd is reachable without going through the proxy.
+  trustedProxies: "" # @schema type:string
+  # -- Role implicitly granted to every authenticated user. Empty locks the cluster down
+  # (only explicit policy.csv grants apply).
+  defaultRole: "role:readonly"
+  # -- How often kd polls the policy file for changes (hot reload, no restart).
+  policyReloadInterval: "10s"
+  # -- Informer resync period.
+  resync: "10m"
+  # -- Comma-separated extra resource names to skip from eager informer startup, on top of the
+  # built-in high-cardinality defaults (events, leases, endpointslices, controllerrevisions).
+  skipKinds: "" # @schema type:string
+  # -- Comma-separated resource names to force-include in eager startup, overriding both
+  # skipKinds and the built-in defaults (e.g. "events" to feed the events view from cache).
+  eagerKinds: "" # @schema type:string
+  # -- Extra raw CLI arguments appended to the kd command.
+  extraArgs: [] # @schema type:array; item:string
+
+# Declarative kd authorization (policy.csv), mounted into the pod and hot-reloaded.
+policy:
+  # -- Mount a policy.csv ConfigMap and point kd at it. When false, kd runs on built-in
+  # defaults only (every user gets config.defaultRole).
+  enabled: true # @schema type:boolean
+  # -- The policy.csv contents. ArgoCD-style grammar:
+  #   p, <subject>, <namespace-glob>, <resource>, <action>, <effect>
+  #   g, <subject>, <role>
+  # Resources: namespaces|workloads|pods|logs|events|rbac|nodes|*  Actions: get|list|watch
+  # Effect: allow|deny (deny overrides). Built-in roles role:readonly and role:admin always exist.
+  csv: |
+    # Cluster operators get full read access everywhere.
+    g, admin-user, role:admin
+    g, cluster-admins, role:admin
+
+    # The app-team group sees only its own namespaces; nothing else.
+    p, app-team, team-a-*, *, *, allow
+    p, app-team, team-b-*, *, *, allow
+
+    # Anyone may read workloads/pods but not pod logs in a sensitive namespace.
+    p, role:readonly, secure, logs, *, deny
+
+serviceAccount:
+  # -- Create a ServiceAccount for kd to run as.
+  create: true # @schema type:boolean
+  # -- Name of the ServiceAccount. Generated from the release when empty.
+  name: "" # @schema type:string
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {} # @schema type:object
+
+rbac:
+  # -- Create the ClusterRole + ClusterRoleBinding granting kd its cluster read access.
+  create: true # @schema type:boolean
+  # -- ClusterRole rules. The default grants wildcard read so the dynamic-informer factory can
+  # discover every API resource (including CRDs installed at runtime) — the same model ArgoCD
+  # ships with. Replace with a narrow allowlist for least privilege (see the chart README); the
+  # trade-off is that new CRDs aren't visible until added here.
+  rules:
+    - apiGroups: ["*"]
+      resources: ["*"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get"]
+
+service:
+  # -- Service type.
+  type: ClusterIP # @schema enum:[ClusterIP, NodePort, LoadBalancer]
+  # -- Service port (forwards to the container's HTTP port).
+  port: 80 # @schema type:integer; minimum:1; maximum:65535
+  # -- Annotations to add to the Service.
+  annotations: {} # @schema type:object
+
+# Standard Kubernetes Ingress. Use this on most clusters; for a Traefik forward-auth edge use
+# ingressRoute below instead.
+ingress:
+  # -- Create a standard Kubernetes Ingress.
+  enabled: false # @schema type:boolean
+  # -- IngressClass name.
+  className: "" # @schema type:string
+  # -- Annotations to add to the Ingress (e.g. cert-manager, auth middleware).
+  annotations: {} # @schema type:object
+  # -- Ingress hosts and their paths.
+  hosts:
+    - host: kd.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration.
+  tls: [] # @schema type:array; item:object
+
+# Traefik IngressRoute — mirrors the upstream forward-auth setup, where a middleware injects
+# X-Forwarded-User so kd never sees an unauthenticated request. Requires the Traefik CRDs.
+ingressRoute:
+  # -- Create a Traefik IngressRoute (instead of a standard Ingress).
+  enabled: false # @schema type:boolean
+  # -- Traefik entryPoints to bind.
+  entryPoints:
+    - websecure
+  # -- Host matched by the route's Rule.
+  host: kd.example.com
+  # -- Middlewares applied to the route (e.g. the forward-auth middleware that emits the
+  # identity header). Each item is {name, namespace}.
+  middlewares: [] # @schema type:array; item:object
+  # -- TLS block. Empty object enables TLS with the default resolver; set to null to disable.
+  tls: {} # @schema type:[object, null]
+
+# -- Compute resources for the kd container.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# -- Pod-level security context. kd runs as non-root with a runtime-default seccomp profile.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context. kd needs no write access to its root filesystem and
+# drops every capability.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# -- Readiness probe. Overrides are merged over the chart defaults.
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 3
+
+# -- Liveness probe.
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 10
+
+# -- Extra environment variables for the kd container.
+extraEnv: [] # @schema type:array; item:object
+
+# -- Annotations to add to the pod.
+podAnnotations: {} # @schema type:object
+# -- Labels to add to the pod.
+podLabels: {} # @schema type:object
+
+# -- Node selector for pod scheduling.
+nodeSelector: {} # @schema type:object
+# -- Tolerations for pod scheduling.
+tolerations: [] # @schema type:array; item:object
+# -- Affinity rules for pod scheduling.
+affinity: {} # @schema type:object

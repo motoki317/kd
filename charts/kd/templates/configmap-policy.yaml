@@ -1,0 +1,12 @@
+{{- if .Values.policy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kd.fullname" . }}-policy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kd.labels" . | nindent 4 }}
+data:
+  policy.csv: |
+    {{- .Values.policy.csv | nindent 4 }}
+{{- end }}

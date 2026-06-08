@@ -1,0 +1,28 @@
+{{- if .Values.rbac.create }}
+# kd applies its own authorization (policy.csv) on top of this; the ClusterRole only needs read
+# verbs. The default wildcard lets the dynamic-informer factory discover CRDs at runtime — narrow
+# rbac.rules for least privilege (see the chart README).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kd.fullname" . }}
+  labels:
+    {{- include "kd.labels" . | nindent 4 }}
+rules:
+  {{- toYaml .Values.rbac.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kd.fullname" . }}
+  labels:
+    {{- include "kd.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "kd.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kd.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

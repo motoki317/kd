@@ -56,13 +56,13 @@ see every command.
 ## Deploy
 
 ```bash
-docker build -t <ref> .     # one static image, web embedded
-kubectl apply -k deploy/    # read-only Deployment behind a forward-auth proxy
+docker build -t <ref> .                                      # one static image, web embedded
+helm install kd ./charts/kd --namespace kd --create-namespace  # read-only Deployment behind a forward-auth proxy
 ```
 
 kd has no login of its own. It trusts a user header (`X-Forwarded-User`) from your proxy and checks
 access with a `policy.csv` file (ArgoCD/Casbin style, reloaded when it changes). See
-[deploy/README.md](deploy/README.md) for the full setup.
+[charts/kd/README.md](charts/kd/README.md) for the full setup and every value.
 
 ## How it works
 
