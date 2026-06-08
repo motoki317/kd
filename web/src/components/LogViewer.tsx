@@ -363,8 +363,8 @@ export default function LogViewer(props: Props) {
         </button>
         <button
           class="logs-wrap"
-          classList={{ active: !wrap() }}
-          aria-pressed={!wrap()}
+          classList={{ active: wrap() }}
+          aria-pressed={wrap()}
           onClick={toggleWrap}
           title={wrap() ? 'Stop wrapping long lines (scroll horizontally)' : 'Wrap long lines'}
         >

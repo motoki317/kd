@@ -97,8 +97,13 @@ describe('LogViewer', () => {
     const toggle = container.querySelector('.logs-wrap') as HTMLButtonElement
     expect(toggle).toBeTruthy()
     expect(body.classList.contains('no-wrap')).toBe(false) // wraps by default
+    // The button reads as pressed/active WHEN wrapping is on — it is labelled "wrap", so its lit state
+    // must mean "wrapping", not the inverse (the flipped-state bug).
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(toggle.classList.contains('active')).toBe(true)
     toggle.click()
     expect(body.classList.contains('no-wrap')).toBe(true)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false') // off → not wrapping
     expect(localStorage.getItem('kd:logsWrap')).toBe('0')
     localStorage.removeItem('kd:logsWrap')
   })
