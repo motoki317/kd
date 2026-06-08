@@ -28,6 +28,11 @@ interface Props {
   // stream survives; flipping this back to true asks the viewer to snap to the tail (so coming
   // back to Logs from Manifest lands on the newest line, not a stale scroll position).
   visible?: boolean
+  // Whether the drawer summary is folded away so this panel takes the full drawer height. The control
+  // lives here (not in the drawer header) because it reads as a property of the logs panel it enlarges
+  // — proximity over a far-corner action cluster. Absent ⇒ no maximize control (e.g. embedded use).
+  maximized?: boolean
+  onToggleMaximize?: () => void
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -468,6 +473,32 @@ export default function LogViewer(props: Props) {
               // whole buffer (cycle 318; extended to level/source filters so all three read alike).
               title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
+          </Show>
+          {/* Maximize: fold the resource summary away so this panel takes the drawer's full height.
+              Sits at the panel's top-right (the conventional maximize corner) and next to the logs it
+              grows, rather than in the drawer-header action cluster. */}
+          <Show when={props.onToggleMaximize}>
+            <button
+              class="logs-maximize"
+              classList={{ active: props.maximized }}
+              aria-pressed={props.maximized}
+              title={props.maximized ? 'Restore the resource summary' : 'Hide the summary to enlarge this panel'}
+              aria-label={props.maximized ? 'Restore the resource summary' : 'Hide the summary to enlarge this panel'}
+              onClick={() => props.onToggleMaximize!()}
+            >
+              <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                <path
+                  d={props.maximized ? 'M3 6 L7 10 L11 6' : 'M3 8 L7 4 L11 8'}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <line x1="3" y1={props.maximized ? 3 : 11} x2="11" y2={props.maximized ? 3 : 11} stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+              {props.maximized ? 'restore' : 'maximize'}
+            </button>
           </Show>
         </span>
       </div>

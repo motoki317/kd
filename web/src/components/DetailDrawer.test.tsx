@@ -471,19 +471,24 @@ describe('DetailDrawer', () => {
     expect(navigated).toEqual(['d1'])
   })
 
-  it('collapses the resource summary to maximize the active tab section', () => {
+  it('maximizes the logs panel from its own toolbar (not a drawer-header button)', () => {
+    // The control lives in the logs panel (proximity), so it only exists on a loggable resource's logs
+    // tab — never in the drawer-header action cluster.
+    const pod: KNode = { ...configMap, id: 'p1', kind: 'Pod', name: 'api-0', status: 'Running' }
     const { container, getByLabelText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer')!
     expect(drawer.classList.contains('summary-collapsed')).toBe(false)
-    const toggle = getByLabelText('Collapse summary to enlarge this section')
+    expect(container.querySelector('.drawer-collapse-summary')).toBeNull() // gone from the header
+    const toggle = getByLabelText('Hide the summary to enlarge this panel')
+    expect(toggle.closest('.logs-panel')).toBeTruthy() // it's inside the logs panel
     toggle.click()
     // The drawer carries the class that hides the non-hero summary content (CSS), keeping the hero —
     // the resource's kind · name stays visible for context while the tab panel takes the height.
     expect(drawer.classList.contains('summary-collapsed')).toBe(true)
     expect(container.querySelector('.drawer-hero')).toBeTruthy()
-    getByLabelText('Show resource summary').click()
+    getByLabelText('Restore the resource summary').click()
     expect(drawer.classList.contains('summary-collapsed')).toBe(false)
   })
 
