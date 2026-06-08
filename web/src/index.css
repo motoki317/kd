@@ -1314,6 +1314,49 @@ button.conn.conn-retry:focus-visible {
   white-space: nowrap;
   user-select: none;
 }
+/* Show-orphaned checkbox: a plain labelled toggle (not a chip — it's a display switch, not a filter
+   value), so it reads distinct from the togglable pills/chips beside it. The trailing count badge
+   reuses the pills' tabular-num count styling so "5 hidden" reads at a glance. */
+.toolbar-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.toolbar-checkbox:hover {
+  color: var(--text);
+}
+.toolbar-checkbox input {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.toolbar-checkbox-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* Orphan section divider (relationship view): the caption + rule that separate the kind-grouped
+   unconnected resources from the relationship trees above. The label reuses the dim, upper-cased
+   toolbar-label idiom so the section reads as a quiet structural heading, not a card. */
+.orphan-section-label {
+  fill: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.orphan-section-rule {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
 /* Health-filter pills: the controls column of the Health facet — fill the row beside the label and
    wrap internally. */
 .topology-health-pills {

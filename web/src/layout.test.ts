@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLLAPSE_VISIBLE, connGroups, kindGroups, layoutGraph, layoutGraphByKind, NODE_HEIGHT, NODE_WIDTH } from './layout'
+import { COLLAPSE_VISIBLE, connGroups, kindGroups, layoutGraph, layoutGraphByKind, layoutGraphWithOrphans, NODE_HEIGHT, NODE_WIDTH } from './layout'
 import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatQuantity, layoutGraphByCapacity } from './capacityLayout'
 import type { KEdge, KNode } from './types'
 
@@ -1034,5 +1034,49 @@ describe('formatQuantity', () => {
     // The unit table tops out at Pi, so a value ≥ 1024 Pi stays expressed in Pi rather than inventing
     // an "Ei" suffix — pins the `i < units.length - 1` loop guard.
     expect(formatQuantity(1024 ** 6, 'memory')).toBe('1024Pi')
+  })
+})
+
+describe('layoutGraphWithOrphans', () => {
+  // A connected Deployment→Pod tree, plus loose ConfigMaps + a Secret with no edges (orphans).
+  const connected: KNode[] = [
+    { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' },
+    { id: 'pod', kind: 'Pod', name: 'web-x', health: 'Healthy' },
+  ]
+  const connEdges: KEdge[] = [{ from: 'dep', to: 'pod', type: 'ownerReference' }]
+  const orphans: KNode[] = [
+    ...Array.from({ length: 6 }, (_, i) => ({ id: `cm${i}`, kind: 'ConfigMap', name: `cm-${i}`, health: 'Healthy' as const })),
+    { id: 'sec', kind: 'Secret', name: 'tls', health: 'Healthy' },
+  ]
+
+  it('lays the kind-grouped orphan section strictly BELOW the relationship trees', () => {
+    const l = layoutGraphWithOrphans(connected, orphans, connEdges)
+    const treeBottom = Math.max(...l.nodes.filter((n) => n.id === 'dep' || n.id === 'pod').map((n) => n.y + n.height / 2))
+    const orphanTop = Math.min(...l.nodes.filter((n) => n.kind === 'ConfigMap' || n.kind === 'Secret').map((n) => n.y - n.height / 2))
+    expect(orphanTop).toBeGreaterThan(treeBottom) // the section never overlaps the trees
+  })
+
+  it('exposes per-kind orphan bands whose count folds the hidden cards back', () => {
+    const l = layoutGraphWithOrphans(connected, orphans, connEdges)
+    const byKind = Object.fromEntries(l.orphanGroups.map((g) => [g.kind, g.count]))
+    // Bands cover ONLY the orphan kinds (the tree's Deployment/Pod get no band) and the ConfigMap band
+    // counts all 6 even though its crowded middle folds behind a "+N more" pill.
+    expect(Object.keys(byKind).sort()).toEqual(['ConfigMap', 'Secret'])
+    expect(byKind.ConfigMap).toBe(6)
+    expect(byKind.Secret).toBe(1)
+  })
+
+  it('returns the bare relationship layout when there are no orphans', () => {
+    const l = layoutGraphWithOrphans(connected, [], connEdges)
+    expect(l.orphanGroups).toEqual([])
+    expect(l.nodes).toHaveLength(2)
+  })
+
+  it('opens the orphan section flush at the top when there is no connected tree', () => {
+    const l = layoutGraphWithOrphans([], orphans, [])
+    // No trees → no leading gap; the topmost orphan card sits near the canvas origin, not pushed down.
+    const top = Math.min(...l.nodes.map((n) => n.y - n.height / 2))
+    expect(top).toBeLessThan(NODE_HEIGHT * 2)
+    expect(l.orphanGroups.length).toBe(2)
   })
 })

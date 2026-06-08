@@ -67,6 +67,13 @@ export default function App() {
     urlCapRes === 'cpu' || urlCapRes === 'memory' ? urlCapRes : readPref('kd:capRes', 'cpu', ['cpu', 'memory']),
   )
   createEffect(() => writePref('kd:capRes', capResource()))
+  // Show-orphaned (relationship view): unconnected resources hide by default so the canvas reads as the
+  // relationship tree. Owned here so it round-trips through the URL + localStorage like group/rels — a
+  // shared "?orphans=1" link restores the choice. Default off; the URL flag wins, then localStorage.
+  const [showOrphaned, setShowOrphaned] = createSignal(
+    params.get('orphans') === '1' || (params.get('orphans') === null && readRawPref('kd:orphans') === '1'),
+  )
+  createEffect(() => writePref('kd:orphans', showOrphaned() ? '1' : '0'))
   // Relationship + kind chips share one toggle/solo semantics — see toggleInSet.
   const toggleRel = (c: RelCategory, solo = false) => setRelFilter(toggleInSet(relFilter(), c, solo))
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
@@ -228,6 +235,7 @@ export default function App() {
     // capRes only changes the Nodes view, but mirror group/rels: write it whenever non-default so a
     // shared capacity-view link restores the resource. Omitted at the 'cpu' default to keep URLs clean.
     if (capResource() !== 'cpu') p.set('capRes', capResource())
+    if (showOrphaned()) p.set('orphans', '1')
     const id = selectedId()
     const n = id ? graph.nodes[id] : null
     if (n) p.set('sel', `${n.kind}/${n.name}`)
@@ -652,6 +660,8 @@ export default function App() {
             onCapResource={setCapResource}
             relFilter={relFilter()}
             onRelFilter={toggleRel}
+            showOrphaned={showOrphaned()}
+            onShowOrphaned={setShowOrphaned}
             scope={`${ctx() ?? ''}/${namespace() ?? ''}`}
             namespace={namespace() ?? ''}
             capacity={capacity()}

@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { connGroups, kindGroups, layoutGraph, layoutGraphByKind, type CollapseMeta } from '../layout'
+import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
 import { CAP_BAR_H, CAP_BULLET_BAR_GAP, CAP_BULLET_BAR_H, CAP_BULLET_PAD, formatPair, formatQuantity, layoutGraphByCapacity, type CapResource, type CapRow, type CapSeg, type CapacityLayout } from '../capacityLayout'
 import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
@@ -21,6 +21,7 @@ import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
+const EMPTY_IDS: ReadonlySet<string> = new Set()
 
 // The group-by options, exported so App's keyboard shortcuts (1–3) and help overlay stay in sync
 // with the segmented control rendered in the toolbar. Order = number-key order.
@@ -65,6 +66,13 @@ interface Props {
   // drive connectivity). The toolbar's relationship chips toggle it via onRelFilter.
   relFilter?: ReadonlySet<RelCategory>
   onRelFilter?: (c: RelCategory, solo?: boolean) => void
+  // In the relationship grouping, an "orphaned" resource — one no DISPLAYED edge touches — is hidden
+  // by default so the canvas reads as the relationship tree, not a wall of loose cards. The toolbar's
+  // "Show orphaned" checkbox flips this; App owns the signal so it round-trips through URL + localStorage.
+  // Degraded orphans are the standing exception (see visibleNodes / healthStats): they always count in
+  // the Degraded pill and surface when that filter is active, so triage reaches them even while hidden.
+  showOrphaned?: boolean
+  onShowOrphaned?: (v: boolean) => void
   // onClearFilters clears every active filter at once (search + health + kinds). Optional —
   // when omitted, the chip row's individual clears stay the only way to reset.
   onClearFilters?: () => void
@@ -205,6 +213,34 @@ export default function Topology(props: Props) {
   // shortening is a readability aid independent of which relationships are toggled on.
   const displayEdges = createMemo(() => projectEdges(props.edges, props.relFilter ?? EMPTY_RELS))
 
+  // The relationship grouping is the default — an absent groupBy falls through to it (see the layout
+  // memo's else branch), so "is this the relationship view" must treat undefined as yes, not just an
+  // explicit 'relationship'. The orphan logic below keys off this so it engages on the default landing.
+  const isRelGrouping = () => props.groupBy !== 'kind' && props.groupBy !== 'nodes'
+  // Orphaned resources: nodes no DISPLAYED edge touches (relationship grouping only — the other views
+  // group by kind/host, where "unconnected" is meaningless). Relative to the active relFilter, exactly
+  // like the orphan blocks layoutGraph folds, so toggling a relationship reclassifies them in lockstep.
+  const orphanIds = createMemo(() => {
+    if (!isRelGrouping()) return EMPTY_IDS
+    const touched = new Set<string>()
+    for (const e of displayEdges()) (touched.add(e.from), touched.add(e.to))
+    const s = new Set<string>()
+    for (const n of props.nodes) if (!touched.has(n.id)) s.add(n.id)
+    return s
+  })
+  // The nodes actually laid out: the full set minus hidden orphans. Orphans hide only in the
+  // relationship grouping when "Show orphaned" is off — EXCEPT a Degraded orphan stays visible while the
+  // Degraded health filter is active, so "show me what's broken" reaches unconnected trouble too (the
+  // user's smoother-investigation ask). Drops only orphans, never folded nodes, so the collapse-pill
+  // counts downstream stay honest.
+  const visibleNodes = createMemo(() => {
+    if (!isRelGrouping() || props.showOrphaned) return props.nodes
+    const orph = orphanIds()
+    if (orph.size === 0) return props.nodes
+    const keepDegraded = props.healthFilter === 'Degraded'
+    return props.nodes.filter((n) => !orph.has(n.id) || (keepDegraded && n.health === 'Degraded'))
+  })
+
   const layout = createMemo(() => {
     const edges = displayEdges()
     // Kind grouping: every resource in a per-kind box; the projected edges still draw on top
@@ -225,10 +261,15 @@ export default function Topology(props: Props) {
       return layoutGraphByCapacity(props.capacity?.nodes ?? [], props.capacity?.usage?.items, capResource(), props.namespace ?? '', expandedClusters())
     // Relationship grouping (default): left-to-right depth columns following the displayed
     // relationship edges. A card is far wider than it is tall, so a parent's children read better
-    // stacked in a vertical column to the right (LR). Nodes untouched by any displayed edge fall
-    // out as per-kind orphan blocks (layoutGraph folds them), so the canvas stays a complete
-    // namespace inventory regardless of which relationships are active.
-    return layoutGraph(props.nodes, edges, 'LR', expandedClusters())
+    // stacked in a vertical column to the right (LR). Orphans (no displayed edge) are split OUT of the
+    // tree and laid out Kind-view style in a section BELOW it (layoutGraphWithOrphans), so the tree
+    // reads as the relationship backbone and the loose resources read as a per-kind inventory. The
+    // caller-side split keys off orphanIds; the health filter biases the orphan kind-folds like Kind view.
+    const orph = orphanIds()
+    const connected = orph.size ? visibleNodes().filter((n) => !orph.has(n.id)) : visibleNodes()
+    const orphans = orph.size ? visibleNodes().filter((n) => orph.has(n.id)) : []
+    const hf = props.healthFilter
+    return layoutGraphWithOrphans(connected, orphans, edges, expandedClusters(), hf ? (n) => n.health === hf : undefined)
   })
   // Auto-expand the fold hiding a navigated-to selection. Enter-cycle, j/k stepping, and deep-links
   // all walk the FULL node set (troubled-first), so a target is often a node folded behind a "+N more"
@@ -252,7 +293,27 @@ export default function Topology(props: Props) {
   })
   // Kind grouping draws a faint kind-label band above each kind box so the operator can scan
   // "this section is all Pods, that's all Services" without inferring it from card kinds.
-  const groups = createMemo(() => (props.groupBy === 'kind' ? kindGroups(layout()) : []))
+  // Kind label bands. The Kind grouping bands every box; the relationship grouping bands ONLY its
+  // orphan section (the trees below read by their backbone, not by kind), reusing the same per-kind box
+  // visual so the loose resources look exactly like the Kind view (the user's ask). Nodes view: none.
+  const groups = createMemo(() => {
+    if (props.groupBy === 'kind') return kindGroups(layout())
+    if (isRelGrouping()) return (layout() as OrphanLayout).orphanGroups ?? []
+    return []
+  })
+  // The relationship grouping's orphan section gets a caption + rule marking the boundary, so the
+  // kind-grouped boxes below read explicitly as "unconnected" rather than as more of the tree above.
+  // Null in the Kind view (every box is a kind band there, so no single section to caption) and when
+  // there are no orphans on screen. Bounds derive from the orphan kind bands.
+  const orphanSection = createMemo(() => {
+    if (props.groupBy === 'kind' || !isRelGrouping()) return null
+    const g = groups()
+    if (g.length === 0) return null
+    const x = Math.min(...g.map((r) => r.x))
+    const y = Math.min(...g.map((r) => r.y))
+    const right = Math.max(...g.map((r) => r.x + r.width))
+    return { x, y, width: right - x }
+  })
   // Nodes grouping: the capacity layout's per-node row model (tracks, segments, bullets). Empty for
   // every other group-by. Cast is safe — layout() returns a CapacityLayout exactly when groupBy is
   // 'nodes' (the dispatch above), and CapacityLayout is a Layout superset.
@@ -446,7 +507,10 @@ export default function Topology(props: Props) {
     const kf = props.kindFilter
     const kindOk = (kind: string) => !kf || kf.size === 0 || kf.has(kind)
     const m = new Set<string>()
-    for (const n of props.nodes) {
+    // Over visibleNodes (not props.nodes): a hidden orphan isn't on the canvas, so search must not
+    // count or Enter-cycle to it — "what you see is what you search". Still the full set minus orphans,
+    // so folded-but-present matches keep counting (the folded-undercount fix holds).
+    for (const n of visibleNodes()) {
       if (kindOk(n.kind) && nodeMatches(n, q)) m.add(n.id)
     }
     return m
@@ -483,7 +547,7 @@ export default function Topology(props: Props) {
     const q = query().trim()
     const hf = props.healthFilter
     const ak = activeKinds()
-    return props.nodes.filter(
+    return visibleNodes().filter(
       (n) => (!q || nodeMatches(n, q)) && (!hf || n.health === hf) && (!ak || ak.has(n.kind)),
     ).length
   })
@@ -519,7 +583,14 @@ export default function Topology(props: Props) {
       }
       return c
     }
-    for (const n of props.nodes) c[n.health] = (c[n.health] ?? 0) + 1
+    // When orphans are hidden, the pills count only what's on the canvas — EXCEPT Degraded, which always
+    // counts every degraded resource (orphaned or not). So the Degraded pill advertises unconnected
+    // trouble the operator can't otherwise see, and clicking it (visibleNodes' keepDegraded) reveals it.
+    const hideOrph = isRelGrouping() && !props.showOrphaned
+    for (const n of props.nodes) {
+      if (hideOrph && n.health !== 'Degraded' && orphanIds().has(n.id)) continue
+      c[n.health] = (c[n.health] ?? 0) + 1
+    }
     return c
   })
   // Only surface states actually present (stable HEALTH_ORDER), so the row reads as a quiet "all
@@ -744,7 +815,7 @@ export default function Topology(props: Props) {
   createEffect(() => {
     const l = layout()
     const scope = props.scope ?? ''
-    const lk = `${props.groupBy ?? ''}|${relKey()}`
+    const lk = `${props.groupBy ?? ''}|${relKey()}|${props.showOrphaned ? 'o' : ''}`
     if (scope !== fitScope) {
       fitScope = scope
       layoutKey = lk
@@ -1272,6 +1343,27 @@ export default function Topology(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* Everything-orphaned overlay: hiding orphans emptied the canvas (every resource is unconnected),
+          which would otherwise read as a mysterious blank. Say so and offer the one-click reveal. */}
+      <Show
+        when={
+          isRelGrouping() &&
+          !props.showOrphaned &&
+          props.nodes.length > 0 &&
+          visibleNodes().length === 0
+        }
+      >
+        <div class="topology-empty topology-filtered-out">
+          <div class="topology-empty-text">
+            {orphanIds().size} unconnected {orphanIds().size === 1 ? 'resource is' : 'resources are'} hidden — none have a relationship in view.
+          </div>
+          <Show when={props.onShowOrphaned}>
+            <button class="topology-clear" onClick={() => props.onShowOrphaned?.(true)}>
+              show orphaned
+            </button>
+          </Show>
+        </div>
+      </Show>
       <Show when={props.nodes.length === 0}>
         <div class="topology-empty">
           {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a
@@ -1494,7 +1586,7 @@ export default function Topology(props: Props) {
             pods by host) and the Kind view draws no edges either (the cross-kind backbone is pure
             noise in a per-kind matrix), so the facet would be inert there — suppress it and let the
             row carry the health pills alone. */}
-        <Show when={(props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter)}>
+        <Show when={(props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter) || (isRelGrouping() && props.onShowOrphaned)}>
           <div class="toolbar-row">
         {/* Relationships facet — which relationship categories are drawn (and so drive
             connectivity). Composable toggles: several can be active at once. One chip per category
@@ -1569,6 +1661,28 @@ export default function Topology(props: Props) {
               )}
             </For>
             </div>
+          </div>
+        </Show>
+        {/* Show-orphaned toggle — relationship grouping only. Orphans (no displayed relationship) hide by
+            default so the canvas reads as the tree; the count advertises how many are tucked away so the
+            operator knows the toggle is worth flipping (explicit over implicit). Degraded orphans still
+            surface under the Degraded filter regardless, so this never buries broken resources. */}
+        <Show when={isRelGrouping() && props.onShowOrphaned}>
+          <div class="toolbar-facet">
+            <label
+              class="toolbar-checkbox"
+              title="Resources with no relationship in view are hidden by default. Degraded ones still surface under the Degraded health filter."
+            >
+              <input
+                type="checkbox"
+                checked={!!props.showOrphaned}
+                onChange={(e) => props.onShowOrphaned?.(e.currentTarget.checked)}
+              />
+              Show orphaned
+              <Show when={orphanIds().size > 0}>
+                <span class="toolbar-checkbox-count">{orphanIds().size}</span>
+              </Show>
+            </label>
           </div>
         </Show>
           </div>
@@ -1953,6 +2067,17 @@ export default function Topology(props: Props) {
               </For>
             </g>
           </Show>
+          {/* Relationship view's orphan section header: a caption + rule above the kind-grouped
+              unconnected resources, separating them from the relationship trees above (explicit over
+              implicit — the gap alone could read as just more tree). */}
+          <Show when={orphanSection()}>
+            {(s) => (
+              <g class="orphan-section-head" aria-hidden="true">
+                <line class="orphan-section-rule" x1={s().x - 10} y1={s().y - 24} x2={s().x + Math.max(s().width + 10, 200)} y2={s().y - 24} />
+                <text class="orphan-section-label" x={s().x - 10} y={s().y - 32}>Orphaned · no relationships</text>
+              </g>
+            )}
+          </Show>
           {/* All view: a faint kind label sits above each kind group, so the eye can sweep
               "Pods here, Services there" without inferring it from card text. Underlay only —
               no interactivity; cards above remain selectable normally. */}
@@ -1995,7 +2120,7 @@ export default function Topology(props: Props) {
                       {kindIcon(g.kind)}
                     </g>
                     <text class="kind-group-label" x={g.x + 16} y={g.y + 14}>
-                      {g.kind} <tspan class="kind-group-count">{props.nodes.filter((n) => n.kind === g.kind).length}</tspan>
+                      {g.kind} <tspan class="kind-group-count">{g.count}</tspan>
                     </text>
                   </g>
                 )}
@@ -2214,13 +2339,13 @@ export default function Topology(props: Props) {
           when one is active ("4 of 23"). Active filters compose (search ∩ health ∩ kinds), so
           the count reflects what's actually lit on the canvas. Hidden when the canvas is empty —
           the empty-state already covers the message. */}
-      <Show when={props.nodes.length > 0}>
+      <Show when={visibleNodes().length > 0}>
         <div class="topology-count" aria-live="polite" aria-atomic="true">
           <Show
             when={matches() || props.healthFilter || activeKinds()}
             fallback={
               <>
-                {props.nodes.length} resource{props.nodes.length === 1 ? '' : 's'}
+                {visibleNodes().length} resource{visibleNodes().length === 1 ? '' : 's'}
                 {/* Per-grouping summary (cycle 231): Kind grouping shows the kind count, Nodes
                     grouping shows the host count — each surfaces the dimension that grouping
                     actually exposes, so "is this dense?" reads without parsing the canvas. */}
@@ -2233,7 +2358,7 @@ export default function Topology(props: Props) {
               </>
             }
           >
-            {filterMatchCount()} of {props.nodes.length}
+            {filterMatchCount()} of {visibleNodes().length}
             {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
                 gives the polite live announcement a noun. "match" (not "shown") because the count is
                 the true filter total — some matches may be folded into a collapse pill, not on canvas. */}

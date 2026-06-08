@@ -14,10 +14,14 @@ const edges: KEdge[] = [{ from: '1', to: '2', type: 'ownerReference' }]
 
 // Default base = group by relationship with the Ownership relationship on, reproducing the old
 // landing Ownership view (the ownerReference backbone is drawn, names shorten under their owner).
+// showOrphaned: true so these fade/count tests keep seeing every node — the production default hides
+// unconnected resources (its own dedicated tests cover that), but most tests here assert behaviour over
+// the whole fixture and predate the orphan toggle.
 const base = {
   selectedId: null,
   connected: true,
   relFilter: new Set<RelCategory>(['ownership']),
+  showOrphaned: true,
   onSearch: () => {},
   onSelect: () => {},
 }
@@ -1053,6 +1057,145 @@ describe('Topology', () => {
       ))
       fireEvent.click(container.querySelector('.topology-rels-hidden button')!)
       expect(requested).toBe('ownership')
+    })
+  })
+
+  // Orphaned resources (no displayed relationship) hide by default in the relationship grouping; a
+  // "Show orphaned" checkbox reveals them. The Degraded health state is the standing exception so triage
+  // never loses sight of broken-but-unconnected resources.
+  describe('orphaned resources', () => {
+    // web(Deployment)→web-abc(Pod) is the connected tree; lonely(Healthy) and broken(Degraded) are
+    // orphans (no edge touches them under the Ownership relationship).
+    const orphNodes: KNode[] = [
+      { id: '1', kind: 'Deployment', name: 'web', health: 'Healthy' },
+      { id: '2', kind: 'Pod', name: 'web-abc', health: 'Healthy' },
+      { id: '3', kind: 'Pod', name: 'lonely', health: 'Healthy' },
+      { id: '4', kind: 'Pod', name: 'broken', health: 'Degraded' },
+    ]
+    const orphEdges: KEdge[] = [{ from: '1', to: '2', type: 'ownerReference' }]
+    // base sets showOrphaned:true; override back to the production default (hidden) for these.
+    const hiddenBase = { ...base, showOrphaned: false }
+
+    it('hides orphaned resources by default, drawing only the connected tree', () => {
+      const { container } = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} />)
+      // Only web + web-abc render; the two orphans (lonely, broken) are not on the canvas.
+      const names = [...container.querySelectorAll('.node-name')].map((e) => e.textContent)
+      expect(container.querySelectorAll('g.node').length).toBe(2)
+      expect(names.some((n) => /lonely/.test(n ?? ''))).toBe(false)
+      expect(names.some((n) => /broken/.test(n ?? ''))).toBe(false)
+    })
+
+    it('reveals every orphan when Show orphaned is on', () => {
+      const { container } = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...base} />)
+      expect(container.querySelectorAll('g.node').length).toBe(4)
+    })
+
+    it('the Show-orphaned checkbox badges the hidden orphan count and toggles the handler', () => {
+      const onShowOrphaned = vi.fn()
+      const { container } = render(() => (
+        <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} onShowOrphaned={onShowOrphaned} />
+      ))
+      const box = container.querySelector('.toolbar-checkbox') as HTMLLabelElement
+      expect(box).toBeTruthy()
+      expect(box.querySelector('.toolbar-checkbox-count')?.textContent).toBe('2') // lonely + broken
+      const input = box.querySelector('input') as HTMLInputElement
+      expect(input.checked).toBe(false)
+      fireEvent.click(input)
+      expect(onShowOrphaned).toHaveBeenCalledWith(true)
+    })
+
+    it('the checkbox appears only in the relationship grouping', () => {
+      const rel = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} groupBy="relationship" onShowOrphaned={() => {}} />)
+      expect(rel.container.querySelector('.toolbar-checkbox')).toBeTruthy()
+      cleanup()
+      const kind = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} groupBy="kind" onShowOrphaned={() => {}} />)
+      expect(kind.container.querySelector('.toolbar-checkbox')).toBeNull()
+    })
+
+    it('the Degraded health pill counts orphans even while they are hidden; other states do not', () => {
+      const { container } = render(() => (
+        <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} onHealthFilter={() => {}} />
+      ))
+      const counts = Object.fromEntries(
+        [...container.querySelectorAll('.topology-health-pills .legend-item')].map((p) => [
+          p.textContent?.replace(/\d+$/, '').trim(),
+          p.querySelector('.legend-count')?.textContent,
+        ]),
+      )
+      // Healthy: web + web-abc only (the Healthy orphan 'lonely' is hidden AND uncounted). Degraded:
+      // the hidden orphan 'broken' STILL counts — the pill advertises trouble the canvas hides.
+      expect(counts).toEqual({ Healthy: '2', Degraded: '1' })
+      // ...and the canvas still shows only the two connected cards (the Degraded orphan isn't drawn yet).
+      expect(container.querySelectorAll('g.node').length).toBe(2)
+    })
+
+    it('clicking the Degraded filter reveals degraded orphans (smoother triage)', () => {
+      const { container } = render(() => (
+        <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} healthFilter="Degraded" onHealthFilter={() => {}} />
+      ))
+      // The degraded orphan 'broken' is now laid out and lit; the Healthy orphan 'lonely' stays hidden.
+      const names = [...container.querySelectorAll('.node-name')].map((e) => e.textContent)
+      expect(names.some((n) => /broken/.test(n ?? ''))).toBe(true)
+      expect(names.some((n) => /lonely/.test(n ?? ''))).toBe(false)
+      // 'broken' is the only lit card (the two Healthy connected nodes fade under the Degraded filter).
+      const broken = [...container.querySelectorAll('g.node')].find((g) => /broken/.test(g.textContent ?? ''))
+      expect(broken?.classList.contains('faded')).toBe(false)
+    })
+
+    it('an all-orphan namespace shows a reveal prompt instead of a blank canvas', () => {
+      const loose: KNode[] = [
+        { id: 'a', kind: 'ConfigMap', name: 'cm-a', health: 'Healthy' },
+        { id: 'b', kind: 'Secret', name: 'sec-b', health: 'Healthy' },
+      ]
+      const { container } = render(() => (
+        <Topology nodes={loose} edges={[]} search="" {...hiddenBase} onShowOrphaned={() => {}} />
+      ))
+      expect(container.querySelectorAll('g.node').length).toBe(0)
+      const overlay = container.querySelector('.topology-filtered-out')
+      expect(overlay?.textContent).toMatch(/unconnected/)
+      expect(overlay?.querySelector('button')?.textContent).toMatch(/show orphaned/i)
+    })
+
+    // The orphan section renders Kind-view style: per-kind boxes with label bands + a section caption,
+    // separate from (and below) the relationship tree.
+    const sectionNodes: KNode[] = [
+      { id: '1', kind: 'Deployment', name: 'web', health: 'Healthy' },
+      { id: '2', kind: 'Pod', name: 'web-abc', health: 'Healthy' },
+      { id: 'cm', kind: 'ConfigMap', name: 'cfg', health: 'Healthy' },
+      { id: 'sec', kind: 'Secret', name: 'tls', health: 'Healthy' },
+    ]
+    const sectionEdges: KEdge[] = [{ from: '1', to: '2', type: 'ownerReference' }]
+
+    it('renders orphans as kind-grouped boxes (bands) for ONLY the orphan kinds, with a section caption', () => {
+      const { container } = render(() => (
+        <Topology nodes={sectionNodes} edges={sectionEdges} search="" {...base} onKindFilter={() => {}} kindFilter={new Set<string>()} />
+      ))
+      // One band per orphan kind (ConfigMap, Secret) — the connected Deployment/Pod tree gets none.
+      const banded = [...container.querySelectorAll('.kind-group-label')].map((e) => e.textContent?.replace(/\d+$/, '').trim())
+      expect(banded.sort()).toEqual(['ConfigMap', 'Secret'])
+      // The explicit "Orphaned" section caption marks the boundary.
+      expect(container.querySelector('.orphan-section-head')?.textContent).toMatch(/Orphaned/i)
+    })
+
+    it('draws no kind bands or caption while orphans are hidden (default)', () => {
+      const { container } = render(() => (
+        <Topology nodes={sectionNodes} edges={sectionEdges} search="" {...hiddenBase} onKindFilter={() => {}} kindFilter={new Set<string>()} />
+      ))
+      expect(container.querySelector('.kind-group-label')).toBeNull()
+      expect(container.querySelector('.orphan-section-head')).toBeNull()
+    })
+
+    it('a revealed Degraded orphan lands in its own kind band (triage)', () => {
+      const withDeg: KNode[] = [
+        { id: '1', kind: 'Deployment', name: 'web', health: 'Healthy' },
+        { id: '2', kind: 'Pod', name: 'web-abc', health: 'Healthy' },
+        { id: 'cr', kind: 'CronJob', name: 'nightly', health: 'Degraded' }, // orphaned + degraded
+      ]
+      const { container } = render(() => (
+        <Topology nodes={withDeg} edges={sectionEdges} search="" {...hiddenBase} healthFilter="Degraded" onHealthFilter={() => {}} />
+      ))
+      const banded = [...container.querySelectorAll('.kind-group-label')].map((e) => e.textContent?.replace(/\d+$/, '').trim())
+      expect(banded).toEqual(['CronJob'])
     })
   })
 })

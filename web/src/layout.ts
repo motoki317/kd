@@ -361,32 +361,48 @@ export function layoutGraphByKind(
 }
 
 
+export interface KindGroup {
+  kind: string
+  // True resource count of the kind: visible cards plus the nodes folded behind its "+N more" pill, so
+  // the band reads the honest total regardless of folding (the renderer no longer counts props.nodes,
+  // which over-counts when the same kind appears both connected and orphaned in one combined layout).
+  count: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 // kindGroups returns the kind boxes' bounding rectangles in the layout's coordinate space,
 // so the renderer can draw kind labels + group outlines without recomputing the grouping.
-export function kindGroups(layout: Layout): { kind: string; x: number; y: number; width: number; height: number }[] {
-  const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>()
+export function kindGroups(layout: Layout): KindGroup[] {
+  const groups = new Map<string, { minX: number; minY: number; maxX: number; maxY: number; count: number }>()
   for (const n of layout.nodes) {
     // A "+N older" pill belongs to the kind box it folds, not a phantom "__collapse__" group, so
     // the box grows to include the pill instead of the pill drifting into its own group.
     const kind = n.collapse ? n.collapse.groupKind : n.kind
+    // A pill stands for its hidden siblings (count them); a real card counts as one.
+    const add = n.collapse ? n.collapse.hidden.length : 1
     const left = n.x - n.width / 2
     const right = n.x + n.width / 2
     const top = n.y - n.height / 2
     const bottom = n.y + n.height / 2
     const cur = groups.get(kind)
     if (!cur) {
-      groups.set(kind, { minX: left, minY: top, maxX: right, maxY: bottom })
+      groups.set(kind, { minX: left, minY: top, maxX: right, maxY: bottom, count: add })
     } else {
       cur.minX = Math.min(cur.minX, left)
       cur.minY = Math.min(cur.minY, top)
       cur.maxX = Math.max(cur.maxX, right)
       cur.maxY = Math.max(cur.maxY, bottom)
+      cur.count += add
     }
   }
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([kind, r]) => ({
       kind,
+      count: r.count,
       x: r.minX,
       y: r.minY - KIND_HEADER_HEIGHT,
       width: r.maxX - r.minX,
@@ -502,6 +518,48 @@ export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'
 
   // Grouped orphan blocks pack after the connectivity trees, so the tree backbone reads first.
   return packComponents([...components, ...orphanComponents])
+}
+
+// Vertical gap between the relationship trees and the kind-grouped orphan section below them.
+const ORPHAN_SECTION_GAP = 96
+
+export interface OrphanLayout extends Layout {
+  // Kind bands for the orphan section, already offset into the combined coordinate space, so the
+  // renderer draws the same per-kind boxes the Kind grouping uses — but only over the orphans.
+  orphanGroups: KindGroup[]
+}
+
+// layoutGraphWithOrphans lays the relationship grouping out as TWO stacked regions: the connectivity
+// trees on top (the usual LR depth-column layout), then — when orphans are shown — a Kind-grouped
+// section beneath them, so unconnected resources read as a tidy per-kind inventory instead of a wall
+// of single cards strung along the tree column. The caller decides which orphans are visible (Show
+// orphaned, or the Degraded triage exception) and passes them split from the connected set; this
+// function only composes the geometry. `prioritize` biases each orphan kind box's folded
+// representatives toward the active health filter, matching the Kind view.
+export function layoutGraphWithOrphans(
+  connected: KNode[],
+  orphans: KNode[],
+  edges: KEdge[],
+  expanded: ReadonlySet<string> = new Set(),
+  prioritize?: (n: KNode) => boolean,
+): OrphanLayout {
+  const rel = layoutGraph(connected, edges, 'LR', expanded)
+  if (orphans.length === 0) return { ...rel, orphanGroups: [] }
+  // Orphans have no edges between them (that is what makes them orphans), so the Kind layout's
+  // cross-kind edges resolve to nothing — pass an empty edge set.
+  const section = layoutGraphByKind(orphans, [], expanded, prioritize)
+  // Stack the section below the trees; no leading gap when there are no trees (an all-orphan namespace
+  // then opens flush at the top instead of with dead space above it).
+  const dy = rel.nodes.length ? rel.height + ORPHAN_SECTION_GAP : 0
+  const orphanNodes = section.nodes.map((n) => ({ ...n, y: n.y + dy }))
+  const orphanGroups = kindGroups({ ...section, nodes: orphanNodes })
+  return {
+    nodes: [...rel.nodes, ...orphanNodes],
+    edges: rel.edges, // the orphan section contributes none
+    width: Math.max(rel.width, section.width),
+    height: dy + section.height,
+    orphanGroups,
+  }
 }
 
 // componentKey is a stable sort key for a component: the lexicographically smallest "kind/name"
