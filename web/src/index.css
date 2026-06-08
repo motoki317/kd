@@ -2084,6 +2084,11 @@ button.conn.conn-retry:focus-visible {
    too (the user's "add a maximum height to the top parts"), and tightens when expanded — there the tab
    IS the focus. */
 .drawer-summary {
+  /* Fill the header width left of the action cluster (flex-1, min-width:0 so a long name still
+     truncates rather than pushing wider): the summary's grids — the resource bars especially — size to
+     the full drawer, not to their own short content, so a short node name no longer shrinks the bars. */
+  flex: 1;
+  min-width: 0;
   max-height: 42vh;
   overflow-y: auto;
 }
