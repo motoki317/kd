@@ -5,7 +5,7 @@ import type { KNode } from './types'
 const Gi = 1024 ** 3
 
 describe('drawerResourceBars — Pod / workload', () => {
-  it('puts both bars on ONE shared scale: same usage ⇒ same fill, bounds differ only in their tick', () => {
+  it('puts both bars on ONE shared scale: same usage ⇒ same fill, bounds differ only in track length', () => {
     const g = drawerResourceBars({
       isNode: false,
       usage: { cpuMilli: 300, memBytes: 1 * Gi },
@@ -21,29 +21,29 @@ describe('drawerResourceBars — Pod / workload', () => {
     // draws the SAME length (0.75) — the comparability the old per-bound-as-100% model lacked.
     expect(lim.fillFrac).toBeCloseTo(0.75)
     expect(req.fillFrac).toBeCloseTo(0.75)
-    // The bounds differ only in where their tick sits on the shared ruler: the 400 limit at 1.0, the
-    // 200 request at 0.5 — so the Req bar's ceiling reads visibly shorter.
-    expect(lim.tickFrac).toBeCloseTo(1.0)
-    expect(req.tickFrac).toBeCloseTo(0.5)
-    // Usage is under the limit but over the request → only the Req bar is "over" (fill past its tick).
+    // The bounds differ only in track length on the shared ruler: the 400 limit reaches 1.0, the
+    // 200 request only 0.5 — so the Req bar reads visibly shorter.
+    expect(lim.boundFrac).toBeCloseTo(1.0)
+    expect(req.boundFrac).toBeCloseTo(0.5)
+    // Usage is under the limit but over the request → only the Req bar is "over" (fill past its ceiling).
     expect(lim.over).toBe(false)
     expect(req.over).toBe(true)
   })
 
   it('lets the fill run to the full scale when usage bursts past every bound', () => {
-    // usage 500 is the group max → fill 1.0; the 200 request tick sits at 0.4, so 0.4→1.0 is overshoot.
+    // usage 500 is the group max → fill 1.0; the 200 request bound sits at 0.4, so 0.4→1.0 is overshoot.
     const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 500 }, request: { cpuMilli: 200 } })
     const req = g[0].bars[0]
     expect(req.fillFrac).toBeCloseTo(1.0)
-    expect(req.tickFrac).toBeCloseTo(0.4)
+    expect(req.boundFrac).toBeCloseTo(0.4)
     expect(req.over).toBe(true)
   })
 
-  it('reads exactly at the bound as a full bar, tick at the end, not over', () => {
+  it('reads exactly at the bound as a full bar, not over', () => {
     const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 200 }, limit: { cpuMilli: 200 } })
     const lim = g[0].bars[0]
     expect(lim.fillFrac).toBeCloseTo(1.0)
-    expect(lim.tickFrac).toBeCloseTo(1.0)
+    expect(lim.boundFrac).toBeCloseTo(1.0)
     expect(lim.over).toBe(false) // usage == bound is full, not over
   })
 
@@ -53,7 +53,7 @@ describe('drawerResourceBars — Pod / workload', () => {
     expect(bar.label).toBe('Node')
     expect(bar.ceil).toBe(4000)
     expect(bar.fillFrac).toBeCloseTo(0.0625) // 250 / 4000 — a small slice of the node
-    expect(bar.tickFrac).toBeCloseTo(1.0)
+    expect(bar.boundFrac).toBeCloseTo(1.0)
     expect(bar.unconstrained).toBeFalsy()
   })
 
@@ -61,17 +61,17 @@ describe('drawerResourceBars — Pod / workload', () => {
     const g = drawerResourceBars({ isNode: false, usage: { cpuMilli: 250 } })
     expect(g[0].bars[0].unconstrained).toBe(true)
     expect(g[0].bars[0].usage).toBe(250)
-    expect(g[0].bars[0].tickFrac).toBeUndefined()
+    expect(g[0].bars[0].boundFrac).toBeUndefined()
   })
 
-  it('still shows the bars (empty fill, bound ticks) from spec bounds when metrics are unavailable', () => {
+  it('still shows the bars (empty fill, bound-length tracks) from spec bounds when metrics are unavailable', () => {
     const g = drawerResourceBars({ isNode: false, request: { cpuMilli: 200 }, limit: { cpuMilli: 400 } })
     const cpu = g[0]
     expect(cpu.bars.map((b) => b.label)).toEqual(['Lim', 'Req'])
     expect(cpu.bars.every((b) => b.usage === undefined && b.fillFrac === 0)).toBe(true)
-    // Even with no usage, the ticks still encode the relative bound lengths (limit 1.0, request 0.5).
-    expect(cpu.bars[0].tickFrac).toBeCloseTo(1.0)
-    expect(cpu.bars[1].tickFrac).toBeCloseTo(0.5)
+    // Even with no usage, the track lengths still encode the relative bounds (limit 1.0, request 0.5).
+    expect(cpu.bars[0].boundFrac).toBeCloseTo(1.0)
+    expect(cpu.bars[1].boundFrac).toBeCloseTo(0.5)
   })
 
   it('omits a resource entirely when it has neither usage nor any bound', () => {
@@ -94,7 +94,7 @@ describe('drawerResourceBars — Node', () => {
     expect(cpu.bars[1].ceil).toBe(3800)
     expect(cpu.bars.every((b) => b.usage === 600)).toBe(true) // same usage, two bounds
     expect(cpu.bars[0].fillFrac).toBeCloseTo(cpu.bars[1].fillFrac) // identical fill length
-    expect(cpu.bars[1].tickFrac).toBeCloseTo(0.95) // allocatable 3800 / 4000 scale
+    expect(cpu.bars[1].boundFrac).toBeCloseTo(0.95) // allocatable 3800 / 4000 scale
   })
 
   it('flags only the Alloc bar over when node usage spills past allocatable into reserved', () => {
@@ -106,9 +106,9 @@ describe('drawerResourceBars — Node', () => {
     })
     const [cap, alloc] = g[0].bars
     expect(cap.over).toBe(false) // 3900 < 4000 capacity
-    expect(alloc.over).toBe(true) // 3900 > 3800 allocatable → fill runs past its tick
+    expect(alloc.over).toBe(true) // 3900 > 3800 allocatable → fill runs past its ceiling
     expect(alloc.fillFrac).toBeCloseTo(0.975) // 3900 / 4000
-    expect(alloc.tickFrac).toBeCloseTo(0.95) // 3800 / 4000
+    expect(alloc.boundFrac).toBeCloseTo(0.95) // 3800 / 4000
   })
 })
 

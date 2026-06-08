@@ -151,10 +151,11 @@ interface Props {
 
 // UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
 // Req, a Node's Cap + Alloc). Every bar in a group shares ONE linear scale (like the Nodes capacity
-// view), so the fill — LIVE USAGE — draws the SAME length on both bars and each bound shows as a TICK at
-// its true relative position (a 256Mi limit reads visibly shorter than a 281Mi request). Usage past a
-// bound runs the fill PAST that tick, with the overshoot hatched — the "over its request/limit" signal.
-// Built by drawerResourceBars.
+// view), so the fill — LIVE USAGE — draws the SAME length on both bars, and each bar's TRACK LENGTH
+// encodes its bound: the bar ENDS at its ceiling (a 256Mi limit bar is visibly shorter than a 281Mi
+// request bar), not a tick on a fixed-width track. Usage past a bound EXTENDS the track past that
+// ceiling with the overshoot hatched — the Nodes-view "over its request/limit" idiom. Built by
+// drawerResourceBars.
 const pct = (f: number) => `${Math.min(100, f * 100)}%`
 function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
   return (
@@ -171,26 +172,27 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
                   const pair = formatPair(b.usage, b.ceil, g.res, g.unitRef)
                   const ref = b.unconstrained ? 'unset' : `${pair.cap} ${b.label.toLowerCase()}`
                   const ratio = b.usage != null && b.ceil ? b.usage / b.ceil : 0
+                  // The visible track ends AT the bound (its ceiling), or past it — at the usage — when
+                  // usage overshoots. So a smaller bound draws a shorter bar (Req shorter than Lim) and a
+                  // burst grows the bar past its ceiling, like a Nodes-view bullet.
+                  const extentFrac = Math.max(b.fillFrac, b.boundFrac ?? 0)
                   return (
                     <div class="metric-row">
                       <span class="metric-sublabel">{b.label}</span>
                       {/* An unconstrained bar (no bound) shows a dashed empty track — never a fake-full bar. */}
                       <div class="metric-bar" classList={{ unconstrained: b.unconstrained }} title={b.unconstrained ? `${pair.value} used · ungauged` : `${pair.value} used · ${ref}${b.over ? ` · ${ratio.toFixed(1)}× over` : ''}`}>
                         <Show when={!b.unconstrained}>
+                          {/* Track length = the bound: the bar's right edge IS its ceiling (or the usage
+                              when it bursts past). The relative bound lengths read directly off the bars. */}
+                          <div class="metric-track" style={{ width: pct(extentFrac) }} />
                           {/* Usage fill on the shared scale (same length across this group's bars). */}
                           <Show when={b.usage != null}>
                             <div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />
-                            {/* Overshoot: hatch the portion of the fill beyond this bound's tick. */}
-                            <Show when={b.over && b.tickFrac != null}>
-                              <div class="metric-burst" style={{ left: pct(b.tickFrac!), width: `${Math.min(100, b.fillFrac * 100) - b.tickFrac! * 100}%` }} />
+                            {/* Overshoot: hatch the portion of the fill beyond the ceiling (where the track
+                                grew past the bound). */}
+                            <Show when={b.over && b.boundFrac != null}>
+                              <div class="metric-burst" style={{ left: pct(b.boundFrac!), width: `${Math.min(100, b.fillFrac * 100) - b.boundFrac! * 100}%` }} />
                             </Show>
-                          </Show>
-                          {/* The bound itself, as a tick — its position IS the bar's relative ceiling
-                              length. Skip it when the bound is the group max (tick at the far right): the
-                              bar's full length already says so, and a tick at left:100% clips against the
-                              bar's overflow:hidden into a 1px edge sliver. */}
-                          <Show when={b.tickFrac != null && b.tickFrac < 0.999}>
-                            <div class="metric-tick" style={{ left: pct(b.tickFrac!) }} />
                           </Show>
                         </Show>
                       </div>
@@ -316,9 +318,10 @@ export default function ResourceSummary(props: Props) {
         </Show>
       </div>
       {/* CPU/memory resource bars — live usage gauged against each bound (a Pod's Lim + Req, a Node's
-          Cap + Alloc), wrapping into coloured laps when usage overshoots. The "am I bursting past my
-          request / spilling past allocatable" answer the operator otherwise gets only from `kubectl top`
-          + `describe`. Shown when there's anything to gauge — usage OR a declared bound. */}
+          Cap + Alloc), each bar's length sized to its ceiling and the fill extending past it (hatched)
+          on a burst. The "am I bursting past my request / spilling past allocatable" answer the operator
+          otherwise gets only from `kubectl top` + `describe`. Shown when there's anything to gauge —
+          usage OR a declared bound. */}
       <Show when={props.node.kind === 'Pod' || props.node.kind === 'Node'}>
         <UsageGauges
           groups={drawerResourceBars({

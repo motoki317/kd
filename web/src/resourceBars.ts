@@ -1,11 +1,11 @@
 // The drawer's CPU/memory resource bars. Per resource, one bar per bound — a Pod shows a "Lim" bar
 // (bound = limit) and a "Req" bar (bound = request); a Node shows "Cap" (capacity) and "Alloc"
 // (allocatable). Every bar in a group is drawn on ONE shared linear scale (the SAME px-per-unit), just
-// like the Nodes capacity view: the fill is LIVE USAGE (identical length on both bars), and each bound
-// is a TICK on that scale — so the bars' relative lengths are honest (a 256Mi limit reads shorter than
-// a 281Mi request) and the same usage doesn't look different on the two bars. When usage runs past a
-// bound the fill simply EXTENDS past that bound's tick and the overshoot is hatched (the "over its
-// request/limit" signal), rather than each bar gauging usage against its own bound as a private 100%.
+// like the Nodes capacity view: the fill is LIVE USAGE (identical length on both bars), and each bar's
+// TRACK LENGTH encodes its bound — the bar ENDS at its ceiling (a 256Mi limit bar is visibly shorter
+// than a 281Mi request bar), rather than a tick on a fixed-width track. When usage runs past a bound the
+// fill EXTENDS the track past that ceiling and the overshoot is hatched (the "over its request/limit"
+// signal) — exactly the Nodes-view bullet idiom, where the bar grows past its reference on a burst.
 import type { KNode, Resources, ResourceUsage } from './types'
 import type { CapResource } from './capacityLayout'
 
@@ -24,8 +24,8 @@ export interface ResBarModel {
   // bursts past every bound) maps to 1. Both in [0, 1]; equal usage ⇒ equal fillFrac across the group's
   // bars, which is what makes their lengths comparable.
   fillFrac: number // usage / groupMax — the fill width
-  tickFrac?: number // ceil / groupMax — where this bar's bound tick sits; undefined when unconstrained
-  over: boolean // usage exceeds this bar's bound — the fill runs past the tick (hatched overshoot)
+  boundFrac?: number // ceil / groupMax — the bar's track extent (its ceiling); undefined when unconstrained
+  over: boolean // usage exceeds this bar's bound — the fill EXTENDS the track past the ceiling (hatched)
   unconstrained?: boolean // no bound at all (no limit/request/host capacity) — render a dashed empty track
 }
 
@@ -67,7 +67,7 @@ function scaleBars(bounds: Bound[], use: number | undefined): ResBarModel[] {
     ceil: b.val,
     usage: use,
     fillFrac: use != null ? use * scale : 0,
-    tickFrac: b.val * scale,
+    boundFrac: b.val * scale,
     over: use != null && use > b.val,
   }))
 }

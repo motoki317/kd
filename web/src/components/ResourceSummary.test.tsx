@@ -83,20 +83,20 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows[1].querySelector('.metric-val b')?.textContent).toBe('120m') // usage again, not the request
     expect(rows[1].textContent).toContain('100m req')
   })
-  it('draws one shared-scale fill plus a bound tick, hatching the overshoot past a crossed bound', () => {
-    // CPU 120m, limit 500m, request 100m → groupMax 500. The fill (0.24) is the SAME on both bars; only
-    // the tick differs (limit at 1.0, request at 0.2). Usage is under the limit but over the request.
+  it('sizes each bar to its bound and hatches the overshoot when usage runs past a shorter bound', () => {
+    // CPU 120m, limit 500m, request 100m → groupMax 500. The fill (0.24) is the SAME on both bars; the
+    // bars differ in TRACK LENGTH: the Lim track spans the full scale (limit IS the group max), the Req
+    // track only 0.2 (100m / 500m). Usage is under the limit but over the (shorter) request.
     const usage = { cpuMilli: 120, memBytes: 100 * 1024 * 1024 }
     const { container } = render(() => <ResourceSummary node={pod} {...base} usage={usage} />)
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     // Both bars carry one fill; equal usage ⇒ equal fill width (24%).
     expect((rows[0].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
     expect((rows[1].querySelector('.metric-fill') as HTMLElement).style.width).toBe('24%')
-    // The Lim bound IS the group max → its tick sits at the bar's right edge, so it's suppressed (the
-    // full-length bar already says so, and a tick at 100% would clip into an edge sliver). The Req
-    // tick, inside the bar at 0.2, still renders.
-    expect(rows[0].querySelector('.metric-tick')).toBeNull()
-    expect(rows[1].querySelector('.metric-tick')).toBeTruthy()
+    // Track length encodes the bound: the Lim bar reaches the full scale; the Req bar's track stops at
+    // its 0.2 ceiling — except the usage bursts past it, so the track extends to the fill (24%).
+    expect((rows[0].querySelector('.metric-track') as HTMLElement).style.width).toBe('100%')
+    expect((rows[1].querySelector('.metric-track') as HTMLElement).style.width).toBe('24%')
     // Lim bar: usage under the limit → no overshoot hatch. Req bar: usage over the request → hatched.
     expect(rows[0].querySelector('.metric-burst')).toBeNull()
     expect(rows[1].querySelector('.metric-burst')).toBeTruthy()
@@ -126,9 +126,9 @@ describe('ResourceSummary pod usage gauges', () => {
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     expect(rows.length).toBe(4)
     expect([...rows].every((r) => r.querySelector('.metric-fill') === null)).toBe(true) // empty, no fill
-    // The Req tick still renders (inside the bar) even without metrics, encoding the relative bound
-    // length; the Lim tick is suppressed as the group max (its full-length bar already conveys it).
-    expect([...rows].map((r) => r.querySelector('.metric-tick') !== null)).toEqual([false, true, false, true])
+    // Track length still encodes the relative bounds without metrics: Lim spans the full scale, Req is
+    // its fraction (CPU 100m/500m = 20%, Mem 256Mi/512Mi = 50%).
+    expect([...rows].map((r) => (r.querySelector('.metric-track') as HTMLElement).style.width)).toEqual(['100%', '20%', '100%', '50%'])
     expect(rows[0].textContent).toContain('500m lim') // the bound still reads
     cleanup()
     const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
@@ -173,7 +173,8 @@ describe('ResourceSummary pod usage gauges', () => {
       allocatable: { cpuMilli: 3800, memBytes: 7 * 1024 * 1024 * 1024 },
       capacityRes: { cpuMilli: 4000, memBytes: 8 * 1024 * 1024 * 1024 },
     }
-    // CPU usage 3900m: under the 4000m capacity (Cap, lap 0) but past the 3800m allocatable (Alloc, lap 1).
+    // CPU usage 3900m: under the 4000m capacity (Cap) but past the 3800m allocatable (Alloc), so the
+    // Alloc bar bursts past its ceiling while the Cap bar does not.
     const { container } = render(() => (
       <ResourceSummary node={node} {...base} usage={{ cpuMilli: 3900, memBytes: 2 * 1024 * 1024 * 1024 }} />
     ))
@@ -182,7 +183,7 @@ describe('ResourceSummary pod usage gauges', () => {
     expect([...rows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Cap', 'Alloc', 'Cap', 'Alloc'])
     expect(rows[0].textContent).toContain('3.9 / 4 cap') // cores, capacityRes drives the unit
     expect(rows[0].querySelector('.metric-burst')).toBeNull() // under capacity → no overshoot
-    expect(rows[1].querySelector('.metric-burst')).toBeTruthy() // past allocatable → fill runs past the Alloc tick
+    expect(rows[1].querySelector('.metric-burst')).toBeTruthy() // past allocatable → fill runs past the Alloc ceiling
   })
 })
 

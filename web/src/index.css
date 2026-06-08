@@ -2266,23 +2266,33 @@ button.conn.conn-retry:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+/* The bar is a positioning cell spanning the full value column; the visible track inside it is sized to
+   the bound, so its right edge IS the bar's ceiling. */
 .metric-bar {
   position: relative;
   height: 8px;
-  border-radius: 4px;
+}
+/* The track: its LENGTH encodes the bound on the group's shared scale — the bar ends at its ceiling
+   (Req shorter than Lim), and extends past it to the usage on a burst (the metric-burst then hatches the
+   excess). This replaces a fixed-width track + a bound tick: the relative bound lengths read straight
+   off the bars, like a Nodes-view bullet. */
+.metric-track {
+  position: absolute;
+  inset: 0 auto 0 0;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  overflow: hidden;
+  border-radius: 4px;
 }
-/* No request/limit to gauge against — a dashed, empty track signals "ungauged" so the bar can't be
-   misread as "at capacity". */
+/* No request/limit to gauge against — a dashed, empty full-width track signals "ungauged" so the bar
+   can't be misread as "at capacity". */
 .metric-bar.unconstrained {
-  border-style: dashed;
-  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
 }
 /* Fill = live usage on the group's shared scale, so its length is directly comparable across the bars
    (and to nothing else on screen — it is the same usage on Lim and Req). A single neutral accent; the
-   "over a bound" signal is the hatched overshoot past that bound's tick, not a colour change. */
+   "over a bound" signal is the hatched overshoot past the ceiling, not a colour change. Drawn over the
+   track. */
 .metric-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -2290,19 +2300,7 @@ button.conn.conn-retry:focus-visible {
   border-radius: 4px 0 0 4px;
   transition: width 0.2s;
 }
-/* The bound tick: a thin vertical mark at the bound's position on the shared scale, so the bar's
-   relative ceiling length is legible even at a glance and an overshoot reads as the fill running past
-   it. Drawn on top of the fill. */
-.metric-tick {
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  width: 2px;
-  margin-left: -1px;
-  background: var(--text-dim);
-  border-radius: 1px;
-}
-/* Overshoot: the slice of the fill beyond the tick, hatched (colour-independent) so "past its
+/* Overshoot: the slice of the fill beyond the ceiling, hatched (colour-independent) so "past its
    request/limit" pulls the eye the same way the Nodes view's burst overlay does. */
 .metric-burst {
   position: absolute;
