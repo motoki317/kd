@@ -2078,13 +2078,26 @@ button.conn.conn-retry:focus-visible {
   z-index: 20;
   box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
 }
-/* The operator expands the drawer to READ a tab (logs/manifest/events), so the verbose resource
-   summary — tall for a pod (containers, images, ports, labels) — must yield the height it eats in the
-   side panel. Cap it and let it scroll, so the active tab panel fills the rest of the canvas; the
-   header actions sit outside this box and stay fixed. (Only when expanded; the side panel is unchanged.) */
+/* A verbose resource summary — tall for a pod (containers, images, ports, labels) — must not shove the
+   active tab panel (logs/events/manifest) off-screen. Cap it and let it scroll so the tab panel always
+   gets room; the header actions sit outside this box and stay fixed. The cap applies in the side panel
+   too (the user's "add a maximum height to the top parts"), and tightens when expanded — there the tab
+   IS the focus. */
+.drawer-summary {
+  max-height: 42vh;
+  overflow-y: auto;
+}
 .drawer.expanded .drawer-summary {
   max-height: 30vh;
-  overflow-y: auto;
+}
+/* "Maximize this section": collapse the summary to just its hero (kind · name · status), so the active
+   tab panel takes the full drawer height while the operator keeps the resource's identity in view. */
+.drawer.summary-collapsed .drawer-summary {
+  max-height: none;
+  overflow: visible;
+}
+.drawer.summary-collapsed .drawer-summary > :not(.drawer-hero) {
+  display: none;
 }
 @keyframes drawer-in {
   from { transform: translateX(32px); opacity: 0; }
@@ -2769,6 +2782,7 @@ button.drawer-host:hover {
    copy via the .copied class. */
 .drawer-share,
 .drawer-back,
+.drawer-collapse-summary,
 .drawer-expand {
   border: 0;
   background: transparent;
@@ -2784,18 +2798,21 @@ button.drawer-host:hover {
 }
 .drawer-share:hover,
 .drawer-back:hover,
+.drawer-collapse-summary:hover,
 .drawer-expand:hover {
   background: var(--surface-2);
   color: var(--accent);
 }
 .drawer-share:focus-visible,
 .drawer-back:focus-visible,
+.drawer-collapse-summary:focus-visible,
 .drawer-expand:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-/* Pressed (expanded) state reads as "active mode" via the accent tint, like the legend pills. */
-.drawer-expand[aria-pressed='true'] {
+/* Pressed (expanded / summary-collapsed) state reads as "active mode" via the accent tint, like the legend pills. */
+.drawer-expand[aria-pressed='true'],
+.drawer-collapse-summary[aria-pressed='true'] {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }

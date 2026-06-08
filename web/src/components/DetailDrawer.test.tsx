@@ -471,6 +471,22 @@ describe('DetailDrawer', () => {
     expect(navigated).toEqual(['d1'])
   })
 
+  it('collapses the resource summary to maximize the active tab section', () => {
+    const { container, getByLabelText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    const drawer = container.querySelector('.drawer')!
+    expect(drawer.classList.contains('summary-collapsed')).toBe(false)
+    const toggle = getByLabelText('Collapse summary to enlarge this section')
+    toggle.click()
+    // The drawer carries the class that hides the non-hero summary content (CSS), keeping the hero —
+    // the resource's kind · name stays visible for context while the tab panel takes the height.
+    expect(drawer.classList.contains('summary-collapsed')).toBe(true)
+    expect(container.querySelector('.drawer-hero')).toBeTruthy()
+    getByLabelText('Show resource summary').click()
+    expect(drawer.classList.contains('summary-collapsed')).toBe(false)
+  })
+
   it('host meta is a click-to-jump button when onNavigateRef is provided', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
     const refNavigated: string[] = []

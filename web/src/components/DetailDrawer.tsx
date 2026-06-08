@@ -61,6 +61,11 @@ export default function DetailDrawer(props: Props) {
   // stay in "big" mode while walking the tree) but resets when the drawer closes, so a fresh
   // selection opens in the compact side panel again.
   const [expanded, setExpanded] = createSignal(false)
+  // Maximize the active tab section (cycle: operators reading long logs): collapse the verbose resource
+  // summary down to just its hero (kind · name · status) so the Logs/Events/Manifest panel takes the
+  // drawer's full height. Independent of `expanded` (width) — the two compose for the biggest reading
+  // area. Sticky across owner-chip navigation, reset on close like `expanded`.
+  const [summaryCollapsed, setSummaryCollapsed] = createSignal(false)
   const EXIT_MS = 220
   let exitTimer: ReturnType<typeof setTimeout> | undefined
   // Set when the drawer opens from a closed state (not when navigating between resources while
@@ -96,6 +101,7 @@ export default function DetailDrawer(props: Props) {
             setDisplayNode(null)
             setExiting(false)
             setExpanded(false)
+            setSummaryCollapsed(false)
             exitTimer = undefined
           }, EXIT_MS)
         }
@@ -301,7 +307,7 @@ export default function DetailDrawer(props: Props) {
         <aside
           ref={asideEl}
           class="drawer"
-          classList={{ exiting: exiting(), expanded: expanded() }}
+          classList={{ exiting: exiting(), expanded: expanded(), 'summary-collapsed': summaryCollapsed() }}
           onKeyDown={onDrawerKeyDown}
           // Name the complementary landmark by the resource it describes, so a screen reader's
           // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
@@ -336,6 +342,30 @@ export default function DetailDrawer(props: Props) {
                   </svg>
                 </button>
               </Show>
+              {/* Collapse/show summary: fold the resource summary down to just its hero so the active
+                  tab (logs/events/manifest) takes the drawer's full height — "maximize this section"
+                  without changing the drawer's width. Chevron points up to fold the summary away, down
+                  to bring it back. Grouped with expand as the drawer's two reading-space controls. */}
+              <button
+                class="drawer-collapse-summary"
+                type="button"
+                title={summaryCollapsed() ? 'Show resource summary' : 'Collapse summary to enlarge this section'}
+                aria-label={summaryCollapsed() ? 'Show resource summary' : 'Collapse summary to enlarge this section'}
+                aria-pressed={summaryCollapsed()}
+                onClick={() => setSummaryCollapsed((v) => !v)}
+              >
+                <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+                  <path
+                    d={summaryCollapsed() ? 'M3 6 L7 10 L11 6' : 'M3 8 L7 4 L11 8'}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <line x1="3" y1={summaryCollapsed() ? 3 : 11} x2="11" y2={summaryCollapsed() ? 3 : 11} stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+              </button>
               {/* Expand/restore: grow the drawer to fill the canvas for comfortable log/manifest
                   reading, then shrink it back to the side panel. The 4-corner glyph points outward
                   to "maximize" and inward to "restore" — a familiar window-control idiom. */}
