@@ -142,6 +142,8 @@ interface CapBarItem {
 // sized by their EXACT summed value (a single block can't N-inflate the bar); a lone sub-threshold
 // pod is floored instead (≤1 min-width of slack). Unhealthy pods never fold — a troubled pod stays
 // individually visible (with its health color) even at near-zero usage, so problems aren't hidden.
+// Near-limit pods don't fold either, for the same reason: the OOM/throttle risk marker needs its
+// segment on the bar, and a pod hiding inside the anonymous "small" block would mute the warning.
 function buildCapBar(
   items: CapBarItem[],
   valueOf: (d: CapBarItem) => number,
@@ -151,7 +153,7 @@ function buildCapBar(
   height: number,
 ): { segs: CapSeg[]; small?: CapAggregate; folded: KNode[]; endX: number } {
   const sized = items.map((d) => ({ d, w: valueOf(d) * scale }))
-  const foldable = (s: { d: CapBarItem; w: number }) => s.w < CAP_SEG_FOLD && s.d.node.health === 'Healthy'
+  const foldable = (s: { d: CapBarItem; w: number }) => s.w < CAP_SEG_FOLD && s.d.node.health === 'Healthy' && !s.d.nearLimit
   const smallItems = sized.filter(foldable)
   const fold = smallItems.length >= 2
   const segs: CapSeg[] = []

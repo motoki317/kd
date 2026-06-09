@@ -2009,6 +2009,17 @@ export default function Topology(props: Props) {
                               <Show when={s.over && !capSegFaded(s.node)}>
                                 <rect class="cap-burst-overlay" x={s.x} y={s.y} width={Math.max(0.5, s.width - 0.5)} height={s.height} />
                               </Show>
+                              {/* Near-limit (≥90% of its limit — OOM/throttle risk): a FIXED-SIZE warning
+                                  notch above the segment. The .near outline stroke vanishes on a few-px
+                                  segment, and exactly those tight-limit tiny pods are the likeliest to sit
+                                  near their limit — the marker's size encodes the state, not the pod's
+                                  magnitude, so the bar's most urgent cue survives any segment width. */}
+                              <Show when={s.nearLimit && !capSegFaded(s.node)}>
+                                <path
+                                  class="cap-near-marker"
+                                  d={`M ${s.x + s.width / 2 - 5} ${s.y - 7} L ${s.x + s.width / 2 + 5} ${s.y - 7} L ${s.x + s.width / 2} ${s.y - 1.5} Z`}
+                                />
+                              </Show>
                             </g>
                           </Show>
                         )}

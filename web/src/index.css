@@ -946,6 +946,13 @@ button.conn.conn-retry:focus-visible {
   stroke: var(--health-degraded);
   stroke-width: 1.4;
 }
+/* Fixed-size warning notch above a near-limit segment (the stroke above vanishes at a few px wide).
+   Red on purpose — it marks OOM/throttle risk, the Use bar's most urgent state, outranking the
+   bursting hatch. pointer-events:none keeps the segment's own hover/click the target. */
+.cap-near-marker {
+  fill: var(--health-degraded);
+  pointer-events: none;
+}
 /* Pods from OTHER namespaces render gray regardless of health, so the selected namespace's pods (in
    the node's full pod set) stand out as the bright block. Placed after the health rules so its
    equal-specificity fill wins. Still clickable/hoverable — explicitly identified, not hidden. */

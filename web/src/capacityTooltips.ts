@@ -13,8 +13,20 @@ export type CapTipData = { title: string; sub?: string; value: string; hint?: st
 // A single pod segment → its name + the one amount it contributes on the bar being hovered (its usage on
 // the Use bar, its request on the Req bar). The bars already print "use / cap" and "req / cap" at their
 // right end, so the tooltip carries ONLY that single number, not the full use/req/limit triple.
+// The Use bar's risk overlays (near-limit notch, burst hatch) are explained in words here — a bare
+// marker/hatch makes the operator infer its meaning (explicit over implicit), and near-limit names the
+// per-resource consequence (CPU throttles, memory OOM-kills). Near-limit outranks bursting: it's the
+// urgent one, and a segment can be both.
 export const tipFromSeg = (s: CapSeg, metric: 'use' | 'req', resource: CapResource): CapTipData => ({
   title: s.node.name,
+  sub:
+    metric === 'use' && s.nearLimit
+      ? resource === 'cpu'
+        ? 'near its CPU limit — throttling'
+        : 'near its memory limit — OOM risk'
+      : metric === 'use' && s.over
+        ? 'using more than it requested'
+        : undefined,
   value: formatQuantity(metric === 'use' ? s.use : s.req ?? 0, resource),
 })
 

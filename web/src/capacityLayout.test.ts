@@ -166,6 +166,19 @@ describe('layoutGraphByCapacity', () => {
       expect(row.smallUseSeg?.count).toBe(2)
       expect(row.useSegs.map((s) => s.node.id)).toEqual(['sick'])
     })
+
+    it('never folds a near-limit tiny pod — the OOM/throttle warning needs its own segment', () => {
+      // Tight-limit tiny pods are exactly the ones likeliest to run near their limit; folding one
+      // into the anonymous "small" block would hide the bar's most urgent state.
+      const a = pod('ok-a', 'huge', 'shop', { use: 100, req: 100 })
+      const b = pod('ok-b', 'huge', 'shop', { use: 100, req: 100 })
+      const hot: KNode = { ...pod('hot', 'huge', 'shop', { use: 100, req: 100 }), limits: { cpuMilli: 105 } as Resources }
+      const usage = usageOf(['ok-a', 100], ['ok-b', 100], ['hot', 100]) // 100 ≥ 0.9 × 105
+      const row = layoutGraphByCapacity([huge, a, b, hot], usage, 'cpu', 'shop').rows.find((r) => r.host === 'huge')!
+      expect(row.smallUseSeg?.count).toBe(2)
+      expect(row.useSegs.map((s) => s.node.id)).toEqual(['hot'])
+      expect(row.useSegs[0].nearLimit).toBe(true)
+    })
   })
 
   it('flags overcommit when summed requests exceed allocatable', () => {

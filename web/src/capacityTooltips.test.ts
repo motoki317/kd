@@ -17,6 +17,17 @@ describe('capacity tooltips', () => {
     expect(tipFromSeg(seg(2 * 1024 ** 3), 'use', 'memory').value).toBe('2Gi')
   })
 
+  it('explains the Use-bar risk states in words — near-limit (per-resource consequence) over bursting', () => {
+    const risky = { ...seg(95, 50), over: true, nearLimit: true } as CapSeg
+    // Near-limit names what actually happens at the limit: CPU throttles, memory OOM-kills.
+    expect(tipFromSeg(risky, 'use', 'cpu').sub).toBe('near its CPU limit — throttling')
+    expect(tipFromSeg(risky, 'use', 'memory').sub).toBe('near its memory limit — OOM risk')
+    // Bursting alone gets the request explanation; the req bar stays a bare name+value.
+    const bursting = { ...seg(95, 50), over: true } as CapSeg
+    expect(tipFromSeg(bursting, 'use', 'cpu').sub).toBe('using more than it requested')
+    expect(tipFromSeg(risky, 'req', 'cpu').sub).toBeUndefined()
+  })
+
   it('a small fold names the pod count; an other-ns fold adds the outside-namespace sub', () => {
     const small: CapAggregate = { variant: 'small', count: 3, use: 12, req: 30, x: 0, y: 0, width: 0, height: 0 }
     expect(tipFromAgg(small, 'req', 'cpu')).toEqual({ title: '3 small pods', sub: undefined, value: '30m' })

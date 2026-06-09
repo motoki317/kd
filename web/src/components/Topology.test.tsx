@@ -719,6 +719,24 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use:not(.small):not(.other):not(.faded)').length).toBe(0)
   })
 
+  it('Nodes view: a near-limit pod gets a fixed-size warning notch; a comfortable pod none', () => {
+    // The .near outline stroke disappears on a few-px segment, so the OOM/throttle cue is a
+    // fixed-size marker whose size encodes the state, not the pod's magnitude.
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'hot', kind: 'Pod', name: 'hot', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 }, limits: { cpuMilli: 100 } },
+      { id: 'cool', kind: 'Pod', name: 'cool', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 100 }, limits: { cpuMilli: 1000 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { hot: { cpuMilli: 95 }, cool: { cpuMilli: 95 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    expect(container.querySelectorAll('.cap-near-marker').length).toBe(1)
+    // The tooltip spells the risk out — hover the near-limit segment (sorted first: equal use, equal req).
+    fireEvent.pointerMove(container.querySelector('.cap-seg.use.near') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-sub')?.textContent).toBe('near its CPU limit — throttling')
+  })
+
   it('Nodes view: an aggregate fold\'s tooltip says what a click does (toggle the row)', () => {
     // Aggregates (small/other folds) carry the same pointer cursor as pod segments but a click
     // falls through to the row's expand toggle, not a selection — the tooltip must say so.
