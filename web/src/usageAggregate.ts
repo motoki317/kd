@@ -12,10 +12,13 @@ export interface WorkloadUsage {
 }
 
 // aggregateWorkloadUsage sums descendant-pod usage and requests/limits. Usage comes from the capacity
-// feed (keyed by pod UID); requests/limits from each pod node. A bound is summed across the pods that set
-// it and stays defined if ANY pod does (identical replicas reserve identically; a partial set still reads
-// meaningfully as "ΣrequestsThatExist"). Returns null when no descendant pod has a usage reading yet, so
-// the caller shows nothing rather than a misleading "0 used".
+// feed (keyed by pod UID); requests/limits from each pod node. The bound is summed over ONLY the metered
+// pods — the same set the usage numerator covers — so the gauge plots a like-for-like ratio. Summing the
+// bound over ALL pods while usage covers only the metered ones understated utilization on a rollout
+// (a 10-replica Deployment with 3 pods not-yet-metered gauged Σusage(7) against Σrequests(10), reading
+// ~30% short and faking headroom); the "summed across M of N pods" caption then describes both sides
+// honestly. Returns null when no descendant pod has a usage reading yet, so the caller shows nothing
+// rather than a misleading "0 used".
 export function aggregateWorkloadUsage(
   pods: KNode[],
   usage: Record<string, ResourceUsage> | undefined,
@@ -34,11 +37,10 @@ export function aggregateWorkloadUsage(
   let hasLimMem = false
   for (const p of pods) {
     const u = usage[p.id]
-    if (u) {
-      metered++
-      cpuMilli += u.cpuMilli ?? 0
-      memBytes += u.memBytes ?? 0
-    }
+    if (!u) continue // unmetered pod: excluded from BOTH sides so the ratio stays like-for-like
+    metered++
+    cpuMilli += u.cpuMilli ?? 0
+    memBytes += u.memBytes ?? 0
     if (p.requests?.cpuMilli != null) {
       hasReqCpu = true
       reqCpu += p.requests.cpuMilli

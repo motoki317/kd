@@ -26,14 +26,16 @@ describe('aggregateWorkloadUsage', () => {
     })
   })
 
-  it('counts only metered pods for usage but all pods for podCount', () => {
+  it('sums usage AND its bound over only the metered pods, so the ratio is like-for-like', () => {
+    // Pod b is unmetered (no usage reading — metrics-server lag on a fresh replica). Its request must
+    // NOT inflate the denominator while its usage is absent from the numerator, or the gauge reads short.
     const pods = [pod('a', { cpuMilli: 100 }), pod('b', { cpuMilli: 100 })]
     const agg = aggregateWorkloadUsage(pods, { a: { cpuMilli: 70 } })
     expect(agg?.usage).toEqual({ cpuMilli: 70, memBytes: 0 })
-    expect(agg?.podCount).toBe(2)
-    expect(agg?.meteredPods).toBe(1)
-    // request summed across both pods that set it
-    expect(agg?.requests).toEqual({ cpuMilli: 200, memBytes: undefined })
+    expect(agg?.podCount).toBe(2) // still reports all replicas exist…
+    expect(agg?.meteredPods).toBe(1) // …but only 1 is metered
+    // request summed over the metered pod only (100), NOT both (200) — matches the usage's pod set.
+    expect(agg?.requests).toEqual({ cpuMilli: 100, memBytes: undefined })
   })
 
   it('returns null when no descendant pod has a usage reading', () => {
