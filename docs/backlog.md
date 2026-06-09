@@ -96,6 +96,14 @@ Recent batches (newest first; `git log` has the commits):
   signal); DOM unchanged, full interaction surface re-verified live on staging. Note: docker-desktop got
   metrics-server reinstalled this session (cluster reset had dropped it) — the gauge/capacity dogfooding
   paths need it.
+  Then shipped: **HPA "metric" chip** ("cpu 200% / 90%" current/target — why/when it scales; v2 +
+  v1 schemas, "—" when unsampled; dogfooded against a real mid-scale HPA). **ArgoCD Application dest +
+  rev chips & OutOfSync-paired status** — found driving a real cross-namespace triage (the argocd
+  namespace's Progressing app gave no pointer to the namespace its crashing workload lives in); dest =
+  destination ns (cluster-prefixed when remote), rev = short synced SHA (copyable), status pairs
+  "Progressing · OutOfSync" when drifted (ECK pairing idiom). E2E crashloop triage flow re-verified
+  mature on a real staging incident (badge → worst ns → Degraded filter → frame button → pod →
+  CrashLoopBackOff + ↻10 + last exit → previous logs → the actual init error), 6 clicks to root cause.
   Then shipped: **Alt-click copies an event** (log-line idiom: "Reason: message", source-prefixed when
   aggregated, green flash, clipboard-guarded; source-nav button ignores Alt). Headless clipboard rejects
   unfocused → flash unverifiable live BY DESIGN (pitfall #8 in the dogfooding skill). **Policy 403s name
