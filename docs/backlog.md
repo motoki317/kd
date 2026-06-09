@@ -56,10 +56,24 @@ Recent batches (newest first; `git log` has the commits):
   discovery worked well** (parallel read-only source surveys → I adversarially verify + dogfood the
   survivors); note the false-positive caught: the "EventSource onerror fires on close → shows no-logs-yet"
   hypothesis was WRONG (the server holds idle), only live driving revealed the real perpetual-spinner.
-  Open survivors from this batch's surveys (verified real, not yet shipped): RBAC-403 manifest/events read
-  as a generic "unavailable" (no "you lack access" hint); drawer Copy affordance inconsistent across spec
-  values (image/IP have it, selector/data-keys/routes don't); Events tab lacks copy + message search + a
-  warnings-only "shown/total" feedback that the Logs tab standardized.
+  Also shipped: **Service selector is now copyable** — the "why no endpoints" suspect an operator pastes
+  into `kubectl get pods -l …`, yet unlike the sibling clusterIP/external/image rows it had no copy button
+  (Repetition break); added opt-in `copy` to the shared MetaChip and enabled it on the selector (copy stays
+  opt-in — most labelled facts aren't pasted anywhere). Verified live on staging (button present, "Copy
+  selector" label, layout in-bounds). And: **favicon attention badge reflects the WHOLE cluster, not just
+  the open namespace** — it sells itself (favicon.ts docstring) as a tab-per-cluster "is anything wrong
+  here" signal but was painted from the open namespace's graph alone, so parked on a healthy namespace the
+  tab read "all good" while other namespaces were Degraded (and it silently disagreed with the sidebar
+  trouble badge). Now counts over `sidebarNs` (cluster-wide per-ns health, open ns kept live via SSE
+  summary — the badge's own source). Verified live on staging: parked on a fully-healthy namespace the
+  favicon stays Degraded-red because another namespace is degraded (was clean). Both surveys ran as
+  background subagents while I dogfooded staging.
+  Open survivors (verified real, not yet shipped): RBAC-403 manifest/events read as a generic "unavailable"
+  (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on data-keys/routes;
+  Events tab lacks copy + message search + warnings "shown/total"; **sidebar trouble-count + "no matches"
+  have no `aria-live`** (SR users get no signal trouble arrived / list emptied); **Kinds-row arrow-key focus
+  can land on a fade-masked off-screen chip** (no scrollIntoView — needs live verify); externalIP "pending"
+  has no explanatory title; toolbar lacks a clickable "frame matches" for health/kind filters (search has it).
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
