@@ -57,7 +57,13 @@ refinement). What an agent editing it must keep in mind:
 - **Collapsed segments draw at EXACT proportional width** (`value·scale`, no per-pod floor) so
   Σwidths = Σvalues and the bar end is true utilization. A per-segment minimum was the overshoot bug
   (N near-zero pods tiling past the track). Tiny **healthy** pods fold into ONE `small` `CapAggregate`
-  sized by exact summed value; a lone sub-threshold pod is floored; **unhealthy pods never fold**.
+  sized by exact summed value; a lone sub-threshold pod is floored; **unhealthy and near-limit pods
+  never fold** — problems stay individually visible.
+- **Risk states survive any segment width:** bursting (use > request) is a hatch overlay
+  (`.cap-burst-overlay`); near-limit (use ≥ 90% of limit — the urgent one) draws a FIXED-SIZE red
+  notch above the segment (`.cap-near-marker` — the `.near` outline stroke alone vanishes at a few
+  px), and the hover tooltip words both states ("near its CPU limit — throttling" / "using more than
+  it requested").
 - **Use + Req bars share ONE colour scheme and ONE height** (`CAP_BAR_H`, Use on top): a pod is the
   same colour on both, selection emphasises both. Segments ordered largest-first by `max(use, request)`.
 - **Per-bar totals (proximity):** each bar carries its own `value / capacity` label past its right end
@@ -88,9 +94,10 @@ empty-to-the-right full card.
 **Interaction state:** `Resource` facet (`CapResource = cpu|memory`, one at a time) is owned by App,
 persisted to `kd:capRes` + `?capRes=`. Hover-to-spotlight: `capHover` (a pod id, a `small:`/`other:`/
 `overhead:<host>` marker) drives `capSegFaded`/`capAggFaded`, falling back to `nodeFaded` when nothing
-is hovered. A cursor-following HTML tooltip (`.cap-tooltip`, payload `CapTipData = {title, sub?, value}`)
-replaces native `<title>` + inline numbers. The whole node row (`.cap-node-frame`) toggles expand/
-collapse; segments/bullets `stopPropagation`. Card width grows to contain SVG text via char-count
+is hovered. A cursor-following HTML tooltip (`.cap-tooltip`, payload `CapTipData = {title, sub?,
+value, hint?}`) replaces native `<title>` + inline numbers; `hint` is the view-composed action line on
+aggregate folds ("Click to expand into per-pod cards") whose click falls through to the row toggle.
+The whole node row (`.cap-node-frame`) toggles expand/collapse; segments/bullets `stopPropagation`. Card width grows to contain SVG text via char-count
 estimates (`CAP_HEADER_CHAR_W`/`CAP_BULLET_CHAR_W`).
 
 ## LR depth-column layout (`placeColumns`)

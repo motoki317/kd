@@ -16,7 +16,8 @@ set up.
 You arrange the canvas yourself. Switch how resources are grouped:
 
 - **Relationship** — an ArgoCD-style tree, children fanning out from their parents.
-- **Nodes** — bars sized by capacity and usage, to see where resources actually go.
+- **Nodes** — bars sized by capacity and usage, to see where resources actually go. Pods bursting
+  past their requests or running near their limits are flagged on the bar.
 - **Kind** — every resource boxed by type.
 
 Then pick which links to draw: ownership, network, volumes, RBAC, or disruption. Custom resources show
@@ -27,8 +28,13 @@ Pods. Unhealthy resources stand out in color, and troubled namespaces sort to th
 
 ### Resource details
 
-Click a resource to open its details: live logs (tail, per-container, previous crash, filter), recent
-events, and the raw manifest.
+Click a resource to open its details. The summary answers "what is this and how is it doing" without
+opening the manifest: status with its reason, container states, live CPU/memory gauges against
+requests and limits, and each kind's defining facts — a Service's selector and endpoints, an Ingress's
+routes, a ConfigMap's keys, a Node's taints. Tabs carry live logs (multi-container streams merged and
+labelled, previous-crash output, level and text filters), recent events rolled up from the resource's
+children, and the raw manifest (YAML or JSON, with in-pane find). Owner chips walk up the tree, and
+the panel expands when log lines need the room.
 
 ### Search and sharing
 
