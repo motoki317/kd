@@ -215,6 +215,35 @@ describe('ResourceSummary service selector', () => {
   })
 })
 
+describe('ResourceSummary external address', () => {
+  it('explains a pending LoadBalancer address (caution tint + why, no copy button)', () => {
+    // "pending" is the server's placeholder for a LoadBalancer with no assigned ingress — it is not
+    // an address, so it must not read like one: caution tint, an explanatory title (provisioning vs
+    // a cluster with no LB controller), and no copy affordance for a non-pasteable value.
+    const svc: KNode = {
+      id: 's3', kind: 'Service', name: 'lb', health: 'Healthy',
+      clusterIP: '10.0.0.3', externalIP: 'pending',
+    }
+    const { container } = render(() => <ResourceSummary node={svc} {...base} />)
+    const ext = container.querySelector('.port-ext')!
+    expect(ext.classList.contains('port-caution')).toBe(true)
+    expect(ext.getAttribute('title')).toContain('LoadBalancer')
+    expect(ext.getAttribute('title')).toContain('pending indefinitely')
+    expect(ext.querySelector('.copy-btn')).toBeNull()
+  })
+  it('keeps a real external address plain and copyable', () => {
+    const svc: KNode = {
+      id: 's4', kind: 'Service', name: 'lb', health: 'Healthy',
+      clusterIP: '10.0.0.4', externalIP: '203.0.113.7',
+    }
+    const { container } = render(() => <ResourceSummary node={svc} {...base} />)
+    const ext = container.querySelector('.port-ext')!
+    expect(ext.classList.contains('port-caution')).toBe(false)
+    expect(ext.getAttribute('title')).toContain('External address')
+    expect(ext.querySelector('.copy-btn')).toBeTruthy()
+  })
+})
+
 describe('ResourceSummary labels', () => {
   it('renders labels in a collapsed-by-default <details> (a Pod can carry 20+ operator-internal labels)', () => {
     // The drawer must not lead with a wall of labels — they live behind a "Labels · N" disclosure that

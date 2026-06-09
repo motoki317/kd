@@ -374,9 +374,21 @@ export default function ResourceSummary(props: Props) {
           </Show>
           {/* For a LoadBalancer/NodePort service the external address is the actual "reach it from
               outside" answer the cluster IP can't give — surface it labelled, and copyable unless
-              it's still "pending" (no address assigned yet). */}
+              it's still "pending" (no address assigned yet). "pending" is a placeholder, not an
+              address, so it wears the caution tint + an explanatory title: the usual reasons (the
+              provider is still provisioning, or this cluster has no LoadBalancer controller at all
+              — where it stays pending forever) are exactly what the operator drilling into an
+              unreachable Service needs to hear. */}
           <Show when={props.node.externalIP}>
-            <span class="port-addr port-ext" title="External address (LoadBalancer / externalIPs)">
+            <span
+              class="port-addr port-ext"
+              classList={{ 'port-caution': props.node.externalIP === 'pending' }}
+              title={
+                props.node.externalIP === 'pending'
+                  ? 'No external address assigned yet — the LoadBalancer provider is still provisioning one. On a cluster with no LoadBalancer controller this stays pending indefinitely.'
+                  : 'External address (LoadBalancer / externalIPs)'
+              }
+            >
               <span class="addr-label">ext</span>
               <code>{props.node.externalIP}</code>
               <Show when={props.node.externalIP !== 'pending'}>
