@@ -36,6 +36,17 @@ failed-container message — see Rejected). No scale-specific bug found; the sur
 
 Recent batches (newest first; `git log` has the commits):
 
+- **2026-06-10 (operator-dogfooding campaign, continued)** — driving real triage flows on docker-desktop +
+  staging EKS. Shipped: **Nodes-view count speaks in pods, not the whole-namespace inventory** — the
+  capacity canvas draws only Nodes + own Pods (from the cluster-wide `capacity` feed) yet the bottom count
+  read `visibleNodes()` (every kind in the namespace snapshot), so a 12-pod namespace with 132 orphaned
+  CMs/Secrets/CRs read "182 resources · 1 node" above a dozen bars; extracted the displayed-set filter as
+  `capacityShown` (DRY with the health pills, which were already correct) and headlined pods · nodes,
+  mirroring the Kind view's resources · kinds split. Verified live (was "182 resources · 1 node" → now
+  "12 pods · 1 node", matching the PO chip; filtered "12 of 12 pods match"; Kind/Relationship counts
+  unchanged). The "count mixes basis" gap pattern (dogfooding skill) again — a real felt confusion the
+  source survey called mature.
+
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
   source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
