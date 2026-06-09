@@ -423,6 +423,32 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use.other').length).toBe(1)
   })
 
+  it('Nodes view count headlines displayed pods, not the namespace inventory', () => {
+    // props.nodes carries the whole namespace — pods + node + ConfigMaps/Secrets the capacity canvas
+    // never draws; the capacity feed carries only Nodes + pods. The count must speak in displayed pods,
+    // not the 6-resource inventory (the "182 resources over a dozen bars" bug).
+    const inventory: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Healthy', host: 'host-1' },
+      { id: 'p2', kind: 'Pod', name: 'p2', namespace: 'app', health: 'Degraded', host: 'host-1' },
+      { id: 'cm1', kind: 'ConfigMap', name: 'cm1', namespace: 'app', health: 'Healthy' },
+      { id: 'cm2', kind: 'ConfigMap', name: 'cm2', namespace: 'app', health: 'Healthy' },
+      { id: 's1', kind: 'Secret', name: 's1', namespace: 'app', health: 'Healthy' },
+    ]
+    const capacity = { nodes: inventory.filter((n) => n.kind === 'Node' || n.kind === 'Pod'), usage: { items: {} } }
+    const { container } = render(() => (
+      <Topology nodes={inventory} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" />
+    ))
+    // 2 pods on 1 node — NOT "6 resources" the capacity canvas never draws.
+    expect(container.querySelector('.topology-count')?.textContent).toBe('2 pods · 1 node')
+    cleanup()
+    // Filtered, the subset and total stay pod-scoped too (Degraded → 1 of 2 pods, not 1 of 6).
+    const filtered = render(() => (
+      <Topology nodes={inventory} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" healthFilter="Degraded" />
+    ))
+    expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('1 of 2 pods match')
+  })
+
   it('Relationships facet appears only in the relationship grouping (Nodes + Kind draw no edges)', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },

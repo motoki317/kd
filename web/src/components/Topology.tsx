@@ -550,17 +550,32 @@ export default function Topology(props: Props) {
     const s = props.kindFilter
     return s && s.size > 0 ? s : null
   })
+  // The Nodes (capacity) view draws ONLY cluster Nodes + this namespace's Pods, sourced from the
+  // cluster-wide capacity feed (props.capacity), NOT props.nodes' full per-kind inventory. Every count
+  // that describes this view — the health pills (healthStats) and the bottom overlay — reads from this
+  // displayed set, so none advertises a ConfigMap/Secret/CR the capacity canvas never draws (the
+  // "182 resources" over a dozen pod bars bug). Pods alone are the grouped members the count headlines.
+  const capacityShown = createMemo(() => {
+    const ns = props.namespace ?? ''
+    const clusterScope = ns === '' || ns === CLUSTER_SCOPE
+    return (props.capacity?.nodes ?? []).filter(
+      (n) => n.kind === 'Node' || (n.kind === 'Pod' && (clusterScope || n.namespace === ns)),
+    )
+  })
+  const shownPods = createMemo(() => capacityShown().filter((n) => n.kind === 'Pod'))
   // True count of resources matching the active filter intersection (search ∩ health ∩ kind), over the
   // FULL node set. The bottom-left overlay must agree with the health pill / kind chip totals (which
   // both count props.nodes), but a folded collapse pill removes matching nodes from layout().nodes —
   // so counting only what's lit on canvas undercounts (a Degraded filter on a namespace whose troubled
   // Workflows are mostly folded read "15 of 341" while the pill said 57). Count over props.nodes so the
-  // overlay reports the honest match total; the badged pills already point to the folded ones.
+  // overlay reports the honest match total; the badged pills already point to the folded ones. In the
+  // Nodes view the population is instead the displayed pods (capacityShown) — the only members drawn.
   const filterMatchCount = createMemo(() => {
     const q = query().trim()
     const hf = props.healthFilter
     const ak = activeKinds()
-    return visibleNodes().filter(
+    const pool = props.groupBy === 'nodes' ? shownPods() : visibleNodes()
+    return pool.filter(
       (n) => (!q || nodeMatches(n, q)) && (!hf || n.health === hf) && (!ak || ak.has(n.kind)),
     ).length
   })
@@ -588,12 +603,7 @@ export default function Topology(props: Props) {
   const healthStats = createMemo(() => {
     const c = {} as Record<Health, number>
     if (props.groupBy === 'nodes') {
-      const ns = props.namespace ?? ''
-      const clusterScope = ns === '' || ns === CLUSTER_SCOPE
-      for (const n of props.capacity?.nodes ?? []) {
-        const shown = n.kind === 'Node' || (n.kind === 'Pod' && (clusterScope || n.namespace === ns))
-        if (shown) c[n.health] = (c[n.health] ?? 0) + 1
-      }
+      for (const n of capacityShown()) c[n.health] = (c[n.health] ?? 0) + 1
       return c
     }
     // When orphans are hidden, the pills count only what's on the canvas — EXCEPT Degraded, which always
@@ -2358,7 +2368,15 @@ export default function Topology(props: Props) {
             when={matches() || props.healthFilter || activeKinds()}
             fallback={
               <>
-                {visibleNodes().length} resource{visibleNodes().length === 1 ? '' : 's'}
+                {/* The Nodes view headlines pods (its grouped members), every other view headlines
+                    resources — a baffling "182 resources" over a dozen pod bars is the count counting
+                    a namespace inventory the capacity canvas never draws (see capacityShown). */}
+                <Show
+                  when={props.groupBy === 'nodes'}
+                  fallback={<>{visibleNodes().length} resource{visibleNodes().length === 1 ? '' : 's'}</>}
+                >
+                  {shownPods().length} pod{shownPods().length === 1 ? '' : 's'}
+                </Show>
                 {/* Per-grouping summary (cycle 231): Kind grouping shows the kind count, Nodes
                     grouping shows the host count — each surfaces the dimension that grouping
                     actually exposes, so "is this dense?" reads without parsing the canvas. */}
@@ -2371,11 +2389,11 @@ export default function Topology(props: Props) {
               </>
             }
           >
-            {filterMatchCount()} of {visibleNodes().length}
+            {filterMatchCount()} of {props.groupBy === 'nodes' ? shownPods().length : visibleNodes().length}
             {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
                 gives the polite live announcement a noun. "match" (not "shown") because the count is
                 the true filter total — some matches may be folded into a collapse pill, not on canvas. */}
-            <span class="sr-only"> resources match</span>
+            <span class="sr-only"> {props.groupBy === 'nodes' ? 'pods' : 'resources'} match</span>
           </Show>
         </div>
       </Show>
