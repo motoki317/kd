@@ -552,6 +552,39 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.event-reason')?.textContent).toBe('BackOff')
   })
 
+  it('Alt-click copies an event as "Reason: message" with the green flash (log-line idiom)', async () => {
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(
+              JSON.stringify({
+                events: [
+                  { type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() },
+                ],
+              }),
+              { status: 200 },
+            )
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      ),
+    )
+    const writeText = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await findByText('BackOff')
+    const item = container.querySelector('.event-item') as HTMLElement
+    expect(item.title).toContain('Alt-click')
+    // A plain click must NOT copy (it would fight text selection); Alt-click copies.
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(writeText).not.toHaveBeenCalled()
+    item.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true }))
+    expect(writeText).toHaveBeenCalledWith('BackOff: crash-looping')
+    await Promise.resolve() // let the .then flash apply
+    expect(item.classList.contains('copied')).toBe(true)
+  })
+
   it('omits the warnings-only chip when all events are the same type', async () => {
     vi.stubGlobal('fetch', (url: string) =>
       Promise.resolve(

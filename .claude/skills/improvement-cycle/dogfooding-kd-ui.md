@@ -328,7 +328,15 @@ surfaced them. Look for these shapes on any view:
    a non-default flag / an injected fixture that the production path can't supply, suspect the default path
    is broken and test THAT.
 
-8. **Troubled-first nav (`j`/`k`/Enter) keeps selecting VISIBLE nodes, masking a fold-related path you
+8. **`navigator.clipboard.writeText` REJECTS in the headless session ("Document is not focused") — a
+   copy affordance can never flash its success state there.** kd's copy paths confirm only on real
+   success (the AGENTS.md clipboard rule), so the missing `.copied` flash after a dispatched
+   Alt-click/copy-click is the DESIGNED failure no-op, not broken wiring. Verify instead: the handler
+   fires (stub-free unit test asserts the payload + flash), the title/affordance is present, and a
+   plain click does NOT copy. Don't chase the flash live, and don't weaken the success-only guard to
+   make it appear.
+
+9. **Troubled-first nav (`j`/`k`/Enter) keeps selecting VISIBLE nodes, masking a fold-related path you
    want to exercise.** Both the keyboard step (`orderedForNav`) and the search Enter-cycle order matches
    *most-troubled first*, and on a real cluster the troubled resources are often the head/tail cards a
    fold keeps visible — so pressing Enter dozens of times lands selection on visible cards and never on a

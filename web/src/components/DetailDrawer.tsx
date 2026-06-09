@@ -515,7 +515,27 @@ export default function DetailDrawer(props: Props) {
                         // descendant — the root's own events are obvious from the drawer header.
                         const showSource = ev.source && ev.source !== root
                         return (
-                          <li class="event-item" classList={{ warning: ev.type === 'Warning' }}>
+                          <li
+                            class="event-item"
+                            classList={{ warning: ev.type === 'Warning' }}
+                            // Alt-click copies the event ("source | Reason: message") — the same
+                            // share-one-line idiom as log lines, for pasting a FailedScheduling /
+                            // BackOff message into a ticket or search. Same whole-chain optional
+                            // chaining: navigator.clipboard is undefined on plain-http origins.
+                            title="Alt-click to copy this event"
+                            onClick={(e) => {
+                              if (!e.altKey) return
+                              const el = e.currentTarget as HTMLElement
+                              const src = showSource ? `${ev.source} | ` : ''
+                              navigator.clipboard
+                                ?.writeText(`${src}${ev.reason}: ${ev.message}`)
+                                ?.then(() => {
+                                  el.classList.add('copied')
+                                  setTimeout(() => el.classList.remove('copied'), 700)
+                                })
+                                ?.catch(() => {})
+                            }}
+                          >
                             <div class="event-head">
                               <span class="event-reason">{ev.reason}</span>
                               <Show when={ev.count > 1}>
@@ -529,7 +549,8 @@ export default function DetailDrawer(props: Props) {
                                   <button
                                     class="event-source"
                                     title={`Go to ${ev.source}`}
-                                    onClick={() => props.onNavigateRef!(ev.source!)}
+                                    // Alt-click belongs to the item's copy gesture — don't also navigate.
+                                    onClick={(e) => { if (e.altKey) return; props.onNavigateRef!(ev.source!) }}
                                   >
                                     <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
                                       {kindIcon(kindFromRef(ev.source!))}

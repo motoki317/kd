@@ -3047,6 +3047,10 @@ button.drawer-host:hover {
   border-left-color: var(--health-degraded);
   background: color-mix(in srgb, var(--health-degraded) 4%, transparent);
 }
+/* Alt-click copy feedback — the same green flash as a copied log line (one idiom per meaning). */
+.event-item.copied {
+  background: color-mix(in srgb, var(--health-healthy) 30%, transparent);
+}
 .event-head {
   display: flex;
   align-items: baseline;
