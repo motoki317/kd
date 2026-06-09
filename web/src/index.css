@@ -1065,6 +1065,15 @@ button.conn.conn-retry:focus-visible {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* Trailing action line on aggregate folds ("Click to expand…") — dim, clearly subordinate to the
+   name/value facts above it. */
+.cap-tooltip-hint {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+}
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {
   flex: none;

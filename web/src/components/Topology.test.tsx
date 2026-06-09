@@ -719,6 +719,32 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.cap-seg.use:not(.small):not(.other):not(.faded)').length).toBe(0)
   })
 
+  it('Nodes view: an aggregate fold\'s tooltip says what a click does (toggle the row)', () => {
+    // Aggregates (small/other folds) carry the same pointer cursor as pod segments but a click
+    // falls through to the row's expand toggle, not a selection — the tooltip must say so.
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1', namespace: 'team-a', requests: { cpuMilli: 100 } },
+      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1', namespace: 'team-b', requests: { cpuMilli: 100 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 80 }, p2: { cpuMilli: 80 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="team-a" />
+    ))
+    fireEvent.pointerMove(container.querySelector('.cap-seg.use.other') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-name')?.textContent).toBe('Other namespaces')
+    expect(container.querySelector('.cap-tooltip-hint')?.textContent).toContain('expand')
+    // Toggle the row open; the SAME hover now offers the collapse direction. Re-query the segment —
+    // Solid's <For> reconciliation replaces the element on relayout (stale-ref pitfall).
+    fireEvent.click(container.querySelector('.cap-row') as Element)
+    expect(container.querySelector('.cap-row')?.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.pointerMove(container.querySelector('.cap-seg.use.other') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-hint')?.textContent).toContain('collapse')
+    // A pod segment keeps the minimal name+value tooltip — no hint (selection is the normal idiom).
+    fireEvent.pointerMove(container.querySelector('.cap-seg.use:not(.other):not(.small)') as Element, { clientX: 50, clientY: 50 })
+    expect(container.querySelector('.cap-tooltip-hint')).toBeNull()
+  })
+
   it('clears all filters via onClearFilters (cycle 216)', () => {
     const onClearFilters = vi.fn()
     const { container } = render(() => (

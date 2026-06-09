@@ -6,7 +6,9 @@ import { formatQuantity, type CapAggregate, type CapResource, type CapRow, type 
 
 // CapTipData is the normalized hover-tooltip payload for the capacity bars — built from either a single
 // pod segment, a folded aggregate, or the node-usage backdrop, so the tooltip renders one shape.
-export type CapTipData = { title: string; sub?: string; value: string }
+// `hint` is a dim trailing action line ("Click to expand…") the VIEW composes — it depends on row
+// expansion state these pure builders deliberately don't know about.
+export type CapTipData = { title: string; sub?: string; value: string; hint?: string }
 
 // A single pod segment → its name + the one amount it contributes on the bar being hovered (its usage on
 // the Use bar, its request on the Req bar). The bars already print "use / cap" and "req / cap" at their

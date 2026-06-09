@@ -1823,6 +1823,14 @@ export default function Topology(props: Props) {
                   const fmt = (v: number | undefined) => formatQuantity(v, capResource())
                   const pods = row.ownCount
                   const expandable = pods > 0 || row.otherCount > 0
+                  // Aggregate folds carry no stopPropagation, so a click falls through to the row's
+                  // expand/collapse toggle. Their pointer cursor alone reads as "select this block" —
+                  // which a fold can't do — so the tooltip says what the click really does (explicit
+                  // over implicit). Pod segments need no hint: theirs is the normal selection idiom.
+                  const aggTip = (d: CapTipData): CapTipData =>
+                    expandable
+                      ? { ...d, hint: row.expanded ? 'Click to collapse the node row' : 'Click to expand into per-pod cards' }
+                      : d
                   // The Use bar's right label is the node's REAL usage (NodeMetrics) — the sum of this
                   // namespace's pod segments undercounts when other namespaces + system overhead also run
                   // on the node, so max(pod sum, node usage) keeps the headline figure honest.
@@ -1938,7 +1946,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'req', capResource()), e) }}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(aggTip(tipFromAgg(o(), 'req', capResource())), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -1952,7 +1960,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'req', capResource()), e) }}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(aggTip(tipFromAgg(o(), 'req', capResource())), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -2014,7 +2022,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
+                            onPointerMove={(e) => { setCapHover(`small:${row.host}`); showTip(aggTip(tipFromAgg(o(), 'use', capResource())), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -2028,7 +2036,7 @@ export default function Topology(props: Props) {
                             y={o().y}
                             width={Math.max(0.5, o().width - 0.5)}
                             height={o().height}
-                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
+                            onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(aggTip(tipFromAgg(o(), 'use', capResource())), e) }}
                             onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                           />
                         )}
@@ -2091,7 +2099,7 @@ export default function Topology(props: Props) {
                             <g
                               class="cap-bullet other"
                               classList={{ faded: capAggFaded(`other:${row.host}`) }}
-                              onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(tipFromAgg(o(), 'use', capResource()), e) }}
+                              onPointerMove={(e) => { setCapHover(`other:${row.host}`); showTip(aggTip(tipFromAgg(o(), 'use', capResource())), e) }}
                               onPointerLeave={() => { setCapHover(null); setCapTip(null) }}
                             >
                               <rect class="cap-bullet-frame" x={box.x} y={box.y} width={box.width} height={box.height} rx="6" />
@@ -2472,6 +2480,7 @@ export default function Topology(props: Props) {
               <div class="cap-tooltip-name">{d().title}</div>
               <Show when={d().sub}>{(sub) => <div class="cap-tooltip-sub">{sub()}</div>}</Show>
               <div class="cap-tooltip-value">{d().value}</div>
+              <Show when={d().hint}>{(hint) => <div class="cap-tooltip-hint">{hint()}</div>}</Show>
             </div>
           )
         }}
