@@ -46,6 +46,20 @@ Recent batches (newest first; `git log` has the commits):
   "12 pods · 1 node", matching the PO chip; filtered "12 of 12 pods match"; Kind/Relationship counts
   unchanged). The "count mixes basis" gap pattern (dogfooding skill) again — a real felt confusion the
   source survey called mature.
+  Also shipped: **finished-but-empty `previous` logs read "no previous logs", not a hung spinner** — a
+  CrashLoopBackOff pod that wrote nothing before exiting (the exact CrashLoop triage path) left the panel
+  on "waiting for log output…" forever; the one-shot dump closes its channel but the server holds the
+  connection open idle (so EventSource won't re-dump), so the client never learned the dump finished
+  empty. Server now emits a `done` SSE event on one-shot completion; the viewer renders a terminal state.
+  Verified live by inducing `crash-silent` (command:["/bin/false"]) vs `crash-loud` (echo+exit 1) pods on
+  docker-desktop — the kind of induced-unhealthy-state dogfooding the playbook prescribes. **Subagent
+  discovery worked well** (parallel read-only source surveys → I adversarially verify + dogfood the
+  survivors); note the false-positive caught: the "EventSource onerror fires on close → shows no-logs-yet"
+  hypothesis was WRONG (the server holds idle), only live driving revealed the real perpetual-spinner.
+  Open survivors from this batch's surveys (verified real, not yet shipped): RBAC-403 manifest/events read
+  as a generic "unavailable" (no "you lack access" hint); drawer Copy affordance inconsistent across spec
+  values (image/IP have it, selector/data-keys/routes don't); Events tab lacks copy + message search + a
+  warnings-only "shown/total" feedback that the Logs tab standardized.
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
