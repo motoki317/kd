@@ -675,6 +675,98 @@ func hpaRange(obj runtime.Object) string {
 	return fmt.Sprintf("%d–%d", minR, maxR)
 }
 
+// nestedNumber reads a numeric field from an unstructured map, tolerating both JSON decodings —
+// int64 from the API server, float64 after a JSON round-trip (the wgpolicy summary lesson).
+func nestedNumber(m map[string]any, key string) (int64, bool) {
+	switch v := m[key].(type) {
+	case int64:
+		return v, true
+	case float64:
+		return int64(v), true
+	}
+	return 0, false
+}
+
+// hpaMetricSide renders one side of an HPA Resource metric — "72%" (averageUtilization) or the raw
+// quantity ("100m", averageValue) — from a v2 `target`/`current` block. Empty when neither is set.
+func hpaMetricSide(m map[string]any) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := nestedNumber(m, "averageUtilization"); ok {
+		return fmt.Sprintf("%d%%", v)
+	}
+	if s, ok := m["averageValue"].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// hpaMetrics renders the metric actually driving an HPA's decision — "cpu 72% / 80%" (current /
+// target) — the fact the replica counts alone can't explain ("why is it scaling?" / "how close to
+// the trigger is it?"). Covers the Resource metric type (the overwhelmingly common case: CPU/memory
+// utilization or averageValue), joining several with " · "; Pods/Object/External metrics are skipped
+// rather than half-rendered. A current side missing (metrics not yet sampled, or metrics-server
+// down) renders as "—" so the configured target still shows. Falls back to the autoscaling/v1
+// targetCPUUtilizationPercentage schema when spec.metrics is absent.
+func hpaMetrics(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "HorizontalPodAutoscaler")
+	if u == nil {
+		return ""
+	}
+	// Index the sampled side by resource name first; spec order drives the output order.
+	currentByName := map[string]string{}
+	current, _, _ := unstructured.NestedSlice(u.Object, "status", "currentMetrics")
+	for _, m := range current {
+		mm, ok := m.(map[string]any)
+		if !ok || mm["type"] != "Resource" {
+			continue
+		}
+		res, _ := mm["resource"].(map[string]any)
+		if res == nil {
+			continue
+		}
+		name, _ := res["name"].(string)
+		cur, _ := res["current"].(map[string]any)
+		if side := hpaMetricSide(cur); side != "" {
+			currentByName[name] = side
+		}
+	}
+	var parts []string
+	metrics, _, _ := unstructured.NestedSlice(u.Object, "spec", "metrics")
+	for _, m := range metrics {
+		mm, ok := m.(map[string]any)
+		if !ok || mm["type"] != "Resource" {
+			continue
+		}
+		res, _ := mm["resource"].(map[string]any)
+		if res == nil {
+			continue
+		}
+		name, _ := res["name"].(string)
+		tgt, _ := res["target"].(map[string]any)
+		target := hpaMetricSide(tgt)
+		if name == "" || target == "" {
+			continue
+		}
+		cur := currentByName[name]
+		if cur == "" {
+			cur = "—"
+		}
+		parts = append(parts, fmt.Sprintf("%s %s / %s", name, cur, target))
+	}
+	if len(parts) == 0 {
+		if t, ok, _ := unstructured.NestedInt64(u.Object, "spec", "targetCPUUtilizationPercentage"); ok {
+			cur := "—"
+			if c, ok2, _ := unstructured.NestedInt64(u.Object, "status", "currentCPUUtilizationPercentage"); ok2 {
+				cur = fmt.Sprintf("%d%%", c)
+			}
+			parts = append(parts, fmt.Sprintf("cpu %s / %d%%", cur, t))
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
 // pdbPolicy renders a PodDisruptionBudget's configured intent — "min N" (minAvailable) or "max N"
 // (maxUnavailable), where N is a count or a percentage — the policy the status's "healthy" count alone
 // doesn't reveal. Empty for non-PDBs or a PDB with neither set (invalid, but don't panic).

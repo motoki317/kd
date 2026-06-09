@@ -346,6 +346,17 @@ describe('ResourceSummary PDB', () => {
 })
 
 describe('ResourceSummary HPA', () => {
+  it('shows the driving metric as a labelled chip — why/when it scales', () => {
+    const hpa: KNode = {
+      id: 'h2', kind: 'HorizontalPodAutoscaler', name: 'web', health: 'Healthy',
+      scaleReplicas: '3', scaleRange: '2–10', scaleMetrics: 'cpu 72% / 80%',
+    }
+    const { container } = render(() => <ResourceSummary node={hpa} {...base} />)
+    const chips = [...container.querySelectorAll('.drawer-ports .port-addr')]
+    const metric = chips.find((c) => c.textContent?.includes('metric'))
+    expect(metric?.textContent).toContain('cpu 72% / 80%')
+  })
+
   it('shows replica state and bounds as labelled chips', () => {
     const node: KNode = {
       id: 'hpa', kind: 'HorizontalPodAutoscaler', name: 'web', health: 'Healthy',

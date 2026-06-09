@@ -113,6 +113,7 @@ export interface KNode {
   failed?: number // a Job's failed pod count
   scaleReplicas?: string // an HPA's replica state, "current[ → desired]"
   scaleRange?: string // an HPA's min–max replica bounds ("2–10")
+  scaleMetrics?: string // the metric driving an HPA, "cpu 72% / 80%" (current / target)
   pdbPolicy?: string // a PodDisruptionBudget's policy, "min 2" / "max 1"
   disruptions?: string // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks)
   provisioner?: string // a StorageClass's provisioner (CSI driver / volume plugin)

@@ -87,6 +87,7 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			Failed:            batchFailed(obj),
 			ScaleReplicas:     hpaScale(obj),
 			ScaleRange:        hpaRange(obj),
+			ScaleMetrics:      hpaMetrics(obj),
 			PDBPolicy:         pdbPolicy(obj),
 			Disruptions:       pdbDisruptions(obj),
 			Provisioner:       storageClassProvisioner(obj),

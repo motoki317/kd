@@ -793,6 +793,65 @@ func TestHPAScaleAndRange(t *testing.T) {
 	}
 }
 
+func TestHPAMetrics(t *testing.T) {
+	v2 := func(spec, status map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler",
+			"spec": spec, "status": status,
+		}}
+	}
+	resourceMetric := func(name string, side string, val any) map[string]any {
+		return map[string]any{"type": "Resource", "resource": map[string]any{"name": name, side: val}}
+	}
+	// The common case: one Resource utilization metric with a sampled current.
+	sampled := v2(
+		map[string]any{"metrics": []any{resourceMetric("cpu", "target", map[string]any{"type": "Utilization", "averageUtilization": int64(80)})}},
+		map[string]any{"currentMetrics": []any{resourceMetric("cpu", "current", map[string]any{"averageUtilization": int64(72)})}},
+	)
+	if got := hpaMetrics(sampled); got != "cpu 72% / 80%" {
+		t.Errorf("hpaMetrics(sampled) = %q, want \"cpu 72%% / 80%%\"", got)
+	}
+	// No reading yet (fresh HPA / metrics-server down): the target still shows, current as a dash.
+	unsampled := v2(
+		map[string]any{"metrics": []any{resourceMetric("cpu", "target", map[string]any{"averageUtilization": int64(80)})}},
+		map[string]any{},
+	)
+	if got := hpaMetrics(unsampled); got != "cpu — / 80%" {
+		t.Errorf("hpaMetrics(unsampled) = %q, want \"cpu — / 80%%\"", got)
+	}
+	// Several Resource metrics join in spec order; averageValue targets pass the quantity through.
+	multi := v2(
+		map[string]any{"metrics": []any{
+			resourceMetric("cpu", "target", map[string]any{"averageUtilization": int64(80)}),
+			resourceMetric("memory", "target", map[string]any{"averageValue": "200Mi"}),
+		}},
+		map[string]any{"currentMetrics": []any{
+			resourceMetric("memory", "current", map[string]any{"averageValue": "150Mi"}),
+			// float64 decoding (a JSON round-trip) must read the same as int64.
+			resourceMetric("cpu", "current", map[string]any{"averageUtilization": float64(40)}),
+		}},
+	)
+	if got := hpaMetrics(multi); got != "cpu 40% / 80% · memory 150Mi / 200Mi" {
+		t.Errorf("hpaMetrics(multi) = %q", got)
+	}
+	// autoscaling/v1 schema (no spec.metrics): the flat targetCPUUtilizationPercentage fields.
+	v1 := v2(
+		map[string]any{"targetCPUUtilizationPercentage": int64(70)},
+		map[string]any{"currentCPUUtilizationPercentage": int64(55)},
+	)
+	if got := hpaMetrics(v1); got != "cpu 55% / 70%" {
+		t.Errorf("hpaMetrics(v1) = %q, want \"cpu 55%% / 70%%\"", got)
+	}
+	// Pods/Object/External metrics are skipped, not half-rendered; non-HPAs read empty.
+	external := v2(map[string]any{"metrics": []any{map[string]any{"type": "External"}}}, map[string]any{})
+	if got := hpaMetrics(external); got != "" {
+		t.Errorf("hpaMetrics(external-only) = %q, want empty", got)
+	}
+	if got := hpaMetrics(&corev1.Pod{}); got != "" {
+		t.Errorf("hpaMetrics(Pod) = %q, want empty", got)
+	}
+}
+
 func TestPDBPolicyAndDisruptions(t *testing.T) {
 	minAvail := intstr.FromInt32(2)
 	pdb := &policyv1.PodDisruptionBudget{

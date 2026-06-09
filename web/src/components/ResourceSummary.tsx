@@ -451,16 +451,21 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
-      {/* An HPA's scale state: how many replicas it's running (with a → arrow mid-scale) and the
-          min–max bounds it works within — "is it at the ceiling?". Labelled chips beside the status,
-          reusing the address-row idiom. The HPA→target edge already shows what it scales. */}
-      <Show when={props.node.scaleReplicas || props.node.scaleRange}>
+      {/* An HPA's scale state: how many replicas it's running (with a → arrow mid-scale), the
+          min–max bounds it works within — "is it at the ceiling?" — and the metric driving the
+          decision ("cpu 72% / 80%", current / target): how close to the trigger is it, and is the
+          signal even arriving ("—" current = metrics not sampled). Labelled chips beside the
+          status, reusing the address-row idiom. The HPA→target edge already shows what it scales. */}
+      <Show when={props.node.scaleReplicas || props.node.scaleRange || props.node.scaleMetrics}>
         <div class="drawer-ports">
           <Show when={props.node.scaleReplicas}>
             <MetaChip label="replicas" value={props.node.scaleReplicas!} title="Current replicas (→ desired while scaling)" />
           </Show>
           <Show when={props.node.scaleRange}>
             <MetaChip label="range" value={props.node.scaleRange!} title="Min–max replica bounds" />
+          </Show>
+          <Show when={props.node.scaleMetrics}>
+            <MetaChip label="metric" value={props.node.scaleMetrics!} title="Scaling metric — current / target ('—' = no reading yet)" />
           </Show>
         </div>
       </Show>
