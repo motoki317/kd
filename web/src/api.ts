@@ -146,6 +146,7 @@ export function streamLogs(
   opts: { container?: string; tailLines?: number; previous?: boolean; timestamps?: boolean },
   onLine: (entry: LogEntry) => void,
   onError?: () => void,
+  onDone?: () => void,
 ): () => void {
   const params = new URLSearchParams({ follow: opts.previous ? 'false' : 'true' })
   if (opts.container) params.set('container', opts.container)
@@ -156,6 +157,9 @@ export function streamLogs(
     `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )
   es.addEventListener('log', (e) => onLine(JSON.parse((e as MessageEvent).data) as LogEntry))
+  // The one-shot (previous-logs) dump emits `done` when it has streamed everything; the live follow
+  // stream never does. Lets the viewer tell "nothing yet, still streaming" from "finished, empty".
+  es.addEventListener('done', () => onDone?.())
   es.onerror = () => onError?.()
   return () => es.close()
 }

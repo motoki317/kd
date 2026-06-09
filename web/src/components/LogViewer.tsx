@@ -40,6 +40,10 @@ interface Props {
 export default function LogViewer(props: Props) {
   const [lines, setLines] = createSignal<LogEntry[]>([])
   const [error, setError] = createSignal(false)
+  // The one-shot `previous` dump signals `done` when it has finished; a finished dump with no lines
+  // means the crashed container wrote nothing, so the empty state must read "no previous logs", not an
+  // indefinite "waiting…". The live follow stream never completes, so this stays false there.
+  const [completed, setCompleted] = createSignal(false)
   // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
   // history, new lines stop yanking them down (a "Latest" button jumps back).
   const [pinned, setPinned] = createSignal(true)
@@ -249,6 +253,7 @@ export default function LogViewer(props: Props) {
     const ts = timestamps() || combined()
     setLines([])
     setError(false)
+    setCompleted(false)
     setPinned(true)
     setUnseenLines(0)
     const close = streamLogs(
@@ -265,6 +270,7 @@ export default function LogViewer(props: Props) {
         scheduleTail()
       },
       () => setError(true),
+      () => setCompleted(true),
     )
     onCleanup(close)
   })
@@ -634,7 +640,10 @@ export default function LogViewer(props: Props) {
           // chips) left 25 streaming lines reading "waiting for log output…" — falsely implying the
           // pod was silent. Keying on the raw buffer covers every filter (level, pod, text).
           <div class="logs-waiting">
-            <Show when={lines().length > 0} fallback={'waiting for log output…'}>
+            <Show
+              when={lines().length > 0}
+              fallback={completed() ? 'no previous logs for this container' : 'waiting for log output…'}
+            >
               {/* Name the count so a PERSISTED level filter that hides a fresh pod's whole output reads
                   as "30 lines are here, hidden" not "this pod is silent", and offer a one-click reset
                   (the topology empty-state has the same affordance). */}

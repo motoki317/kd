@@ -158,6 +158,20 @@ describe('LogViewer', () => {
     await findByText('no logs yet')
   })
 
+  // The `previous` dump is one-shot: the server emits `done` when finished. A crashed container that
+  // wrote nothing before exiting yields a finished-but-empty dump — the CrashLoop triage path — which
+  // must read as a terminal "no previous logs" state, not an indefinite "waiting…" spinner.
+  it('shows "no previous logs" when a finished previous-logs dump produced nothing', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={3} status="Running" />
+    ))
+    // Before completion the stream is genuinely still streaming.
+    expect(container.querySelector('.logs-waiting')?.textContent).toBe('waiting for log output…')
+    // The server signals the one-shot dump finished with zero lines.
+    eventSources[0].emit('done', {})
+    await findByText('no previous logs for this container')
+  })
+
   it('shows "stream interrupted" when the stream errors on a Running pod', async () => {
     const { findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

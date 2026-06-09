@@ -101,9 +101,16 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case ll, ok := <-lines:
 			if !ok {
-				// Only the one-shot path closes `lines` (follow's supervisor never does). The dump
-				// is finished; hold the connection open (idle) so the browser's EventSource doesn't
+				// Only the one-shot path closes `lines` (follow's supervisor never does). The dump is
+				// finished — tell the client so a `previous` request that produced nothing renders a
+				// terminal "no previous logs" state instead of an indefinite "waiting…" (a crashed
+				// container that wrote nothing before exiting is exactly the CrashLoop triage path).
+				// Then hold the connection open (idle) so the browser's EventSource doesn't
 				// auto-reconnect and re-dump. Closing the request ends it.
+				if !writeSSE(w, "done", struct{}{}) {
+					return
+				}
+				flusher.Flush()
 				lines = nil
 				continue
 			}
