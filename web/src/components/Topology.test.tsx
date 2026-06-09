@@ -771,6 +771,28 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-count')?.textContent).toBe('1 of 3 resources match')
   })
 
+  it('the filtered count is a frame-the-matches button; disabled at zero matches, absent unfiltered', () => {
+    // Same count-is-the-affordance idiom as the search row's matches button: under a health/kind-only
+    // filter the search button is absent, so this pill is the only mouse path to off-screen matches.
+    const noFilter = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    expect(noFilter.container.querySelector('.topology-count-frame')).toBeNull()
+    cleanup()
+    const filtered = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} healthFilter="Degraded" onHealthFilter={() => {}} />
+    ))
+    const btn = filtered.container.querySelector('.topology-count-frame') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.disabled).toBe(false)
+    cleanup()
+    // No fixture node is Progressing → zero matches → a true no-op, so the button must disable.
+    const none = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} healthFilter="Progressing" onHealthFilter={() => {}} />
+    ))
+    const btn2 = none.container.querySelector('.topology-count-frame') as HTMLButtonElement
+    expect(btn2).toBeTruthy()
+    expect(btn2.disabled).toBe(true)
+  })
+
   it('fades a collapse pill that hides no filter match, keeping match-bearing pills bright (Contrast)', () => {
     // Six same-kind cards fold into a "+ show N more" pill (COLLAPSE triggers at ≥5). Under a Degraded
     // health filter a pill that hides only Healthy cards holds nothing the operator is triaging for, so

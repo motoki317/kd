@@ -2409,11 +2409,29 @@ export default function Topology(props: Props) {
               </>
             }
           >
-            {filterMatchCount()} of {props.groupBy === 'nodes' ? shownPods().length : visibleNodes().length}
-            {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
-                gives the polite live announcement a noun. "match" (not "shown") because the count is
-                the true filter total — some matches may be folded into a collapse pill, not on canvas. */}
-            <span class="sr-only"> {props.groupBy === 'nodes' ? 'pods' : 'resources'} match</span>
+            {/* The filtered count doubles as the frame-the-matches affordance — the same idiom as
+                the search row's count button (a match count is clickable and frames its matches),
+                because under a health/kind-only filter the search button is absent and this pill is
+                the ONLY count, leaving a mouse operator no way to fly to off-screen matches. The
+                button is INSIDE the aria-live pill (not a swapped element) so the live region
+                survives filter toggles and keeps announcing count changes. */}
+            <button
+              type="button"
+              class="topology-count-frame"
+              disabled={filterMatchCount() === 0}
+              onClick={frameMatches}
+              title={
+                filterMatchCount() === 0
+                  ? 'Nothing matches the active filters.'
+                  : `Click to frame the matching ${props.groupBy === 'nodes' ? 'pods' : 'resources'}.`
+              }
+            >
+              {filterMatchCount()} of {props.groupBy === 'nodes' ? shownPods().length : visibleNodes().length}
+              {/* The bare "M of N" is clear visually but ambiguous read aloud; this sr-only suffix
+                  gives the polite live announcement a noun. "match" (not "shown") because the count is
+                  the true filter total — some matches may be folded into a collapse pill, not on canvas. */}
+              <span class="sr-only"> {props.groupBy === 'nodes' ? 'pods' : 'resources'} match</span>
+            </button>
           </Show>
         </div>
       </Show>

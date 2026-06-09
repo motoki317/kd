@@ -1744,6 +1744,33 @@ button.conn.conn-retry:focus-visible {
   padding: 2px 10px;
   font-variant-numeric: tabular-nums;
 }
+/* The filtered "M of N" doubles as the frame-the-matches button (same idiom as .topology-matches).
+   Negative margins make the button fill the pill, so the whole pill is the click target while the
+   pill chrome stays on the parent (which also carries the aria-live region). */
+.topology-count-frame {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  margin: -2px -10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.topology-count-frame:hover:not(:disabled) {
+  color: var(--text);
+}
+.topology-count:has(.topology-count-frame:hover:not(:disabled)) {
+  border-color: var(--text-dim);
+}
+.topology-count-frame:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.topology-count-frame:disabled {
+  cursor: default;
+}
 /* Visually-hidden but kept in the accessibility tree — for screen-reader-only context strings
    (e.g. the word "resources" appended to the bare "M of N" count so the live announcement reads). */
 .sr-only {
