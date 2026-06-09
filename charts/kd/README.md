@@ -112,8 +112,9 @@ rbac:
 
 ## Tuning eager-load
 
-By default kd starts an informer for every discovered kind except the four high-cardinality defaults
-(`events`, `leases`, `endpointslices`, `controllerrevisions`):
+By default kd starts an informer for every discovered kind except the high-cardinality defaults
+(`events`, `leases`, `endpoints`, `endpointslices`, `controllerrevisions`, and Kyverno's
+`ephemeralreports`):
 
 - `config.skipKinds: "workflows,leases"` — extra resource names to skip, on top of the defaults.
 - `config.eagerKinds: "events"` — resource names to force-include, overriding both the defaults and

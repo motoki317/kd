@@ -62,6 +62,7 @@ var DefaultSkipKinds = []string{
 	"endpoints",                               // core/v1; same as endpointslices — readiness comes from Service selectors, so the per-Service Endpoints object is just an edgeless orphan card duplicating its Service
 	"endpointslices",                          // discovery.k8s.io/v1; high-cardinality and we use Service selectors
 	"controllerrevisions",                     // apps/v1; StatefulSet/DaemonSet rollout history
+	"ephemeralreports",                        // reports.kyverno.io/v1; per-admission policy reports, created/updated at request volume — high churn, no topology value
 }
 
 // well-known GVRs the store handles specially.

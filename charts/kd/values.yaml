@@ -43,7 +43,8 @@ config:
   # -- Informer resync period.
   resync: "10m"
   # -- Comma-separated extra resource names to skip from eager informer startup, on top of the
-  # built-in high-cardinality defaults (events, leases, endpointslices, controllerrevisions).
+  # built-in high-cardinality defaults (events, leases, endpoints, endpointslices,
+  # controllerrevisions, ephemeralreports).
   skipKinds: "" # @schema type:string
   # -- Comma-separated resource names to force-include in eager startup, overriding both
   # skipKinds and the built-in defaults (e.g. "events" to feed the events view from cache).

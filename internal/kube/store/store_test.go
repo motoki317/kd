@@ -273,6 +273,16 @@ func TestDefaultSkipKindsHidesServiceBackingData(t *testing.T) {
 	}
 }
 
+// Kyverno's EphemeralReport objects are created/updated at admission-request volume (one per
+// evaluated resource, constantly churned) and carry no topology — eager-watching them dominates
+// memory and event traffic like events/leases already do. Pin the default skip so it can't silently
+// rejoin the eager set.
+func TestDefaultSkipKindsHidesKyvernoEphemeralReports(t *testing.T) {
+	if !slices.Contains(DefaultSkipKinds, "ephemeralreports") {
+		t.Error(`"ephemeralreports" must stay in DefaultSkipKinds (high-churn Kyverno admission reports)`)
+	}
+}
+
 // TestStoreGroupForKindDeterministic locks the security-relevant invariant that two
 // registered resources sharing a Kind always resolve to the same group across calls (and
 // map iteration orders). Without sorting, a malicious CRD registering "Pod" in a foreign

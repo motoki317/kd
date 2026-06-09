@@ -39,7 +39,8 @@ type Config struct {
 	Kubeconfig string        // empty = in-cluster, then default kubeconfig
 	Resync     time.Duration // informer resync period
 	// SkipKinds removes resource names from the eager-load set, on top of the built-in
-	// high-cardinality defaults (events, leases, endpointslices, controllerrevisions).
+	// high-cardinality defaults (events, leases, endpoints, endpointslices,
+	// controllerrevisions, ephemeralreports). See store.DefaultSkipKinds.
 	SkipKinds []string
 	// EagerKinds adds resource names back into the eager-load set, overriding both the
 	// built-in defaults and SkipKinds. Lets an operator opt back into watching e.g.
@@ -67,7 +68,7 @@ func Load(args []string) (Config, error) {
 	fs.DurationVar(&c.PolicyReloadInterval, "policy-reload-interval", envDurationOr("KD_POLICY_RELOAD_INTERVAL", 10*time.Second), "how often to poll the policy file for changes")
 	fs.StringVar(&c.Kubeconfig, "kubeconfig", envOr("KUBECONFIG", ""), "path to kubeconfig (empty = in-cluster, then default)")
 	fs.DurationVar(&c.Resync, "resync", envDurationOr("KD_RESYNC", 10*time.Minute), "informer resync period")
-	fs.StringVar(&skipKinds, "skip-kinds", envOr("KD_SKIP_KINDS", ""), "comma-separated extra resource names to skip from eager informer startup, on top of the built-in defaults (events, leases, endpointslices, controllerrevisions)")
+	fs.StringVar(&skipKinds, "skip-kinds", envOr("KD_SKIP_KINDS", ""), "comma-separated extra resource names to skip from eager informer startup, on top of the built-in defaults (events, leases, endpoints, endpointslices, controllerrevisions, ephemeralreports)")
 	fs.StringVar(&eagerKinds, "eager-kinds", envOr("KD_EAGER_KINDS", ""), "comma-separated resource names to force-include in eager startup, overriding both --skip-kinds and the built-in defaults")
 
 	if err := fs.Parse(args); err != nil {
