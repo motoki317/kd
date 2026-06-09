@@ -232,8 +232,11 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
   the whole reason `rollupHealth` was deleted.
 - **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`) is
   treated everywhere as a real namespace by route shape but expands to the cluster's cluster-scoped
-  snapshot server-side. Cluster-scoped objects also ride along into namespace views when referenced (a
-  Pod's Node, a PVC's PV). The sidebar pins it above the namespace list. A cluster-scoped resource's
+  snapshot server-side. Cluster-scoped objects also ride along into namespace views when referenced AND
+  drawable there — currently just a PVC's PV (via the `mounts` edge). A Pod's Node deliberately does NOT
+  ride along: no relationship category draws the `scheduledOn` edge (the pod↔node story is the Nodes
+  group-by view), so a rode-along Node only ever appeared as a permanently-orphaned card. The sidebar
+  pins `__cluster__` above the namespace list. A cluster-scoped resource's
   drawer must substitute the sentinel for its empty `{ns}` (an empty path segment → `namespaces//…` →
   307→404).
 - **PVC → PV edge**: emitted as `EdgeMounts` (not a new edge type) so the existing volumes view picks it

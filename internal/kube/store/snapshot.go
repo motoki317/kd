@@ -102,8 +102,11 @@ func (c *Cache) SnapshotNodesAndPods() []runtime.Object {
 // appendRideAlong adds cluster-scoped objects that are referenced (one hop) by the
 // namespaced objects already in `out`. Resolved references:
 //   - metadata.ownerReferences UID → any cluster-scoped object with that UID
-//   - Pod.spec.nodeName → Node
 //   - PVC.spec.volumeName → PersistentVolume
+//
+// A Pod's Node is deliberately NOT pulled in: the pod↔node story lives in the Nodes group-by
+// (capacity) view, and the `scheduledOn` edge isn't surfaced by any relationship category, so a
+// rode-along Node only ever appeared as a permanently-orphaned card in the namespace graph.
 //
 // Lookups go through the per-informer indexer: UID via the uidIndex secondary index
 // (installed by registerLocked), Node/PV by name via the default key index. Each lookup is
@@ -114,7 +117,6 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 		return out
 	}
 	wantUIDs := map[string]bool{}
-	wantNodeNames := map[string]bool{}
 	wantPVNames := map[string]bool{}
 	have := map[string]bool{}
 	for _, obj := range out {
@@ -130,18 +132,13 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 				wantUIDs[string(or.UID)] = true
 			}
 		}
-		switch u.GetKind() {
-		case "Pod":
-			if name, found, _ := unstructured.NestedString(u.Object, "spec", "nodeName"); found && name != "" {
-				wantNodeNames[name] = true
-			}
-		case "PersistentVolumeClaim":
+		if u.GetKind() == "PersistentVolumeClaim" {
 			if name, found, _ := unstructured.NestedString(u.Object, "spec", "volumeName"); found && name != "" {
 				wantPVNames[name] = true
 			}
 		}
 	}
-	if len(wantUIDs) == 0 && len(wantNodeNames) == 0 && len(wantPVNames) == 0 {
+	if len(wantUIDs) == 0 && len(wantPVNames) == 0 {
 		return out
 	}
 	add := func(obj any) {
@@ -170,14 +167,7 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 				add(obj)
 			}
 		}
-		switch r.Kind {
-		case "Node":
-			for name := range wantNodeNames {
-				if obj, exists, _ := idx.GetByKey(name); exists {
-					add(obj)
-				}
-			}
-		case "PersistentVolume":
+		if r.Kind == "PersistentVolume" {
 			for name := range wantPVNames {
 				if obj, exists, _ := idx.GetByKey(name); exists {
 					add(obj)

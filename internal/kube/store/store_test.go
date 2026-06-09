@@ -135,28 +135,23 @@ func TestStoreSnapshotNamespaceFiltersByNamespace(t *testing.T) {
 	}
 }
 
-func TestStoreSnapshotRideAlongNodeViaPodNodeName(t *testing.T) {
-	// A Node ride-alongs into a per-namespace snapshot only when a Pod in that namespace
-	// references it via spec.nodeName — the explicit reference policy that replaces the
-	// old "always include every Node" behavior. A Node unreferenced by any pod here stays
-	// out, even though it's in the cluster cache.
+func TestStoreSnapshotExcludesNodeFromNamespace(t *testing.T) {
+	// A Node does NOT ride along into a per-namespace snapshot, even when a Pod references it
+	// via spec.nodeName: the pod↔node story lives in the cluster-wide Nodes (capacity) view, and
+	// no relationship category draws the scheduledOn edge — so a rode-along Node only ever showed
+	// up as a permanently-orphaned card in the namespace graph. The Pod itself still appears.
 	c := startTestStore(t,
 		ns("alpha"),
 		node("node-1"),
-		node("orphan-node"),
 		pod("alpha", "web-1", "node-1"),
 	)
 	objs := c.SnapshotNamespace("alpha")
-
-	var nodeNames []string
-	for _, o := range objs {
-		u := o.(*unstructured.Unstructured)
-		if u.GetKind() == "Node" {
-			nodeNames = append(nodeNames, u.GetName())
-		}
+	kinds := kindCounts(objs)
+	if kinds["Node"] != 0 {
+		t.Errorf("Node must not ride along into a namespace snapshot, got %d", kinds["Node"])
 	}
-	if want := []string{"node-1"}; !slices.Equal(nodeNames, want) {
-		t.Errorf("ride-along node names = %v, want %v (orphan-node should not appear)", nodeNames, want)
+	if kinds["Pod"] != 1 {
+		t.Errorf("the referencing Pod should still be in the snapshot, got %d", kinds["Pod"])
 	}
 }
 
