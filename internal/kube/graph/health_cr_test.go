@@ -404,6 +404,22 @@ func TestArgoCDApplicationHealth(t *testing.T) {
 	if got := statusSummary(app("Degraded")); got != "Degraded" {
 		t.Errorf("Application status = %q, want Degraded", got)
 	}
+	// A non-Synced sync state pairs with the health phase (ArgoCD's own two-column reading) so a
+	// Progressing/Degraded card says whether it's mid-sync or drifted; Synced stays silent.
+	paired := cr("argoproj.io/v1alpha1", "Application", map[string]any{
+		"health": map[string]any{"status": "Progressing"},
+		"sync":   map[string]any{"status": "OutOfSync"},
+	})
+	if got := statusSummary(paired); got != "Progressing · OutOfSync" {
+		t.Errorf("Application paired status = %q, want \"Progressing · OutOfSync\"", got)
+	}
+	synced := cr("argoproj.io/v1alpha1", "Application", map[string]any{
+		"health": map[string]any{"status": "Healthy"},
+		"sync":   map[string]any{"status": "Synced"},
+	})
+	if got := statusSummary(synced); got != "Healthy" {
+		t.Errorf("Application synced status = %q, want \"Healthy\"", got)
+	}
 }
 
 // TestECKHealth pins the Elastic Cloud on Kubernetes mapping. The cluster's real Elasticsearch

@@ -852,6 +852,46 @@ func TestHPAMetrics(t *testing.T) {
 	}
 }
 
+func TestArgoAppDestAndRevision(t *testing.T) {
+	app := func(dest map[string]any, rev string) *unstructured.Unstructured {
+		obj := map[string]any{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+			"spec": map[string]any{"destination": dest},
+		}
+		if rev != "" {
+			obj["status"] = map[string]any{"sync": map[string]any{"revision": rev}}
+		}
+		return &unstructured.Unstructured{Object: obj}
+	}
+	// The common in-cluster case: just the namespace (no noise for the default destination).
+	inCluster := app(map[string]any{"server": "https://kubernetes.default.svc", "namespace": "shop"}, "")
+	if got := argoAppDest(inCluster); got != "shop" {
+		t.Errorf("argoAppDest(in-cluster) = %q, want \"shop\"", got)
+	}
+	// A named remote cluster prefixes the namespace.
+	remote := app(map[string]any{"name": "prod-cluster", "namespace": "shop"}, "")
+	if got := argoAppDest(remote); got != "prod-cluster/shop" {
+		t.Errorf("argoAppDest(remote) = %q, want \"prod-cluster/shop\"", got)
+	}
+	// A 40-hex git SHA shortens to 8 chars; other revision forms pass through.
+	sha := app(map[string]any{"namespace": "shop"}, "0123456789abcdef0123456789abcdef01234567")
+	if got := argoAppRevision(sha); got != "01234567" {
+		t.Errorf("argoAppRevision(sha) = %q, want \"01234567\"", got)
+	}
+	tag := app(map[string]any{"namespace": "shop"}, "v1.2.3")
+	if got := argoAppRevision(tag); got != "v1.2.3" {
+		t.Errorf("argoAppRevision(tag) = %q, want \"v1.2.3\"", got)
+	}
+	// A non-Argo kind named Application must not match (the group guard).
+	other := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "core.oam.dev/v1beta1", "kind": "Application",
+		"spec": map[string]any{"destination": map[string]any{"namespace": "shop"}},
+	}}
+	if got := argoAppDest(other); got != "" {
+		t.Errorf("argoAppDest(non-argo Application) = %q, want empty", got)
+	}
+}
+
 func TestPDBPolicyAndDisruptions(t *testing.T) {
 	minAvail := intstr.FromInt32(2)
 	pdb := &policyv1.PodDisruptionBudget{

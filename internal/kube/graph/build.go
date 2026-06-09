@@ -88,6 +88,8 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			ScaleReplicas:     hpaScale(obj),
 			ScaleRange:        hpaRange(obj),
 			ScaleMetrics:      hpaMetrics(obj),
+			AppDest:           argoAppDest(obj),
+			AppRevision:       argoAppRevision(obj),
 			PDBPolicy:         pdbPolicy(obj),
 			Disruptions:       pdbDisruptions(obj),
 			Provisioner:       storageClassProvisioner(obj),

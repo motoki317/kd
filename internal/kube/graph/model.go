@@ -93,6 +93,8 @@ type Node struct {
 	ScaleReplicas string         `json:"scaleReplicas,omitempty"` // an HPA's replica state, "current[ → desired]" (mid-scale shows the arrow)
 	ScaleRange  string           `json:"scaleRange,omitempty"`  // an HPA's min–max replica bounds ("2–10") — is it at the ceiling?
 	ScaleMetrics string          `json:"scaleMetrics,omitempty"` // the metric driving an HPA, "cpu 72% / 80%" (current / target) — why it scales
+	AppDest     string           `json:"appDest,omitempty"`     // an ArgoCD Application's deploy destination ("[cluster/]namespace") — where its workloads live
+	AppRevision string           `json:"appRevision,omitempty"` // an ArgoCD Application's synced revision (short SHA / tag) — what's actually deployed
 	PDBPolicy   string           `json:"pdbPolicy,omitempty"`   // a PodDisruptionBudget's policy, "min 2" / "max 1" (the configured intent)
 	Disruptions string           `json:"disruptions,omitempty"` // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks here); "" for non-PDBs
 	Provisioner string           `json:"provisioner,omitempty"` // a StorageClass's provisioner (the CSI driver / volume plugin) — its defining fact

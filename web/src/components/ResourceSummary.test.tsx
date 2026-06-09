@@ -371,6 +371,23 @@ describe('ResourceSummary HPA', () => {
   })
 })
 
+describe('ResourceSummary ArgoCD Application', () => {
+  it('shows the deploy destination and synced revision as labelled chips', () => {
+    // kd's graph is namespace-scoped: the dest chip is the pointer from the argocd namespace to
+    // where the app's workloads (and their trouble) actually live; rev answers "what's deployed".
+    const app: KNode = {
+      id: 'a', kind: 'Application', name: 'shop', health: 'Progressing',
+      appDest: 'team-a', appRevision: '01234567',
+    }
+    const { container } = render(() => <ResourceSummary node={app} {...base} />)
+    const chips = [...container.querySelectorAll('.drawer-ports .port-addr')]
+    expect(chips.find((c) => c.textContent?.includes('dest'))?.textContent).toContain('team-a')
+    const rev = chips.find((c) => c.textContent?.includes('rev'))
+    expect(rev?.textContent).toContain('01234567')
+    expect(rev?.querySelector('.copy-btn')).toBeTruthy() // a revision is a git-log paste target
+  })
+})
+
 describe('ResourceSummary RBAC', () => {
   it('flags a wildcard-verb rule with an explicit tag + caution class, leaving bounded rules plain', () => {
     const node: KNode = {

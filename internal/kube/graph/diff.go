@@ -96,6 +96,8 @@ func nodeEqual(a, b Node) bool {
 		a.ScaleReplicas == b.ScaleReplicas && // an HPA scaling (replica count moving) must repaint
 		a.ScaleRange == b.ScaleRange &&
 		a.ScaleMetrics == b.ScaleMetrics && // the live current/target metric moving must repaint
+		a.AppDest == b.AppDest &&
+		a.AppRevision == b.AppRevision && // a new sync landing (revision moving) must repaint
 
 		a.PDBPolicy == b.PDBPolicy &&
 		a.Disruptions == b.Disruptions && // a PDB's allowed-disruptions dropping to 0 must repaint

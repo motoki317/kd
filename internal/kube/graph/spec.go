@@ -675,6 +675,62 @@ func hpaRange(obj runtime.Object) string {
 	return fmt.Sprintf("%d–%d", minR, maxR)
 }
 
+// argoApp returns the unstructured object when it is an ArgoCD Application — the group guard
+// matters because "Application" is a generic kind name other operators also use.
+func argoApp(obj runtime.Object) *unstructured.Unstructured {
+	u := asUnstructuredKind(obj, "Application")
+	if u == nil || u.GroupVersionKind().Group != "argoproj.io" {
+		return nil
+	}
+	return u
+}
+
+// argoAppDest renders where an ArgoCD Application deploys — its destination namespace, prefixed
+// with the cluster when it targets a remote one ("prod-cluster/shop"). kd's graph is namespace-
+// scoped, so an Application card otherwise gives no pointer from the argocd namespace to where its
+// workloads (and their trouble) actually live.
+func argoAppDest(obj runtime.Object) string {
+	u := argoApp(obj)
+	if u == nil {
+		return ""
+	}
+	ns, _, _ := unstructured.NestedString(u.Object, "spec", "destination", "namespace")
+	cluster, _, _ := unstructured.NestedString(u.Object, "spec", "destination", "name")
+	if cluster == "" || cluster == "in-cluster" {
+		if server, _, _ := unstructured.NestedString(u.Object, "spec", "destination", "server"); server != "" && server != "https://kubernetes.default.svc" {
+			cluster = strings.TrimPrefix(strings.TrimPrefix(server, "https://"), "http://")
+		} else {
+			cluster = ""
+		}
+	}
+	switch {
+	case cluster != "" && ns != "":
+		return cluster + "/" + ns
+	case cluster != "":
+		return cluster
+	default:
+		return ns
+	}
+}
+
+// argoAppRevision renders the revision an Application last synced to — "what's actually deployed".
+// A 40-hex git SHA is shortened to 8 chars (what an operator pastes into git log); other revision
+// forms (a chart version, a tag) pass through. Multi-source apps (status.sync.revisions) are
+// omitted rather than half-rendered.
+func argoAppRevision(obj runtime.Object) string {
+	u := argoApp(obj)
+	if u == nil {
+		return ""
+	}
+	rev, _, _ := unstructured.NestedString(u.Object, "status", "sync", "revision")
+	if len(rev) == 40 && strings.IndexFunc(rev, func(r rune) bool {
+		return !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f')
+	}) < 0 {
+		return rev[:8]
+	}
+	return rev
+}
+
 // nestedNumber reads a numeric field from an unstructured map, tolerating both JSON decodings —
 // int64 from the API server, float64 after a JSON round-trip (the wgpolicy summary lesson).
 func nestedNumber(m map[string]any, key string) (int64, bool) {

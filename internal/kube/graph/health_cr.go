@@ -500,7 +500,18 @@ func crKindStatus(u *unstructured.Unstructured) string {
 		case "Workflow", "Rollout":
 			return crPhase(u)
 		case "Application":
+			// Pair the health phase with the sync state when it isn't the all-clear "Synced" —
+			// ArgoCD's own UI always shows the two side by side, and "Progressing · OutOfSync"
+			// answers the first triage question ("is it mid-sync or drifted?") the bare health
+			// phase can't. Mirrors the ECK "Ready · yellow" pairing idiom.
 			s, _, _ := unstructured.NestedString(u.Object, "status", "health", "status")
+			sync, _, _ := unstructured.NestedString(u.Object, "status", "sync", "status")
+			if sync != "" && sync != "Synced" {
+				if s == "" {
+					return sync
+				}
+				return s + " · " + sync
+			}
 			return s
 		case "CronWorkflow":
 			if b, _, _ := unstructured.NestedBool(u.Object, "spec", "suspend"); b {

@@ -469,6 +469,20 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* An ArgoCD Application's deploy destination + synced revision: kd's graph is namespace-
+          scoped, so without the dest chip an Application card gives no pointer from the argocd
+          namespace to where its workloads (and their trouble) actually live; the revision answers
+          "what's deployed". The status line already pairs health with OutOfSync. */}
+      <Show when={props.node.appDest || props.node.appRevision}>
+        <div class="drawer-ports">
+          <Show when={props.node.appDest}>
+            <MetaChip label="dest" value={props.node.appDest!} title="Deploy destination — the namespace this Application's workloads live in" />
+          </Show>
+          <Show when={props.node.appRevision}>
+            <MetaChip label="rev" value={props.node.appRevision!} title="Last synced revision" copy />
+          </Show>
+        </div>
+      </Show>
       {/* A PodDisruptionBudget's configured policy (min N / max N) and how many voluntary evictions it
           allows right now. "can disrupt 0" is the operationally critical state — a node drain/upgrade
           blocks here — so it carries the caution colour to draw the eye (the status's "healthy" count

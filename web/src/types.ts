@@ -114,6 +114,8 @@ export interface KNode {
   scaleReplicas?: string // an HPA's replica state, "current[ → desired]"
   scaleRange?: string // an HPA's min–max replica bounds ("2–10")
   scaleMetrics?: string // the metric driving an HPA, "cpu 72% / 80%" (current / target)
+  appDest?: string // an ArgoCD Application's deploy destination ("[cluster/]namespace")
+  appRevision?: string // an ArgoCD Application's synced revision (short SHA / tag)
   pdbPolicy?: string // a PodDisruptionBudget's policy, "min 2" / "max 1"
   disruptions?: string // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks)
   provisioner?: string // a StorageClass's provisioner (CSI driver / volume plugin)
