@@ -477,19 +477,23 @@ export default function App() {
     setSidebarNs(reconcile(next, { key: 'name' }))
   })
 
-  // Health distribution across the view, kept here for the favicon attention badge. The toolbar's
-  // health-filter pills + stripe (moved out of the topbar into the Topology toolbar) derive their
-  // own counts from the same node set.
+  // Per-namespace health across the WHOLE cluster, for the favicon attention badge. Counts over
+  // sidebarNs — the /namespaces poll with the open namespace kept live from the SSE summary — the SAME
+  // source the sidebar trouble badge reads, so favicon and badge never disagree. Excludes the
+  // cluster-scope sentinel to match the badge (troubledNamespaces). NOT the open namespace's node set:
+  // a tab-per-cluster operator parked on a healthy namespace must still see the favicon flag trouble in
+  // ANOTHER namespace — the feature's whole premise (favicon.ts docstring), which the old view-scoped
+  // count silently broke (clean favicon while three other namespaces were Degraded).
   const counts = createMemo(() => {
     const c: Record<string, number> = {}
-    for (const n of nodes()) c[n.health] = (c[n.health] ?? 0) + 1
+    for (const n of sidebarNs) if (n.name !== CLUSTER_SCOPE) c[n.health] = (c[n.health] ?? 0) + 1
     return c
   })
 
-  // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the current
-  // view as a colored dot on the brand mark, so multi-tab operators spot trouble without clicking
-  // into each tab. Healthy/empty restores the plain mark. Updated via the existing <link rel="icon">
-  // element rather than injecting a new one, so the DOM stays clean across HMR reloads in dev.
+  // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the cluster as a
+  // colored dot on the brand mark, so multi-tab operators spot trouble without clicking into each tab.
+  // Healthy/empty restores the plain mark. Updated via the existing <link rel="icon"> element rather
+  // than injecting a new one, so the DOM stays clean across HMR reloads in dev.
   createEffect(() => {
     const worst = worstHealth(counts())
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
