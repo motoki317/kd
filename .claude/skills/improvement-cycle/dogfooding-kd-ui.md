@@ -217,6 +217,25 @@ surfaced them. Look for these shapes on any view:
    path you *expect*; the diff is the bug. Fix at the single key/URL-builder, and substitute the scope
    sentinel (`CLUSTER_SCOPE`) the server already unmaps — don't special-case each fetch call site.
 
+7. **A finished-but-empty result reads as "still loading" when the stream has no completion signal.**
+   The `previous` (crashed-container) logs are a ONE-SHOT SSE dump: the server resolves pods, streams
+   each, closes the line channel — then deliberately **holds the connection open idle** (heartbeating) so
+   the browser's EventSource doesn't auto-reconnect and re-dump. Upshot: a crashed container that wrote
+   nothing before exiting (OOM, `/bin/false`, instant panic — the exact CrashLoop triage path) yields a
+   finished dump with zero lines, and the client, never told the dump finished, sat on
+   "waiting for log output…" forever. **Tempting-but-wrong hypothesis** (cost a reasoning detour): "the
+   server close → EventSource.onerror fires → it'll show the no-logs state." It does NOT — the server
+   holds the socket open, so onerror never fires; only live driving revealed the perpetual spinner. The
+   general rule: **any one-shot stream the server holds open after completing needs an explicit `done`
+   event** so the client can tell "empty, finished" from "empty, still streaming" — don't infer
+   completion from a close that never comes. Fix (commit): emit `event: done` on one-shot completion;
+   client renders a terminal "no previous logs" state; the live follow stream never completes so its
+   genuine "waiting…" is untouched. **Recipe to induce:** two disposable pods on docker-desktop —
+   `command:["/bin/false"]` (crashes silent) vs `["sh","-c","echo BOOM; exit 1"]` (crashes loud) — wait
+   for `restartCount ≥ 1`, then toggle `previous`: silent must show the terminal empty state, loud must
+   show its line. They're standalone pods → **orphans**, so the namespace view hides them until you click
+   "Show orphaned" (or pass `&orphans=1`).
+
 ## Measurement pitfalls (agent-browser `eval`) — false positives these caused
 
 `getComputedStyle` in headless Chrome plus a naive colour parser each manufactured a convincing
