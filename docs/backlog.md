@@ -82,9 +82,17 @@ Recent batches (newest first; `git log` has the commits):
   Rejected). Open survivors (verified real, not yet shipped): RBAC-403 manifest/events read as a generic
   "unavailable" (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on
   data-keys/routes (held — clutter risk on many-key ConfigMaps); Events tab lacks copy + message search +
-  warnings "shown/total"; externalIP "pending" has no explanatory title; **capacity aggregate blocks show `cursor:pointer` but a
-  click toggles the row** (already expands on click, so mild); **near-limit cue is a thin stroke invisible on
+  warnings "shown/total"; **near-limit cue is a thin stroke invisible on
   small segments** (inverted importance vs `over` hatch — hard to dogfood without a near-limit pod).
+  Then shipped: **aggregate-fold tooltips name the click action** — the small-pods/other-namespaces
+  folds wore a pod-segment pointer cursor but click toggles the ROW; the hover tooltip now appends a dim
+  "Click to expand into per-pod cards" / "Click to collapse the node row" hint (view-composed; the pure
+  builders stay state-free). Verified live on staging (hint flips after the click expands the row).
+  Then shipped: **a pending LoadBalancer external address explains itself** (drawer "ext pending" chip:
+  caution tint + a title naming both causes — provider still provisioning, or no LB controller at all so
+  it stays pending forever; real addresses stay plain+copyable). Verified live on docker-desktop against
+  a genuinely-pending LB (host-port conflict induces it; `loadBalancerClass` does NOT — vpnkit assigns
+  localhost anyway).
   Then shipped: **filtered count pill doubles as a frame-the-matches button** (5291ac7) — under a
   health/kind-only filter the clickable count was search-only, so after panning away from the one-shot
   auto-fit a mouse operator had no way back to the matches; the bottom "M of N" now reuses frameMatches
