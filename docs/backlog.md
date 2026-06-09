@@ -88,6 +88,15 @@ Recent batches (newest first; `git log` has the commits):
   folds wore a pod-segment pointer cursor but click toggles the ROW; the hover tooltip now appends a dim
   "Click to expand into per-pod cards" / "Click to collapse the node row" hint (view-composed; the pure
   builders stay state-free). Verified live on staging (hint flips after the click expands the row).
+  Then shipped: **near-limit risk survives tiny segments** — fixed-size red notch above the segment
+  (state-sized, not magnitude-sized), near-limit pods excluded from the small fold (problems aren't
+  hidden), and worded Use-bar risk tooltips ("near its CPU limit — throttling"); verified against a real
+  throttled 50m-limit busy-loop pod whose segment drew 2.3px. **README/internals doc refresh** (drawer
+  capabilities, pressure cues, fold invariant, CapTipData.hint). **CapacityView extraction** — the
+  ~320-line Nodes-view SVG block left Topology.tsx into a presentational component (host keeps every
+  signal); DOM unchanged, full interaction surface re-verified live on staging. Note: docker-desktop got
+  metrics-server reinstalled this session (cluster reset had dropped it) — the gauge/capacity dogfooding
+  paths need it.
   Then shipped: **a pending LoadBalancer external address explains itself** (drawer "ext pending" chip:
   caution tint + a title naming both causes — provider still provisioning, or no LB controller at all so
   it stays pending forever; real addresses stay plain+copyable). Verified live on docker-desktop against
