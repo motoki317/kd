@@ -83,9 +83,23 @@ Recent batches (newest first; `git log` has the commits):
   "unavailable" (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on
   data-keys/routes (held — clutter risk on many-key ConfigMaps); Events tab lacks copy + message search +
   warnings "shown/total"; externalIP "pending" has no explanatory title; toolbar lacks a clickable "frame
-  matches" for health/kind filters (search has it); **manifest find has no keyboard focus shortcut** (`/` when
-  Manifest active); **capacity aggregate blocks show `cursor:pointer` but a click toggles the row** (cursor
-  lies); **near-limit cue is a thin stroke invisible on small segments** (inverted importance vs `over` hatch).
+  matches" for health/kind filters (search has it); **capacity aggregate blocks show `cursor:pointer` but a
+  click toggles the row** (already expands on click, so mild); **near-limit cue is a thin stroke invisible on
+  small segments** (inverted importance vs `over` hatch — hard to dogfood without a near-limit pod).
+  Then shipped: **workload usage gauge sums its bound over the same metered pods as usage** — it summed
+  Σusage(metered) against Σrequests(ALL), so a Deployment mid-rollout with pods not-yet-metered gauged ~30%
+  short and faked headroom; now both sides cover the metered subset and the "summed across M of N pods"
+  caption is honest. Pure gauge-math fix (unit-tested — the authoritative check per the view-math-vs-headless
+  ADR); regression-checked live on a staging Deployment ("summed across 2 pods", steady state unchanged).
+  Verified-mature this session (don't re-survey unless code changes): relationship-view selection highlight
+  (14 lit / 50 faded on a selected StatefulSet), j/k troubled-first nav + the "Selected …" `aria-live`
+  region, owner-chip navigation + Alt+Left history (Pod→owner→back round-trips), help overlay (caps height
+  549px + overflow:auto, no clipping). **Init-container progress refuted** — `containerStateString`
+  (fields.go:130-134) already emits "Waiting: <reason>", so each init card shows its state (with the blocking
+  reason) in spec order with a group count; "which init step is stuck and why" is already legible without an
+  ordinal. **Co-routed multi-type edges overlapping** (two edge types between the same pair draw identical
+  paths, one unhoverable) — real but rare (`orthRoute` is center-to-center); deferred (needs a per-pair
+  routing fan-out, risky for a low-frequency case).
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
