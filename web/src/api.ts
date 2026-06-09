@@ -63,6 +63,20 @@ export const CLUSTER_SCOPE = '__cluster__'
 
 export type ManifestFormat = 'yaml' | 'json'
 
+// ApiError keeps the HTTP status on the thrown error so error states can distinguish "kd's policy
+// denied this" (403 — actionable: ask an admin, not a kd fault) from a transport/server failure.
+export class ApiError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+// isForbidden reports whether a resource fetch failed on kd's OWN authorization (the policy.csv) —
+// the one failure that should never render as a generic "unavailable".
+export const isForbidden = (err: unknown): boolean => err instanceof ApiError && err.status === 403
+
 // fetchResource returns the resource manifest already rendered as text by the server (YAML or
 // JSON), so the client just displays it — the structure is never inspected on this path.
 export async function fetchResource(
@@ -75,7 +89,7 @@ export async function fetchResource(
   const res = await fetch(
     `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}?format=${format}`,
   )
-  if (!res.ok) throw new Error(`resource: ${res.status}`)
+  if (!res.ok) throw new ApiError(`resource: ${res.status}`, res.status)
   return res.text()
 }
 
@@ -93,7 +107,7 @@ export async function fetchEvents(ctx: string, ns: string, kind: string, name: s
   const res = await fetch(
     `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/events`,
   )
-  if (!res.ok) throw new Error(`events: ${res.status}`)
+  if (!res.ok) throw new ApiError(`events: ${res.status}`, res.status)
   return ((await res.json()) as { events: EventEntry[] }).events ?? []
 }
 

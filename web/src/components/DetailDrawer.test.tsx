@@ -387,6 +387,19 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer')).toBeTruthy()
   })
 
+  it('a 403 names itself — access denied, not the generic load failure (events + manifest)', async () => {
+    // kd's own policy denying drill-in must read as "ask your admin", not "kd is broken": the
+    // generic wording sends the operator into retry/distrust instead of a permissions request.
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response('forbidden', { status: 403 })))
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    await findByText("Access denied — your kd role can't read events here.")
+    // Manifest tab: same split.
+    ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Manifest'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await findByText("Access denied — your kd role can't read this manifest.")
+  })
+
   it('explains the ~1h event TTL under an empty events list (not just "No recent events")', async () => {
     // Default beforeEach mock returns {events: []} → the empty state. The hint stops an operator from
     // reading an aged-out resource's empty tab as "nothing ever happened / broken feed".

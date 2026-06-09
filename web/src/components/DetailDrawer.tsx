@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
-import { CLUSTER_SCOPE, fetchEvents, fetchResource, type ManifestFormat } from '../api'
+import { CLUSTER_SCOPE, fetchEvents, fetchResource, isForbidden, type ManifestFormat } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { splitByMatch } from '../logs'
@@ -474,7 +474,17 @@ export default function DetailDrawer(props: Props) {
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
               {/* events() throws if the resource errored, so gate on events.error first — both to show
                   a real error (not a misleading "no events") and to avoid reading the errored signal. */}
-              <Show when={!events.error} fallback={<div class="events-empty">Couldn't load events.</div>}>
+              {/* A 403 is kd's own policy speaking — "ask your admin", not "kd is broken" — so it
+                  must not hide behind the generic load failure (the message an operator reads as
+                  a server fault and retries). */}
+              <Show
+                when={!events.error}
+                fallback={
+                  <div class="events-empty">
+                    {isForbidden(events.error) ? 'Access denied — your kd role can\'t read events here.' : "Couldn't load events."}
+                  </div>
+                }
+              >
                 {/* Warnings-only toggle: surfaced only when there's a mix to filter (some warnings AND
                     some normal). Pure "all normal" or "all warnings" hides the chip — no useful action. */}
                 <Show when={(events()?.length ?? 0) > 0 && warnings() > 0 && warnings() < (events()?.length ?? 0)}>
@@ -652,8 +662,16 @@ export default function DetailDrawer(props: Props) {
               <CopyButton text={() => detail() ?? ''} title="Copy manifest" />
             </div>
             <Suspense fallback={<div class="drawer-loading">loading…</div>}>
-              {/* detail() throws if the fetch errored, so check detail.error before reading it. */}
-              <Show when={!detail.error && detail() != null} fallback={<div class="drawer-loading">unavailable</div>}>
+              {/* detail() throws if the fetch errored, so check detail.error before reading it.
+                  Same 403 split as the events tab: a policy denial names itself. */}
+              <Show
+                when={!detail.error && detail() != null}
+                fallback={
+                  <div class="drawer-loading">
+                    {isForbidden(detail.error) ? 'Access denied — your kd role can\'t read this manifest.' : 'unavailable'}
+                  </div>
+                }
+              >
                 <pre class="manifest" ref={manifestPre} tabindex="0">
                   <Show when={manifestQuery()} fallback={detail()}>
                     {(() => {
