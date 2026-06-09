@@ -7,7 +7,7 @@ import { hostNodeCapacity } from './resourceBars'
 import { selectionLabel, setServerShortNames } from './names'
 import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
 import { faviconDataUrl, worstHealth } from './favicon'
-import { navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
+import { matchSel, navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
 import { REL_CATEGORIES } from './relationships'
@@ -236,9 +236,13 @@ export default function App() {
     // shared capacity-view link restores the resource. Omitted at the 'cpu' default to keep URLs clean.
     if (capResource() !== 'cpu') p.set('capRes', capResource())
     if (showOrphaned()) p.set('orphans', '1')
+    // Resolve the selection from the SAME fallback the drawer uses (graph, then the cluster-wide
+    // capacity feed) so a Nodes-view pod from another namespace — present only in capById — still
+    // writes a `sel`, instead of the Share link silently dropping it. Carry the namespace when it
+    // differs from the viewed scope (the cluster-scope Nodes case) so the ref round-trips unambiguously.
     const id = selectedId()
-    const n = id ? graph.nodes[id] : null
-    if (n) p.set('sel', `${n.kind}/${n.name}`)
+    const n = id ? (graph.nodes[id] ?? capById().get(id)) : null
+    if (n) p.set('sel', n.namespace && n.namespace !== namespace() ? `${n.kind}/${n.namespace}/${n.name}` : `${n.kind}/${n.name}`)
     if (kindFilter().size > 0) p.set('kinds', [...kindFilter()].sort().join(','))
     history.replaceState(null, '', `${location.pathname}?${p}`)
   })
@@ -254,10 +258,14 @@ export default function App() {
     document.title = parts.join(' · ')
   })
 
-  // Restore a URL-seeded selection once its node arrives (then stop tracking).
+  // Restore a URL-seeded selection once its node arrives (then stop tracking). Search the namespace
+  // graph first, then the cluster-wide capacity feed — a Nodes-view deep-link can name a pod that lives
+  // only in capById (the cluster-scope Nodes case), which the graph snapshot never holds.
   createEffect(() => {
     if (!pendingSel) return
-    const match = Object.values(graph.nodes).find((n) => `${n.kind}/${n.name}` === pendingSel)
+    const match =
+      Object.values(graph.nodes).find((n) => matchSel(n, pendingSel!)) ??
+      [...capById().values()].find((n) => matchSel(n, pendingSel!))
     if (match) {
       setSelectedId(match.id)
       pendingSel = null

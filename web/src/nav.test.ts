@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { navCandidates, nextSelection, orderedForNav, resolveSelectionOnSnapshot } from './nav'
+import { matchSel, navCandidates, nextSelection, orderedForNav, resolveSelectionOnSnapshot } from './nav'
 import type { Health, KNode } from './types'
 
 function node(id: string, kind: string, name: string, health: Health = 'Healthy'): KNode {
@@ -116,5 +116,27 @@ describe('resolveSelectionOnSnapshot', () => {
 
   it('prefers a kept selection over a deep-link', () => {
     expect(resolveSelectionOnSnapshot(nodes, 'uid-2', 'Service/kube-dns')).toEqual({ id: 'uid-2', consumedPending: false })
+  })
+})
+
+describe('matchSel', () => {
+  const podA: KNode = { id: 'a', kind: 'Pod', name: 'redis', namespace: 'team-a', health: 'Healthy' }
+  const podB: KNode = { id: 'b', kind: 'Pod', name: 'redis', namespace: 'team-b', health: 'Healthy' }
+
+  it('matches the back-compatible two-part Kind/name form', () => {
+    expect(matchSel(podA, 'Pod/redis')).toBe(true)
+    expect(matchSel(podA, 'Pod/other')).toBe(false)
+  })
+
+  it('disambiguates same-named pods across namespaces via the three-part form', () => {
+    // The cluster-wide Nodes view can show both; the namespace makes the deep-link address exactly one.
+    expect(matchSel(podA, 'Pod/team-a/redis')).toBe(true)
+    expect(matchSel(podB, 'Pod/team-a/redis')).toBe(false)
+    expect(matchSel(podB, 'Pod/team-b/redis')).toBe(true)
+  })
+
+  it('treats a missing namespace as empty so a cluster-scoped ref still matches', () => {
+    const node: KNode = { id: 'n', kind: 'Node', name: 'host-1', health: 'Healthy' }
+    expect(matchSel(node, 'Node/host-1')).toBe(true)
   })
 })

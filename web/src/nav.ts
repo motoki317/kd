@@ -16,10 +16,21 @@ export function resolveSelectionOnSnapshot(
 ): { id: string | null; consumedPending: boolean } {
   if (keepId && nodes.some((n) => n.id === keepId)) return { id: keepId, consumedPending: false }
   if (pendingSel) {
-    const match = nodes.find((n) => `${n.kind}/${n.name}` === pendingSel)
+    const match = nodes.find((n) => matchSel(n, pendingSel))
     if (match) return { id: match.id, consumedPending: true }
   }
   return { id: null, consumedPending: false }
+}
+
+// matchSel tests a node against a deep-link selection ref. The bare "Kind/name" form is unique within
+// a namespace-scoped graph; the three-part "Kind/namespace/name" form addresses a pod selected in the
+// cluster-wide Nodes view — where the canvas pulls pods from every namespace, so "Pod/redis" alone
+// could mean any team's redis (and isn't even present in the scope's own graph). Names/kinds/namespaces
+// are DNS labels (no "/"), so the split is unambiguous. The two-part form stays back-compatible.
+export function matchSel(n: KNode, sel: string): boolean {
+  const parts = sel.split('/')
+  if (parts.length === 3) return n.kind === parts[0] && (n.namespace ?? '') === parts[1] && n.name === parts[2]
+  return `${n.kind}/${n.name}` === sel
 }
 
 // navCandidates is the set keyboard stepping (j/k) walks through. When ANY filter is active,
