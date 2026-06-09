@@ -79,10 +79,9 @@ Recent batches (newest first; `git log` has the commits):
   now a row whose pod isn't hovered dims as a whole (`capRowFaded` on the hovered pod's host). Verified live on
   8 staging nodes: 7 rows → 0.32, the spotlit node → 1.
   Refuted live: **Kinds-row arrow-focus scrollIntoView** — native `.focus()` already scrolls the row (see
-  Rejected). Open survivors (verified real, not yet shipped): RBAC-403 manifest/events read as a generic
-  "unavailable" (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on
-  data-keys/routes (held — clutter risk on many-key ConfigMaps); Events tab lacks copy + message search +
-  warnings "shown/total"; **near-limit cue is a thin stroke invisible on
+  Rejected). Open survivors (verified real, not yet shipped): drawer copy still missing on
+  data-keys/routes (held — clutter risk on many-key ConfigMaps); Events tab message search (copy SHIPPED
+  — Alt-click, the log-line idiom; warnings "shown/total" already-mitigated, see Rejected); **near-limit cue is a thin stroke invisible on
   small segments** (inverted importance vs `over` hatch — hard to dogfood without a near-limit pod).
   Then shipped: **aggregate-fold tooltips name the click action** — the small-pods/other-namespaces
   folds wore a pod-segment pointer cursor but click toggles the ROW; the hover tooltip now appends a dim
@@ -97,6 +96,12 @@ Recent batches (newest first; `git log` has the commits):
   signal); DOM unchanged, full interaction surface re-verified live on staging. Note: docker-desktop got
   metrics-server reinstalled this session (cluster reset had dropped it) — the gauge/capacity dogfooding
   paths need it.
+  Then shipped: **Alt-click copies an event** (log-line idiom: "Reason: message", source-prefixed when
+  aggregated, green flash, clipboard-guarded; source-nav button ignores Alt). Headless clipboard rejects
+  unfocused → flash unverifiable live BY DESIGN (pitfall #8 in the dogfooding skill). **Policy 403s name
+  themselves** — manifest "unavailable" / "Couldn't load events" now split on a typed ApiError(403):
+  "Access denied — your kd role can't read …"; dogfooded live with `-policy` + a deny-get rule for the
+  dev user (the technique the "hard to dogfood" verdict missed — no proxy needed).
   Then shipped: **a pending LoadBalancer external address explains itself** (drawer "ext pending" chip:
   caution tint + a title naming both causes — provider still provisioning, or no LB controller at all so
   it stays pending forever; real addresses stay plain+copyable). Verified live on docker-desktop against
