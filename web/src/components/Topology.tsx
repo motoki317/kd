@@ -646,9 +646,28 @@ export default function Topology(props: Props) {
   // When something is hovered it wins; with nothing hovered we fall back to the standard
   // selection/search/filter fade (nodeFaded), so a selected pod stays spotlit after the cursor leaves.
   const [capHover, setCapHover] = createSignal<string | null>(null)
-  const capSegFaded = (n: { id: string; health: string; kind: string }) => {
+  // The spotlight originally dimmed only the pod SEGMENTS, leaving every node row's frame, tracks, value
+  // labels and name fully bright — a half-applied "fades the rest" that left a dozen bright frames and a
+  // column of bright totals competing with the one hovered pod. capRowFaded recedes a WHOLE row's chrome
+  // when the hover belongs to a DIFFERENT node, so only the spotlit pod's node stays lit (Contrast).
+  const capHoverHost = createMemo<string | null>(() => {
     const h = capHover()
-    if (h) return n.id !== h
+    if (!h) return null
+    const colon = h.indexOf(':') // small:/other:/overhead:<host> markers carry the host
+    if (colon >= 0) return h.slice(colon + 1)
+    for (const n of props.capacity?.nodes ?? []) if (n.id === h) return n.host ?? null // pod id → its node
+    return null
+  })
+  const capRowFaded = (host: string) => {
+    const hh = capHoverHost()
+    return hh !== null && hh !== host
+  }
+  const capSegFaded = (n: { id: string; health: string; kind: string; host?: string }) => {
+    const h = capHover()
+    // A segment on a fully-dimmed OTHER row is recessed by capRowFaded already — don't double-fade it
+    // (it would compound to near-invisible and read dimmer than its own row frame). Only the hovered
+    // row's own siblings fade individually here.
+    if (h) return capRowFaded(n.host ?? '') ? false : n.id !== h
     return nodeFaded(n)
   }
   // An aggregate block stands for many pods and is never the single spotlighted pod, so it fades
@@ -656,7 +675,7 @@ export default function Topology(props: Props) {
   // (Fixes the bug where the bright accent block stayed lit while every individual segment faded.)
   const capAggFaded = (marker: string) => {
     const h = capHover()
-    if (h) return marker !== h
+    if (h) return capRowFaded(marker.slice(marker.indexOf(':') + 1)) ? false : marker !== h
     return !!props.selectedId || !!matches() || !!props.healthFilter
   }
   // A collapsed pill counts how many of its hidden nodes the operator is currently searching/filtering
@@ -1831,6 +1850,7 @@ export default function Topology(props: Props) {
                   return (
                     <g
                       class="cap-row"
+                      classList={{ faded: capRowFaded(row.host) }}
                       onClick={() => expandable && toggleCapRow(row.host)}
                       // Expand/collapse is a discrete action with no keyboard equivalent elsewhere, so
                       // (when foldable) the row is a real button: keyboard-focusable, Enter/Space toggles,

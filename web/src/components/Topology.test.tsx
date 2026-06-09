@@ -408,6 +408,29 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
   })
 
+  it('Nodes view hover-spotlight recedes the WHOLE other node row, not just its segments', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'node-b', kind: 'Node', name: 'host-2', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Healthy', host: 'host-1', requests: { cpuMilli: 500 } },
+      { id: 'p2', kind: 'Pod', name: 'p2', namespace: 'app', health: 'Healthy', host: 'host-2', requests: { cpuMilli: 500 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: { p1: { cpuMilli: 400 }, p2: { cpuMilli: 400 } } } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" />
+    ))
+    const rowOf = (host: string) =>
+      [...container.querySelectorAll<SVGGElement>('.cap-row')].find((g) => g.textContent?.includes(host))!
+    // Nothing hovered: no row recedes.
+    expect(rowOf('host-1').classList.contains('faded')).toBe(false)
+    expect(rowOf('host-2').classList.contains('faded')).toBe(false)
+    // Hover p1 (on host-1): host-2's whole row recedes; host-1 (the spotlit pod's node) stays lit.
+    const p1Seg = container.querySelector('.cap-seg.use:not(.other):not(.small)') as SVGElement
+    fireEvent.pointerMove(p1Seg)
+    expect(rowOf('host-1').classList.contains('faded')).toBe(false)
+    expect(rowOf('host-2').classList.contains('faded')).toBe(true)
+  })
+
   it('Nodes view dims other-namespace pods as a distinct gray group', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },

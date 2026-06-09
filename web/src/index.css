@@ -976,6 +976,13 @@ button.conn.conn-retry:focus-visible {
 .cap-seg.faded {
   opacity: 0.18;
 }
+/* Hover-spotlight: a node row whose pod isn't the one being hovered recedes WHOLE (frame, tracks,
+   value labels, name) so the spotlit pod's node is the only lit chrome — completing the "fades the
+   rest" the per-segment fade only half-applied. Transition matches the segments' so they fade together. */
+.cap-row.faded {
+  opacity: 0.32;
+  transition: opacity 0.12s ease;
+}
 .cap-capline {
   stroke: var(--health-degraded);
   stroke-width: 1.6;
