@@ -111,11 +111,17 @@ function ImageRef(props: { image: string; wrapClass: string }) {
 // so they read as one visual language (Repetition) and a new essence field is a one-liner instead of a
 // copy-pasted 4-line span. `class` appends a state modifier on the same `port-addr` element the bare
 // blocks used (e.g. `port-failed` for a degraded count, `port-caution` for an operationally critical 0).
-function MetaChip(props: { label: string; value: string | number; title: string; class?: string }) {
+// `copy` adds the address-row's hover-reveal CopyButton for the labelled facts that are terminal-paste
+// targets (a Service selector → `kubectl get pods -l …`), matching the clusterIP/image rows' idiom. Most
+// facts (access modes, PDB policy) aren't pasted anywhere, so copy stays opt-in rather than universal.
+function MetaChip(props: { label: string; value: string | number; title: string; class?: string; copy?: boolean }) {
   return (
     <span class="port-addr" classList={props.class ? { [props.class]: true } : undefined} title={props.title}>
       <span class="addr-label">{props.label}</span>
       <code>{props.value}</code>
+      <Show when={props.copy}>
+        <CopyButton text={() => String(props.value)} title={`Copy ${props.label}`} />
+      </Show>
     </span>
   )
 }
@@ -398,6 +404,7 @@ export default function ResourceSummary(props: Props) {
               value={props.node.selector!}
               title="Pod selector — the labels a backing Pod must carry"
               class={props.node.endpoints?.total === 0 ? 'port-caution' : undefined}
+              copy
             />
           </Show>
         </div>

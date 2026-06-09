@@ -200,6 +200,9 @@ describe('ResourceSummary service selector', () => {
     expect(chip?.textContent).toContain('app=web, tier=frontend')
     // 0 endpoints → the selector is the suspect, so it carries the caution tint (same idiom as PDB "0").
     expect(chip).toBeTruthy()
+    // The selector is a terminal-paste target (`kubectl get pods -l …`), so it carries a CopyButton —
+    // the same idiom as the clusterIP/image rows (Repetition).
+    expect(chip?.querySelector('.copy-btn')).toBeTruthy()
   })
   it('shows the selector without the caution tint when the Service has ready backends', () => {
     const svc: KNode = {
