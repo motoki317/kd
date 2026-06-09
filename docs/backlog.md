@@ -314,15 +314,11 @@ Recent batches (newest first; `git log` has the commits):
   graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
   split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
-- **Container / step picker for multi-container pod logs** — *surfaced dogfooding the Workflow logs
-  flow; medium value, deferred.* The server already accepts `?container=` and now defaults to `main`
-  (bc94db7), but the client offers no UI to switch containers, so an operator can't read a pod's
-  sidecar (istio-proxy, a log-shipper) or a specific Workflow step. The general fix is a container
-  dropdown in the log toolbar. **Blocker for the aggregated/completed case:** the client can't populate
-  it — a finished Workflow's pods are display-dropped, so their container names aren't in the client
-  graph; needs the server to expose the available containers (pairs naturally with the per-node
-  `hasLogs` flag below). **Reopen when:** an operator needs sidecar logs or to isolate one workflow
-  step.
+- ~~Container / step picker for multi-container pod logs~~ — **resolved by the merged-logs work**
+  (0c767a3/b34e695, re-verified 2026-06-10): `select.logs-container` exists with init/app optgroups +
+  an "All containers" default, and the aggregated view gained per-container filter chips. The one
+  residual — a finished Workflow's display-dropped pods have no container names client-side — is the
+  same gap as the `hasLogs` item below; it lives there now.
 
 - **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
   fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
@@ -344,15 +340,11 @@ Recent batches (newest first; `git log` has the commits):
   topology-level answer — already lands. Build it if a cluster here adopts GRPCRoute: add a
   `grpcRouteMatches` branch to `routes()` mirroring `httpRoutePaths`, fixture-tested.
 
-- **HPA: target metric + drop the "unknown state" status** — *follow-ups to the 2026-06-06 HPA chips;
-  medium/low value.* (1) The drawer now shows replicas + bounds but not the metric driving the decision
-  (e.g. `cpu 72% / 80%`). It needs parsing `spec.metrics[]` against `status.currentMetrics[]` — several
-  metric types (Resource/Pods/Object/External/ContainerResource); start with the common Resource-CPU/mem
-  `averageUtilization` case and render `cpu cur%/target%`. (2) An HPA falls to the generic CR status
-  ("unknown state" — see crStatusSummary) which is misleading for a functioning autoscaler; either
-  suppress it when `scaleReplicas` is set, or add an HPA rule keying on the `ScalingActive`/`AbleToScale`
-  conditions. Needs a metrics-server-backed cluster to dogfood current-metric rendering (docker-desktop
-  has none — the chips verified there but `cpu <unknown>`).
+- ~~HPA: target metric + drop the "unknown state" status~~ — **shipped / refuted (2026-06-10).**
+  (1) The "metric" chip now renders each Resource metric's current/target ("cpu 200% / 90%"; v2
+  utilization + averageValue, v1 flat fields, unsampled current as "—"); dogfooded live against a real
+  mid-scale HPA on docker-desktop (metrics-server reinstalled). (2) verified stale — e629880's
+  condition rules classify a functioning HPA (status empty, health Healthy); no "unknown state" shows.
 
 ## Future / larger work — deferred (examined, not actionable now)
 
@@ -466,6 +458,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | Validate `-addr` / invalid env durations in `config.Load` (fail earlier) | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later; no operator pain |
 | Add explicit `scrollIntoView` to the Kinds-row arrow-key focus handler (`onToolbarKey`) | refuted live (2026-06-10) — drove the roving arrow path through an 18-kind overflowing row (`scrollWidth 1585 > 980`): native `.focus()` already scrolls the row (verified it scrolled back to 0 when focus wrapped to early chips; chip mid-row landed visible). The only residual is the browser's `inline:'nearest'` leaving the very LAST chip's right edge slightly clipped after a direct focus — a native-scroll nicety, not a reachability bug; every chip is focusable, readable, and reachable. jsdom can't see this (stubs scroll), so it reads as a gap on a source survey — exactly why the chip-overflow rule says verify live. |
 | Events "Warnings only" filter should show a "shown / total" readout like the Logs `X/Y` | already-mitigated (2026-06-10) — the Events TAB badge always shows the TOTAL event count (`DetailDrawer.tsx:431`, `events().length`, unaffected by the filter), and the chip shows the warning count, so an operator sees both 3 (warnings) and 33 (total) — the "this resource only had 3 events ever" misread the logs `X/Y` prevents doesn't occur here. An explicit "3 of 33" would be redundant clutter. (The Logs panel needs `X/Y` because it has no equivalent always-on total.) |
+| Events tab message search/filter box | refuted (2026-06-10) — the events list is FULLY RENDERED DOM (plain `<ul><For>`, no cap or virtualization, bounded by the ~1h event TTL), so the browser's native Cmd+F already searches every message; the Logs panel needed its own filter only because a streaming buffer + level/pod filters make native find useless there. Warnings-only + newest-first covers triage; a search box would duplicate Cmd+F as clutter. |
 | Manifest in-pane find needs a keyboard focus shortcut (e.g. `/` when the Manifest tab is active) | deferred (2026-06-10) — real keyboard-completeness gap (the find box is the one drawer action with no keyboard door), but the only natural key (`/`) is the established global namespace-filter focus; overloading it contextually (manifest-find when the drawer's Manifest tab is active) risks surprising muscle memory on a core shortcut, and needs App↔drawer coupling to know the active tab. Not shipping without the campaign owner's call on the interaction. Revisit if a non-conflicting affordance emerges. |
 | Sort in-cluster `List()` context order; `defer debounce.Stop()` in sse.go | low-value — in-cluster has a single context (switcher hidden); the debounce timer is GC'd and is not a race |
 | "A non-default relationship filter (e.g. RBAC) clutters the canvas with orphan cards" | working-as-designed (live-checked on a real 219-resource staging namespace, `rels=rbac`). kd shows ALL namespace resources regardless of the active rel-filter (commit `0143cea`); under RBAC only SA→RoleBinding→Role + Pod→SA edges are drawn, so non-RBAC resources become parentless — but `layoutGraph`'s `orphanBlock` folds any kind with ≥`FANOUT_MIN` (5) loose nodes into one collapsible "+N more" block (EPHR 88 / WF 48 folded → only 68 of 219 cards drawn), and sub-5 kinds stay as a short plain-card column by design. The RBAC trees render correctly (18 edges); the leftmost orphan cards are intended, not clutter. Do NOT hide nodes under a rel-filter — that re-introduces the "standalone ConfigMap vanishes" bug 0143cea fixed. |
