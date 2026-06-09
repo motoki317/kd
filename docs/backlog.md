@@ -68,12 +68,24 @@ Recent batches (newest first; `git log` has the commits):
   summary — the badge's own source). Verified live on staging: parked on a fully-healthy namespace the
   favicon stays Degraded-red because another namespace is degraded (was clean). Both surveys ran as
   background subagents while I dogfooded staging.
-  Open survivors (verified real, not yet shipped): RBAC-403 manifest/events read as a generic "unavailable"
-  (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on data-keys/routes;
-  Events tab lacks copy + message search + warnings "shown/total"; **sidebar trouble-count + "no matches"
-  have no `aria-live`** (SR users get no signal trouble arrived / list emptied); **Kinds-row arrow-key focus
-  can land on a fade-masked off-screen chip** (no scrollIntoView — needs live verify); externalIP "pending"
-  has no explanatory title; toolbar lacks a clickable "frame matches" for health/kind filters (search has it).
+  Then shipped: **sidebar trouble-count + empty-result `aria-live`** (SR counterpart to the badge/favicon —
+  a polite region announces "N namespaces need attention"; `role=status` on the empty filter result).
+  **Share/URL round-trips a Nodes-view pod across namespaces** — the URL writer resolved the selection only
+  from the namespace graph while the drawer falls back to the cluster-wide capacity feed, so in cluster-scope
+  Nodes view selecting a pod (capById-only) opened the drawer but wrote no `sel`; now writes `Pod/ns/name`
+  (back-compat 2-part otherwise, shared `matchSel`) and restores from capById. Verified live: cluster-scope
+  pod select → reload reopens the exact pod (was empty). **Capacity hover-spotlight recedes whole node rows,
+  not just segments** — the "fades the rest" was half-applied (frames/tracks/value-labels/names stayed bright);
+  now a row whose pod isn't hovered dims as a whole (`capRowFaded` on the hovered pod's host). Verified live on
+  8 staging nodes: 7 rows → 0.32, the spotlit node → 1.
+  Refuted live: **Kinds-row arrow-focus scrollIntoView** — native `.focus()` already scrolls the row (see
+  Rejected). Open survivors (verified real, not yet shipped): RBAC-403 manifest/events read as a generic
+  "unavailable" (hard to dogfood in dev-user mode — no proxy auth to deny); drawer copy still missing on
+  data-keys/routes (held — clutter risk on many-key ConfigMaps); Events tab lacks copy + message search +
+  warnings "shown/total"; externalIP "pending" has no explanatory title; toolbar lacks a clickable "frame
+  matches" for health/kind filters (search has it); **manifest find has no keyboard focus shortcut** (`/` when
+  Manifest active); **capacity aggregate blocks show `cursor:pointer` but a click toggles the row** (cursor
+  lies); **near-limit cue is a thin stroke invisible on small segments** (inverted importance vs `over` hatch).
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
