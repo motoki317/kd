@@ -137,6 +137,13 @@ export default function Sidebar(props: Props) {
             </button>
           </Show>
         </Show>
+        {/* Screen-reader counterpart to the trouble badge + favicon dot: a polite live region announces
+            when the cluster's trouble count changes (a rollout degrades a namespace) — the single most
+            important sidebar state change — so an AT user monitoring the cluster HEARS it arrive instead
+            of only seeing the red pill appear. Empty when all-clear, so it stays silent until trouble. */}
+        <span class="sr-only" role="status">
+          {troubled() > 0 ? `${troubled()} ${troubled() === 1 ? 'namespace needs' : 'namespaces need'} attention` : ''}
+        </span>
       </div>
       <div class="sidebar-filter-field">
         <svg class="topology-search-icon" viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
@@ -267,8 +274,10 @@ export default function Sidebar(props: Props) {
               )}
             </For>
             <Show when={shown().length === 0}>
-              {/* Distinguish "filtered everything out" from "nothing visible to this user" (RBAC). */}
-              <li class="ns-empty">{props.namespaces.length === 0 ? 'No namespaces visible.' : 'no matches'}</li>
+              {/* Distinguish "filtered everything out" from "nothing visible to this user" (RBAC).
+                  role="status" announces the empty result to an AT user typing a filter — the ↑↓ nav
+                  early-returns on an empty set with no other feedback that the candidates vanished. */}
+              <li class="ns-empty" role="status">{props.namespaces.length === 0 ? 'No namespaces visible.' : 'no matches'}</li>
             </Show>
           </ul>
         </Show>

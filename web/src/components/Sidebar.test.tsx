@@ -234,8 +234,25 @@ describe('Sidebar', () => {
   })
 
   it('distinguishes no namespaces visible from no filter matches', () => {
-    const { getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
+    const { container, getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
     expect(getByText('No namespaces visible.')).toBeTruthy()
+    // The empty state is a live region so an AT user typing a filter hears the candidates vanish.
+    expect(container.querySelector('.ns-empty')?.getAttribute('role')).toBe('status')
+  })
+
+  it('announces the trouble count to screen readers, and stays silent when all-clear', () => {
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    // Polite live region mirrors the badge/favicon so an AT user hears trouble arrive (2 troubled here).
+    const live = [...container.querySelectorAll('.sr-only[role="status"]')].find((e) => /attention/.test(e.textContent ?? ''))
+    expect(live?.textContent).toContain('2 namespaces need attention')
+    cleanup()
+    // All healthy → the region renders but is empty, so nothing is announced.
+    const allHealthy: NamespaceInfo[] = [{ name: 'a', health: 'Healthy' }]
+    const clean = render(() => <Sidebar namespaces={allHealthy} selected={null} onSelect={noop} loading={false} failed={false} />)
+    const region = clean.container.querySelector('.sidebar-title .sr-only[role="status"]')
+    expect(region?.textContent?.trim()).toBe('')
   })
 
   it('pins the [cluster] pseudo-namespace above the list and outside the filter (FR-004)', async () => {
