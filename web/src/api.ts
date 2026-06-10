@@ -29,7 +29,8 @@ export interface ContextsResponse {
 
 export async function fetchContexts(): Promise<ContextsResponse> {
   const res = await fetch(`${base}/contexts`)
-  if (!res.ok) throw new Error(`contexts: ${res.status}`)
+  // ApiError so the bootstrap path can tell "no identity / denied" (401/403) from an outage.
+  if (!res.ok) throw new ApiError(`contexts: ${res.status}`, res.status)
   return (await res.json()) as ContextsResponse
 }
 

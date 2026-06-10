@@ -94,6 +94,12 @@ describe('Topology', () => {
     ))
     expect(noAccess.container.querySelector('.topology-empty-spinner')).toBeFalsy()
     expect(noAccess.container.querySelector('.topology-empty-text')?.textContent).toContain('No namespaces are visible')
+    noAccess.unmount()
+    // Auth failure (the contexts bootstrap 401/403'd): outranks everything — nothing else can load.
+    const auth = render(() => (
+      <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} noAccess={true} authFailed={true} />
+    ))
+    expect(auth.container.querySelector('.topology-empty-text')?.textContent).toContain('Not signed in')
   })
 
   it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {

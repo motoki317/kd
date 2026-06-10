@@ -60,6 +60,9 @@ interface Props {
   // read access. A terminal state of its own — neither "connecting" (nothing will arrive) nor
   // "offline" (nothing failed).
   noAccess?: boolean
+  // kd's bootstrap (the contexts list) was answered 401/403: the auth proxy sent no identity, or
+  // policy denies this user outright. Outranks every other empty state — nothing else can load.
+  authFailed?: boolean
   // The active context's cache-build error, shown under the offline empty-state headline so the
   // failure diagnoses itself (expired credentials vs unreachable API) instead of a bare "retry".
   offlineReason?: string
@@ -1463,8 +1466,10 @@ export default function Topology(props: Props) {
           </svg>
           <div class="topology-empty-text">
             <Show when={props.connected} fallback={
-              // no-access outranks offline: with zero visible namespaces, "can't reach the
-              // cluster" misdiagnoses what is actually a permissions answer from a healthy one.
+              // Rung order: auth > no-access > offline > connecting. Identity failures outrank
+              // connectivity ones — with zero visible namespaces or no identity at all, "can't
+              // reach the cluster" misdiagnoses what is actually a permissions answer.
+              <Show when={props.authFailed} fallback={
               <Show when={props.noAccess} fallback={
                 <Show when={props.offline} fallback={
                   <>
@@ -1488,6 +1493,9 @@ export default function Topology(props: Props) {
                 </Show>
               }>
                 No namespaces are visible to this account — ask whoever runs kd to grant access.
+              </Show>
+              }>
+                Not signed in — kd received no identity from its auth proxy, or access is denied.
               </Show>
             }>
               Nothing to show in this namespace.

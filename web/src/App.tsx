@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceInfo, type NamespaceSummary } from './api'
+import { ApiError, CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceInfo, type NamespaceSummary } from './api'
 import { descendantPods, hasDescendantPod } from './loggable'
 import { aggregateWorkloadUsage } from './usageAggregate'
 import { hostNodeCapacity } from './resourceBars'
@@ -38,6 +38,15 @@ export default function App() {
   // refetches to pick up the diagnosis the offline empty-state shows.
   const [contextsRes, { refetch: refetchContexts }] = createResource(fetchContexts)
   const contextsInfo = createMemo(() => (contextsRes.error ? null : contextsRes() ?? null))
+  // The contexts list is kd's bootstrap: when IT fails, nothing downstream (ctx → namespaces →
+  // subscribe) ever fires and the canvas would spin "connecting…" forever. A 401/403 is an
+  // identity answer — kd's auth proxy sent no identity, or policy denies it — not an outage, so
+  // it gets its own terminal state instead of the offline ("can't reach") misdiagnosis.
+  const authFailed = createMemo(
+    () =>
+      contextsRes.error instanceof ApiError &&
+      (contextsRes.error.status === 401 || contextsRes.error.status === 403),
+  )
   // Seed namespace/ctx/grouping/relationships from the URL so a link or reload restores the same
   // place. Grouping + relationship filter also fall back to localStorage (then their defaults), so
   // a plain reload of an un-shared URL still remembers how the operator last arranged the canvas.
@@ -141,6 +150,10 @@ export default function App() {
   // canvas spun "connecting…" forever — no namespace means the subscribe effect never runs, so
   // connState never moves. Gated on 'ready' so the unresolved pre-fetch state doesn't flash it.
   const noNamespaces = createMemo(() => namespaces.state === 'ready' && namespaceList().length === 0)
+  // A non-auth contexts failure (kd itself down/broken) reads offline, engaging the retry pill.
+  createEffect(() => {
+    if (contextsRes.error && !authFailed()) setConnState('offline')
+  })
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
@@ -649,9 +662,10 @@ export default function App() {
         {/* When offline (cycle 291), the conn pill becomes clickable as a manual reconnect:
             EventSource auto-reconnects, but on a long backoff — operators who know the server is
             back shouldn't have to wait it out. role/title shift to reflect the affordance.
-            Hidden entirely in the no-access state: with no namespace there is no stream for the
-            pill to describe, and "connecting…" would promise progress that can never come. */}
-        <Show when={!noNamespaces()}>
+            Hidden entirely in the no-access / not-signed-in states: with no namespace there is no
+            stream for the pill to describe, and "connecting…" would promise progress that can
+            never come. */}
+        <Show when={!noNamespaces() && !authFailed()}>
         <Show
           when={connState() === 'offline'}
           fallback={
@@ -677,7 +691,9 @@ export default function App() {
             title="Offline — click to reconnect"
             onClick={() => {
               // With no namespace (the list itself failed) the subscribe effect has nothing to
-              // re-run against — retry the list too, so one button serves both failure classes.
+              // re-run against — retry the failed bootstrap fetches too, so one button serves
+              // every failure class.
+              if (contextsRes.error) void refetchContexts()
               if (namespaces.error) void refetchNamespaces()
               setReconnectTick((n) => n + 1)
             }}
@@ -783,6 +799,7 @@ export default function App() {
             connected={connected()}
             offline={connState() === 'offline'}
             noAccess={noNamespaces()}
+            authFailed={authFailed()}
             // The active context's cache-build error (expired credentials, unreachable API) — the
             // diagnosis behind an offline state. Without it the empty-state's "use retry" sends an
             // operator with an expired SSO session into a retry loop; the reason ("getting
