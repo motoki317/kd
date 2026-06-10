@@ -128,6 +128,12 @@ func statusMessage(obj runtime.Object, h Health) string {
 		}
 	case *corev1.Pod:
 		msg = blockingConditionMessage(o.Status.Conditions)
+		// A pod stuck Terminating past its grace period shows nothing actionable anywhere — the
+		// finalizer holding it lives only in the manifest. Wins over the blocking condition: while
+		// deleting, "containers with unready status" is mechanics, the finalizer is the cause.
+		if o.DeletionTimestamp != nil && len(o.Finalizers) > 0 {
+			msg = "Deleting — waiting for finalizer " + strings.Join(o.Finalizers, ", ") + " to be removed by its controller"
+		}
 	case *appsv1.Deployment:
 		msg = deploymentProblemMessage(o)
 	case *appsv1.ReplicaSet:

@@ -408,6 +408,19 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(quota-blocked ReplicaSet) = %q, want the ReplicaFailure cause", got)
 	}
 
+	// A pod stuck Terminating names the finalizer holding it — the cause lives only in the manifest
+	// otherwise, and it beats the unready-containers mechanics while deleting.
+	now := metav1.Now()
+	zombie := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now, Finalizers: []string{"example.com/cleanup"}},
+		Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{
+			Type: corev1.PodReady, Status: corev1.ConditionFalse, Message: "containers with unready status: [main]",
+		}}},
+	}
+	if got := statusMessage(zombie, HealthDegraded); !strings.Contains(got, "example.com/cleanup") {
+		t.Errorf("statusMessage(finalizer-stuck pod) = %q, want the finalizer name", got)
+	}
+
 	// A failed Job says it has terminally given up — "0/1 · failed 2" alone reads as still retrying.
 	deadJob := &batchv1.Job{Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
 		{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded",
