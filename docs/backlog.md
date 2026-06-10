@@ -145,6 +145,17 @@ Recent batches (newest first; `git log` has the commits):
   ordinal. **Co-routed multi-type edges overlapping** (two edge types between the same pair draw identical
   paths, one unhoverable) — real but rare (`orthRoute` is center-to-center); deferred (needs a per-pair
   routing fan-out, risky for a low-frequency case).
+  Then shipped: **triage-aware fold representatives in the connectivity view** (c15ab85, the deferred
+  follow-up to 9d4438c, reopened per its own condition) — threaded the existing `prioritize` predicate
+  through `layoutGraph` into all three fold sites (`foldSiblingSubtrees`, `orphanBlock`,
+  `collapseHubLeaves`); no caller change (Topology already passed it for the orphan section). Live-verified
+  per the reopen condition: hub-leaf grids on a REAL staging incident (2 Failed workflows under one
+  template, the mid-name-order one was buried behind "+3 more" pre-fix, floats bright post-fix; expand
+  keeps slots), sibling subtrees + orphan folds on induced docker-desktop shapes (CronJob-owned Jobs where
+  the failed one owns its Error-pod subtree — floats WITH the subtree; 9 bare pods, the crashlooper floats
+  in the orphan section). Unit tests pin all three paths. Note: `layoutGraph`'s internal `orphanBlock` is
+  a safety net in the live relationship view — `orphanIds` routes every unconnected node to the orphan
+  SECTION (`layoutGraphByKind`), so the block engages only for edge-dropped stragglers; covered by test.
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
@@ -303,21 +314,6 @@ Recent batches (newest first; `git log` has the commits):
 ---
 
 ## Open
-
-- **Triage-aware fold representatives in the connectivity/ownership view** — *follow-up to the
-  kind-view fix (9d4438c); high value (default view), deferred on risk.* `layoutGraphByKind` now
-  floats health-filter matches into a folded kind box's visible slots so the box's face shows the
-  trouble. The connectivity view (`layoutGraph`) has the SAME gap in its three fold paths —
-  `foldSiblingSubtrees` (explicitly "status-agnostic", layout.ts:166, the Workflows-under-
-  WorkflowTemplate case), `orphanBlock`, and `collapseHubLeaves` (via `layoutComponent`). The
-  `splitForFold` `prioritize` predicate already exists and caps visible at `COLLAPSE_VISIBLE` (no
-  layout explosion); the work is purely plumbing it through those four functions, health-filter-gated
-  in Topology's connectivity branch (a click → dagre relayout, acceptable; keep live search fade-only).
-  **Why deferred:** 4× the plumbing of the kind-view fix, touching the most intricate dagre / subtree-
-  dragging / hub-leaf edge-bundling code with the default view as blast radius — and the connectivity
-  view already has the badge ("● N match") + Enter-cycle auto-expand + auto-fit mitigations, so the
-  value/risk ratio is lower than the kind-view fix was. **Reopen as:** a dedicated cycle with live
-  verification across all three fold paths (sibling subtrees, orphan blocks, hub leaves) on staging.
 
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
