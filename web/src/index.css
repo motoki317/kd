@@ -18,6 +18,11 @@
      dark surface but drops to ~1.9:1 on the light theme's near-white surfaces, so caution TEXT uses
      this darker amber in light mode (≥4.5:1) while borders/fills/dots keep the vivid hue. */
   --caution-text: #9a6700;
+  /* Same treatment for degraded/progressing TEXT: the vivid hues measure 3.7:1 / 3.1:1 on the light
+     surfaces — fine for dots/fills/borders (3:1 graphics bar) but under the 4.5:1 text bar at the
+     11–13px sizes statuses/reasons render at. Darker inks for text only; dots stay vivid. */
+  --degraded-text: #c73e36;
+  --progressing-text: #1a66c2;
 
   /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
@@ -52,7 +57,9 @@
   --accent: #4d8bf0;
   --edge-color: #3f4654;
   --pod-accent: #8593f5;
-  --caution-text: #f0a92a; /* on dark, the vivid amber reads fine as text */
+  --caution-text: #f0a92a; /* on dark, the vivid hues read fine as text */
+  --degraded-text: #e5544b;
+  --progressing-text: #2f86eb;
   color-scheme: dark;
 }
 
@@ -304,7 +311,7 @@ body {
 /* Offline variant (no .live / .connecting): match the degraded color vocabulary so a hung stream
    reads as trouble at a glance — same red as a Degraded card border. */
 .conn:not(.live):not(.connecting) {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
   border-color: color-mix(in srgb, var(--health-degraded) 60%, var(--border-strong));
 }
 .conn:not(.live):not(.connecting)::before {
@@ -336,8 +343,8 @@ body {
 /* "connecting…" is a transient state; a slow opacity pulse signals "working on it" instead of
    the alarming bare "offline" look. Progressing amber so it reads neutral-positive (waiting). */
 .conn.connecting {
-  color: var(--health-progressing);
-  border-color: var(--health-progressing);
+  color: var(--progressing-text);
+  border-color: var(--progressing-text);
   animation: conn-pulse 1.2s ease-in-out infinite;
 }
 .conn.connecting::before {
@@ -1797,7 +1804,7 @@ button.conn.conn-retry:focus-visible {
   outline-offset: 1px;
 }
 .topology-matches.none {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
   cursor: default;
 }
 /* Clear-all button: stays inline with the search row but reads as a quiet text link rather than
@@ -2663,7 +2670,7 @@ button.drawer-host:hover {
 }
 .container-restarts {
   margin-left: auto;
-  color: var(--health-degraded);
+  color: var(--degraded-text);
   flex: none;
 }
 /* Why the container previously exited (its last restart). Indented to align under the name like the
@@ -2856,7 +2863,7 @@ button.drawer-host:hover {
 /* A Job's failed-pod count reads as trouble (degraded colour), so it stands apart from the neutral
    last-run / active chips beside it. */
 .port-addr.port-failed code {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 /* A PDB allowing 0 disruptions isn't broken, but it's a heads-up — a node drain blocks here — so the
    count takes the caution (suspended) colour rather than the alarming degraded red. */
@@ -3142,7 +3149,7 @@ button.drawer-host:hover {
 .events-filter-chip.active {
   background: color-mix(in srgb, var(--health-degraded) 14%, var(--surface));
   border-color: color-mix(in srgb, var(--health-degraded) 65%, var(--border));
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 .events-filter-chip:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--health-degraded) 55%, transparent);
@@ -3154,7 +3161,7 @@ button.drawer-host:hover {
   padding: 0 5px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--health-degraded) 20%, transparent);
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 .event-list {
   list-style: none;
@@ -3186,7 +3193,7 @@ button.drawer-host:hover {
   font-size: 13px;
 }
 .event-item.warning .event-reason {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 .event-count,
 .event-age {
@@ -3275,7 +3282,7 @@ button.event-source:focus-visible {
   letter-spacing: 0;
 }
 .manifest-find-count.none {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 .manifest-match {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
@@ -3402,7 +3409,7 @@ button.event-source:focus-visible {
   gap: 10px;
 }
 .logs-error {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
   text-transform: none;
 }
 .logs-error.notice {
@@ -3532,7 +3539,7 @@ button.event-source:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .logs-count.none {
-  color: var(--health-degraded);
+  color: var(--degraded-text);
 }
 /* Per-pod filter chips for aggregated streams (cycle 328/R2): a wrapping row between the toolbar and
    the log body. Each chip carries the pod's signature hue dot so it ties to the inline pod labels. */
@@ -3582,7 +3589,7 @@ button.event-source:focus-visible {
 .logs-errjump {
   border: 1px solid color-mix(in srgb, var(--health-degraded) 45%, var(--border));
   background: color-mix(in srgb, var(--health-degraded) 14%, transparent);
-  color: var(--health-degraded);
+  color: var(--degraded-text);
   border-radius: 6px;
   padding: 2px 8px;
   font-size: 11px;

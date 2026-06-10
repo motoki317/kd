@@ -221,8 +221,9 @@ describe('DetailDrawer', () => {
     const s = container.querySelector('.drawer-status') as HTMLElement
     expect(s).toBeTruthy()
     expect(s.textContent).toBe('Ready · yellow')
-    // Troubled → health-coloured (contrast), mirroring the card's status text.
-    expect(s.style.color).toBe('var(--health-progressing)')
+    // Troubled → health-coloured (contrast), mirroring the card's status text — in the darker TEXT
+    // ink, since the vivid hue fails the light theme's 4.5:1 bar at this size (healthTextColor).
+    expect(s.style.color).toBe('var(--progressing-text)')
   })
 
   it('keeps a Healthy status quiet (dim, not green) so the eye lands on trouble', () => {

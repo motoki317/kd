@@ -38,3 +38,20 @@ export function healthColor(h: Health): string {
       return 'var(--health-unknown)'
   }
 }
+
+// Health colour for TEXT (statuses, reasons): the vivid degraded/progressing/suspended hues sit
+// under the 4.5:1 WCAG text bar on the light theme's near-white surfaces at the 11–13px sizes
+// statuses render at, so text takes the darker `*-text` ink (same hue family; the dark theme maps
+// them back to the vivid values). Dots/fills/borders keep healthColor — the 3:1 graphics bar.
+export function healthTextColor(h: Health): string {
+  switch (h) {
+    case 'Progressing':
+      return 'var(--progressing-text)'
+    case 'Degraded':
+      return 'var(--degraded-text)'
+    case 'Suspended':
+      return 'var(--caution-text)'
+    default:
+      return healthColor(h)
+  }
+}

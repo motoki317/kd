@@ -1,6 +1,6 @@
 import { createMemo, For, Show } from 'solid-js'
 import { formatPair } from '../capacityLayout'
-import { healthColor, healthHint } from '../health'
+import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
@@ -29,13 +29,13 @@ function isDone(cs: ContainerStatus): boolean {
   return cs.state.startsWith('Terminated:') && cs.state.includes('Completed')
 }
 
-// containerDot returns the dot/state colour and the card's status class in lockstep, so a completed
+// containerDot returns the dot/state colours and the card's status class in lockstep, so a completed
 // container is gray everywhere on its card. A done container is gray (--text-dim); everything else
-// uses its health hue. Reserving green for running is the whole point of the gray-for-done rule.
-function containerDot(cs: ContainerStatus): { color: string; cls: string } {
-  if (isDone(cs)) return { color: 'var(--text-dim)', cls: 'done' }
+// uses its health hue — the dot vivid, the state TEXT in the darker text ink (see healthTextColor).
+function containerDot(cs: ContainerStatus): { color: string; text: string; cls: string } {
+  if (isDone(cs)) return { color: 'var(--text-dim)', text: 'var(--text-dim)', cls: 'done' }
   const h = containerHealth(cs)
-  return { color: healthColor(h), cls: `h-${h.toLowerCase()}` }
+  return { color: healthColor(h), text: healthTextColor(h), cls: `h-${h.toLowerCase()}` }
 }
 
 // endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
@@ -276,7 +276,7 @@ export default function ResourceSummary(props: Props) {
           <Show when={props.node.status}>
             <div
               class="drawer-status"
-              style={{ color: props.node.health === 'Healthy' ? 'var(--text-dim)' : healthColor(props.node.health) }}
+              style={{ color: props.node.health === 'Healthy' ? 'var(--text-dim)' : healthTextColor(props.node.health) }}
             >
               {props.node.status}
             </div>
@@ -683,7 +683,7 @@ export default function ResourceSummary(props: Props) {
                         <div class="container-card-head">
                           <span class="dot" style={{ background: dot.color }} />
                           <span class="container-name">{cs.name}</span>
-                          <span class="container-state" style={{ color: dot.color }}>
+                          <span class="container-state" style={{ color: dot.text }}>
                             {cs.state}
                           </span>
                           <Show when={(cs.restarts ?? 0) > 0}>

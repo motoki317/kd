@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HEALTH_ORDER, healthSeverity, healthHint, healthColor } from './health'
+import { HEALTH_ORDER, healthSeverity, healthHint, healthColor, healthTextColor } from './health'
 import type { Health } from './types'
 
 describe('health mappings', () => {
@@ -15,6 +15,16 @@ describe('health mappings', () => {
     expect(healthColor('Degraded')).toBe('var(--health-degraded)')
     expect(healthColor('Suspended')).toBe('var(--health-suspended)')
     expect(healthColor('Unknown')).toBe('var(--health-unknown)')
+  })
+
+  it('routes troubled-state TEXT through the darker text inks, graphics colours otherwise', () => {
+    // Statuses/reasons render at 11–13px where the vivid hues fail the 4.5:1 light-theme text bar;
+    // the text inks darken them in light mode only (dark re-maps the vars to the vivid values).
+    expect(healthTextColor('Degraded')).toBe('var(--degraded-text)')
+    expect(healthTextColor('Progressing')).toBe('var(--progressing-text)')
+    expect(healthTextColor('Suspended')).toBe('var(--caution-text)')
+    expect(healthTextColor('Healthy')).toBe(healthColor('Healthy'))
+    expect(healthTextColor('Unknown')).toBe(healthColor('Unknown'))
   })
 
   it('falls back to the unknown colour for an unexpected value', () => {

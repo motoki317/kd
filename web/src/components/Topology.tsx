@@ -8,7 +8,7 @@ import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
 import { type CapTipData } from '../capacityTooltips'
 import CapacityView from './CapacityView'
-import { HEALTH_ORDER, healthColor } from '../health'
+import { HEALTH_ORDER, healthColor, healthTextColor } from '../health'
 import { kindStats as computeKindStats } from '../kindStats'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, pluralizeKind, prefixParentNames } from '../names'
@@ -2036,7 +2036,7 @@ export default function Topology(props: Props) {
                     {label(n)}
                   </text>
                   <Show when={n.status}>
-                    <text class="node-status" x={n.width - 12} y="17" text-anchor="end" fill={healthColor(n.health)}>
+                    <text class="node-status" x={n.width - 12} y="17" text-anchor="end" fill={healthTextColor(n.health)}>
                       {cardStatus(n.status!)}
                     </text>
                   </Show>
