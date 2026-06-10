@@ -146,6 +146,15 @@ the cards are real and counted directly). Collapses only when the hidden middle 
 ≥`COLLAPSE_MIN_HIDDEN` (2). This is a CLIENT-side reveal-able fold of *live* resources — distinct from
 the server-side permanent drop of dead ReplicaSets/Pods (`graph/build.go` `isHistorical`).
 
+**Triage representatives.** While the health filter is active, `splitForFold`'s `prioritize` predicate
+floats *matching* cards into the visible slots (matches first in natural order, then the natural-order
+prefix of the rest) instead of the name-ordinal head+tail — a Degraded resource must never hide behind
+a "+N more" pill the operator is filtering for. The predicate reaches **every** fold site: kind boxes
+(`layoutGraphByKind`), sibling-subtree pills (`foldSiblingSubtrees` — a floated sibling brings its
+subtree back), hub leaf grids (`collapseHubLeaves`), and orphan folds. Expanding under the filter keeps
+the visible reps in their slots and appends the remainder (same no-reshuffle invariant). Health-filter
+only — live search stays fade-only, so typing never relayouts.
+
 ## Hub leaf blocks (`findHubs` → `collapseHubLeaves` → `connGroups`)
 
 - **Fan-out only.** Only a hub's degree-1 fan-OUT *children* are wrapped into leaf blocks. A fan-IN
