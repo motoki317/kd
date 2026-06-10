@@ -509,6 +509,20 @@ describe('Topology', () => {
     expect(meta3.textContent).toContain('1 pod')
     expect(meta3.textContent).not.toContain('/ 0')
     expect(meta3.classList.contains('near-cap')).toBe(false)
+
+    // An EKS Fargate node reports allocatable.pods = 1 (one pod per micro-VM by design, always 1/1).
+    // It must NOT render "1 / 1 pods" or amber — that would flag normal Fargate as pod pressure.
+    const fargate: KNode[] = [
+      { id: 'node-f', kind: 'Node', name: 'fargate-ip-10-0-0-1', health: 'Healthy', allocatable: { cpuMilli: 2000, pods: 1 } },
+      { id: 'f1', kind: 'Pod', name: 'f1', health: 'Healthy', host: 'fargate-ip-10-0-0-1' },
+    ]
+    const { container: c4 } = render(() => (
+      <Topology nodes={fargate} edges={[]} search="" {...base} groupBy="nodes" capacity={{ nodes: fargate, usage: { items: {} } }} namespace="" />
+    ))
+    const meta4 = c4.querySelector('.cap-row-meta') as SVGElement
+    expect(meta4.textContent).toContain('1 pod')
+    expect(meta4.textContent).not.toContain('/ 1')
+    expect(meta4.classList.contains('near-cap')).toBe(false)
   })
 
   it('Nodes view shows node pod-fill alongside the namespace subset in namespace scope', () => {

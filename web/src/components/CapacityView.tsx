@@ -62,11 +62,14 @@ export default function CapacityView(props: {
           // pods" — become the binding constraint. Show "N / cap" like the CPU/mem bars' value/
           // capacity, and amber the count when the node nears its pod cap (scheduling will start to
           // fail). Cap is node-global, so it gauges the node TOTAL (own + other namespaces).
-          // Guard podCap > 0: a node can report allocatable.pods = 0 (some virtual-kubelet nodes,
-          // cpu/mem still set so the server's nil-guard passes), which would render "N / 0 pods" and
-          // amber on a N/0 = Infinity ratio. Treat 0/absent alike — fall back to the bare count.
+          // Show the denominator only when the node has real pod headroom to gauge (cap > 1). A cap of
+          // 0 (some virtual-kubelet nodes report it, cpu/mem still set so the server's nil-guard passes)
+          // would render "N / 0 pods" and amber on a N/0 = Infinity ratio. A cap of 1 is an EKS Fargate
+          // node — one pod per micro-VM BY DESIGN, always 1/1 — so "1 / 1 pods" + the amber falsely read
+          // as pod pressure on every Fargate pod. Both are dedicated/degenerate; fall back to the bare
+          // count (verified on real Fargate nodes, tainted eks.amazonaws.com/compute-type=fargate).
           const podCap = row.node?.allocatable?.pods
-          const showPodCap = podCap !== undefined && podCap > 0
+          const showPodCap = podCap !== undefined && podCap > 1
           const totalPods = row.ownCount + row.otherCount
           const podPressure = showPodCap && totalPods / podCap! >= 0.9
           const expandable = pods > 0 || row.otherCount > 0
