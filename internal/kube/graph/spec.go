@@ -708,6 +708,17 @@ func hpaScale(obj runtime.Object) string {
 	if hasDes && des > 0 && des != cur {
 		return fmt.Sprintf("%d → %d", cur, des)
 	}
+	// "at max" only for ScalingLimited's TooManyReplicas reason: demand wants MORE than the ceiling
+	// — the "workload is slow but the HPA shows green" saturation a beginner can't infer from
+	// comparing the replica and range chips. TooFewReplicas (pinned at min) stays unmarked: idling
+	// at the floor is the normal steady state, the reason ScalingLimited overall is no health signal.
+	if conds, found, _ := unstructured.NestedSlice(u.Object, "status", "conditions"); found {
+		for _, c := range conds {
+			if m, ok := c.(map[string]any); ok && m["type"] == "ScalingLimited" && m["status"] == "True" && m["reason"] == "TooManyReplicas" {
+				return fmt.Sprintf("%d · at max", cur)
+			}
+		}
+	}
 	return fmt.Sprintf("%d", cur)
 }
 

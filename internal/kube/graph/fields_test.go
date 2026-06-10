@@ -824,6 +824,21 @@ func TestHPAScaleAndRange(t *testing.T) {
 	if got := hpaScale(hpa(1, 5, 1, 0, true, true)); got != "1" {
 		t.Errorf("hpaScale(broken) = %q, want \"1\" (no arrow to an uncomputed 0)", got)
 	}
+	// ScalingLimited/TooManyReplicas: demand wants more than the ceiling — say "at max" in words.
+	// TooFewReplicas (idling at the floor) is the normal steady state and stays unmarked.
+	withLimit := func(reason string) *unstructured.Unstructured {
+		h := hpa(2, 5, 5, 5, true, true)
+		h.Object["status"].(map[string]any)["conditions"] = []any{
+			map[string]any{"type": "ScalingLimited", "status": "True", "reason": reason},
+		}
+		return h
+	}
+	if got := hpaScale(withLimit("TooManyReplicas")); got != "5 · at max" {
+		t.Errorf("hpaScale(saturated) = %q, want \"5 · at max\"", got)
+	}
+	if got := hpaScale(withLimit("TooFewReplicas")); got != "5" {
+		t.Errorf("hpaScale(at floor) = %q, want plain \"5\" (idling at min is normal)", got)
+	}
 	if got := hpaRange(hpa(2, 10, 5, 5, true, true)); got != "2–10" {
 		t.Errorf("hpaRange = %q, want \"2–10\"", got)
 	}

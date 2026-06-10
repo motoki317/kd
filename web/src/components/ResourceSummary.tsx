@@ -516,7 +516,18 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.scaleReplicas || props.node.scaleRange || props.node.scaleMetrics}>
         <div class="drawer-ports">
           <Show when={props.node.scaleReplicas}>
-            <MetaChip label="replicas" value={props.node.scaleReplicas!} title="Running replicas — shows the target while scaling" />
+            {/* "· at max" = ScalingLimited/TooManyReplicas: demand exceeds the ceiling while
+                everything still reads green — caution-tint it so the saturation is explicit. */}
+            <MetaChip
+              label="replicas"
+              value={props.node.scaleReplicas!}
+              title={
+                props.node.scaleReplicas!.includes('at max')
+                  ? 'Demand wants more replicas than maxReplicas allows — the workload may be saturated; raise the ceiling if this persists'
+                  : 'Running replicas — shows the target while scaling'
+              }
+              class={props.node.scaleReplicas!.includes('at max') ? 'port-caution' : undefined}
+            />
           </Show>
           <Show when={props.node.scaleRange}>
             <MetaChip label="range" value={props.node.scaleRange!} title="Allowed replica range" />
