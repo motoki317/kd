@@ -409,7 +409,11 @@ export function layoutGraphByCapacity(
       otherReqSeg ? otherReqSeg.x + otherReqSeg.width : 0,
     )
     const valEnd = Math.max(trackW, useTrackW, useTotal * scale, reqTotal * scale)
-    const headerChars = label.length + 10 + (otherPods.length ? 15 : 0) + (overcommit ? 13 : 0)
+    // The pod-count clause grows when the node reports a pod capacity: "/ cap" in cluster scope, or a
+    // " · T/cap on node" tail in namespace scope — budget the extra chars so the card border still
+    // contains the header (under-reserve clips into the border; slight over-reserve is harmless).
+    const podCapChars = nodeCard?.allocatable?.pods !== undefined ? (otherPods.length ? 18 : 7) : 0
+    const headerChars = label.length + 10 + (otherPods.length ? 15 : 0) + podCapChars + (overcommit ? 13 : 0)
     const headerRight = CAP_ROW_LEFT - CAP_HEADER_INSET + headerChars * CAP_HEADER_CHAR_W
     // A pod card starts CAP_BULLET_AXIS_W left of the bars (room for the same "Use"/"Req" axis label the
     // node bars carry) so its bars sit directly UNDER and aligned with the node bars at the same scale —

@@ -468,6 +468,50 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
   })
 
+  it('Nodes view shows pod count against the node pod capacity, ambering a node near its ceiling', () => {
+    const roomy: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000, pods: 110 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', health: 'Healthy', host: 'host-1' },
+      { id: 'p2', kind: 'Pod', name: 'p2', health: 'Healthy', host: 'host-1' },
+    ]
+    const roomyCap = { nodes: roomy, usage: { items: {} } }
+    const { container: c1 } = render(() => (
+      <Topology nodes={roomy} edges={[]} search="" {...base} groupBy="nodes" capacity={roomyCap} namespace="" />
+    ))
+    const meta1 = c1.querySelector('.cap-row-meta') as SVGElement
+    expect(meta1.textContent).toContain('2 / 110 pods') // pod slots read like the CPU/mem value/capacity
+    expect(meta1.classList.contains('near-cap')).toBe(false) // 2/110 — plenty of headroom
+
+    // A node at its pod ceiling: CPU is near-empty, but pod SLOTS are the binding constraint → amber.
+    const full: KNode[] = [
+      { id: 'node-b', kind: 'Node', name: 'host-2', health: 'Healthy', allocatable: { cpuMilli: 4000, pods: 2 } },
+      { id: 'q1', kind: 'Pod', name: 'q1', health: 'Healthy', host: 'host-2' },
+      { id: 'q2', kind: 'Pod', name: 'q2', health: 'Healthy', host: 'host-2' },
+    ]
+    const fullCap = { nodes: full, usage: { items: {} } }
+    const { container: c2 } = render(() => (
+      <Topology nodes={full} edges={[]} search="" {...base} groupBy="nodes" capacity={fullCap} namespace="" />
+    ))
+    const meta2 = c2.querySelector('.cap-row-meta') as SVGElement
+    expect(meta2.textContent).toContain('2 / 2 pods')
+    expect(meta2.classList.contains('near-cap')).toBe(true) // 2/2 = 100% — at the ceiling
+  })
+
+  it('Nodes view shows node pod-fill alongside the namespace subset in namespace scope', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000, pods: 110 } },
+      { id: 'p1', kind: 'Pod', name: 'p1', namespace: 'app', health: 'Healthy', host: 'host-1' },
+      { id: 'p2', kind: 'Pod', name: 'p2', namespace: 'other', health: 'Healthy', host: 'host-1' },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: {} } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="app" />
+    ))
+    const meta = container.querySelector('.cap-row-meta') as SVGElement
+    // 1 pod in this namespace, +1 in another; the node holds 2 of 110 — the node total carries the cap.
+    expect(meta.textContent).toContain('1 pod (+1 in other namespaces · 2/110 on node)')
+  })
+
   it('Nodes view marks a cordoned node row in words', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Suspended', status: 'Ready,SchedulingDisabled', allocatable: { cpuMilli: 4000 } },

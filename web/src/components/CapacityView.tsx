@@ -57,6 +57,14 @@ export default function CapacityView(props: {
         {(row) => {
           const fmt = (v: number | undefined) => formatQuantity(v, props.resource)
           const pods = row.ownCount
+          // Pods are a THIRD capacity axis: a node caps at ~110 pods and can hit that ceiling while
+          // CPU/memory sit near-empty (many tiny pods), so pod slots — invisible behind a bare "N
+          // pods" — become the binding constraint. Show "N / cap" like the CPU/mem bars' value/
+          // capacity, and amber the count when the node nears its pod cap (scheduling will start to
+          // fail). Cap is node-global, so it gauges the node TOTAL (own + other namespaces).
+          const podCap = row.node?.allocatable?.pods
+          const totalPods = row.ownCount + row.otherCount
+          const podPressure = podCap !== undefined && totalPods / podCap >= 0.9
           const expandable = pods > 0 || row.otherCount > 0
           // Aggregate folds carry no stopPropagation, so a click falls through to the row's
           // expand/collapse toggle. Their pointer cursor alone reads as "select this block" —
@@ -144,9 +152,14 @@ export default function CapacityView(props: {
                 {/* Node-level totals (capacity, use, req) used to live here, crowding the name;
                     they now sit next to the Req/Use bars they describe (proximity). The header
                     keeps only the node's identity + pod count. */}
-                <tspan class="cap-row-meta">
-                  {` · ${pods} pod${pods === 1 ? '' : 's'}`}
-                  {row.otherCount > 0 ? ` (+${row.otherCount} in other namespaces)` : ''}
+                <tspan class="cap-row-meta" classList={{ 'near-cap': podPressure }}>
+                  {row.otherCount === 0
+                    ? podCap !== undefined
+                      ? ` · ${totalPods} / ${podCap} pods`
+                      : ` · ${pods} pod${pods === 1 ? '' : 's'}`
+                    : ` · ${pods} pod${pods === 1 ? '' : 's'} (+${row.otherCount} in other namespaces${
+                        podCap !== undefined ? ` · ${totalPods}/${podCap} on node` : ''
+                      })`}
                 </tspan>
                 <Show when={row.overcommit}>
                   <tspan class="cap-warn"> · overcommit</tspan>

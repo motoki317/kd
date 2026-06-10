@@ -979,6 +979,13 @@ button.conn.conn-retry:focus-visible {
   fill: var(--health-suspended);
   font-weight: 600;
 }
+/* A node nearing its pod-count ceiling (~110): CPU/mem bars can read near-empty while pod SLOTS are the
+   binding constraint, so amber the count — caution (scheduling will start to fail), not damage, the same
+   semantic as cordoned. Two-class selector out-specifies the base .cap-row-meta dim fill. */
+.cap-row-meta.near-cap {
+  fill: var(--health-suspended);
+  font-weight: 600;
+}
 /* "Req" / "Use" axis labels in the left gutter, right-aligned against the bars so each bar reads
    with an explicit name rather than the operator having to infer which stripe is which. */
 .cap-axis-label {
