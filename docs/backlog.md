@@ -96,6 +96,17 @@ Recent batches (newest first; `git log` has the commits):
   signal); DOM unchanged, full interaction surface re-verified live on staging. Note: docker-desktop got
   metrics-server reinstalled this session (cluster reset had dropped it) — the gauge/capacity dogfooding
   paths need it.
+  Then shipped: **offline context diagnoses itself** — deep-linking into a context with expired AWS
+  SSO read "use offline·retry" forever while the server knew the cause; the empty state now shows the
+  cache-build error (dim, clamped, tail = root cause) and /contexts refetches on the offline
+  TRANSITION (status was still "pending" at initial load — the failure lands after; gated against the
+  EventSource retry storm). Verified live against a real expired-credentials production context.
+  Verified-mature this pass: Memory mode at staging scale (0 overshoot, unit-consistent labels),
+  narrow-viewport toolbar (0 overflow @760px incl. the new count button), expanded drawer @760px
+  (in-bounds), suspended CronJob (amber "Suspended"), offline switcher/sidebar/canvas trio.
+  Deferred: **TopologyToolbar extraction** (survey item) — unlike CapacityView's clean presentational
+  boundary, the toolbar is ref/state-heavy (roving focus, scroll-edge fades, rels fold) with ~20
+  threaded props; value is code-clarity only. Reopen if the toolbar grows another facet.
   Then shipped: **HPA "metric" chip** ("cpu 200% / 90%" current/target — why/when it scales; v2 +
   v1 schemas, "—" when unsampled; dogfooded against a real mid-scale HPA). **ArgoCD Application dest +
   rev chips & OutOfSync-paired status** — found driving a real cross-namespace triage (the argocd
