@@ -59,6 +59,44 @@ describe('ResourceSummary container status dots', () => {
     expect(cards[0].classList.contains('h-healthy')).toBe(true) // running+ready stays green
     expect(cards[1].classList.contains('h-degraded')).toBe(true) // failed exit stays red, not gray
   })
+  // Per-container usage answers "which container is eating the memory?" on the card itself. The
+  // server only sends a breakdown for multi-container pods, so the rows simply follow the data:
+  // a card with a matching reading shows one, others (e.g. a finished init container, which
+  // metrics-server doesn't report) show nothing.
+  it('shows each container its own live cpu/mem share when the usage feed carries a breakdown', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'app', ready: true, state: 'Running' },
+          { name: 'sidecar', ready: true, state: 'Running' },
+          { name: 'setup', ready: false, state: 'Terminated: Completed', init: true },
+        ])}
+        {...base}
+        usage={{
+          cpuMilli: 270,
+          memBytes: 192 * 1024 * 1024,
+          containers: [
+            { name: 'app', cpuMilli: 250, memBytes: 128 * 1024 * 1024 },
+            { name: 'sidecar', cpuMilli: 20, memBytes: 64 * 1024 * 1024 },
+          ],
+        }}
+      />
+    ))
+    const rows = container.querySelectorAll('.container-usage')
+    expect(rows.length).toBe(2) // the finished init container has no reading → no row
+    expect(rows[0].textContent).toBe('cpu250m·mem128Mi')
+    expect(rows[1].textContent).toBe('cpu20m·mem64Mi')
+  })
+  it('shows no usage rows without a breakdown (single-container pod, or metrics-server absent)', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([{ name: 'main', ready: true, state: 'Running' }])}
+        {...base}
+        usage={{ cpuMilli: 50, memBytes: 16 * 1024 * 1024 }}
+      />
+    ))
+    expect(container.querySelectorAll('.container-usage').length).toBe(0)
+  })
   it('says "not ready" in words on a Running container failing its readiness probe', () => {
     const { container } = render(() => (
       <ResourceSummary node={podWith([{ name: 'main', ready: false, state: 'Running' }])} {...base} />

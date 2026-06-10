@@ -2723,6 +2723,22 @@ button.drawer-host:hover {
   color: var(--degraded-text);
   flex: none;
 }
+/* A container's live share of the pod's draw (multi-container pods only). Indented under the name
+   like the image row (proximity: the number sits on the card it describes); labels dim, values bright
+   (contrast), tabular-nums so the 15s refresh doesn't jitter the row. */
+.container-usage {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.container-usage .container-usage-val {
+  color: var(--text);
+  font-weight: 500;
+}
 /* Why the container previously exited (its last restart). Indented to align under the name like the
    image row, and amber (--health-suspended) — a PAST termination is a caution that must stand out from
    the live green "Running" state without reading as a current failure (red). */

@@ -49,6 +49,16 @@ export interface Resources {
 export interface ResourceUsage {
   cpuMilli?: number
   memBytes?: number
+  // Per-container shares of a pod's total — present only for multi-container pods (a single
+  // container's breakdown would just repeat the total). Joined onto container cards by name.
+  containers?: ContainerUsage[]
+}
+
+// ContainerUsage is one container's slice of its pod's live draw. Missing numbers mean zero.
+export interface ContainerUsage {
+  name: string
+  cpuMilli?: number
+  memBytes?: number
 }
 
 // Usage is live consumption keyed by object UID (both Nodes and Pods). Kept separate from KNode so

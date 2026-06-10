@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"sort"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
@@ -13,6 +14,20 @@ import (
 type ResourceUsage struct {
 	CPUMilli int64 `json:"cpuMilli,omitempty"`
 	MemBytes int64 `json:"memBytes,omitempty"`
+	// Containers breaks a pod's total down per container, so the drawer can answer "which container
+	// is eating the memory?" without `kubectl top pod --containers`. Only multi-container pods carry
+	// it — a single container's breakdown just repeats the total, and most pods are single-container,
+	// so omitting them keeps the cluster-wide usage payload (every pod, every ~15s) lean.
+	Containers []ContainerUsage `json:"containers,omitempty"`
+}
+
+// ContainerUsage is one container's share of its pod's live draw, named so the client can pin the
+// reading onto that container's card. A zero value marshals compactly (omitempty) — the client
+// treats a missing number as zero, which is what metrics-server's rounding produced anyway.
+type ContainerUsage struct {
+	Name     string `json:"name"`
+	CPUMilli int64  `json:"cpuMilli,omitempty"`
+	MemBytes int64  `json:"memBytes,omitempty"`
 }
 
 // Usage is the SSE `usage` payload: live resource draw keyed by object UID for both Nodes and
@@ -69,12 +84,22 @@ func joinUsage(pods []metricsv1beta1.PodMetrics, nodes []metricsv1beta1.NodeMetr
 			continue
 		}
 		var cpu, mem int64
+		var breakdown []ContainerUsage
 		for j := range pm.Containers {
 			c := &pm.Containers[j]
-			cpu += c.Usage.Cpu().MilliValue()
-			mem += c.Usage.Memory().Value()
+			cc, cm := c.Usage.Cpu().MilliValue(), c.Usage.Memory().Value()
+			cpu += cc
+			mem += cm
+			breakdown = append(breakdown, ContainerUsage{Name: c.Name, CPUMilli: cc, MemBytes: cm})
 		}
-		items[uid] = ResourceUsage{CPUMilli: cpu, MemBytes: mem}
+		u := ResourceUsage{CPUMilli: cpu, MemBytes: mem}
+		if len(breakdown) > 1 {
+			// Name-sorted so successive ticks marshal identically regardless of metrics-server's
+			// reporting order; the client joins by name, so wire order carries no meaning.
+			sort.Slice(breakdown, func(a, b int) bool { return breakdown[a].Name < breakdown[b].Name })
+			u.Containers = breakdown
+		}
+		items[uid] = u
 	}
 	for i := range nodes {
 		nm := &nodes[i]

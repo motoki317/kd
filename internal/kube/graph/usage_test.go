@@ -75,6 +75,37 @@ func TestJoinUsageSumsAndResolves(t *testing.T) {
 	}
 }
 
+// Multi-container pods carry a per-container breakdown (name-sorted, so ticks marshal identically
+// regardless of metrics-server's reporting order); single-container pods omit it — the breakdown
+// would repeat the total, and most pods are single-container, so omitting keeps the payload lean.
+func TestJoinUsagePerContainerBreakdown(t *testing.T) {
+	resolve := func(_, name string) (string, bool) { return name + "-uid", true }
+
+	multi := metricsv1beta1.PodMetrics{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web"}}
+	multi.Containers = []metricsv1beta1.ContainerMetrics{
+		{Name: "sidecar", Usage: rl("20m", "64Mi")}, // deliberately out of name order
+		{Name: "app", Usage: rl("250m", "128Mi")},
+	}
+	single := podMetric("shop", "solo", rl("5m", "16Mi"))
+
+	items := joinUsage([]metricsv1beta1.PodMetrics{multi, single}, nil, resolve, resolve)
+
+	got := items["web-uid"].Containers
+	want := []ContainerUsage{
+		{Name: "app", CPUMilli: 250, MemBytes: 128 * 1024 * 1024},
+		{Name: "sidecar", CPUMilli: 20, MemBytes: 64 * 1024 * 1024},
+	}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("multi-container breakdown = %+v, want %+v (name-sorted)", got, want)
+	}
+	if items["web-uid"].CPUMilli != 270 {
+		t.Errorf("total CPUMilli = %d, want 270 (breakdown does not replace the sum)", items["web-uid"].CPUMilli)
+	}
+	if items["solo-uid"].Containers != nil {
+		t.Errorf("single-container pod carries a breakdown %+v, want none", items["solo-uid"].Containers)
+	}
+}
+
 // A pod with no containers resolves to a zero usage (not skipped) — it still has a graph node and an
 // honest zero is a real reading; and an empty input yields an empty (non-nil) map.
 func TestJoinUsageEdgeCases(t *testing.T) {

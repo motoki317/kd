@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js'
-import { formatPair } from '../capacityLayout'
+import { formatPair, formatQuantity } from '../capacityLayout'
 import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
@@ -730,6 +730,25 @@ export default function ResourceSummary(props: Props) {
                             </span>
                           </Show>
                         </div>
+                        {/* This container's share of the pod's live draw (multi-container pods only —
+                            the server omits single-container breakdowns). Answers "which container is
+                            eating the memory?" right where the operator is already looking; the pod
+                            gauge above only shows the sum. keyed: each 15s usage tick delivers a new
+                            object, so the row re-renders with fresh numbers. */}
+                        <Show when={props.usage?.containers?.find((c) => c.name === cs.name)} keyed>
+                          {(cu) => (
+                            <div
+                              class="container-usage"
+                              title="This container's live share of the pod's usage, from metrics-server"
+                            >
+                              <span class="container-usage-label">cpu</span>
+                              <span class="container-usage-val">{formatQuantity(cu.cpuMilli ?? 0, 'cpu')}</span>
+                              <span class="container-usage-sep">·</span>
+                              <span class="container-usage-label">mem</span>
+                              <span class="container-usage-val">{formatQuantity(cu.memBytes ?? 0, 'memory')}</span>
+                            </div>
+                          )}
+                        </Show>
                         <Show when={cs.lastTerminated}>
                           {/* Why it previously exited — surfaced inline next to the restart count so an
                               operator sees "OOMKilled" without digging into the manifest's lastState. */}
