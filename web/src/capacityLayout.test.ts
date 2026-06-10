@@ -211,6 +211,23 @@ describe('layoutGraphByCapacity', () => {
     expect(last.useSegs.map((s) => s.node.id)).toContain('orphan')
   })
 
+  it('bounds every track when an unscheduled request exceeds the biggest node', () => {
+    // A pending pod asking for 4× the node (a fat-fingered "cpu: 64") must not stretch its track
+    // kilopixels off-canvas; the scale keys on the larger of capacity and demand, so the giant row
+    // takes the max track and the node row shrinks in proportion (the honest 1:4 picture).
+    const nodes = [
+      node('n1', 1000, 1000),
+      pod('giant', 'nowhere', 'shop', { use: 0, req: 4000 }), // unknown host → Unscheduled bucket
+    ]
+    const l = layoutGraphByCapacity(nodes, usageOf(), 'cpu', 'shop')
+    const orphanRow = l.rows[l.rows.length - 1]
+    const nodeRow = l.rows.find((r) => r.host === 'n1')!
+    expect(orphanRow.label).toBe('Unscheduled')
+    const maxTrack = Math.max(orphanRow.trackW, orphanRow.useTrackW)
+    expect(maxTrack).toBeLessThanOrEqual(1080) // CAP_TRACK_MAX — nothing runs off-canvas
+    expect(nodeRow.trackW).toBeCloseTo(maxTrack / 4, 0) // proportionality preserved
+  })
+
   it('displays the FULL node name — the …compute.internal domain is kept, not stripped', () => {
     const fqdn = 'ip-10-8-77-146.us-west-2.compute.internal'
     const l = layoutGraphByCapacity([node(fqdn, 1000, 1000)], undefined, 'cpu', 'shop')

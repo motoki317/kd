@@ -289,7 +289,12 @@ export function layoutGraphByCapacity(
     }
     maxDemand = Math.max(maxDemand, use, req)
   }
-  const scale = CAP_TRACK_MAX / (maxCap || maxDemand || 1)
+  // Key on demand too, not just node capacity: the Unscheduled bucket has no cap, so a pending pod
+  // requesting more than the biggest node (a fat-fingered "cpu: 64") otherwise drew a track running
+  // kilopixels off-canvas and poisoned the auto-fit. Scaling to the larger of the two keeps every row
+  // bounded while preserving the one-scale story — node tracks shrink in proportion, which IS the
+  // picture ("this request is 4× your biggest node").
+  const scale = CAP_TRACK_MAX / (Math.max(maxCap, maxDemand) || 1)
 
   const rows: CapRow[] = []
   const posNodes: PositionedNode[] = []
