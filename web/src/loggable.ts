@@ -5,10 +5,13 @@ import type { KNode } from './types'
 // scaled to 0 (or whose pod hasn't been created yet) still conceptually has logs, so it stays loggable
 // even when hasDescendantPod is momentarily false.
 //
-// Argo's Workflow is included though it's a CRD: a FINISHED Workflow owns only completed pods, which
-// the displayed graph drops, so hasDescendantPod can't see them — without this a running Workflow
-// showed a Logs tab but a finished one didn't. The server's BuildForLogs still reaches those pods.
-export const LOGGABLE_KINDS = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'Workflow'])
+// Argo's Workflow and CronWorkflow are included though they're CRDs: a FINISHED Workflow owns only
+// completed pods, which the displayed graph drops, so hasDescendantPod can't see them — without this a
+// running Workflow showed a Logs tab but a finished one didn't. A CronWorkflow's completed runs are
+// the same shape one level up (CronWorkflow → Workflow → pods), so "did last night's scheduled run
+// succeed?" — the operator's actual question — needs the tab too. The server's BuildForLogs reaches
+// the grandchild pods through the ownerReference chain.
+export const LOGGABLE_KINDS = new Set(['Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'Workflow', 'CronWorkflow'])
 
 // hasDescendantPod reports whether rootId transitively owns any Pod in the current graph — the client
 // mirror of the server's podsForResource (graph.DescendantPodNames). It walks ownerUIDs downward, so a

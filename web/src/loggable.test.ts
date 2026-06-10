@@ -53,6 +53,13 @@ describe('isLoggable', () => {
     expect(isLoggable(node('wf', 'Workflow'), [node('wf', 'Workflow')])).toBe(true)
   })
 
+  it('is true for a CronWorkflow whose completed runs the graph dropped (asks "did last night run?")', () => {
+    // CronWorkflow → Workflow → pods: a finished run's pods are display-dropped two levels down, so
+    // hasDescendantPod sees nothing. The kind floor keeps the Logs tab; BuildForLogs reaches the
+    // grandchild pods through the ownerReference chain.
+    expect(isLoggable(node('cwf', 'CronWorkflow'), [node('cwf', 'CronWorkflow')])).toBe(true)
+  })
+
   it('is false for a null selection', () => {
     expect(isLoggable(null, [])).toBe(false)
   })
