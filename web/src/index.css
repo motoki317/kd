@@ -2248,9 +2248,10 @@ button.conn.conn-retry:focus-visible {
    too (the user's "add a maximum height to the top parts"), and tightens when expanded — there the tab
    IS the focus. */
 .drawer-summary {
-  /* Fill the header width left of the action cluster (flex-1, min-width:0 so a long name still
-     truncates rather than pushing wider): the summary's grids — the resource bars especially — size to
-     the full drawer, not to their own short content, so a short node name no longer shrinks the bars. */
+  /* Fill the FULL header width (flex-1, min-width:0 so a long name still truncates rather than
+     pushing wider): the action cluster overlays absolutely instead of sitting beside, so the bars,
+     chips and container cards stop losing ~100px of width to three icons that only occupy the top
+     28px — only the hero reserves clearance (its padding-right below). */
   flex: 1;
   min-width: 0;
   max-height: 42vh;
@@ -2286,6 +2287,8 @@ button.conn.conn-retry:focus-visible {
   align-items: flex-start;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  /* Anchor for the absolutely-overlaid action cluster (see .drawer-actions). */
+  position: relative;
 }
 /* Terminal banner when the inspected resource vanished from the live graph: a strip across the
    drawer's top, above the (now historical) summary. Degraded tint — the resource is gone, which
@@ -2310,6 +2313,13 @@ button.conn.conn-retry:focus-visible {
   gap: 14px;
   min-width: 0;
   flex: 1;
+  /* Clearance for the overlaid action cluster — only the hero's identity lines share its row, so
+     only they reserve space; everything below uses the full drawer width. Widens when the back
+     button joins the cluster. */
+  padding-right: 100px;
+}
+.drawer-header:has(.drawer-back) .drawer-hero {
+  padding-right: 134px;
 }
 .drawer-hero-icon {
   flex: 0 0 auto;
@@ -2966,14 +2976,20 @@ button.drawer-host:hover {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-/* Action cluster at top-right of the drawer header — keeps share + close grouped so the parent
-   header's space-between rule doesn't push them apart. Flex with a small gap matches the chrome
-   rhythm in the rest of the topbar. */
+/* Action cluster at top-right of the drawer header. Overlaid absolutely rather than flexed beside
+   the summary: in the flex layout its width narrowed EVERY summary row (bars, chips, container
+   cards) even though the icons only occupy the top 28px. The panel-coloured pill keeps the icons
+   legible when the summary scrolls beneath them — invisible against the unscrolled header. */
 .drawer-actions {
   display: flex;
   align-items: center;
   gap: 2px;
-  flex: 0 0 auto;
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 5;
+  background: var(--surface);
+  border-radius: 999px;
 }
 /* Share button: same circular footprint as drawer-close so the two read as a paired action set
    ("get out", "send"). Subtler default state until hover; flashes green for ~1s on a successful
