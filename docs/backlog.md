@@ -26,6 +26,20 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b9 (WCAG contrast pass + per-container usage)** — a computed-luminance walk over
+  every visible text element found the dark theme's lighter accent (#4d8bf0) sinking white control
+  text to 3.35:1; new `--on-accent` token flips to near-black on dark (5.6:1) across the four
+  text-bearing accent fills, and `.log-json-extra` lifts 4.14→5.2:1 on the fixed-dark log pane
+  (b1bd510). The audit's off-screen sibling: white on vivid `--health-degraded` badges measured
+  3.7:1 at 10px bold — `--degraded-badge` (#c73e36, the existing degraded-text ink) carries the
+  sidebar trouble count + warning-events tab at 5.0:1, vivid hue kept for dots/borders/fills
+  (088fb42). User-requested: a pod's container cards now show each container's live cpu/mem share
+  (joinUsage keeps metrics-server's per-container breakdown for multi-container pods; client joins
+  by name) — "which container is eating the memory?" without `kubectl top --containers`; verified
+  live, shares sum exactly to the pod gauge (921406f). Deferred idea (needs a dependency): CronJob/
+  CronWorkflow "next run" chip — no cron-expression parser in go.mod; reopen only if a parser
+  arrives for another reason or the ask recurs from a user.
+
 - **2026-06-10 b8 (storage/DS shapes, triage flow, RBAC flow)** — a Released+Retain PV reads
   Suspended (amber, waits on an operator forever) instead of Progressing (promised motion that
   never comes), and names the stale claimRef blocking any new bind (22f17a7). A DaemonSet shows its
