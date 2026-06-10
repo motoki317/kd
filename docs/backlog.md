@@ -156,6 +156,19 @@ Recent batches (newest first; `git log` has the commits):
   in the orphan section). Unit tests pin all three paths. Note: `layoutGraph`'s internal `orphanBlock` is
   a safety net in the live relationship view — `orphanIds` routes every unconnected node to the orphan
   SECTION (`layoutGraphByKind`), so the block engages only for edge-dropped stragglers; covered by test.
+  Then shipped: **sidebar toggle button + phone-width overlay** (d5d3489) — the namespace sidebar's only
+  toggle was Cmd/Ctrl+B (keyboard-only); at 375px (the paged-at-2am phone check) it left a ~155px canvas
+  sliver. Topbar panel-left toggle (far left, above the panel it controls; round utility chrome set),
+  ≤640px: open sidebar overlays the canvas, defaults hidden with no stored pref, auto-dismisses on
+  namespace pick. Verified live at 375x667 and 1280 (desktop unchanged).
+  Verified-mature this discovery pass (projections + shell, staging): Network view (IngressRoute drawer
+  carries host→service·middlewares; Service drawer answers "backed by ready pods?" with the n/n ready
+  chip + copyable selector; edge `<title>` names each relationship type), Volumes view (Pod→PVC "Bound
+  30Gi"→PV chain), cluster-scope at 666 resources (626-orphan toggle folds to ~71 cards/13 pills in one
+  frame, count honest), context switcher (broken ctx suffixed "— unavailable"; a namespace missing in
+  the target ctx falls back to most-troubled with a row flash — App.tsx auto-pick). Refuted: **Namespace
+  card "open namespace" drawer action** — the omnipresent sidebar (health dots + filter) is the same one
+  click; a drawer affordance saves nothing (low-value).
 
 - **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
