@@ -426,6 +426,16 @@ surfaced them. Look for these shapes on any view:
    fires (stub-free unit test asserts the payload + flash), the title/affordance is present, and a
    plain click does NOT copy. Don't chase the flash live, and don't weaken the success-only guard to
    make it appear.
+9. **`graph/stream` multiplexes TWO node sets as separate SSE events — the namespace graph AND the
+   cluster-wide capacity feed — so counting "pods" across the whole `curl` dump conflates them.** The
+   capacity feed (for the Nodes view) carries EVERY pod on EVERY node cluster-wide plus the Nodes, with
+   ZERO edges; the namespace graph carries that one namespace's resources + relationship edges. Naively
+   `perl`-counting `"kind":"Pod"` over the stream made a 14-pod namespace read as 172 (the capacity
+   feed's cluster-wide pods), faking a "where did 158 pods go / the relationship view drops pods" scale
+   bug that does not exist. To analyse the namespace graph, parse each `data:` JSON and pick the event
+   whose nodes include kinds beyond `{Pod, Node}` OR whose `edges` is non-empty; the edge-less
+   `{Pod, Node}`-only event is the capacity feed. (Cost a long D125 investigation that resolved to "no
+   bug, I read the wrong feed".)
 
 9. **Troubled-first nav (`j`/`k`/Enter) keeps selecting VISIBLE nodes, masking a fold-related path you
    want to exercise.** Both the keyboard step (`orderedForNav`) and the search Enter-cycle order matches
