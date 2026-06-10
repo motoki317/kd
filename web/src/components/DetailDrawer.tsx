@@ -571,7 +571,7 @@ export default function DetailDrawer(props: Props) {
                             <div class="event-head">
                               <span class="event-reason">{ev.reason}</span>
                               <Show when={ev.count > 1}>
-                                <span class="event-count">×{ev.count}</span>
+                                <span class="event-count" title={`Happened ${ev.count} times — Kubernetes folds repeats into one event`}>×{ev.count}</span>
                               </Show>
                               <Show when={showSource}>
                                 {/* Clickable when the source resource is still in the current

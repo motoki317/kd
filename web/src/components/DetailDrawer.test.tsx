@@ -432,6 +432,24 @@ describe('DetailDrawer', () => {
     expect(hint?.textContent).toContain('about an hour')
   })
 
+  it('glosses a coalesced event\'s ×N count in plain words on hover', async () => {
+    const ev = { type: 'Warning', reason: 'BackOff', message: 'restarting failed container', count: 7, last: new Date().toISOString() }
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.includes('/events')
+          ? new Response(JSON.stringify({ events: [ev] }), { status: 200 })
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      ),
+    )
+    const { container, findByText } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+    ))
+    await findByText('BackOff')
+    const count = container.querySelector('.event-count')
+    expect(count?.textContent).toBe('×7')
+    expect(count?.getAttribute('title')).toContain('Happened 7 times')
+  })
+
   it('shows "unavailable" when the manifest fetch fails, without crashing', async () => {
     vi.stubGlobal('fetch', (url: string) =>
       Promise.resolve(
