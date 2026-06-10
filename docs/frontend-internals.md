@@ -212,7 +212,7 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
   (`UsageSegment`) — one per POD by default (replicas should pull even weight; an outlier segment is
   the finding; names use the topology's "…-suffix" relative form) — with a persisted caption-row
   toggle (`kd:workloadGaugeBy`) to per-container-NAME summed fleet-wide (sidecar overhead). Widths
-  are proportional to each share, colours from `CONTAINER_PALETTE` (`ContainerCards.tsx` — leads
+  are proportional to each share, colours from `SEGMENT_PALETTE` (`UsageGauges.tsx` — leads
   with the accent so a stack's first segment matches the single-fill colour; deliberately no
   green/red/amber, a segment colour must never read as a status). The stack's total width equals the
   plain fill: it changes WHO, never HOW MUCH. No cards follow the rollup, so a `metric-legend` row
