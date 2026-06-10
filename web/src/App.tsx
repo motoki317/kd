@@ -224,6 +224,17 @@ export default function App() {
     return false
   }
 
+  // A URL-seeded namespace that can't be opened (RBAC-denied, deleted, or absent from a newly
+  // switched context) gets silently replaced by the fallback below — say so, or a shared link
+  // lands the operator on someone else's view with zero explanation. Auto-clears; dismissible.
+  const [nsNotice, setNsNotice] = createSignal<string | null>(null)
+  let nsNoticeTimer: ReturnType<typeof setTimeout> | undefined
+  const noteNsFallback = (wanted: string) => {
+    setNsNotice(`Couldn't open namespace "${namespaceLabel(wanted)}" — no access, or it no longer exists.`)
+    clearTimeout(nsNoticeTimer)
+    nsNoticeTimer = setTimeout(() => setNsNotice(null), 10_000)
+  }
+
   // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
   // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
   // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
@@ -231,6 +242,8 @@ export default function App() {
     const list = namespaceList()
     if (list.length === 0) return
     if (!list.some((n) => n.name === namespace())) {
+      const wanted = namespace()
+      if (wanted) noteNsFallback(wanted) // null = no target was asked for; nothing to explain
       setNamespace(mostTroubled(list)!.name)
       setNsFlash((t) => t + 1)
     }
@@ -703,6 +716,18 @@ export default function App() {
           ?
         </button>
       </header>
+
+      {/* A sibling of the topbar, NOT a child: inside the header's flex row a full-width strip
+          collapses the items beside it (the zero-basis flex-wrap trap). role=status so screen
+          readers hear the silent redirect too. */}
+      <Show when={nsNotice()}>
+        <div class="ns-notice" role="status">
+          {nsNotice()}
+          <button class="ns-notice-close" aria-label="Dismiss" onClick={() => setNsNotice(null)}>
+            ×
+          </button>
+        </div>
+      </Show>
 
       <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }}>
         <Sidebar
