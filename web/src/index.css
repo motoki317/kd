@@ -2768,6 +2768,10 @@ button.drawer-host:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px 7px;
+  /* A long unbreakable token (a helm-style selector pair, a cloud taint key, an LB hostname) sets
+     the chip's min-content and pushes it past the drawer edge at phone width — wrap inside the chip
+     instead, the .route-row treatment. */
+  overflow-wrap: anywhere;
 }
 .addr-label {
   font-size: 9px;
