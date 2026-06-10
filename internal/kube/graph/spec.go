@@ -115,32 +115,53 @@ func labelMapString(m map[string]string) string {
 	return strings.Join(parts, ", ")
 }
 
-// serviceExternalAddress returns a Service's external reachability — the "how do I reach this from
-// outside the cluster" answer the cluster IP can't give: a LoadBalancer's assigned ingress IP (or
-// hostname, or "pending" while it provisions) and any admin-set spec.externalIPs. An IP is preferred
-// over a hostname as the more specific address. "" for a plain ClusterIP service (nothing external)
-// or non-services, so the drawer omits it.
-func serviceExternalAddress(obj runtime.Object) string {
-	svc, ok := obj.(*corev1.Service)
-	if !ok {
-		return ""
-	}
-	var addrs []string
-	for _, ing := range svc.Status.LoadBalancer.Ingress {
-		if ing.IP != "" {
-			addrs = append(addrs, ing.IP)
-		} else if ing.Hostname != "" {
-			addrs = append(addrs, ing.Hostname)
+// externalAddress returns a Service's or Ingress's external reachability — the "how do I reach this
+// from outside the cluster" answer the cluster IP can't give. Both carry a status.loadBalancer.ingress
+// list of the same shape, so they share one reader: a LoadBalancer Service's assigned ingress IP (or
+// hostname, or "pending" while it provisions) plus admin-set spec.externalIPs; an Ingress's controller-
+// reported address (the ALB/Traefik hostname an operator actually curls — the entry point the routing
+// table sends traffic to). An IP is preferred over a hostname as the more specific address. "" when
+// nothing external applies (a plain ClusterIP service, an Ingress no controller has claimed), so the
+// drawer omits it.
+func externalAddress(obj runtime.Object) string {
+	switch o := obj.(type) {
+	case *corev1.Service:
+		var addrs []string
+		for _, ing := range o.Status.LoadBalancer.Ingress {
+			addrs = appendLBAddr(addrs, ing.IP, ing.Hostname)
 		}
-	}
-	addrs = append(addrs, svc.Spec.ExternalIPs...)
-	if len(addrs) == 0 {
-		if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
-			return "pending" // requested an external IP; the provider hasn't assigned one yet
+		addrs = append(addrs, o.Spec.ExternalIPs...)
+		if len(addrs) == 0 {
+			if o.Spec.Type == corev1.ServiceTypeLoadBalancer {
+				return "pending" // requested an external IP; the provider hasn't assigned one yet
+			}
+			return ""
 		}
-		return ""
+		return strings.Join(addrs, ", ")
+	case *networkingv1.Ingress:
+		// No "pending" sentinel: an Ingress with no address simply hasn't been claimed by a controller
+		// yet (or there is none) — the routing table still shows where it WOULD route, so an empty
+		// address is silent rather than alarming. (The two status types are distinct structs with the
+		// same IP/Hostname fields, hence the per-kind loops over a shared appender.)
+		var addrs []string
+		for _, ing := range o.Status.LoadBalancer.Ingress {
+			addrs = appendLBAddr(addrs, ing.IP, ing.Hostname)
+		}
+		return strings.Join(addrs, ", ")
 	}
-	return strings.Join(addrs, ", ")
+	return ""
+}
+
+// appendLBAddr adds a load-balancer entry's address, preferring its IP over its hostname (the more
+// specific reachability). A no-op when both are empty.
+func appendLBAddr(addrs []string, ip, hostname string) []string {
+	if ip != "" {
+		return append(addrs, ip)
+	}
+	if hostname != "" {
+		return append(addrs, hostname)
+	}
+	return addrs
 }
 
 // intStrString renders an unstructured port-like value that may be a number (int64 from the dynamic

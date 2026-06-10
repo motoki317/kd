@@ -1179,12 +1179,28 @@ func TestServiceExternalAddress(t *testing.T) {
 		{"plain clusterIP", &corev1.Service{Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, ClusterIP: "10.96.0.1"}}, ""},
 	}
 	for _, tt := range tests {
-		if got := serviceExternalAddress(tt.svc); got != tt.want {
-			t.Errorf("serviceExternalAddress(%s) = %q, want %q", tt.name, got, tt.want)
+		if got := externalAddress(tt.svc); got != tt.want {
+			t.Errorf("externalAddress(%s) = %q, want %q", tt.name, got, tt.want)
 		}
 	}
-	if got := serviceExternalAddress(&corev1.Pod{}); got != "" {
-		t.Errorf("serviceExternalAddress(non-service) = %q, want empty", got)
+	if got := externalAddress(&corev1.Pod{}); got != "" {
+		t.Errorf("externalAddress(non-service) = %q, want empty", got)
+	}
+
+	// An Ingress shares the status.loadBalancer.ingress shape: its controller-reported address is the
+	// entry point an operator curls. No "pending" sentinel — an unclaimed Ingress is silently address-
+	// less (its routing table still shows where it would route).
+	ingLB := func(ing ...networkingv1.IngressLoadBalancerIngress) *networkingv1.Ingress {
+		return &networkingv1.Ingress{Status: networkingv1.IngressStatus{LoadBalancer: networkingv1.IngressLoadBalancerStatus{Ingress: ing}}}
+	}
+	if got := externalAddress(ingLB(networkingv1.IngressLoadBalancerIngress{Hostname: "k8s-shop.elb.amazonaws.com"})); got != "k8s-shop.elb.amazonaws.com" {
+		t.Errorf("externalAddress(Ingress hostname) = %q, want the ALB hostname", got)
+	}
+	if got := externalAddress(ingLB(networkingv1.IngressLoadBalancerIngress{IP: "203.0.113.9", Hostname: "lb.example.com"})); got != "203.0.113.9" {
+		t.Errorf("externalAddress(Ingress) = %q, want the IP preferred over hostname", got)
+	}
+	if got := externalAddress(ingLB()); got != "" {
+		t.Errorf("externalAddress(unclaimed Ingress) = %q, want empty (no pending sentinel)", got)
 	}
 }
 
