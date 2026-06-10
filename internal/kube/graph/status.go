@@ -163,6 +163,14 @@ func statusMessage(obj runtime.Object, h Health) string {
 		}
 	case *policyv1.PodDisruptionBudget:
 		msg = pdbBlockMessage(o)
+	case *corev1.PersistentVolume:
+		// A Released volume still references its DELETED claim, which silently blocks any new claim
+		// from binding — the "why won't my new PVC take this volume" trap. Name the stale claim and
+		// the way out.
+		if o.Status.Phase == corev1.VolumeReleased && o.Spec.ClaimRef != nil {
+			msg = fmt.Sprintf("Still references its deleted claim %s/%s — clear spec.claimRef to let a new claim bind, or delete the volume",
+				o.Spec.ClaimRef.Namespace, o.Spec.ClaimRef.Name)
+		}
 	}
 	return truncateRunes(strings.TrimSpace(msg), maxStatusMessage)
 }

@@ -70,13 +70,19 @@ func namespaceStatus(n *corev1.Namespace) string {
 }
 
 // pvHealth mirrors pvcHealth for the backing volume: Available (unbound) is healthy (it exists and is
-// ready for a PVC to claim it), Bound (claimed) is healthy, Released is Progressing (waiting for a new
-// claim or to be reclaimed), Failed means the recycler/reclaimer failed (Degraded).
+// ready for a PVC to claim it), Bound (claimed) is healthy, Failed means the recycler/reclaimer
+// failed (Degraded). Released splits on reclaim policy: with Delete the controller is about to remove
+// it (Progressing, genuinely transient); with Retain it sits until an OPERATOR acts — clearing
+// claimRef or deleting it — so blue "in progress" would promise motion that never comes (amber
+// Suspended: paused awaiting a human, like a suspended CronJob).
 func pvHealth(p *corev1.PersistentVolume) Health {
 	switch p.Status.Phase {
 	case corev1.VolumeAvailable, corev1.VolumeBound:
 		return HealthHealthy
 	case corev1.VolumeReleased:
+		if p.Spec.PersistentVolumeReclaimPolicy == corev1.PersistentVolumeReclaimRetain {
+			return HealthSuspended
+		}
 		return HealthProgressing
 	case corev1.VolumeFailed:
 		return HealthDegraded

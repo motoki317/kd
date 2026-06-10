@@ -254,6 +254,7 @@ func TestPVHealthAndStatus(t *testing.T) {
 	}{
 		{"available", pv(corev1.VolumeAvailable, "20Gi"), HealthHealthy, "Available 20Gi"},
 		{"bound", pv(corev1.VolumeBound, "20Gi"), HealthHealthy, "Bound 20Gi"},
+		// Released + Delete: the controller is about to remove it — genuinely transient.
 		{"released", pv(corev1.VolumeReleased, ""), HealthProgressing, "Released"},
 		{"failed", pv(corev1.VolumeFailed, ""), HealthDegraded, "Failed"},
 	}
@@ -266,6 +267,19 @@ func TestPVHealthAndStatus(t *testing.T) {
 				t.Errorf("statusSummary(PV %s) = %q, want %q", tc.name, got, tc.wantStatus)
 			}
 		})
+	}
+
+	// Released + Retain waits on an OPERATOR forever (clear claimRef or delete) — amber Suspended,
+	// not a blue "in progress" that promises motion; the message names the stale claim blocking
+	// any new bind.
+	retained := pv(corev1.VolumeReleased, "")
+	retained.Spec.PersistentVolumeReclaimPolicy = corev1.PersistentVolumeReclaimRetain
+	retained.Spec.ClaimRef = &corev1.ObjectReference{Namespace: "team-a", Name: "old-claim"}
+	if got := health(retained); got != HealthSuspended {
+		t.Errorf("health(Released+Retain PV) = %q, want Suspended", got)
+	}
+	if got := statusMessage(retained, HealthSuspended); !strings.Contains(got, "team-a/old-claim") {
+		t.Errorf("statusMessage(Released+Retain PV) = %q, want the stale claim named", got)
 	}
 }
 
