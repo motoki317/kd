@@ -211,6 +211,15 @@ describe('LogViewer', () => {
     expect(live.container.querySelector('.logs-waiting')?.textContent).toBe('waiting for log output…')
   })
 
+  // The mirror of the finished-run case: a CronJob/CronWorkflow that never fired has no pods to
+  // tail until its first scheduled run — "waiting…" implied logs were imminent.
+  it('tells a never-run scheduled resource apart from a silent live one', () => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated containers={[]} restarts={0} status="30 3 * * *" neverRan />
+    ))
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('has not run yet')
+  })
+
   it('names the hidden-line count and offers a reset when a filter hides every line', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

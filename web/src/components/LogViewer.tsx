@@ -24,6 +24,9 @@ interface Props {
   restarts: number
   // single pod's status, to tell "container not started yet" from a real stream drop.
   status?: string
+  // A scheduled resource (CronJob/CronWorkflow) that has never fired: there are no logs to wait
+  // for until its first run, so the empty state says that instead of "waiting…" forever.
+  neverRan?: boolean
   // True while the parent panel is on-screen. The viewer stays mounted across tab switches so the
   // stream survives; flipping this back to true asks the viewer to snap to the tail (so coming
   // back to Logs from Manifest lands on the newest line, not a stale scroll position).
@@ -667,7 +670,9 @@ export default function LogViewer(props: Props) {
                     ? 'log stream ended — the resource was deleted'
                     : finishedRun()
                       ? 'this run already finished — no log output remains (its pods may have been cleaned up)'
-                      : 'waiting for log output…'
+                      : props.neverRan
+                        ? 'this has not run yet — logs will appear after its first scheduled run'
+                        : 'waiting for log output…'
               }
             >
               {/* Name the count so a PERSISTED level filter that hides a fresh pod's whole output reads

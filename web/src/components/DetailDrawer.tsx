@@ -424,6 +424,14 @@ export default function DetailDrawer(props: Props) {
                 initContainers={node().initContainers ?? []}
                 restarts={node().restarts ?? 0}
                 status={node().status}
+                neverRan={
+                  // A scheduled kind that never fired has nothing to tail until its first run;
+                  // lastRun mirrors status.lastScheduleTime, and active>0 means a run is live
+                  // even before lastRun lands.
+                  (node().kind === 'CronJob' || node().kind === 'CronWorkflow') &&
+                  !node().lastRun &&
+                  (node().active ?? 0) === 0
+                }
                 visible={tab() === 'logs'}
                 maximized={summaryCollapsed()}
                 onToggleMaximize={() => setSummaryCollapsed((v) => !v)}
