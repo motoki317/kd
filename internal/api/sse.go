@@ -221,7 +221,6 @@ type capacityPayload struct {
 	Usage *graph.Usage `json:"usage,omitempty"`
 }
 
-
 func setSSEHeaders(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")

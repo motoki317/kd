@@ -32,10 +32,10 @@ func TestResourceClasses(t *testing.T) {
 		kind, group string
 		want        []string
 	}{
-		{"Pod", "", []string{"pods"}},                                        // core group adds NO group class
-		{"Node", "", []string{"nodes"}},                                      // (a "" group rule would mean "any")
-		{"Deployment", "apps", []string{"workloads", "apps"}},                // legacy class + group
-		{"Workflow", "argoproj.io", []string{"workloads", "argoproj.io"}},    // a CR: workloads fallback + its group
+		{"Pod", "", []string{"pods"}},                                     // core group adds NO group class
+		{"Node", "", []string{"nodes"}},                                   // (a "" group rule would mean "any")
+		{"Deployment", "apps", []string{"workloads", "apps"}},             // legacy class + group
+		{"Workflow", "argoproj.io", []string{"workloads", "argoproj.io"}}, // a CR: workloads fallback + its group
 		{"Role", "rbac.authorization.k8s.io", []string{"rbac", "rbac.authorization.k8s.io"}},
 	}
 	for _, c := range cases {

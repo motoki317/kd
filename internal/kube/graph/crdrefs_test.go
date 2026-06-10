@@ -102,7 +102,7 @@ func TestGatewayRouteEdges(t *testing.T) {
 		"spec": map[string]any{
 			"rules": []any{
 				map[string]any{"backendRefs": []any{
-					map[string]any{"name": "api-svc", "port": int64(8080)},                   // kind-less → defaults to Service
+					map[string]any{"name": "api-svc", "port": int64(8080)},                    // kind-less → defaults to Service
 					map[string]any{"name": "shared", "kind": "Service", "namespace": "infra"}, // cross-namespace
 					map[string]any{"name": "bucket", "kind": "Bucket"},                        // non-Service backend → no node, skipped
 				}},

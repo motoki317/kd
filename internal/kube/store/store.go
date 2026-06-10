@@ -57,12 +57,12 @@ const ClusterScope = "__cluster__"
 // (controllerrevisions, leases, endpointslices) that dominates memory without informing the
 // topology. Operators can override via --eager-kinds / --skip-kinds.
 var DefaultSkipKinds = []string{
-	"events",                                  // core/v1; we already query events on-demand
-	"leases",                                  // coordination.k8s.io/v1; controller-leader churn
-	"endpoints",                               // core/v1; same as endpointslices — readiness comes from Service selectors, so the per-Service Endpoints object is just an edgeless orphan card duplicating its Service
-	"endpointslices",                          // discovery.k8s.io/v1; high-cardinality and we use Service selectors
-	"controllerrevisions",                     // apps/v1; StatefulSet/DaemonSet rollout history
-	"ephemeralreports",                        // reports.kyverno.io/v1; per-admission policy reports, created/updated at request volume — high churn, no topology value
+	"events",              // core/v1; we already query events on-demand
+	"leases",              // coordination.k8s.io/v1; controller-leader churn
+	"endpoints",           // core/v1; same as endpointslices — readiness comes from Service selectors, so the per-Service Endpoints object is just an edgeless orphan card duplicating its Service
+	"endpointslices",      // discovery.k8s.io/v1; high-cardinality and we use Service selectors
+	"controllerrevisions", // apps/v1; StatefulSet/DaemonSet rollout history
+	"ephemeralreports",    // reports.kyverno.io/v1; per-admission policy reports, created/updated at request volume — high churn, no topology value
 }
 
 // well-known GVRs the store handles specially.
@@ -95,8 +95,8 @@ type Options struct {
 // Cache holds the dynamic informer factory, the per-GVR informer + metadata, and fans
 // informer events out to change subscribers (used to drive the SSE watch feed).
 type Cache struct {
-	client    kubernetes.Interface // typed: log streaming + discovery
-	dynClient dynamic.Interface    // dynamic: every cached read
+	client    kubernetes.Interface       // typed: log streaming + discovery
+	dynClient dynamic.Interface          // dynamic: every cached read
 	metrics   metricsversioned.Interface // metrics-server reads; nil when metrics-server is absent
 	disc      discovery.Discoverer
 	factory   dynamicinformer.DynamicSharedInformerFactory
@@ -108,7 +108,7 @@ type Cache struct {
 	stopCh chan struct{}
 
 	mu        sync.Mutex
-	resources map[schema.GroupVersionResource]Resource // by GVR; updated on CRD add/remove
+	resources map[schema.GroupVersionResource]Resource  // by GVR; updated on CRD add/remove
 	failedAt  map[schema.GroupVersionResource]time.Time // last WARN time per GVR (throttle)
 
 	// reconcileMu serializes CRD-triggered reconciles and coalesces bursts: while one is

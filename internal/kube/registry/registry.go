@@ -265,4 +265,3 @@ func (r *Registry) setStatus(e *entry, s Status, err error) {
 		e.err = err
 	}
 }
-

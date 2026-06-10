@@ -44,7 +44,7 @@ func TestBuildUsageNilClient(t *testing.T) {
 func TestJoinUsageSumsAndResolves(t *testing.T) {
 	pods := []metricsv1beta1.PodMetrics{
 		podMetric("shop", "web", rl("250m", "128Mi"), rl("20m", "64Mi")), // two containers → 270m / 192Mi
-		podMetric("shop", "ghost", rl("999m", "1Gi")),                     // resolver returns ok=false → skipped
+		podMetric("shop", "ghost", rl("999m", "1Gi")),                    // resolver returns ok=false → skipped
 	}
 	nodes := []metricsv1beta1.NodeMetrics{
 		nodeMetric("worker-1", rl("1500m", "2Gi")),

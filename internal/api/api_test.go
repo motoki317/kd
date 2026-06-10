@@ -127,7 +127,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 	// dev is denied secret-ns; admin sees everything.
 	srv := newServer(t, "p, dev, secret-ns, *, *, deny\ng, admin, role:admin", fixtureObjs...)
 
-	resp, body := get(t, srv, ctxPath + "/namespaces", "dev")
+	resp, body := get(t, srv, ctxPath+"/namespaces", "dev")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -148,7 +148,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 		t.Error("dev should not see denied secret-ns")
 	}
 
-	_, adminBody := get(t, srv, ctxPath + "/namespaces", "admin")
+	_, adminBody := get(t, srv, ctxPath+"/namespaces", "admin")
 	if !strings.Contains(string(adminBody), "secret-ns") {
 		t.Error("admin should see secret-ns")
 	}
@@ -156,7 +156,7 @@ func TestListNamespacesRBAC(t *testing.T) {
 
 func TestGetGraph(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, body := get(t, srv, ctxPath + "/namespaces/shop/graph", "alice")
+	resp, body := get(t, srv, ctxPath+"/namespaces/shop/graph", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
 	}
@@ -175,7 +175,7 @@ func TestGetGraph(t *testing.T) {
 
 func TestGetGraphForbidden(t *testing.T) {
 	srv := newServer(t, "p, dev, secret-ns, *, *, deny", fixtureObjs...)
-	resp, _ := get(t, srv, ctxPath + "/namespaces/secret-ns/graph", "dev")
+	resp, _ := get(t, srv, ctxPath+"/namespaces/secret-ns/graph", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
 	}
@@ -183,7 +183,7 @@ func TestGetGraphForbidden(t *testing.T) {
 
 func TestResourceDetailRedactsSecret(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, body := get(t, srv, ctxPath + "/namespaces/shop/resources/Secret/creds", "alice")
+	resp, body := get(t, srv, ctxPath+"/namespaces/shop/resources/Secret/creds", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
 	}
@@ -198,7 +198,7 @@ func TestResourceDetailRedactsSecret(t *testing.T) {
 
 func TestUnauthenticatedRejected(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
-	resp, _ := get(t, srv, ctxPath + "/namespaces", "")
+	resp, _ := get(t, srv, ctxPath+"/namespaces", "")
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -227,7 +227,7 @@ func TestResourceEventsHandler(t *testing.T) {
 	}
 	srv := newServer(t, "", objs...)
 
-	resp, body := get(t, srv, ctxPath + "/namespaces/shop/resources/Deployment/web/events", "alice")
+	resp, body := get(t, srv, ctxPath+"/namespaces/shop/resources/Deployment/web/events", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -245,7 +245,7 @@ func TestResourceEventsHandler(t *testing.T) {
 		t.Errorf("Deployment events = %v, want the pod's FailedScheduling (subtree aggregation)", reasons)
 	}
 
-	if resp, _ := get(t, srv, ctxPath + "/namespaces/shop/resources/Pod/nope/events", "alice"); resp.StatusCode != http.StatusNotFound {
+	if resp, _ := get(t, srv, ctxPath+"/namespaces/shop/resources/Pod/nope/events", "alice"); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("missing resource events status = %d, want 404", resp.StatusCode)
 	}
 }
@@ -416,7 +416,7 @@ func ptr[T any](v T) *T { return &v }
 
 func TestLogStreamForbidden(t *testing.T) {
 	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
-	resp, _ := get(t, srv, ctxPath + "/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
+	resp, _ := get(t, srv, ctxPath+"/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
 	}

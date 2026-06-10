@@ -42,7 +42,7 @@ func TestParseTail(t *testing.T) {
 		in   string
 		want *int64
 	}{
-		{"", nil},        // omitted → default
+		{"", nil},         // omitted → default
 		{"100", ptr(100)}, // explicit count
 		{"0", ptr(0)},     // zero is valid (tail nothing, then follow)
 		{"-5", nil},       // negative → unset, not a negative tail

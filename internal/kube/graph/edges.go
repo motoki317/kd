@@ -42,7 +42,7 @@ type edgeBuilder struct {
 	idx       *index
 	edges     []Edge
 	seen      map[Edge]bool
-	endpoints map[string]*Endpoints // service node id -> readiness, populated alongside selects edges
+	endpoints map[string]*Endpoints  // service node id -> readiness, populated alongside selects edges
 	pods      map[string]*corev1.Pod // "ns/name" -> typed pod, for named-targetPort resolution
 }
 
