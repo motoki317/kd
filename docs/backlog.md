@@ -26,6 +26,17 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b14 (pod summed gauge returns; workload split by pod/container — user-directed)** —
+  the pod drawer shows the summed gauge again ABOVE the per-container cards (both reads matter: total
+  at a glance + per-container attribution below; plain fill, no re-keying); the workload rollup's
+  fill now splits one segment per POD by default (an uneven replica IS the finding — an 8-replica
+  DaemonSet read one pod at 3-4× its siblings live; segments use the topology's "…-suffix" names so
+  legend and canvas agree) with a persisted caption-row toggle to the per-container-name split
+  (kd:workloadGaugeBy); stack aria prefix names the active split (ef9d163). Verified at phone width
+  (toggle row + 8-item legend fit 390px) and across a context switch (pref survives). Earlier same
+  day: induced near-OOM re-verified against the per-card design (91% Lim fill + hatched Req
+  overshoot + amber words on the at-risk card only); near-OOM recipe expectation updated.
+
 - **2026-06-10 b13 (per-container bars land on the cards — user-directed)** — a pod's gauges moved
   ONTO its container cards: each card gauges its own usage against ITS req/lim (a pod-summed gauge
   can't say which container is near the ceiling), retiring the bounds text row and the pod-level
