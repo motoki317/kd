@@ -604,6 +604,24 @@ button.conn.conn-retry:focus-visible {
     z-index: 40;
     box-shadow: 4px 0 18px rgba(0, 0, 0, 0.18);
   }
+  /* The drawer overlays the canvas full-width too: side-by-side left the topology toolbar's
+     absolutely-positioned chips overflowing their ~110px column straight across the drawer text
+     (chips can't shrink below content width and nothing clips them). Full-width also beats the
+     263px reading column. Below the sidebar (z 40): the namespace list was opened deliberately,
+     and picking a namespace dismisses it while clearing the selection anyway. */
+  .main {
+    position: relative;
+  }
+  .main > .drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    z-index: 30;
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.18);
+  }
 }
 
 /* Sidebar */
