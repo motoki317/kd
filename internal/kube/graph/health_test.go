@@ -425,6 +425,26 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(quota-blocked Deployment) = %q, want the ReplicaFailure cause", got)
 	}
 
+	// With no ReplicaFailure, a False Progressing ("timed out progressing" — the rollout gave up)
+	// beats the False Available tautology whatever the array order; Available's message survives
+	// only when it is the sole one (live stuck-rollout dogfooding: array order picked the tautology).
+	stuckRollout := &appsv1.Deployment{Status: appsv1.DeploymentStatus{Conditions: []appsv1.DeploymentCondition{
+		{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionFalse, Reason: "MinimumReplicasUnavailable",
+			Message: "Deployment does not have minimum availability."},
+		{Type: appsv1.DeploymentProgressing, Status: corev1.ConditionFalse, Reason: "ProgressDeadlineExceeded",
+			Message: "ReplicaSet \"shop-api-abc\" has timed out progressing."},
+	}}}
+	if got := statusMessage(stuckRollout, HealthDegraded); !strings.Contains(got, "timed out progressing") {
+		t.Errorf("statusMessage(stuck rollout) = %q, want the Progressing message over the Available tautology", got)
+	}
+	onlyAvailable := &appsv1.Deployment{Status: appsv1.DeploymentStatus{Conditions: []appsv1.DeploymentCondition{
+		{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionFalse, Reason: "MinimumReplicasUnavailable",
+			Message: "Deployment does not have minimum availability."},
+	}}}
+	if got := statusMessage(onlyAvailable, HealthDegraded); !strings.Contains(got, "minimum availability") {
+		t.Errorf("statusMessage(only Available=False) = %q, want the Available message as the fallback", got)
+	}
+
 	// The owning RS carries the same ReplicaFailure cause — the red RS card next to the red
 	// Deployment must explain itself too.
 	rsBlocked := &appsv1.ReplicaSet{Status: appsv1.ReplicaSetStatus{Conditions: []appsv1.ReplicaSetCondition{

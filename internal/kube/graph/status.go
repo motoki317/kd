@@ -189,23 +189,32 @@ func blockingConditionMessage(conds []corev1.PodCondition) string {
 	return ""
 }
 
-// deploymentProblemMessage returns the explanatory message of a Deployment's degraded condition: a
-// ReplicaFailure that's True, or a Progressing/Available that's False (e.g. ProgressDeadlineExceeded).
-// ReplicaFailure wins regardless of condition order: it carries the actual creation-failure cause
-// (quota exceeded, admission denial) while Available=False is the tautological "does not have minimum
-// availability" — picking by array order showed the tautology and buried the cause in the Events tab.
+// deploymentProblemMessage returns the explanatory message of a Deployment's degraded condition,
+// ranked by how much each explains — array order is meaningless and repeatedly picked the wrong one:
+//
+//	1. ReplicaFailure=True — the actual creation-failure cause (quota exceeded, admission denial).
+//	2. Any other False condition except Available — e.g. Progressing=False/ProgressDeadlineExceeded's
+//	   "ReplicaSet … has timed out progressing", which at least says the rollout gave up.
+//	3. Available=False last: its "does not have minimum availability" is a tautology restating the
+//	   replica count the card already shows (kept only for Deployments where it's the sole message).
 func deploymentProblemMessage(d *appsv1.Deployment) string {
 	for _, c := range d.Status.Conditions {
 		if c.Type == appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionTrue && c.Message != "" {
 			return c.Message
 		}
 	}
+	var availableMsg string
 	for _, c := range d.Status.Conditions {
-		if c.Type != appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionFalse && c.Message != "" {
-			return c.Message
+		if c.Type == appsv1.DeploymentReplicaFailure || c.Status != corev1.ConditionFalse || c.Message == "" {
+			continue
 		}
+		if c.Type == appsv1.DeploymentAvailable {
+			availableMsg = c.Message
+			continue
+		}
+		return c.Message
 	}
-	return ""
+	return availableMsg
 }
 
 // pdbBlockMessage explains WHY a degraded PDB allows no voluntary disruptions — the DisruptionAllowed
