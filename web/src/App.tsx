@@ -149,9 +149,15 @@ export default function App() {
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
   // Collapsible sidebar (cycle 299): operators with wide ownership graphs sometimes want every
-  // pixel for the canvas. Cmd/Ctrl+B toggles; state persists in localStorage so a reload doesn't
-  // surprise them with the sidebar re-appearing. Default expanded.
-  const [sidebarHidden, setSidebarHidden] = createSignal(readRawPref('kd:sidebarHidden') === '1')
+  // pixel for the canvas. Cmd/Ctrl+B or the topbar toggle; state persists in localStorage so a
+  // reload doesn't surprise them with the sidebar re-appearing. Default expanded — except on a
+  // phone-width screen with no stored pref, where the 220px sidebar would leave a sliver of
+  // canvas: there it starts hidden and overlays the topology when opened (see the 640px media
+  // block in index.css). matchMedia is guarded for jsdom, which doesn't implement it.
+  const isNarrowScreen = () => typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches
+  const [sidebarHidden, setSidebarHidden] = createSignal(
+    (readRawPref('kd:sidebarHidden') ?? (isNarrowScreen() ? '1' : '0')) === '1',
+  )
   createEffect(() => writePref('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
   // Theme preference (cycle 301): light / dark / system, cycled from a topbar toggle. The effect
   // persists the choice and re-stamps <html data-theme>; index.tsx already applied it pre-render.
@@ -523,6 +529,23 @@ export default function App() {
         {/* Clickable home: resets grouping + relationships + filters + selection without touching
             the namespace (cycle 290). Operators land on the default "group by relationship,
             ownership only, no spotlight" stance — without hunting for the right controls. */}
+        {/* Sidebar toggle: the pointer/touch counterpart of Cmd/Ctrl+B — without it, phones and
+            mice had no way to reclaim (or restore) the namespace column. Far left, directly above
+            the panel it controls (proximity); shares the round topbar-utility chrome. */}
+        <button
+          class="sidebar-btn"
+          type="button"
+          aria-expanded={!sidebarHidden()}
+          title={sidebarHidden() ? 'Show the namespace sidebar (Ctrl/⌘+B)' : 'Hide the namespace sidebar (Ctrl/⌘+B)'}
+          aria-label={sidebarHidden() ? 'Show the namespace sidebar' : 'Hide the namespace sidebar'}
+          onClick={() => setSidebarHidden((v) => !v)}
+        >
+          {/* panel-left glyph: frame + divider marking the column being toggled */}
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <rect x="3" y="4.5" width="18" height="15" rx="2" />
+            <line x1="9.5" y1="4.5" x2="9.5" y2="19.5" />
+          </svg>
+        </button>
         <button
           class="brand"
           type="button"
@@ -656,7 +679,12 @@ export default function App() {
         <Sidebar
           namespaces={sidebarNs}
           selected={namespace()}
-          onSelect={setNamespace}
+          onSelect={(name) => {
+            setNamespace(name)
+            // A phone-width sidebar overlays the canvas, so picking a namespace dismisses it —
+            // the operator's next move is reading the topology it was covering.
+            if (isNarrowScreen()) setSidebarHidden(true)
+          }}
           loading={namespaces.loading}
           failed={!!namespaces.error}
           filterRef={(el) => (filterEl = el)}

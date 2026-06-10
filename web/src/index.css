@@ -365,6 +365,36 @@ button.conn.conn-retry:focus-visible {
   color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* Sidebar toggle: same round utility chrome as .theme-btn/.help-btn so the topbar buttons read
+   as one set (repetition), but it sits at the far LEFT — directly above the sidebar it controls. */
+.sidebar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.sidebar-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.sidebar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sidebar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
 /* Theme toggle (cycle 301): shares the round bordered chrome of .help-btn so the two topbar
    utility buttons read as a set. The icon strokes pick up the dim text color (filled accents like
    the moon/auto disc use currentColor) so the glyph sits at the same visual weight as the ? mark. */
@@ -557,6 +587,23 @@ button.conn.conn-retry:focus-visible {
    state instantly (the namespace list is otherwise re-fetched on remount). */
 .body.sidebar-collapsed .sidebar {
   display: none;
+}
+/* Phone-width: side-by-side would leave the topology a ~155px sliver, so an OPEN sidebar overlays
+   the canvas instead of squeezing it (App also seeds the sidebar hidden at this width when no pref
+   is stored). The shadow marks it as a layer over the graph, not a column beside it. z-index sits
+   above the canvas/drawer chrome (≤25) and below full-screen overlays like the help panel (60). */
+@media (max-width: 640px) {
+  .body {
+    position: relative;
+  }
+  .body:not(.sidebar-collapsed) .sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    box-shadow: 4px 0 18px rgba(0, 0, 0, 0.18);
+  }
 }
 
 /* Sidebar */
