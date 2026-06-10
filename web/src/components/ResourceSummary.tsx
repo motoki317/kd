@@ -126,6 +126,22 @@ function MetaChip(props: { label: string; value: string | number; title: string;
   )
 }
 
+// KeyValRow renders one "key · value" string from the server as a chip row with the key bright and
+// the value dim + right-aligned (Contrast + Alignment — the same value/capacity treatment the node
+// bars use). Shared by the data-keys and quota rows so the split-at-"·" wire format lives in one
+// place; a row without the separator falls back to plain text.
+function KeyValRow(props: { row: string; title?: string }) {
+  const sep = () => props.row.lastIndexOf(' · ')
+  return (
+    <Show when={sep() >= 0} fallback={<code class="route-row">{props.row}</code>}>
+      <code class="route-row data-key" title={props.title}>
+        <span class="data-key-name">{props.row.slice(0, sep())}</span>
+        <span class="data-key-size">{props.row.slice(sep() + 3)}</span>
+      </code>
+    </Show>
+  )
+}
+
 // containerGroups splits a pod's container statuses into the two groups operators reason about
 // separately: init containers (run once, in order, before the app starts) and the long-running app
 // containers. Each carries a header label; order within a group is the server's (execution order).
@@ -630,21 +646,7 @@ export default function ResourceSummary(props: Props) {
               {props.node.secretType}
             </code>
           </Show>
-          <For each={props.node.dataKeys}>
-            {(k) => {
-              // Server sends "key · size"; split so the key reads bright and its size dim + right-aligned
-              // (Contrast + Alignment — the same value/capacity treatment the node bars use).
-              const sep = k.lastIndexOf(' · ')
-              return sep < 0 ? (
-                <code class="route-row">{k}</code>
-              ) : (
-                <code class="route-row data-key">
-                  <span class="data-key-name">{k.slice(0, sep)}</span>
-                  <span class="data-key-size">{k.slice(sep + 3)}</span>
-                </code>
-              )
-            }}
-          </For>
+          <For each={props.node.dataKeys}>{(k) => <KeyValRow row={k} />}</For>
         </div>
       </Show>
       {/* A ResourceQuota's consumption ("resource · used / hard") — the only fact an operator wants
@@ -653,17 +655,7 @@ export default function ResourceSummary(props: Props) {
       <Show when={(props.node.quotaUsage?.length ?? 0) > 0}>
         <div class="drawer-routes">
           <For each={props.node.quotaUsage}>
-            {(row) => {
-              const sep = row.lastIndexOf(' · ')
-              return sep < 0 ? (
-                <code class="route-row">{row}</code>
-              ) : (
-                <code class="route-row data-key" title="Used / limit in this namespace">
-                  <span class="data-key-name">{row.slice(0, sep)}</span>
-                  <span class="data-key-size">{row.slice(sep + 3)}</span>
-                </code>
-              )
-            }}
+            {(row) => <KeyValRow row={row} title="Used / limit in this namespace" />}
           </For>
         </div>
       </Show>
