@@ -38,7 +38,9 @@ g, <subject>, <role>
 ```
 
 Subjects are usernames/groups from the identity header, or `role:*` tokens. Resources:
-`namespaces | workloads | pods | logs | events | rbac | nodes | *`. Actions: `get | list | watch`.
+`namespaces | workloads | pods | logs | events | rbac | nodes | *`, or an API group name to scope
+every custom resource in that group (e.g. `p, alice, *, argoproj.io, *, allow` covers Workflows,
+CronWorkflows, …). Actions: `get | list | watch`.
 Effect: `allow | deny` (deny overrides). Built-in roles `role:readonly` and `role:admin` always
 exist; `config.defaultRole` is the role every authenticated user implicitly has — set it empty to
 lock the cluster down (explicit grants only).

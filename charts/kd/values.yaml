@@ -61,7 +61,8 @@ policy:
   # -- The policy.csv contents. ArgoCD-style grammar:
   #   p, <subject>, <namespace-glob>, <resource>, <action>, <effect>
   #   g, <subject>, <role>
-  # Resources: namespaces|workloads|pods|logs|events|rbac|nodes|*  Actions: get|list|watch
+  # Resources: namespaces|workloads|pods|logs|events|rbac|nodes|*, or an API group name
+  # (e.g. argoproj.io) covering every custom resource in that group.  Actions: get|list|watch
   # Effect: allow|deny (deny overrides). Built-in roles role:readonly and role:admin always exist.
   csv: |
     # Cluster operators get full read access everywhere.
