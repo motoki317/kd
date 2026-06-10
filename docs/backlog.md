@@ -26,6 +26,23 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b5 (induced-failure shapes + drawer width)** — drove the failure states a beginner
+  actually hits, against live induced resources. Quota-blocked Deployment: headline now shows the
+  ReplicaFailure cause ("exceeded quota: …") instead of the Available tautology ("does not have
+  minimum availability") that array-order picked (ad07a1a); the red RS card beside it explains itself
+  too — RS ReplicaFailure surfaced, its only condition type (206d7c2); clicking the quota itself now
+  answers "how much room is left" — ResourceQuota drawer shows used/hard per resource via the data-key
+  chip idiom, ResourceQuota registered in typedFactories (bdfebc1). Readiness-probe failure: a Running
+  container failing its probe says "Running · not ready" in words + a probe hover, where only the dot
+  hue changed before (b74e348). **User-reported fix:** drawer header action icons (expand/share/close)
+  overlay on a surface pill instead of flexing beside the summary — every summary row (bars, chips,
+  container cards) regains ~100px; only the hero reserves clearance (239864d). Delegated
+  first-load/sidebar survey: [cluster] row hover now explains "Resources outside any namespace —
+  Nodes, PersistentVolumes, ClusterRoles" (69c1e46); refuted: breadcrumb placeholder during connect
+  (low-value — conn pill + canvas already say "connecting…", crumb appears on the fast namespace-list
+  fetch); empty-ns ServiceAccount wording expansion (current text already names it as Kubernetes-added);
+  offline selection-loss warning (selection IS preserved when the resource survives); "(default)"
+  context-switcher gloss (self-evident to its multi-context audience).
 - **2026-06-10 b4 (beginner first-run dogfooding)** — fresh namespace says "this namespace is empty"
   plainly instead of the unconnected-orphan riddle (4af7105); drawer gauge rows stop printing their
   bound name twice ("Req — / 25m req" → bare value/bound, capacity-view repetition) (d869e92); Nodes
