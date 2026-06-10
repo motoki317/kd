@@ -455,6 +455,18 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(quota-blocked ReplicaSet) = %q, want the ReplicaFailure cause", got)
 	}
 
+	// An evicted pod's WHY is pod-level status.message (kubelet writes the node-pressure cause
+	// there); the card's bare "Evicted" reason said nothing actionable. Fixture mirrors real
+	// kubelet output. Conditions still win when present.
+	evicted := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:   corev1.PodFailed,
+		Reason:  "Evicted",
+		Message: "The node was low on resource: memory. Container api was using 312Mi, which exceeds its request of 128Mi.",
+	}}
+	if got := statusMessage(evicted, HealthDegraded); !strings.Contains(got, "low on resource: memory") {
+		t.Errorf("statusMessage(evicted pod) = %q, want the eviction cause from status.message", got)
+	}
+
 	// A pod stuck Terminating names the finalizer holding it — the cause lives only in the manifest
 	// otherwise, and it beats the unready-containers mechanics while deleting.
 	now := metav1.Now()

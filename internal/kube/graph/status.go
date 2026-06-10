@@ -134,6 +134,13 @@ func statusMessage(obj runtime.Object, h Health) string {
 		}
 	case *corev1.Pod:
 		msg = blockingConditionMessage(o.Status.Conditions)
+		// A terminally-failed pod's explanation lives in pod-level status.message — kubelet writes
+		// the eviction cause there ("The node was low on resource: memory. Container x was using …").
+		// The card shows the bare status.reason ("Evicted"); without this, the WHY stayed in the
+		// manifest. Conditions win when present — they carry scheduling detail this duplicates.
+		if msg == "" && o.Status.Message != "" {
+			msg = o.Status.Message
+		}
 		// A pod stuck Terminating past its grace period shows nothing actionable anywhere — the
 		// finalizer holding it lives only in the manifest. Wins over the blocking condition: while
 		// deleting, "containers with unready status" is mechanics, the finalizer is the cause.
