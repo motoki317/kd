@@ -425,6 +425,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 | Candidate | Verdict |
 |---|---|
+| Hardcoded short labels for vendor CRDs without API shortNames (e.g. a monitoring operator's kinds truncating to "VMSERV…") | rejected (2026-06-10) — those CRDs declare no shortNames, so any code would be invented: meaningless to a beginner, a per-vendor maintenance list with no canonical source, and WORSE than the truncated real prefix (which at least hints the kind; hover + drawer carry the full name). The fallback truncation is the design |
 | Collapse a container's identical Req+Lim bars into one "Req=Lim" bar (Guaranteed QoS) | rejected (2026-06-10) — the sublabel grid track is a fixed 34px ("Req=Lim" can't fit), a variable row count per card breaks the Lim/Req repetition idiom across cards, and two equal bars already say "req = lim" in the established language |
 | Flag an Unavailable APIService (broken aggregated API) | already-handled (2026-06-06) — `crHealthFromConditions` reads the `Available` condition (False → Degraded) and surfaces its message; no APIService-specific rule needed |
 | Unknown `?ctx=` "silently shows another cluster's data" (trust problem) | refuted (cycle 26) — App.tsx:96-99 validates ctx against the fetched list and `setCtx(info.default)`; verified live the breadcrumb + URL self-correct to the real fallback context (no "bogus" anywhere), so there is no mislead |
