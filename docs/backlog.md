@@ -26,6 +26,19 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b8 (storage/DS shapes, triage flow, RBAC flow)** — a Released+Retain PV reads
+  Suspended (amber, waits on an operator forever) instead of Progressing (promised motion that
+  never comes), and names the stale claimRef blocking any new bind (22f17a7). A DaemonSet shows its
+  node selector as a chip, caution-tinted at 0/0 — "which nodes does this run on" lived only in the
+  manifest, and a selector matching nothing is exactly why a DS shows a contented 0/0 (35049d4).
+  A URL-seeded namespace that can't open (RBAC-denied / deleted / absent from a switched context)
+  now says so in a transient dismissible strip instead of silently landing the operator on the
+  fallback view (9f03da1; found by driving kd under a restrictive policy.csv with -default-role "").
+  Flow-verified mature (no seams): the morning-triage journey on a real cluster — trouble badge →
+  worst namespace → j → Degraded pod drawer → owner chip to the failed Workflow (its real deadline
+  message in the headline) → Alt+Left back → j onward; zero mouse trips after the badge click.
+  Restricted-operator view verified: sidebar lists only permitted namespaces, no [cluster] row.
+
 - **2026-06-10 b7 (HPA, STS chain, logs-gone, API survey)** — a broken HPA explains itself: its
   fault lives in ScalingActive/AbleToScale, neither of which the generic CR condition reader scans,
   so a non-functioning autoscaler was a red card with no words; also "1 → 0" (desiredReplicas=0 =
