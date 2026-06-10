@@ -375,7 +375,10 @@ export default function ResourceSummary(props: Props) {
               title={
                 props.node.clusterIP === 'headless'
                   ? 'Headless service — no virtual IP; DNS resolves the service name straight to the backing pod IPs'
-                  : 'Service address — reachable inside the cluster'
+                  : // Type-neutral on purpose: this value is a cluster IP for a ClusterIP/NodePort/LB
+                    // service but the aliased EXTERNAL host for an ExternalName one — "reachable inside
+                    // the cluster" would misdescribe the latter. The hero's type line disambiguates.
+                    'Service address — what the service name resolves to'
               }
             >
               <code>{props.node.clusterIP}</code>
