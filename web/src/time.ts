@@ -16,3 +16,13 @@ export function relativeAge(iso: string, now: Date = new Date()): string {
   if (days < 365) return `${days}d`
   return `${Math.floor(days / 365)}y`
 }
+
+// relativeAge's mirror for FUTURE timestamps (a Certificate's expiry): "84d", "3h". Returns "0s"
+// for the present or a past time — callers pair it with a health signal for the already-expired
+// case rather than rendering a negative duration.
+export function relativeUntil(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  // Same ladder, opposite direction: reuse relativeAge with the endpoints swapped.
+  return relativeAge(now.toISOString(), new Date(then))
+}

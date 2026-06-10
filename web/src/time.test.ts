@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { relativeAge } from './time'
+import { relativeAge, relativeUntil } from './time'
 
 describe('relativeAge', () => {
   const now = new Date('2026-05-27T12:00:00Z')
@@ -20,5 +20,22 @@ describe('relativeAge', () => {
     expect(relativeAge(now.toISOString(), now)).toBe('0s')
     expect(relativeAge(ago(-30), now)).toBe('0s') // 30s in the future (clock skew)
     expect(relativeAge('not-a-date', now)).toBe('')
+  })
+})
+
+describe('relativeUntil', () => {
+  const now = new Date('2026-05-27T12:00:00Z')
+  const ahead = (s: number) => new Date(now.getTime() + s * 1000).toISOString()
+
+  it('formats a future timestamp on the same compact ladder', () => {
+    expect(relativeUntil(ahead(3 * 3600), now)).toBe('3h')
+    expect(relativeUntil(ahead(84 * 86400), now)).toBe('84d')
+    expect(relativeUntil(ahead(400 * 86400), now)).toBe('1y')
+  })
+
+  it('clamps the present and past to 0s (the expired case is health-flagged, not negative)', () => {
+    expect(relativeUntil(now.toISOString(), now)).toBe('0s')
+    expect(relativeUntil(ahead(-3600), now)).toBe('0s')
+    expect(relativeUntil('not-a-date', now)).toBe('')
   })
 })

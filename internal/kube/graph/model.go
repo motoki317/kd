@@ -103,6 +103,9 @@ type Node struct {
 	ReclaimPolicy  string            `json:"reclaimPolicy,omitempty"` // a StorageClass's reclaim policy (Delete/Retain) — does deleting a PVC destroy the data?
 	VolumeBinding  string            `json:"volumeBinding,omitempty"` // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
 	Expandable     bool              `json:"expandable,omitempty"`    // a StorageClass's allowVolumeExpansion — can PVCs on it grow?
+	CertNames      string            `json:"certNames,omitempty"`     // a Certificate's secured names (commonName + dnsNames) — "what does this cert cover?"
+	CertIssuer     string            `json:"certIssuer,omitempty"`    // a Certificate's issuerRef name — the staging-vs-prod issuer mix-up is the classic mis-issue
+	CertExpiry     string            `json:"certExpiry,omitempty"`    // a Certificate's status.notAfter (RFC3339) — "when does it expire?"; empty until first issuance
 	Labels         map[string]string `json:"labels,omitempty"`
 	OwnerUIDs      []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

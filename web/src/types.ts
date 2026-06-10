@@ -134,6 +134,9 @@ export interface KNode {
   reclaimPolicy?: string // a StorageClass's reclaim policy (Delete/Retain)
   volumeBinding?: string // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
   expandable?: boolean // a StorageClass's allowVolumeExpansion
+  certNames?: string // a Certificate's secured names (commonName + dnsNames, joined)
+  certIssuer?: string // a Certificate's issuerRef name
+  certExpiry?: string // a Certificate's status.notAfter (RFC3339); absent until first issuance
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

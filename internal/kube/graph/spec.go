@@ -408,6 +408,56 @@ func hpaRange(obj runtime.Object) string {
 	return fmt.Sprintf("%d–%d", minR, maxR)
 }
 
+// certNames extracts the names a cert-manager Certificate secures — spec.commonName plus
+// spec.dnsNames, deduplicated, in declaration order. "What does this cert cover?" is the first
+// question at a TLS failure, and it lived only in the manifest.
+func certNames(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "Certificate")
+	if u == nil {
+		return ""
+	}
+	var names []string
+	seen := map[string]bool{}
+	add := func(n string) {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			names = append(names, n)
+		}
+	}
+	if cn, _, _ := unstructured.NestedString(u.Object, "spec", "commonName"); cn != "" {
+		add(cn)
+	}
+	if dns, found, _ := unstructured.NestedStringSlice(u.Object, "spec", "dnsNames"); found {
+		for _, n := range dns {
+			add(n)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+// certIssuer extracts a Certificate's issuerRef name — naming it in the drawer catches the classic
+// staging-vs-production issuer mix-up without opening the manifest.
+func certIssuer(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "Certificate")
+	if u == nil {
+		return ""
+	}
+	name, _, _ := unstructured.NestedString(u.Object, "spec", "issuerRef", "name")
+	return name
+}
+
+// certExpiry extracts a Certificate's status.notAfter (RFC3339) — empty until cert-manager issues
+// the first certificate. The client renders it relative ("in 84d"); an already-expired cert is
+// flagged by the Ready condition's health, not by this chip.
+func certExpiry(obj runtime.Object) string {
+	u := asUnstructuredKind(obj, "Certificate")
+	if u == nil {
+		return ""
+	}
+	notAfter, _, _ := unstructured.NestedString(u.Object, "status", "notAfter")
+	return notAfter
+}
+
 // argoApp returns the unstructured object when it is an ArgoCD Application — the group guard
 // matters because "Application" is a generic kind name other operators also use.
 func argoApp(obj runtime.Object) *unstructured.Unstructured {

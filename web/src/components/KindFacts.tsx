@@ -3,7 +3,7 @@ import { useNow } from '../clock'
 import { healthColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { ruleHasWildcardVerb } from '../rbac'
-import { relativeAge } from '../time'
+import { relativeAge, relativeUntil } from '../time'
 import type { Health, KNode } from '../types'
 import CopyButton from './CopyButton'
 
@@ -160,6 +160,23 @@ export default function KindFacts(props: { node: KNode }) {
           </Show>
           <Show when={props.node.storageClass}>
             <MetaChip label="class" value={props.node.storageClass!} title="Storage class" />
+          </Show>
+        </div>
+      </Show>
+      {/* A cert-manager Certificate's essence: which names it secures (the first question at a TLS
+          failure), which issuer signs it (the staging-vs-prod mix-up), and when it expires —
+          "expires in 84d", relative like the restart dates. An expired/failed cert alarms via its
+          Ready-condition health; these chips carry the facts, not the alarm. */}
+      <Show when={props.node.certNames || props.node.certIssuer || props.node.certExpiry}>
+        <div class="drawer-ports">
+          <Show when={props.node.certNames}>
+            <MetaChip label="for" value={props.node.certNames!} title="Names this certificate secures (commonName + dnsNames)" />
+          </Show>
+          <Show when={props.node.certExpiry}>
+            <MetaChip label="expires" value={`in ${relativeUntil(props.node.certExpiry!, useNow())}`} title="Certificate validity end (status.notAfter) — cert-manager renews before this" />
+          </Show>
+          <Show when={props.node.certIssuer}>
+            <MetaChip label="issuer" value={props.node.certIssuer!} title="Issuer that signs this certificate" />
           </Show>
         </div>
       </Show>

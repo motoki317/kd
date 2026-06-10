@@ -98,6 +98,9 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			ReclaimPolicy:     storageClassReclaim(obj),
 			VolumeBinding:     storageClassBinding(obj),
 			Expandable:        storageClassExpandable(obj),
+			CertNames:         certNames(obj),
+			CertIssuer:        certIssuer(obj),
+			CertExpiry:        certExpiry(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

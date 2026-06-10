@@ -799,6 +799,45 @@ func TestBatchInfo(t *testing.T) {
 	}
 }
 
+func TestCertificateFacts(t *testing.T) {
+	cert := func(spec, status map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "cert-manager.io/v1", "kind": "Certificate",
+			"spec": spec, "status": status,
+		}}
+	}
+	issued := cert(
+		map[string]any{
+			"commonName": "shop.example.com",
+			// commonName repeated in dnsNames must not double up.
+			"dnsNames":  []any{"shop.example.com", "*.shop.example.com"},
+			"issuerRef": map[string]any{"name": "letsencrypt-prod", "kind": "ClusterIssuer"},
+		},
+		map[string]any{"notAfter": "2026-09-02T21:26:45Z"},
+	)
+	if got := certNames(issued); got != "shop.example.com, *.shop.example.com" {
+		t.Errorf("certNames = %q, want deduped commonName+dnsNames", got)
+	}
+	if got := certIssuer(issued); got != "letsencrypt-prod" {
+		t.Errorf("certIssuer = %q, want letsencrypt-prod", got)
+	}
+	if got := certExpiry(issued); got != "2026-09-02T21:26:45Z" {
+		t.Errorf("certExpiry = %q, want status.notAfter", got)
+	}
+	// Not yet issued: no status.notAfter — the chip must stay absent, not read a zero time.
+	pending := cert(map[string]any{"dnsNames": []any{"api.example.com"}}, map[string]any{})
+	if got := certExpiry(pending); got != "" {
+		t.Errorf("certExpiry(pending) = %q, want empty", got)
+	}
+	if got := certNames(pending); got != "api.example.com" {
+		t.Errorf("certNames(pending) = %q", got)
+	}
+	// Non-Certificates yield empties, no panic.
+	if got := certNames(&corev1.Pod{}); got != "" {
+		t.Errorf("certNames(Pod) = %q, want empty", got)
+	}
+}
+
 func TestHPAScaleAndRange(t *testing.T) {
 	hpa := func(min, max, cur, des int64, hasMin, hasDes bool) *unstructured.Unstructured {
 		spec := map[string]any{"maxReplicas": max}

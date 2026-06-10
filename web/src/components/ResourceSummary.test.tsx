@@ -596,6 +596,29 @@ describe('ResourceSummary batch', () => {
   })
 })
 
+describe('ResourceSummary Certificate', () => {
+  it('shows what the cert covers, when it expires (future-relative), and who issues it', () => {
+    const node: KNode = {
+      id: 'c', kind: 'Certificate', name: 'shop-tls', health: 'Healthy',
+      certNames: '*.shop.example.com', certIssuer: 'letsencrypt-prod',
+      certExpiry: new Date(Date.now() + 84 * 86400_000).toISOString(),
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('*.shop.example.com')
+    expect(text).toMatch(/in 8[34]d/) // ~84d out, allowing the render clock to tick past the boundary
+    expect(text).toContain('letsencrypt-prod')
+  })
+
+  it('omits the expiry chip until cert-manager issues the first certificate', () => {
+    const node: KNode = { id: 'c2', kind: 'Certificate', name: 'pending-tls', health: 'Progressing', certNames: 'api.example.com' }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('api.example.com')
+    expect(text).not.toContain('expires')
+  })
+})
+
 describe('ResourceSummary PDB', () => {
   it('shows the policy and allowed disruptions', () => {
     const node: KNode = {
