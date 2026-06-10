@@ -193,6 +193,19 @@ export default function KindFacts(props: { node: KNode }) {
           </Show>
         </div>
       </Show>
+      {/* A cert-manager Issuer/ClusterIssuer's backing CA — "what actually signs my certs?". The
+          ACME staging endpoint issues UNTRUSTED certs (the #1 cert-manager mistake), so a staging
+          issuer wears the caution tint to make the prod-vs-staging distinction unmissable. */}
+      <Show when={props.node.issuerConfig}>
+        <div class="drawer-ports">
+          <MetaChip
+            label="issues via"
+            value={props.node.issuerConfig!}
+            title="The certificate authority this issuer signs with"
+            class={props.node.issuerConfig!.includes('untrusted') ? 'port-caution' : undefined}
+          />
+        </div>
+      </Show>
       {/* A Job/CronJob's runtime progress the status line omits: when a CronJob last fired ("did it
           actually run?"), how many pods/jobs are running now, and a Job's failed count — burning retries
           the "succeeded/total" status hides (a Job at "0/1" with 5 failures looks merely pending). The

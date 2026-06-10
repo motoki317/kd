@@ -136,6 +136,7 @@ var changedFieldCases = []struct {
 	{"CertNames", func(n *Node) { n.CertNames = "*.shop.example.com" }},
 	{"CertIssuer", func(n *Node) { n.CertIssuer = "letsencrypt-prod" }},
 	{"CertExpiry", func(n *Node) { n.CertExpiry = "2026-09-01T00:00:00Z" }},
+	{"IssuerConfig", func(n *Node) { n.IssuerConfig = "ACME · Let's Encrypt" }},
 	{"Allocatable", func(n *Node) { c := int64(4000); n.Allocatable = &Resources{CPUMilli: &c} }},
 	{"CapacityRes", func(n *Node) { c := int64(8000); n.CapacityRes = &Resources{CPUMilli: &c} }},
 	{"Requests", func(n *Node) { c := int64(3000); n.Requests = &Resources{CPUMilli: &c} }},

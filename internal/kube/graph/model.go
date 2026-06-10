@@ -106,6 +106,7 @@ type Node struct {
 	CertNames      string            `json:"certNames,omitempty"`     // a Certificate's secured names (commonName + dnsNames) — "what does this cert cover?"
 	CertIssuer     string            `json:"certIssuer,omitempty"`    // a Certificate's issuerRef name — the staging-vs-prod issuer mix-up is the classic mis-issue
 	CertExpiry     string            `json:"certExpiry,omitempty"`    // a Certificate's status.notAfter (RFC3339) — "when does it expire?"; empty until first issuance
+	IssuerConfig   string            `json:"issuerConfig,omitempty"`  // an Issuer/ClusterIssuer's backing CA ("ACME · Let's Encrypt", "CA", …) — "what signs my certs?"
 	Labels         map[string]string `json:"labels,omitempty"`
 	OwnerUIDs      []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the

@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -477,6 +478,51 @@ func certExpiry(obj runtime.Object) string {
 	}
 	notAfter, _, _ := unstructured.NestedString(u.Object, "status", "notAfter")
 	return notAfter
+}
+
+// issuerConfig summarizes a cert-manager Issuer or ClusterIssuer's backing CA — the answer to "what
+// actually signs my certs?", which lived only in the manifest. The spec carries exactly one of acme/
+// ca/vault/selfSigned/venafi; for ACME the server URL is the load-bearing fact (Let's Encrypt's
+// staging endpoint issues UNTRUSTED certs — the #1 cert-manager mistake — so prod vs staging must be
+// obvious). "" for other kinds.
+func issuerConfig(obj runtime.Object) string {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok || (u.GetKind() != "Issuer" && u.GetKind() != "ClusterIssuer") {
+		return ""
+	}
+	spec, found, _ := unstructured.NestedMap(u.Object, "spec")
+	if !found {
+		return ""
+	}
+	if acme, ok := spec["acme"].(map[string]any); ok {
+		server, _ := acme["server"].(string)
+		return "ACME · " + acmeServerName(server)
+	}
+	for key, label := range map[string]string{"ca": "CA", "vault": "Vault", "selfSigned": "SelfSigned", "venafi": "Venafi"} {
+		if _, ok := spec[key]; ok {
+			return label
+		}
+	}
+	return ""
+}
+
+// acmeServerName turns an ACME directory URL into the operator-meaningful label, making the
+// untrusted-staging-vs-trusted-prod Let's Encrypt distinction unmissable; an unknown ACME server
+// falls back to its host so a private ACME (step-ca, ZeroSSL) still reads.
+func acmeServerName(server string) string {
+	switch {
+	case server == "":
+		return "unknown server"
+	case strings.Contains(server, "acme-staging") && strings.Contains(server, "letsencrypt.org"):
+		return "Let's Encrypt (staging — untrusted)"
+	case strings.Contains(server, "letsencrypt.org"):
+		return "Let's Encrypt"
+	default:
+		if u, err := url.Parse(server); err == nil && u.Host != "" {
+			return u.Host
+		}
+		return server
+	}
 }
 
 // argoApp returns the unstructured object when it is an ArgoCD Application — the group guard

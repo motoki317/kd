@@ -101,6 +101,7 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			CertNames:         certNames(obj),
 			CertIssuer:        certIssuer(obj),
 			CertExpiry:        certExpiry(obj),
+			IssuerConfig:      issuerConfig(obj),
 			ContainerStatuses: containerStatuses(obj),
 		}
 		for _, or := range m.GetOwnerReferences() {

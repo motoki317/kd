@@ -838,6 +838,39 @@ func TestCertificateFacts(t *testing.T) {
 	}
 }
 
+func TestIssuerConfig(t *testing.T) {
+	issuer := func(kind string, spec map[string]any) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "cert-manager.io/v1", "kind": kind, "spec": spec,
+		}}
+	}
+	// ACME prod vs staging is the load-bearing distinction (staging issues untrusted certs).
+	prod := issuer("ClusterIssuer", map[string]any{"acme": map[string]any{"server": "https://acme-v02.api.letsencrypt.org/directory"}})
+	if got := issuerConfig(prod); got != "ACME · Let's Encrypt" {
+		t.Errorf("issuerConfig(ACME prod) = %q", got)
+	}
+	staging := issuer("Issuer", map[string]any{"acme": map[string]any{"server": "https://acme-staging-v02.api.letsencrypt.org/directory"}})
+	if got := issuerConfig(staging); got != "ACME · Let's Encrypt (staging — untrusted)" {
+		t.Errorf("issuerConfig(ACME staging) = %q, want the untrusted-staging warning", got)
+	}
+	// A private ACME falls back to its host so step-ca / ZeroSSL still read.
+	priv := issuer("ClusterIssuer", map[string]any{"acme": map[string]any{"server": "https://ca.internal.example.com/acme/directory"}})
+	if got := issuerConfig(priv); got != "ACME · ca.internal.example.com" {
+		t.Errorf("issuerConfig(private ACME) = %q", got)
+	}
+	// Non-ACME backends report their type.
+	if got := issuerConfig(issuer("Issuer", map[string]any{"ca": map[string]any{"secretName": "ca-key"}})); got != "CA" {
+		t.Errorf("issuerConfig(CA) = %q, want CA", got)
+	}
+	if got := issuerConfig(issuer("ClusterIssuer", map[string]any{"selfSigned": map[string]any{}})); got != "SelfSigned" {
+		t.Errorf("issuerConfig(selfSigned) = %q", got)
+	}
+	// Other kinds yield empty, no panic.
+	if got := issuerConfig(&corev1.Pod{}); got != "" {
+		t.Errorf("issuerConfig(Pod) = %q, want empty", got)
+	}
+}
+
 func TestHPAScaleAndRange(t *testing.T) {
 	hpa := func(min, max, cur, des int64, hasMin, hasDes bool) *unstructured.Unstructured {
 		spec := map[string]any{"maxReplicas": max}

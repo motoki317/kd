@@ -137,6 +137,7 @@ export interface KNode {
   certNames?: string // a Certificate's secured names (commonName + dnsNames, joined)
   certIssuer?: string // a Certificate's issuerRef name
   certExpiry?: string // a Certificate's status.notAfter (RFC3339); absent until first issuance
+  issuerConfig?: string // an Issuer/ClusterIssuer's backing CA ("ACME · Let's Encrypt", "CA", …)
   endpoints?: { ready: number; total: number }
   containerStatuses?: ContainerStatus[]
   labels?: Record<string, string>

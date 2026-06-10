@@ -631,6 +631,20 @@ describe('ResourceSummary Certificate', () => {
   })
 })
 
+describe('ResourceSummary Issuer', () => {
+  it('shows a ClusterIssuer\'s backing CA, with caution tint for untrusted ACME staging', () => {
+    const prod: KNode = { id: 'i1', kind: 'ClusterIssuer', name: 'le-prod', health: 'Healthy', issuerConfig: "ACME · Let's Encrypt" }
+    const { container, unmount } = render(() => <ResourceSummary node={prod} {...base} />)
+    expect(container.querySelector('.drawer-ports')?.textContent).toContain("ACME · Let's Encrypt")
+    expect(container.querySelector('.port-caution')).toBeNull()
+    unmount()
+
+    const staging: KNode = { id: 'i2', kind: 'Issuer', name: 'le-staging', health: 'Healthy', issuerConfig: "ACME · Let's Encrypt (staging — untrusted)" }
+    const { container: c2 } = render(() => <ResourceSummary node={staging} {...base} />)
+    expect(c2.querySelector('.port-caution')).not.toBeNull() // untrusted staging must stand out
+  })
+})
+
 describe('ResourceSummary PDB', () => {
   it('shows the policy and allowed disruptions', () => {
     const node: KNode = {

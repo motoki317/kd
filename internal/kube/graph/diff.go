@@ -111,6 +111,7 @@ func nodeEqual(a, b Node) bool {
 		a.CertNames == b.CertNames &&
 		a.CertIssuer == b.CertIssuer &&
 		a.CertExpiry == b.CertExpiry && // a renewal landing (notAfter advancing) must repaint
+		a.IssuerConfig == b.IssuerConfig &&
 
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
 		resourcesEqual(a.Allocatable, b.Allocatable) && // a hot-resized node (VM grow, device plugin) must repaint the capacity view
