@@ -41,6 +41,10 @@ the panel expands when log lines need the room.
 Search by name, kind, label, image, status, host, or IP. The current view lives in the URL, so you can
 share a link to exactly what you're looking at.
 
+Works where you are: full keyboard control on a desktop (press `?` for the reference), and a
+phone-sized layout — panels overlay the canvas, drag to pan, pinch to zoom — for checking a page
+from wherever it finds you.
+
 ## Run it
 
 You need Go 1.26+, Node 24+, and a working `kubectl` context. With Nix, `nix develop` sets up the tools.
