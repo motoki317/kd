@@ -168,6 +168,14 @@ Recent batches (newest first; `git log` has the commits):
   test pins the ratio/handoff contract; live-verified with synthetic touch pointers (ratio exactly 2.0).
   Phone-regime survey: drawer at 375px already fits in-bounds (263px, expand affordance available) —
   no change needed.
+  Then shipped (phone regime, continued): **drawer becomes a full-width overlay ≤640px** (b2cb445) —
+  side-by-side left the topology column ~110px and the toolbar's absolute chips (unclipped, can't
+  shrink) bled straight across the drawer hero/tabs; overlay also upgrades reading width 263→375px;
+  sits below the sidebar overlay. **Topbar fits 375px** (50d3c07) — intrinsic ~480px clipped everything
+  right of the spacer including the conn pill (the manual offline-retry control); tighter gaps, brand
+  text drops (glyph+title stay), switcher caps 38vw, crumb truncates. Both verified live at 375x667;
+  media-gated, inert on desktop. Logs panel at phone width verified usable (picker/toggles/severity/
+  wrapped text all in-bounds) once the overlay landed.
   Then shipped: **Fit frames the capacity view's drawn layout, not its hit-boxes** (14b4db3) — the
   no-filter Fit framed `layout().nodes`, which in the Nodes view are small hit-targets (pod segments,
   label regions), not the full-width tracks; fitNodeSet hit the 1.4x ceiling and left the track ~1600px
