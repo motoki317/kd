@@ -30,6 +30,16 @@ describe('formatPair', () => {
   it('an undefined value renders as a dash, keeping the cap', () => {
     expect(formatPair(undefined, 16000, 'cpu')).toEqual({ value: '—', cap: '16' })
   })
+  it('a non-zero side never displays as "0" — it borrows its natural unit instead', () => {
+    // 2m idling on a 1-core node rounded to "0 / 1" — a live reading that reads as dead. The value
+    // side falls back to formatQuantity's unit in exactly this corner; a TRUE zero still shows "0".
+    expect(formatPair(2, 1000, 'cpu', 1000)).toEqual({ value: '2m', cap: '1' })
+    expect(formatPair(0, 1000, 'cpu', 1000)).toEqual({ value: '0', cap: '1' })
+    // The bound side gets the same guard: a 4m request beside a multi-core limit must not read "/ 0".
+    expect(formatPair(2, 4, 'cpu', 8000)).toEqual({ value: '2m', cap: '4m' })
+    const Gi = 1024 ** 3
+    expect(formatPair(10 * 1024, 2 * Gi, 'memory', 2 * Gi)).toEqual({ value: '10Ki', cap: '2Gi' })
+  })
 })
 
 const node = (name: string, allocCpu: number, capCpu: number): KNode => ({

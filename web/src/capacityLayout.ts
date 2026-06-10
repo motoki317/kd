@@ -528,10 +528,14 @@ export function formatPair(
 ): { value: string; cap: string } {
   if (cap === undefined) return { value: formatQuantity(value, res), cap: '' } // no reference unit to match
   const ref = unitRef ?? cap // the value that decides the unit; the displayed cap is unchanged
+  // A non-zero number must never display as "0": when the shared unit is too coarse for a tiny side
+  // (a 2m reading on a cores-keyed pair, a 4m request beside a multi-core limit), that side borrows
+  // its natural unit — unit consistency yields to truthfulness in exactly this rounds-to-zero corner.
+  const truthful = (v: number | undefined, s: string) => (v !== undefined && v > 0 && parseFloat(s) === 0 ? formatQuantity(v, res) : s)
   if (res === 'cpu') {
     const cores = ref >= 1000
     const f = (v: number | undefined) => (v === undefined ? '—' : cores ? `${+(v / 1000).toFixed(2)}` : `${Math.round(v)}m`)
-    return { value: f(value), cap: f(cap) }
+    return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
   }
   const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
   let i = 0
@@ -542,7 +546,7 @@ export function formatPair(
   }
   const div = 1024 ** i
   const f = (v: number | undefined) => (v === undefined ? '—' : `${+(v / div).toFixed(i > 0 ? 1 : 0)}${units[i]}`)
-  return { value: f(value), cap: f(cap) }
+  return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
 }
 
 // formatQuantity renders a canonical-unit resource value for the capacity view's labels: CPU
