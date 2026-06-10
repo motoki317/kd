@@ -30,6 +30,20 @@ Degraded) · client core (App.tsx/api.ts SSE wiring, surveyed 0/11) · canvas la
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b20 (security survey clean; empty-state a11y; beginner emergency shapes)** —
+  delegated security survey of internal/auth + internal/rbac (header spoofing, reload races,
+  dev-mode auto-enable, SSE/RBAC gaps, traversal): 9 refuted, 1 refuted on triage
+  (authenticated-but-unpoliced /contexts·/kinds metadata is a commented design choice — discovery,
+  not data; namespaces/resources stay RBAC-filtered) — the auth layer joins the mature surfaces.
+  The canvas empty state became a live region (the conn pill, the only other role=status, hides in
+  the identity states — terminal answers were silent to screen readers). Walked the two classic
+  beginner failures live: an induced unschedulable pod (bare `kubectl run` shape) verifies clean —
+  empty canvas points at "N unconnected resources are hidden" with a one-click show-orphaned, the
+  card reads the scheduler's "0/1 nodes available: Insufficient cpu" verbatim; a failed Workflow on
+  the staging cluster still triages end-to-end after the App.tsx changes. Phone-width (375px)
+  no-access state fits without overflow (the overlaying sidebar carries its own honest message).
+  ADR index verified complete against the files.
+
 - **2026-06-10 b19 (first-contact honesty: every bootstrap failure now answers)** — systematically
   dogfooding first-contact/error paths (which healthy-cluster dogfooding never hits) closed the
   whole silent-hang family: a no-access account (`-default-role ''` → empty namespace list) and a
