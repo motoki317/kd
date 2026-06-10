@@ -152,6 +152,28 @@ body {
 .ctx-switcher:hover {
   border-color: var(--border-strong);
 }
+/* Phone-width topbar: the row's intrinsic widths total ~480px, pushing the conn pill (the
+   offline-retry control!) and the theme/help buttons off a 375px screen. Tighten gaps, drop the
+   decorative brand text (the glyph + title keep the reset affordance), and let the switcher and
+   crumb truncate — the right-side utilities must always stay reachable. */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .brand-text {
+    display: none;
+  }
+  .ctx-switcher {
+    max-width: 38vw;
+  }
+  .crumb {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 /* Breadcrumb beside the brand: dim separator, slightly heavier namespace name so the eye lands on
    the ns first (the brand is the constant; the ns is the context). */
 .crumb {
