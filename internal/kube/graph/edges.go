@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // index resolves (kind, namespace, name) to a node ID, so inferred edges only ever point at
@@ -42,6 +43,7 @@ type edgeBuilder struct {
 	edges     []Edge
 	seen      map[Edge]bool
 	endpoints map[string]*Endpoints // service node id -> readiness, populated alongside selects edges
+	pods      map[string]*corev1.Pod // "ns/name" -> typed pod, for named-targetPort resolution
 }
 
 // link adds an edge from a source node to a target identified by (kind, namespace, name),
@@ -62,7 +64,14 @@ func (b *edgeBuilder) link(fromID string, typ EdgeType, toKind, toNamespace, toN
 // buildEdges infers every relationship edge from the typed objects, resolving endpoints
 // through idx. Each inferrer is independent, so adding a relationship is adding a case here.
 func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[string]*Endpoints) {
-	b := &edgeBuilder{idx: idx, seen: map[Edge]bool{}, endpoints: map[string]*Endpoints{}}
+	b := &edgeBuilder{idx: idx, seen: map[Edge]bool{}, endpoints: map[string]*Endpoints{}, pods: map[string]*corev1.Pod{}}
+	// Pod specs by ns/name: serviceEdges resolves named targetPorts against container port names,
+	// which the projected Node doesn't carry.
+	for _, obj := range objs {
+		if p, ok := obj.(*corev1.Pod); ok {
+			b.pods[p.Namespace+"/"+p.Name] = p
+		}
+	}
 
 	// Owner edges come from metadata.ownerReferences (UID is the node ID), independent of kind.
 	uids := make(map[string]bool, len(nodes))
@@ -215,13 +224,46 @@ func (b *edgeBuilder) serviceEdges(id, ns string, svc *corev1.Service, nodes []N
 	// Endpoint readiness reuses this selector match (a Healthy pod is a Ready backend). A 0/0 result
 	// for a selector-based service is the meaningful "nothing is serving this" signal, so record it
 	// even when no pod matches.
+	// A NAMED targetPort only routes to pods whose containers declare that port name; a numeric (or
+	// defaulted) targetPort always routes. Without this check a typo'd port name read "1/1 ready"
+	// while Kubernetes created zero endpoints — the worst kind of wrong.
+	var namedPorts []string
+	hasNumeric := false
+	for _, p := range svc.Spec.Ports {
+		if p.TargetPort.Type == intstr.String {
+			namedPorts = append(namedPorts, p.TargetPort.StrVal)
+		} else {
+			hasNumeric = true
+		}
+	}
 	ep := &Endpoints{}
+	resolved := map[string]bool{}
 	for _, n := range nodes {
 		if n.Kind == "Pod" && n.Namespace == ns && labelsMatch(svc.Spec.Selector, n.Labels) {
 			b.link(id, EdgeSelects, "Pod", ns, n.Name)
 			ep.Total++
-			if n.Health == HealthHealthy {
+			contributes := hasNumeric || len(namedPorts) == 0
+			if pod := b.pods[ns+"/"+n.Name]; pod != nil {
+				for _, c := range append(append([]corev1.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+					for _, cp := range c.Ports {
+						if cp.Name != "" && slices.Contains(namedPorts, cp.Name) {
+							resolved[cp.Name] = true
+							contributes = true
+						}
+					}
+				}
+			} else {
+				contributes = true // no spec to check against — don't invent a failure
+			}
+			if n.Health == HealthHealthy && contributes {
 				ep.Ready++
+			}
+		}
+	}
+	if ep.Total > 0 && !hasNumeric {
+		for _, name := range namedPorts {
+			if !resolved[name] {
+				ep.UnresolvedPorts = append(ep.UnresolvedPorts, name)
 			}
 		}
 	}

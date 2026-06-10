@@ -1,6 +1,9 @@
 package graph
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // A selector-based Service reports how many of the pods it selects are Ready; a selectorless Service
 // (manual/external endpoints) reports nothing; a selector that matches no pod reports 0/0 — the
@@ -155,6 +158,96 @@ spec:
 	}
 	if alias.Health != HealthHealthy {
 		t.Errorf("alias-svc health = %q, want Healthy (selector is inert on ExternalName)", alias.Health)
+	}
+}
+
+// A named targetPort that no selected pod's containers declare creates ZERO Kubernetes endpoints even
+// though the pods are Ready — the typo'd-port shape. The service must read 0/N Degraded with the why,
+// not a false "1/1 ready". A numeric targetPort always routes, and a name declared by the pod is fine.
+func TestServiceNamedTargetPortMismatch(t *testing.T) {
+	const fixture = `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: p1
+  labels:
+    app: web
+spec:
+  containers:
+    - name: main
+      image: nginx
+      ports:
+        - name: web
+          containerPort: 80
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: typo-svc
+  namespace: shop
+  uid: svc1
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: named-ok-svc
+  namespace: shop
+  uid: svc2
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: numeric-svc
+  namespace: shop
+  uid: svc3
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
+`
+	g := Build(decodeFixture(t, fixture))
+
+	typo := nodeByName(g, "Service", "typo-svc")
+	if typo.Endpoints == nil || typo.Endpoints.Ready != 0 || typo.Endpoints.Total != 1 {
+		t.Errorf("typo-svc endpoints = %+v, want 0/1", typo.Endpoints)
+	}
+	if typo.Health != HealthDegraded || typo.Status != "0/1 ready" {
+		t.Errorf("typo-svc = %q/%q, want Degraded/\"0/1 ready\"", typo.Health, typo.Status)
+	}
+	if typo.Message == "" || !strings.Contains(typo.Message, `targetPort "http"`) {
+		t.Errorf("typo-svc message = %q, want the unresolved-port explanation", typo.Message)
+	}
+
+	// The matching name and the numeric port both resolve: 1/1, Healthy, no message.
+	for _, name := range []string{"named-ok-svc", "numeric-svc"} {
+		svc := nodeByName(g, "Service", name)
+		if svc.Endpoints == nil || svc.Endpoints.Ready != 1 || svc.Endpoints.Total != 1 {
+			t.Errorf("%s endpoints = %+v, want 1/1", name, svc.Endpoints)
+		}
+		if svc.Health != HealthHealthy || svc.Message != "" {
+			t.Errorf("%s = %q (msg %q), want Healthy with no message", name, svc.Health, svc.Message)
+		}
 	}
 }
 

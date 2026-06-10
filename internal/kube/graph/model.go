@@ -135,6 +135,10 @@ type Resources struct {
 type Endpoints struct {
 	Ready int `json:"ready"`
 	Total int `json:"total"`
+	// Named targetPorts that no selected pod's containers declare — the typo'd-port shape where
+	// pods look Ready but Kubernetes creates zero endpoints. Only populated when the service has
+	// no numeric targetPort to fall back on.
+	UnresolvedPorts []string `json:"unresolvedPorts,omitempty"`
 }
 
 // ContainerStatus is one pod container's runtime state, condensed for display.

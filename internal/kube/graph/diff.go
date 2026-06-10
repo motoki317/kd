@@ -119,5 +119,5 @@ func endpointsEqual(a, b *Endpoints) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return *a == *b
+	return a.Ready == b.Ready && a.Total == b.Total && slices.Equal(a.UnresolvedPorts, b.UnresolvedPorts)
 }
