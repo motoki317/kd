@@ -35,7 +35,15 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b22–b26 (2026-06-10, operator-flow dogfooding D1–D60; next cycle: D61)** — sixty successive
+- **b27 (2026-06-11, dogfooding D61–D78; next cycle: D79)** — shipped: cluster-scoped log streams
+  (a Node's static-pod logs — etcd/apiserver one click away on a beginner's Docker Desktop; client
+  sentinel + server logSnapshot), single-slash search fallback (label keys / image fragments were
+  unsearchable), never-run CronJob Logs honesty, drag-pan text-selection suppression, sidebar filter
+  trim, README run-path completion, chart policy.csv group-token doc, backlog re-condensed 713→405.
+  Verified clean: redeploy-while-tab-open recovery, finished-Workflow logs on real data, STS→PVC→PV
+  chain, previous-logs kubelet passthrough, kube-system static-pod tree, dblclick-fit discoverability.
+  Logged: cluster-scope Node Logs-tab gap (joins the hasLogs Open item).
+- **b22–b26 (2026-06-10, operator-flow dogfooding D1–D60)** — sixty successive
   human-operator walks through the live UI (landing/triage, logs, capacity, lenses, keyboard, phone,
   deep links, rollouts, SSE churn, a11y, manifest find, folds, history). Two fixes shipped: macOS
   Option+T composing '†' so Alt+T never fired (e.code now matched); ⌘F on the Manifest tab fell
@@ -146,7 +154,11 @@ spotlight — see the PVC-spotlight row in Rejected).
   and the kind isn't in the hardcoded set. **Proper fix:** the server computes a per-node `hasLogs`
   (ownership over `BuildForLogs`) and the client gates on `node.hasLogs` instead of the kind list +
   client-side descendant walk. **Reopen when:** a non-Argo workload CRD with completed-only pods needs
-  logs, or the hardcoded `LOGGABLE_KINDS` Argo entry feels too special-cased.
+  logs, or the hardcoded `LOGGABLE_KINDS` Argo entry feels too special-cased. Same family
+  (2026-06-11, D67): a Node selected in **cluster scope** shows no Logs tab (the cluster-scope display
+  graph holds no pods, so `hasDescendantPod` is false) while the same Node in kube-system — its static
+  pods riding along — streams fine. Don't fix by adding `Node` to `LOGGABLE_KINDS`: a podless worker
+  node (every EKS node) would get a tab that waits forever; the per-node `hasLogs` is the fix here too.
 
 - **GRPCRoute has routing edges but no drawer routing table** — *follow-up to the 2026-06-06 routing
   trio; low value, deferred.* `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's
