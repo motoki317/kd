@@ -20,15 +20,16 @@ You arrange the canvas yourself. Switch how resources are grouped:
   past their requests or running near their limits are flagged on the bar.
 - **Kind** — every resource boxed by type.
 
-Then pick which links to draw: ownership, network, volumes, RBAC, or disruption. Custom resources show
+Then pick which links to draw: ownership, network, volumes, RBAC, disruption, or monitoring. Custom resources show
 up too — Workflows, Certificates, ArgoCD Applications, and anything else a CRD defines, down to their
 Pods. Unhealthy resources stand out in color, and troubled namespaces sort to the top.
 
 ### Resource details
 
 Click a resource to open its details. The summary answers "what is this and how is it doing" without
-opening the manifest: status with its reason, container states, live CPU/memory gauges against
-requests and limits, and each kind's defining facts — a Service's selector and endpoints, an Ingress's
+opening the manifest: status with its reason, each container's state and live usage against its own
+limit (a container about to hit its memory limit is flagged), CPU/memory gauges against requests and
+limits, and each kind's defining facts — a Service's selector and endpoints, an Ingress's
 routes, a ConfigMap's keys, a Node's taints. Tabs carry live logs (multi-container streams merged and
 labelled, previous-crash output, level and text filters), recent events rolled up from the resource's
 children, and the raw manifest (YAML or JSON, with in-pane find). Owner chips walk up the tree, and
