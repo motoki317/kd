@@ -155,7 +155,8 @@ body {
 /* Phone-width topbar: the row's intrinsic widths total ~480px, pushing the conn pill (the
    offline-retry control!) and the theme/help buttons off a 375px screen. Tighten gaps, drop the
    decorative brand text (the glyph + title keep the reset affordance), and let the switcher and
-   crumb truncate — the right-side utilities must always stay reachable. */
+   crumb truncate — the right-side utilities must always stay reachable.
+   NARROW_SCREEN_QUERY: keep this query in sync with the constant in App.tsx. */
 @media (max-width: 640px) {
   .topbar {
     gap: 8px;
@@ -613,7 +614,8 @@ button.conn.conn-retry:focus-visible {
 /* Phone-width: side-by-side would leave the topology a ~155px sliver, so an OPEN sidebar overlays
    the canvas instead of squeezing it (App also seeds the sidebar hidden at this width when no pref
    is stored). The shadow marks it as a layer over the graph, not a column beside it. z-index sits
-   above the canvas/drawer chrome (≤25) and below full-screen overlays like the help panel (60). */
+   above the canvas/drawer chrome (≤25) and below full-screen overlays like the help panel (60).
+   NARROW_SCREEN_QUERY: keep this query in sync with the constant in App.tsx. */
 @media (max-width: 640px) {
   .body {
     position: relative;

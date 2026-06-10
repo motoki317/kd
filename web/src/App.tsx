@@ -29,6 +29,10 @@ import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref
 const GROUP_IDS = GROUP_OPTIONS.map((g) => g.id)
 const REL_IDS = new Set(REL_CATEGORIES.map((c) => c.id))
 const DEFAULT_RELS = (): Set<RelCategory> => new Set<RelCategory>(['ownership'])
+// The phone-width breakpoint, below which the sidebar/drawer become full-width overlays and the
+// topbar compacts. CSS media queries can't read a JS constant, so the SAME query is repeated in
+// index.css `@media` blocks tagged "NARROW_SCREEN_QUERY" — change it here, grep for that tag there.
+const NARROW_SCREEN_QUERY = '(max-width: 640px)'
 
 // Parse a comma-separated relationship list (URL or localStorage). Returns null when the source is
 // absent (so the next source / the default applies); an explicit empty string round-trips to the
@@ -152,9 +156,10 @@ export default function App() {
   // pixel for the canvas. Cmd/Ctrl+B or the topbar toggle; state persists in localStorage so a
   // reload doesn't surprise them with the sidebar re-appearing. Default expanded — except on a
   // phone-width screen with no stored pref, where the 220px sidebar would leave a sliver of
-  // canvas: there it starts hidden and overlays the topology when opened (see the 640px media
-  // block in index.css). matchMedia is guarded for jsdom, which doesn't implement it.
-  const isNarrowScreen = () => typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches
+  // canvas: there it starts hidden and overlays the topology when opened (see the
+  // NARROW_SCREEN_QUERY media blocks in index.css). matchMedia is guarded for jsdom, which
+  // doesn't implement it.
+  const isNarrowScreen = () => typeof matchMedia === 'function' && matchMedia(NARROW_SCREEN_QUERY).matches
   const [sidebarHidden, setSidebarHidden] = createSignal(
     (readRawPref('kd:sidebarHidden') ?? (isNarrowScreen() ? '1' : '0')) === '1',
   )
