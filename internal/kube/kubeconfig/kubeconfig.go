@@ -31,6 +31,15 @@ func Load(explicitPath string) (*Loader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kubeconfig: load: %w", err)
 	}
+	// A missing default kubeconfig loads as an EMPTY config, not an error (client-go's loading
+	// rules tolerate absent files) — without this check a fresh machine fails much later with
+	// the cryptic `registry: unknown context: ""` instead of being told what to set up.
+	if len(cfg.Contexts) == 0 {
+		return nil, fmt.Errorf(
+			"kubeconfig: no contexts found (looked at %v): not running in a cluster, so kd needs a kubeconfig — set --kubeconfig or KUBECONFIG, or create ~/.kube/config",
+			rules.GetLoadingPrecedence(),
+		)
+	}
 	names := make([]string, 0, len(cfg.Contexts))
 	for name := range cfg.Contexts {
 		names = append(names, name)

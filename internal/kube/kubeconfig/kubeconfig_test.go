@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -77,5 +78,19 @@ func TestRESTConfigTargetsContextServer(t *testing.T) {
 func TestLoadMissingFileErrors(t *testing.T) {
 	if _, err := Load(filepath.Join(t.TempDir(), "does-not-exist")); err == nil {
 		t.Error("Load of a missing explicit path should error")
+	}
+}
+
+func TestLoadContextlessConfigErrors(t *testing.T) {
+	// A fresh machine's missing default kubeconfig loads as an EMPTY config (client-go tolerates
+	// absent files), which used to surface much later as `registry: unknown context: ""` — Load
+	// must fail up front with the actionable setup message instead.
+	path := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(path, []byte("apiVersion: v1\nkind: Config\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "no contexts found") {
+		t.Errorf("Load of a contextless config = %v, want a 'no contexts found' setup error", err)
 	}
 }
