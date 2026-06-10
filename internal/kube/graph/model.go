@@ -154,6 +154,12 @@ type ContainerStatus struct {
 	// lastState.terminated. Empty unless the container restarted at least once — it answers "why did
 	// this restart" for a now-Running container, the actionable signal otherwise buried in the manifest.
 	LastTerminated string `json:"lastTerminated,omitempty"`
+	// CPULimitMilli / MemLimitBytes are this container's OWN limits, so the drawer can gauge its live
+	// usage share against ITS bound — a container at 95% of its memory limit (about to OOM) hides
+	// inside a pod-total gauge that still shows headroom. Zero means no limit declared (unbounded);
+	// 0 is not a meaningful limit (the kubelet rejects it), so omitempty is safe here.
+	CPULimitMilli int64 `json:"cpuLimitMilli,omitempty"`
+	MemLimitBytes int64 `json:"memLimitBytes,omitempty"`
 }
 
 // Edge is a typed relationship from one node to another.

@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js'
-import { formatPair, formatQuantity } from '../capacityLayout'
+import { formatPair, type CapResource } from '../capacityLayout'
 import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
@@ -151,6 +151,34 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
     { label: 'Init containers', items: statuses.filter((c) => c.init) },
     { label: 'Containers', items: statuses.filter((c) => !c.init) },
   ]
+}
+
+// ContainerUsageCell renders one resource's live "value / limit" on a container card — the gauge
+// idiom (value bright, bound dim), bare value when the container declares no limit. formatPair keeps
+// both sides in ONE unit; the unit follows the SMALLER nonzero side so a 2m draw under a 2-core
+// limit reads "2m / 2000m", not the rounded-away "0 / 2" (the live value is what this row is for).
+// Memory within 10% of its limit turns caution-coloured: past it the container is OOMKilled — the
+// one per-container emergency a healthy-looking pod total hides. CPU gets no caution (over-limit
+// merely throttles).
+function ContainerUsageCell(props: { label: string; value: number; limit?: number; res: CapResource }) {
+  const pair = () =>
+    formatPair(props.value, props.limit, props.res, props.value > 0 && props.limit ? Math.min(props.value, props.limit) : props.limit)
+  const nearLimit = () => props.res === 'memory' && !!props.limit && props.value / props.limit! >= 0.9
+  return (
+    <>
+      <span class="container-usage-label">{props.label}</span>
+      <span
+        class="container-usage-val"
+        classList={{ 'near-limit': nearLimit() }}
+        title={nearLimit() ? 'Using over 90% of its memory limit — at risk of being OOM-killed' : undefined}
+      >
+        {pair().value}
+      </span>
+      <Show when={props.limit}>
+        <span class="container-usage-cap">/ {pair().cap}</span>
+      </Show>
+    </>
+  )
 }
 
 interface Props {
@@ -739,13 +767,11 @@ export default function ResourceSummary(props: Props) {
                           {(cu) => (
                             <div
                               class="container-usage"
-                              title="This container's live share of the pod's usage, from metrics-server"
+                              title="This container's live share of the pod's usage, from metrics-server — gauged against its own limit when one is set"
                             >
-                              <span class="container-usage-label">cpu</span>
-                              <span class="container-usage-val">{formatQuantity(cu.cpuMilli ?? 0, 'cpu')}</span>
+                              <ContainerUsageCell label="cpu" value={cu.cpuMilli ?? 0} limit={cs.cpuLimitMilli} res="cpu" />
                               <span class="container-usage-sep">·</span>
-                              <span class="container-usage-label">mem</span>
-                              <span class="container-usage-val">{formatQuantity(cu.memBytes ?? 0, 'memory')}</span>
+                              <ContainerUsageCell label="mem" value={cu.memBytes ?? 0} limit={cs.memLimitBytes} res="memory" />
                             </div>
                           )}
                         </Show>

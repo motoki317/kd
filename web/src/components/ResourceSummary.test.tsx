@@ -87,6 +87,35 @@ describe('ResourceSummary container status dots', () => {
     expect(rows[0].textContent).toBe('cpu250m·mem128Mi')
     expect(rows[1].textContent).toBe('cpu20m·mem64Mi')
   })
+  // The bound that matters per container is its OWN limit: past the memory limit it's OOMKilled,
+  // a fate the pod-total gauge (which may show headroom) hides. The unit follows the smaller side
+  // so a small draw under a big limit keeps its precision ("250m / 500m", never "0 / 2").
+  it('gauges a container against its own limit and flags >90% memory as OOM risk', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500, memLimitBytes: 256 * 1024 * 1024 },
+          { name: 'sidecar', ready: true, state: 'Running' }, // no limits declared → bare values
+        ])}
+        {...base}
+        usage={{
+          containers: [
+            { name: 'app', cpuMilli: 250, memBytes: 240 * 1024 * 1024 }, // ~94% of the mem limit
+            { name: 'sidecar', cpuMilli: 2, memBytes: 8 * 1024 * 1024 },
+          ],
+        }}
+      />
+    ))
+    const rows = container.querySelectorAll('.container-usage')
+    expect(rows[0].textContent).toBe('cpu250m/ 500m·mem240Mi/ 256Mi')
+    const memVal = rows[0].querySelectorAll('.container-usage-val')[1]
+    expect(memVal.classList.contains('near-limit')).toBe(true)
+    expect(memVal.getAttribute('title')).toContain('OOM')
+    // CPU at 50% and the unbounded sidecar carry no caution — only near-limit memory alarms.
+    expect(rows[0].querySelectorAll('.near-limit').length).toBe(1)
+    expect(rows[1].textContent).toBe('cpu2m·mem8Mi')
+    expect(rows[1].querySelector('.near-limit')).toBeNull()
+  })
   it('shows no usage rows without a breakdown (single-container pod, or metrics-server absent)', () => {
     const { container } = render(() => (
       <ResourceSummary

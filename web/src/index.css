@@ -2744,6 +2744,10 @@ button.drawer-host:hover {
   color: var(--text);
   font-weight: 500;
 }
+.container-usage .container-usage-val.near-limit {
+  color: var(--caution-text);
+  font-weight: 600;
+}
 /* Why the container previously exited (its last restart). Indented to align under the name like the
    image row, and amber (--health-suspended) — a PAST termination is a caution that must stand out from
    the live green "Running" state without reading as a current failure (red). */

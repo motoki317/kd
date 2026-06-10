@@ -70,12 +70,21 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	if !ok {
 		return nil
 	}
+	// Limits live on the spec containers, statuses on the status side — join by name so each
+	// card can gauge its usage share against its own bound.
+	limits := map[string]corev1.ResourceList{}
+	for _, c := range p.Spec.InitContainers {
+		limits[c.Name] = c.Resources.Limits
+	}
+	for _, c := range p.Spec.Containers {
+		limits[c.Name] = c.Resources.Limits
+	}
 	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses))
 	for _, cs := range p.Status.InitContainerStatuses {
-		out = append(out, containerStat(cs, true))
+		out = append(out, containerStat(cs, true, limits[cs.Name]))
 	}
 	for _, cs := range p.Status.ContainerStatuses {
-		out = append(out, containerStat(cs, false))
+		out = append(out, containerStat(cs, false, limits[cs.Name]))
 	}
 	if len(out) == 0 {
 		return nil
@@ -83,7 +92,7 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	return out
 }
 
-func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
+func containerStat(cs corev1.ContainerStatus, init bool, limits corev1.ResourceList) ContainerStatus {
 	// LastTerminated explains why a container that has since RESTARTED is now Running/Waiting — so it is
 	// only additive when the CURRENT state isn't itself a termination. A currently-Terminated container
 	// (e.g. caught mid-crashloop) already shows its exit in State; repeating the identical "last exit"
@@ -92,7 +101,14 @@ func containerStat(cs corev1.ContainerStatus, init bool) ContainerStatus {
 	if cs.State.Terminated == nil {
 		last = lastTerminatedString(cs.LastTerminationState)
 	}
-	return ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: last}
+	st := ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: last}
+	if cpu, ok := limits[corev1.ResourceCPU]; ok {
+		st.CPULimitMilli = cpu.MilliValue()
+	}
+	if mem, ok := limits[corev1.ResourceMemory]; ok {
+		st.MemLimitBytes = mem.Value()
+	}
+	return st
 }
 
 // terminatedDetail formats how a container exited: "OOMKilled (exit 137)", a bare reason on a clean

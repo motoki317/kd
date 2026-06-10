@@ -148,6 +148,10 @@ export interface ContainerStatus {
   init?: boolean
   image?: string // the actually-running image, paired with the container in the drawer
   lastTerminated?: string // why it PREVIOUSLY exited ("OOMKilled (exit 137)") — explains a restart
+  // This container's OWN limits (absent = unbounded), gauging its usage share against its bound —
+  // a container near ITS memory limit (about to OOM) hides inside a pod total with headroom.
+  cpuLimitMilli?: number
+  memLimitBytes?: number
 }
 
 export interface KEdge {
