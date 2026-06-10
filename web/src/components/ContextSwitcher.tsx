@@ -41,11 +41,18 @@ export default function ContextSwitcher(props: Props) {
           {(c) => (
             // Contexts with an error during cache build are disabled so a stale credential can't be
             // chosen — the raw client-go error is exposed in the tooltip for local-dev debugging.
+            // The CURRENT context is never disabled even when broken: disabling the selected option
+            // made the browser silently move the native selection to the next enabled option, so the
+            // topbar named a DIFFERENT cluster than the one the URL and canvas showed (D79).
+            // `selected` is declared on the option itself so the choice also survives the <For>
+            // re-rendering the list (the contexts refetch after a stream failure churns the option
+            // nodes, and the select-level value binding loses that race).
             // The option's value is the full kubeconfig context name (URL truth); the visible label
             // is the trimmed tail (cycle 210). Hover reveals the full identifier.
             <option
               value={c.name}
-              disabled={c.status === 'error'}
+              selected={c.name === (props.current ?? props.info!.default)}
+              disabled={c.status === 'error' && c.name !== props.current}
               title={c.error || (c.name !== shortContextName(c.name) ? c.name : undefined)}
             >
               {shortContextName(c.name)}
