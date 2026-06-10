@@ -495,6 +495,20 @@ describe('Topology', () => {
     const meta2 = c2.querySelector('.cap-row-meta') as SVGElement
     expect(meta2.textContent).toContain('2 / 2 pods')
     expect(meta2.classList.contains('near-cap')).toBe(true) // 2/2 = 100% — at the ceiling
+
+    // A node reporting allocatable.pods = 0 (some virtual-kubelet nodes, cpu/mem still set) must NOT
+    // render "N / 0 pods" or amber on a N/0 = Infinity ratio — fall back to the bare count.
+    const zeroCap: KNode[] = [
+      { id: 'node-c', kind: 'Node', name: 'host-3', health: 'Healthy', allocatable: { cpuMilli: 4000, pods: 0 } },
+      { id: 'z1', kind: 'Pod', name: 'z1', health: 'Healthy', host: 'host-3' },
+    ]
+    const { container: c3 } = render(() => (
+      <Topology nodes={zeroCap} edges={[]} search="" {...base} groupBy="nodes" capacity={{ nodes: zeroCap, usage: { items: {} } }} namespace="" />
+    ))
+    const meta3 = c3.querySelector('.cap-row-meta') as SVGElement
+    expect(meta3.textContent).toContain('1 pod')
+    expect(meta3.textContent).not.toContain('/ 0')
+    expect(meta3.classList.contains('near-cap')).toBe(false)
   })
 
   it('Nodes view shows node pod-fill alongside the namespace subset in namespace scope', () => {

@@ -62,9 +62,13 @@ export default function CapacityView(props: {
           // pods" — become the binding constraint. Show "N / cap" like the CPU/mem bars' value/
           // capacity, and amber the count when the node nears its pod cap (scheduling will start to
           // fail). Cap is node-global, so it gauges the node TOTAL (own + other namespaces).
+          // Guard podCap > 0: a node can report allocatable.pods = 0 (some virtual-kubelet nodes,
+          // cpu/mem still set so the server's nil-guard passes), which would render "N / 0 pods" and
+          // amber on a N/0 = Infinity ratio. Treat 0/absent alike — fall back to the bare count.
           const podCap = row.node?.allocatable?.pods
+          const showPodCap = podCap !== undefined && podCap > 0
           const totalPods = row.ownCount + row.otherCount
-          const podPressure = podCap !== undefined && totalPods / podCap >= 0.9
+          const podPressure = showPodCap && totalPods / podCap! >= 0.9
           const expandable = pods > 0 || row.otherCount > 0
           // Aggregate folds carry no stopPropagation, so a click falls through to the row's
           // expand/collapse toggle. Their pointer cursor alone reads as "select this block" —
@@ -154,11 +158,11 @@ export default function CapacityView(props: {
                     keeps only the node's identity + pod count. */}
                 <tspan class="cap-row-meta" classList={{ 'near-cap': podPressure }}>
                   {row.otherCount === 0
-                    ? podCap !== undefined
+                    ? showPodCap
                       ? ` · ${totalPods} / ${podCap} pods`
                       : ` · ${pods} pod${pods === 1 ? '' : 's'}`
                     : ` · ${pods} pod${pods === 1 ? '' : 's'} (+${row.otherCount} in other namespaces${
-                        podCap !== undefined ? ` · ${totalPods}/${podCap} on node` : ''
+                        showPodCap ? ` · ${totalPods}/${podCap} on node` : ''
                       })`}
                 </tspan>
                 <Show when={row.overcommit}>
