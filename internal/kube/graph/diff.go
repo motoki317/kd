@@ -109,10 +109,32 @@ func nodeEqual(a, b Node) bool {
 		a.VolumeBinding == b.VolumeBinding &&
 		a.Expandable == b.Expandable &&
 		endpointsEqual(a.Endpoints, b.Endpoints) && // backends becoming ready/scaling must repaint
+		resourcesEqual(a.Allocatable, b.Allocatable) && // a hot-resized node (VM grow, device plugin) must repaint the capacity view
+		resourcesEqual(a.CapacityRes, b.CapacityRes) &&
+		resourcesEqual(a.Requests, b.Requests) && // an in-place pod resize must repaint its gauges
+		resourcesEqual(a.Limits, b.Limits) &&
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node
 		slices.Equal(a.ContainerStatuses, b.ContainerStatuses) && // readiness/restart/state changes
 		maps.Equal(a.Labels, b.Labels)
+}
+
+// resourcesEqual compares two structured resource quantities by value — their *int64 fields make ==
+// on the structs compare pointer identity, which a rebuild never preserves.
+func resourcesEqual(a, b *Resources) bool {
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	if a == nil {
+		return true
+	}
+	eq := func(x, y *int64) bool {
+		if (x == nil) != (y == nil) {
+			return false
+		}
+		return x == nil || *x == *y
+	}
+	return eq(a.CPUMilli, b.CPUMilli) && eq(a.MemBytes, b.MemBytes) && eq(a.Pods, b.Pods)
 }
 
 // endpointsEqual compares two endpoint summaries, treating nil (not selector-based) as distinct from
