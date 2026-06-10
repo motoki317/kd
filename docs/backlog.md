@@ -183,6 +183,17 @@ Recent batches (newest first; `git log` has the commits):
   Follow-up shipped: **ghost selection no longer fades the canvas** (e6b2901) — the empty spotlight
   subtree faded every card; related() now nulls when the selection has no node on canvas (verified
   live: 0 of 4 faded behind the banner).
+  Then (delegated discovery — two background Explore agents, surveys verified in the main loop):
+  **live-churn survey: all 8 candidates refuted** — sidebar summary/nonReady "lag" dies on sse.go
+  emitting patch+summary in ONE debounce tick; container-picker premise fails (pod containers are
+  immutable; ephemeral debug containers niche); ghost URL degrades gracefully (auto-pick); matchPos
+  self-heals reactively; expanded-fold keys verified stable by the surveyor itself. j/k triage flow
+  ALSO regression-driven live on staging post-cycle-14 (steps exactly the 2 Degraded workflows, no
+  fold churn). **Refactor/docs survey: 3 shipped** — NARROW_SCREEN_QUERY breakpoint consolidation
+  (the 640px magic number lived in 3 places), internals doc gains ghost-drawer contract + ≤640px
+  z-order map + no-spotlight rule, AGENTS.md gains the flex-wrap zero-basis collapse trap. Rejected
+  from that survey: viewport-getter dedup (4 LoC, explicit-over-DRY), pinch-gesture extraction
+  (single consumer — rule of three), drawer reset-logic comment (no third reset site yet).
   Then shipped (phone regime, continued): **drawer becomes a full-width overlay ≤640px** (b2cb445) —
   side-by-side left the topology column ~110px and the toolbar's absolute chips (unclipped, can't
   shrink) bled straight across the drawer hero/tabs; overlay also upgrades reading width 263→375px;
