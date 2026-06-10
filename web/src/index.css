@@ -7,6 +7,11 @@
   --text: #1e2430;
   --text-dim: #6b7280;
   --accent: #2f6feb;
+  /* Text/icon color on an --accent fill (active segment buttons, the "↓ Latest" pill). White clears
+     the 4.5:1 text bar on the light theme's #2f6feb but measures 3.35:1 on the dark theme's lighter
+     #4d8bf0, so the dark palette flips this to near-black instead of darkening the accent itself
+     (focus rings and edge highlights want the lighter accent on dark). */
+  --on-accent: #fff;
   --edge-color: #b6bdc7;
 
   --health-healthy: #18be94;
@@ -55,6 +60,7 @@
   --text: #e4e8ef;
   --text-dim: #98a2b3;
   --accent: #4d8bf0;
+  --on-accent: #0f1115; /* 5.6:1 on #4d8bf0; white is only 3.35:1 */
   --edge-color: #3f4654;
   --pod-accent: #8593f5;
   --caution-text: #f0a92a; /* on dark, the vivid hues read fine as text */
@@ -236,7 +242,7 @@ body {
 }
 .group-seg button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   /* Soft lift on the active segment so it reads as "the one you picked" instead of just a flat
      fill — pairs with hover so the control feels tactile. */
   box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
@@ -3364,7 +3370,7 @@ button.event-source:focus-visible {
 .manifest-format button.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .manifest-format button.active:hover {
   background: color-mix(in srgb, var(--accent) 90%, white);
@@ -3408,7 +3414,7 @@ button.event-source:focus-visible {
   bottom: 14px;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-radius: 999px;
   padding: 5px 14px;
   font-size: 12px;
@@ -3547,7 +3553,7 @@ button.event-source:focus-visible {
 .logs-wrap.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .logs-prev:focus-visible,
 .logs-ts:focus-visible,
@@ -3562,7 +3568,7 @@ button.event-source:focus-visible {
 .logs-case.active:hover,
 .logs-maximize.active:hover,
 .logs-wrap.active:hover {
-  color: #fff;
+  color: var(--on-accent);
   background: color-mix(in srgb, var(--accent) 90%, white);
   border-color: color-mix(in srgb, var(--accent) 90%, white);
 }
@@ -3759,7 +3765,9 @@ button.event-source:focus-visible {
    while the trailing structured fields are dimmed to the timestamp grey — present for grep/context but
    visually subordinate, so the eye lands on the message first (contrast + proximity). */
 .log-json-extra {
-  color: #6b7888;
+  /* #6b7888 measured 4.14:1 on the #0e131b log pane — under the 4.5:1 text bar. This step lighter
+     clears it (5.2:1) while staying well below the body's #d6deea so the fields stay subordinate. */
+  color: #7d8997;
 }
 /* Per-level filter chips (cycle 328): same colors as the inline badges so the toolbar control reads
    as "these are the levels showing". color/background are inherited from the shared .log-level-<lvl>
