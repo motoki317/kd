@@ -26,7 +26,16 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
-- **2026-06-10 b2 (beginner-first pivot)** — light-theme troubled-text contrast: --degraded-text /
+- **2026-06-10 b3 (beginner-first structural sweep)** — three delegated audits (UI text, docs, feature
+  surface) + first-run dogfooding. Shipped: backlog condensed 718→366 lines (519210e); 40+ tooltips/
+  hints/help entries rewritten to beginner-plain English, jargon dropped ("solo", "yank", "SSE")
+  (a965c9c); README hero screenshot from fictional demo data, TODOs dropped (2831e75); deleted-banner
+  text halved. **Feature-surface audit verdict: already restrained** — controls are contextual (kind
+  chips/health pills/orphan toggle appear only when relevant; secondary rels already fold), and the
+  audit's fold candidates (level chips → dropdown, severity dots removal, theme/share/JSON demotion)
+  each trade away an explicit affordance for little chrome; kind abbreviations are kubectl-canonical
+  short names (PO/SVC/DEPLOY/CM). Do not prune features without a concrete beginner-felt pain. Docs
+  audit: README/charts/ADRs/internals all appropriately sized; the bloat was backlog-only (fixed). — light-theme troubled-text contrast: --degraded-text /
   --progressing-text inks + healthTextColor, statuses/reasons now ≥4.5:1 in light (6f46508);
   ExternalName service's inert selector no longer fakes "no endpoints" Degraded (cd61d25) + address-chip
   title made type-neutral (21ca62e); "headless" address sentinel explains itself, no bogus copy
