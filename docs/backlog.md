@@ -28,6 +28,16 @@ Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b17 (gauge ADR; store survey; goroutine-leak fix)** — the attribution-vs-totals gauge
+  design arc recorded as an ADR (per-card self-gauging, plain-fill pod sum, by-pod workload split
+  default, truthful-zero rule) so the next redesign starts from the rationale, not archaeology.
+  Delegated adversarial survey of internal/kube/store+registry: 10 candidates, 8 refuted by the
+  surveyor, 1 refuted on triage (CRD-reconcile capturing Start's ctx IS the intended teardown
+  contract), 1 shipped — Start launched its ctx→stopCh watcher before Discover could fail, so each
+  bad kubeconfig context (built exactly once, against Background) leaked one forever-parked
+  goroutine; the launch now sits after the failure exit. LogViewer toolbar split rejected (no clean
+  state seam — see Rejected). Favicon badge + Events tab re-verifies were probe bugs, not app bugs.
+
 - **2026-06-10 b16 (ManifestPanel; finished-run logs honesty; emergency shapes re-verified)** — the
   manifest tab's whole fetch+find cluster (format radiogroup, keyed resource, query, match stepping,
   per-node reset) extracted into ManifestPanel (the KindFacts seam applied to DetailDrawer, 731→567;
@@ -425,6 +435,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 | Candidate | Verdict |
 |---|---|
+| Split LogViewer's toolbar (or panel) into its own component | rejected (2026-06-10) — the toolbar JSX reads 9+ signals owned by the stream/buffer state machine (filter, levels, groups, wrap, timestamps, previous, container, case, lines); an extraction means ~18 drilled signal/setter props that scatter one cohesive state machine across files. File length alone doesn't justify it — unlike KindFacts/ManifestPanel, there is no clean state seam |
 | Hardcoded short labels for vendor CRDs without API shortNames (e.g. a monitoring operator's kinds truncating to "VMSERV…") | rejected (2026-06-10) — those CRDs declare no shortNames, so any code would be invented: meaningless to a beginner, a per-vendor maintenance list with no canonical source, and WORSE than the truncated real prefix (which at least hints the kind; hover + drawer carry the full name). The fallback truncation is the design |
 | Collapse a container's identical Req+Lim bars into one "Req=Lim" bar (Guaranteed QoS) | rejected (2026-06-10) — the sublabel grid track is a fixed 34px ("Req=Lim" can't fit), a variable row count per card breaks the Lim/Req repetition idiom across cards, and two equal bars already say "req = lim" in the established language |
 | Flag an Unavailable APIService (broken aggregated API) | already-handled (2026-06-06) — `crHealthFromConditions` reads the `Available` condition (False → Degraded) and surfaces its message; no APIService-specific rule needed |
