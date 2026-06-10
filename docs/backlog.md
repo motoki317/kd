@@ -163,12 +163,14 @@ spotlight — see the PVC-spotlight row in Rejected).
 
 - **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
   fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
-  resource's completed pods, and the client shows a Logs tab for `Workflow` via `LOGGABLE_KINDS`. But
-  any OTHER pod-owning workload CRD whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom
-  operator's job CRD) still hides its Logs tab: `hasDescendantPod` can't see the display-dropped pods
-  and the kind isn't in the hardcoded set. **Proper fix:** the server computes a per-node `hasLogs`
-  (ownership over `BuildForLogs`) and the client gates on `node.hasLogs` instead of the kind list +
-  client-side descendant walk. **Reopen when:** a non-Argo workload CRD with completed-only pods needs
+  resource's completed pods, and the client shows a Logs tab for `Workflow` and `CronWorkflow` (the
+  latter via the grandchild chain, D91) via `LOGGABLE_KINDS`. But any OTHER pod-owning workload CRD
+  whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom operator's job CRD) still hides
+  its Logs tab: `hasDescendantPod` can't see the display-dropped pods and the kind isn't in the
+  hardcoded set. **Proper fix:** the server computes a per-node `hasLogs` (ownership over
+  `BuildForLogs`) and the client gates on `node.hasLogs` instead of the kind list +
+  client-side descendant walk (this would also retire the per-Argo-kind `LOGGABLE_KINDS` entries AND
+  fix the cluster-scope Node Logs-tab gap noted in b27). **Reopen when:** a non-Argo workload CRD with completed-only pods needs
   logs, or the hardcoded `LOGGABLE_KINDS` Argo entry feels too special-cased. Same family
   (2026-06-11, D67): a Node selected in **cluster scope** shows no Logs tab (the cluster-scope display
   graph holds no pods, so `hasDescendantPod` is false) while the same Node in kube-system — its static
