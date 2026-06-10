@@ -2052,6 +2052,14 @@ button.conn.conn-retry:focus-visible {
   font-size: 11px;
   font-weight: 600;
 }
+/* A collapsed fold hiding a non-healthy resource: the badge colour is set inline (style.fill) per the
+   worst hidden health, so the fold reads as troubled even with no filter active. A presentation `fill`
+   attribute loses to .collapse-pill-match's CSS fill, so this badge carries no accent class and takes
+   its colour from the inline style (which outranks any class). */
+.collapse-pill-trouble {
+  font-size: 11px;
+  font-weight: 700;
+}
 .collapse-pill.faded {
   opacity: 0.2;
 }

@@ -982,6 +982,37 @@ describe('Topology', () => {
     expect(pill2!.querySelector('.collapse-pill-match')?.textContent).toMatch(/match/)
   })
 
+  it('badges a collapse pill that hides a non-healthy resource, even with no filter active', () => {
+    // Six same-kind cards fold (COLLAPSE at >=5); the middle (cm-1..cm-3) hides behind the pill. One
+    // hidden card is Degraded. With NO search/health filter the "● N match" badge never fires, so
+    // without this the fold reads identical to a benign one and the trouble stays invisible — exactly
+    // the "needs attention" jump that lands the operator on an all-green namespace (the Degraded
+    // Service folded out of sight). The pill must surface the worst hidden health, health-coloured.
+    const mixed: KNode[] = Array.from({ length: 6 }, (_, i) => ({
+      id: `cm${i}`,
+      kind: 'ConfigMap',
+      name: `cm-${i}`,
+      health: i === 2 ? 'Degraded' : 'Healthy',
+    }))
+    const r1 = render(() => <Topology nodes={mixed} edges={[]} search="" {...base} groupBy="kind" />)
+    const pill = r1.container.querySelector('.collapse-pill')!
+    expect(pill).toBeTruthy()
+    expect(pill.classList.contains('faded')).toBe(false) // no filter → the trouble fold stays bright
+    expect(r1.container.querySelector('.collapse-pill-match')).toBeNull() // not a filter match
+    const trouble = r1.container.querySelector('.collapse-pill-trouble')!
+    expect(trouble).toBeTruthy()
+    expect(trouble.textContent).toMatch(/1 degraded/)
+    expect((trouble as SVGElement).style.fill).toContain('health-degraded') // coloured by worst hidden
+    expect(pill.getAttribute('aria-label')).toMatch(/1 needs attention/)
+    cleanup()
+
+    // Converse: an all-healthy fold carries no trouble badge — a benign fold stays neutral.
+    const healthy: KNode[] = Array.from({ length: 6 }, (_, i) => ({ id: `h${i}`, kind: 'ConfigMap', name: `cm-${i}`, health: 'Healthy' }))
+    const r2 = render(() => <Topology nodes={healthy} edges={[]} search="" {...base} groupBy="kind" />)
+    expect(r2.container.querySelector('.collapse-pill')).toBeTruthy()
+    expect(r2.container.querySelector('.collapse-pill-trouble')).toBeNull()
+  })
+
   // The match count is a polite live region so screen readers hear it update as the filter narrows.
   it('marks the resource count as an atomic polite live region (cycle 335/R8)', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)

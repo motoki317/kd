@@ -8,7 +8,7 @@ import { DASHED, edgePath, edgeTitle } from '../edgeRender'
 import { nextRovingIndex } from '../rovingFocus'
 import { type CapTipData } from '../capacityTooltips'
 import CapacityView from './CapacityView'
-import { HEALTH_ORDER, healthColor, healthTextColor } from '../health'
+import { HEALTH_ORDER, healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
 import { kindStats as computeKindStats } from '../kindStats'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, pluralizeKind, prefixParentNames } from '../names'
@@ -657,6 +657,22 @@ export default function Topology(props: Props) {
       return false
     }
     return meta.hidden.reduce((c, n) => c + (hit(n) ? 1 : 0), 0)
+  }
+  // A collapsed fold can hide a non-healthy resource — e.g. the one Degraded Service the "needs
+  // attention" jump drops the operator into a namespace to find. The match badge only fires when a
+  // search or health-filter is already active, so a fresh, unfiltered view reads as all-green and the
+  // problem stays invisible behind a neutral "+ show N more" pill. Surface the worst health the fold
+  // hides, health-coloured, so a troubled fold looks different from a benign one (Contrast + explicit
+  // over implicit). Returns null when every hidden node is Healthy.
+  const collapseHiddenTrouble = (meta: CollapseMeta): { count: number; worst: Health } | null => {
+    let worst: Health | null = null
+    let count = 0
+    for (const n of meta.hidden) {
+      if (n.health === 'Healthy') continue
+      count++
+      if (!worst || healthSeverity[n.health] > healthSeverity[worst]) worst = n.health
+    }
+    return worst ? { count, worst } : null
   }
   // Whether a collapse pill should dim. A kind filter fades a pill of an unselected kind (composing
   // like individual cards do). Additionally, while triaging by an explicit query (search or the health
@@ -2113,7 +2129,11 @@ export default function Topology(props: Props) {
                       aria-label={
                         meta().expanded
                           ? `Show ${meta().hidden.length} fewer ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
-                          : `Show ${meta().hidden.length} more ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
+                          : `Show ${meta().hidden.length} more ${pluralizeKind(meta().groupKind, meta().hidden.length)}${
+                              collapseHiddenTrouble(meta())
+                                ? `, ${collapseHiddenTrouble(meta())!.count} ${collapseHiddenTrouble(meta())!.count === 1 ? 'needs' : 'need'} attention`
+                                : ''
+                            }`
                       }
                       aria-expanded={meta().expanded}
                       onClick={() => toggleCluster(meta().key)}
@@ -2141,12 +2161,36 @@ export default function Topology(props: Props) {
                         <text
                           class="collapse-pill-label"
                           x={n.width / 2}
-                          y={collapseMatchCount(meta()) > 0 ? 24 : 35}
+                          y={collapseMatchCount(meta()) > 0 || collapseHiddenTrouble(meta()) ? 24 : 35}
                           text-anchor="middle"
                         >
                           + show {meta().hidden.length} more
                         </text>
-                        <Show when={collapseMatchCount(meta()) > 0}>
+                        {/* One badge slot: a search/health-filter hit ("● N match", accent) takes
+                            precedence; otherwise, if the fold hides non-healthy resources, surface the
+                            worst with a health-coloured "● N <worst>" so the trouble is visible even
+                            with no filter active (the no-filter case the match badge never covered). */}
+                        <Show
+                          when={collapseMatchCount(meta()) > 0}
+                          fallback={
+                            <Show when={collapseHiddenTrouble(meta())}>
+                              {(t) => (
+                                <text
+                                  class="collapse-pill-trouble"
+                                  x={n.width / 2}
+                                  y="46"
+                                  text-anchor="middle"
+                                  style={{ fill: healthColor(t().worst) }}
+                                >
+                                  <title>
+                                    {t().count} hidden {t().count === 1 ? 'resource needs' : 'resources need'} attention — {healthHint[t().worst]}
+                                  </title>
+                                  ● {t().count} {t().worst.toLowerCase()}
+                                </text>
+                              )}
+                            </Show>
+                          }
+                        >
                           <text class="collapse-pill-match" x={n.width / 2} y="46" text-anchor="middle">
                             ● {collapseMatchCount(meta())} match
                           </text>
