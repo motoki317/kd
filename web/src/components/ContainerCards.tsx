@@ -168,10 +168,25 @@ export default function ContainerCards(props: {
                       </Show>
                       <Show when={cs.lastTerminated}>
                         {/* Why it previously exited — surfaced inline next to the restart count so an
-                            operator sees "OOMKilled" without digging into the manifest's lastState. */}
-                        <div class="container-last-terminated" title="Why the container last restarted">
-                          last exit: {cs.lastTerminated}
-                        </div>
+                            operator sees "OOMKilled" without digging into the manifest's lastState.
+                            The CrashLoopBackOff + clean-exit pairing reads as a contradiction
+                            ("it succeeded, why is it red?"), so that one case gets its explanation
+                            spelled out: the process finishing IS the failure for a Deployment. */}
+                        <Show
+                          when={cs.lastTerminated === 'Completed' && cs.state.includes('CrashLoopBackOff')}
+                          fallback={
+                            <div class="container-last-terminated" title="Why the container last restarted">
+                              last exit: {cs.lastTerminated}
+                            </div>
+                          }
+                        >
+                          <div
+                            class="container-last-terminated"
+                            title="The container exits successfully, so Kubernetes restarts it and backs off — a Deployment expects a process that keeps running. One-shot work belongs in a Job or CronJob."
+                          >
+                            last exit: Completed — it keeps finishing and restarting; run one-shot work as a Job
+                          </div>
+                        </Show>
                       </Show>
                       <Show when={cs.image}>
                         <ImageRef image={cs.image!} wrapClass="container-image" />

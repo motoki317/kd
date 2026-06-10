@@ -339,6 +339,22 @@ describe('DetailDrawer', () => {
     expect(lines[0]).toBe('last exit: OOMKilled (exit 137)')
   })
 
+  it('explains the CrashLoopBackOff + clean-exit contradiction in words', () => {
+    // "It exits successfully, why is it red?" — the batch-script-in-a-Deployment beginner mistake.
+    // Only the crashloop+Completed pairing gets the gloss; a clean exit on a Running container
+    // (previous test) keeps the bare reason.
+    const pod: KNode = {
+      ...configMap,
+      kind: 'Pod',
+      containerStatuses: [
+        { name: 'main', ready: false, restarts: 3, state: 'Waiting: CrashLoopBackOff', lastTerminated: 'Completed' },
+      ],
+    }
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const line = container.querySelector('.container-last-terminated')?.textContent
+    expect(line).toContain('run one-shot work as a Job')
+  })
+
   it('init containers come before main containers (cycle 274)', () => {
     const pod: KNode = {
       ...configMap,
