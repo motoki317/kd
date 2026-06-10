@@ -26,9 +26,19 @@ switching · churn pan-preservation · j/k triage flow · drawer expand mode · 
 owner-chip navigation + Alt+Left · rollout rendering · scale robustness (354-node namespace, 57
 Degraded) · client core (App.tsx/api.ts SSE wiring, surveyed 0/11) · canvas layout math
 (layout.ts/capacityLayout.ts/Topology.tsx, surveyed) · light theme (all views + drawer, token-driven)
-· first-run landing · unreachable-context diagnosis.
+· first-run landing · the bootstrap-failure terminal states (unreachable context / no-access /
+not-signed-in, each live-verified) · auth+rbac (security-lens survey, 0 real) · client utils
+(logs/names/search/ansi/favicon/health/usageAggregate/resourceBars, surveyed 0/8) · beginner
+emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflow).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
+
+- **2026-06-10 b21 (survey coverage complete: utils clean; segment gate green)** — the last
+  unsurveyed surface (logs/names/search/ansi/favicon/health/usageAggregate/resourceBars utility
+  modules) came back 0 real / 8 refuted (regex backtracking, truncation off-by-ones, SGR param
+  skips, scale guards, locale sorts — all already-handled with tests). Every package and client
+  module is now surveyed-clean or fixed. Full segment gate: 617 web tests + all Go suites + `just
+  check` (now in AGENTS.md's build/test block) + embed build, all green.
 
 - **2026-06-10 b20 (security survey clean; empty-state a11y; beginner emergency shapes)** —
   delegated security survey of internal/auth + internal/rbac (header spoofing, reload races,
