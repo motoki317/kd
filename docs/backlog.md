@@ -35,6 +35,19 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b32 (2026-06-11, dogfooding D121–D129)** — EKS-shape pass. Shipped: an EKS Fargate node reports
+  allocatable.pods=1 (one pod per micro-VM by design), so the D101 pod-cap label rendered a red "1 / 1
+  pods" that falsely read as pressure on every Fargate pod — raised the guard to cap > 1 so a dedicated
+  single-pod node falls back to the bare count (verified live: Fargate now reads "· 1 pod", real nodes
+  keep "N / 110 pods"). Also documented (agent skill) that graph/stream multiplexes the namespace graph
+  AND the cluster-wide capacity feed as separate SSE events — conflating them faked a "relationship view
+  drops 158 pods" scale bug (D125, no real bug). Verified clean & mature: zero Unknown-health across 6
+  diverse CRD namespaces (Karpenter NodePool/NodeClaim/EC2NodeClass, Kyverno ClusterPolicy, ECK Elastic,
+  Argo, VictoriaMetrics operator — all classified); induced CreateContainerConfigError surfaces the exact
+  cause ("configmap X not found") in the container card; EBS storage chain (Pod→PVC→PV with the
+  cluster-scoped PV riding along) renders with "Bound NGi"; context switch k3s↔EKS is clean (count/URL
+  update, no stale selection); README concise/beginner-friendly. No LoadBalancer Service found to exercise
+  externalAddress live (unit-tested for Service + Ingress).
 - **b31 (2026-06-11, dogfooding D107–D120)** — breadth pass across two real clusters (k3s + an EKS
   cluster), mostly confirming maturity. Shipped: the expanded-node fit comment said "largest-usage-first"
   but the sort is max(reserved, used) — corrected; a node reporting 0 pod-capacity now falls back to the
