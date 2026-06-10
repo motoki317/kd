@@ -130,6 +130,15 @@ func statusMessage(obj runtime.Object, h Health) string {
 		msg = blockingConditionMessage(o.Status.Conditions)
 	case *appsv1.Deployment:
 		msg = deploymentProblemMessage(o)
+	case *appsv1.ReplicaSet:
+		// ReplicaFailure is the only condition the RS controller writes; it names the creation-failure
+		// cause (quota, admission) for the red RS card next to the red Deployment.
+		for _, c := range o.Status.Conditions {
+			if c.Type == appsv1.ReplicaSetReplicaFailure && c.Status == corev1.ConditionTrue {
+				msg = c.Message
+				break
+			}
+		}
 	case *policyv1.PodDisruptionBudget:
 		msg = pdbBlockMessage(o)
 	}

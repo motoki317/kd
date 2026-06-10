@@ -398,6 +398,16 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(quota-blocked Deployment) = %q, want the ReplicaFailure cause", got)
 	}
 
+	// The owning RS carries the same ReplicaFailure cause — the red RS card next to the red
+	// Deployment must explain itself too.
+	rsBlocked := &appsv1.ReplicaSet{Status: appsv1.ReplicaSetStatus{Conditions: []appsv1.ReplicaSetCondition{
+		{Type: appsv1.ReplicaSetReplicaFailure, Status: corev1.ConditionTrue, Reason: "FailedCreate",
+			Message: "pods \"api-b-abc\" is forbidden: exceeded quota: tiny"},
+	}}}
+	if got := statusMessage(rsBlocked, HealthDegraded); !strings.Contains(got, "exceeded quota") {
+		t.Errorf("statusMessage(quota-blocked ReplicaSet) = %q, want the ReplicaFailure cause", got)
+	}
+
 	// A degraded PDB surfaces its DisruptionAllowed condition message — the WHY behind "can disrupt 0"
 	// (here the controller can't evaluate the budget at all, the misconfigured-empty-selector case).
 	pdbSync := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
