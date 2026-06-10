@@ -88,10 +88,13 @@ describe('ResourceSummary container status dots', () => {
     ))
     // Each rendered bar stacks both containers' segments, proportional to their share and named on
     // hover. (One Lim bar per resource here — only limits are declared.)
-    const cpuSegs = [...container.querySelectorAll('.metric-fill-stack')][0].querySelectorAll('.metric-seg')
+    const stack = [...container.querySelectorAll('.metric-fill-stack')][0]
+    const cpuSegs = stack.querySelectorAll('.metric-seg')
     expect(cpuSegs.length).toBe(2)
     expect(cpuSegs[0].getAttribute('title')).toBe('app · 250m')
     expect(cpuSegs[1].getAttribute('title')).toBe('sidecar · 50m')
+    // Shares stay screen-readable: segment titles are hover-only, so the stack carries one label.
+    expect(stack.getAttribute('aria-label')).toBe('per container: app 250m, sidecar 50m')
     expect((cpuSegs[0] as HTMLElement).style.flexGrow).toBe('250')
     expect((cpuSegs[1] as HTMLElement).style.flexGrow).toBe('50')
     // Both cards carry swatches in distinct colours (the join to the segments above); the cards ARE

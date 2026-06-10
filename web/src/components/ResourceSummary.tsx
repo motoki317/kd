@@ -159,7 +159,18 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segment
                               when={segsFor(g.res).length > 1}
                               fallback={<div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />}
                             >
-                              <div class="metric-fill metric-fill-stack" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }}>
+                              {/* role=img + aria-label: the shares are otherwise hover-only (segment
+                                  titles on plain divs) — one label per stack keeps them readable
+                                  to a screen reader without N virtual-cursor stops. */}
+                              <div
+                                class="metric-fill metric-fill-stack"
+                                classList={{ over: b.over }}
+                                style={{ width: pct(b.fillFrac) }}
+                                role="img"
+                                aria-label={`per container: ${segsFor(g.res)
+                                  .map((s) => `${s.name} ${formatQuantity(s.value, g.res)}`)
+                                  .join(', ')}`}
+                              >
                                 <For each={segsFor(g.res)}>
                                   {(s) => (
                                     <div
