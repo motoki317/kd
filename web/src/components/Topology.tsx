@@ -310,8 +310,9 @@ export default function Topology(props: Props) {
   // Fitting that whole height (the prior behaviour) crushed the WIDTH-proportional bars — the entire point
   // of this view — to noise (a 58-pod node drew 4px-tall cards). Instead drive the zoom from the row WIDTH
   // so the bars read at their true global scale; when the card stack is taller than the viewport, anchor it
-  // to the TOP (cards are ordered largest-usage-first, so the heaviest pods sit up top and the operator
-  // pans down for the long tail) rather than centring an unreadable whole.
+  // to the TOP (cards are ordered largest-footprint-first — by max(reserved, used), so a big reserver
+  // and a big live user both float up — so the heaviest pods sit up top and the operator pans down for
+  // the long tail) rather than centring an unreadable whole.
   const fitCapRowExpanded = (r: { x: number; y: number; width: number; height: number }) => {
     if (!svg) return
     const rect = svg.getBoundingClientRect()
