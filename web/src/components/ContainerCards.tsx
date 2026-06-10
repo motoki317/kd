@@ -4,7 +4,7 @@ import { useNow } from '../clock'
 import { healthColor, healthTextColor } from '../health'
 import { drawerResourceBars } from '../resourceBars'
 import { relativeAge } from '../time'
-import type { ContainerStatus, ContainerUsage, Health, ResourceUsage } from '../types'
+import type { ContainerStatus, ContainerUsage, Health, Resources, ResourceUsage } from '../types'
 import ImageRef from './ImageRef'
 import UsageGauges from './UsageGauges'
 
@@ -68,7 +68,13 @@ const num = (v?: number) => (v ? v : undefined)
 // its own req/lim — a per-pod sum can't say which container is near the ceiling; user-directed), its
 // last exit, and its image, grouped into Init vs app containers with counts. A floating tag
 // (":latest"/none) flags an image a rolling restart could silently change.
-export default function ContainerCards(props: { statuses: ContainerStatus[]; usage?: ResourceUsage }) {
+export default function ContainerCards(props: {
+  statuses: ContainerStatus[]
+  usage?: ResourceUsage
+  // The pod's host-node capacity — the fallback ceiling for a container with no req/lim at all
+  // (it can eat up to the node), keeping the "Node" bar idiom the pod-level gauge used.
+  hostCapacity?: Resources
+}) {
   // A container's own usage reading: multi-container pods carry a per-container breakdown; a
   // single-container pod's breakdown is omitted on the wire (it would repeat the total), so the
   // pod total IS that container's reading.
@@ -115,6 +121,7 @@ export default function ContainerCards(props: { statuses: ContainerStatus[]; usa
                       usage: cu ? { cpuMilli: cu.cpuMilli ?? 0, memBytes: cu.memBytes ?? 0 } : undefined,
                       request: { cpuMilli: num(cs.cpuRequestMilli), memBytes: num(cs.memRequestBytes) },
                       limit: { cpuMilli: num(cs.cpuLimitMilli), memBytes: num(cs.memLimitBytes) },
+                      hostCapacity: props.hostCapacity,
                     })
                   }
                   return (

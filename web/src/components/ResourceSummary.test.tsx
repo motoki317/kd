@@ -115,6 +115,35 @@ describe('ResourceSummary container status dots', () => {
     expect(warn[0].textContent).toContain('OOM')
     expect(warn[0].closest('.container-card')?.querySelector('.container-name')?.textContent).toBe('app')
   })
+  it('gauges an unconstrained container against the host node capacity when known', () => {
+    // The pod-level gauge's "Node" fallback ceiling moves onto the cards with the bars: a container
+    // with no req/lim at all can eat up to the node, so its reading is gauged against the node's
+    // size rather than shown on an ungauged dashed track.
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500 },
+          { name: 'sidecar', ready: true, state: 'Running' },
+        ])}
+        {...base}
+        usage={{
+          cpuMilli: 210,
+          containers: [
+            { name: 'app', cpuMilli: 200 },
+            { name: 'sidecar', cpuMilli: 10 },
+          ],
+        }}
+        hostCapacity={{ cpuMilli: 4000 }}
+      />
+    ))
+    const cards = container.querySelectorAll('.container-card')
+    // app HAS a cpu limit → gauged against it, not the node.
+    expect(cards[0].querySelector('.metric-sublabel')?.textContent).toBe('Lim')
+    const sidecarCpu = cards[1].querySelector('.metric-row')!
+    expect(sidecarCpu.querySelector('.metric-sublabel')?.textContent).toBe('Node')
+    expect(sidecarCpu.querySelector('.metric-bar.unconstrained')).toBeNull()
+    expect(sidecarCpu.textContent).toContain('/ 4') // 4000m → the node's 4 cores
+  })
   it('gauges a single-container card with the pod total (the wire omits a 1-container breakdown) and skips finished containers', () => {
     const mi = 1024 * 1024
     const { container } = render(() => (

@@ -554,7 +554,7 @@ export default function ResourceSummary(props: Props) {
           </Show>
         }
       >
-        <ContainerCards statuses={props.node.containerStatuses ?? []} usage={props.usage} />
+        <ContainerCards statuses={props.node.containerStatuses ?? []} usage={props.usage} hostCapacity={props.hostCapacity} />
       </Show>
       <Show when={props.owners.length > 0}>
         <div class="drawer-owners">
