@@ -168,6 +168,18 @@ Recent batches (newest first; `git log` has the commits):
   test pins the ratio/handoff contract; live-verified with synthetic touch pointers (ratio exactly 2.0).
   Phone-regime survey: drawer at 375px already fits in-bounds (263px, expand affordance available) —
   no change needed.
+  Then shipped: **deleted resources get a drawer terminal banner** (4e4eb33) — found driving a live
+  rollout watch (drawer open on a pod, `rollout restart`): the drawer silently closed the moment the
+  pod left the graph, losing the name/status/final log lines exactly when the operator watches closest.
+  App keeps the last-resolved selection while selectedId points at the vanished id; drawer stays open
+  with an explicit aria-live strip; owner chips derive from the ghost (the RS/Job chip is the path to
+  the replacement — verified, navigates out + banner clears); the dead pod's final log lines stay
+  readable. Layout trap caught live: as a header CHILD the zero-basis summary "fit" on the banner's
+  100% flex line and collapsed to 0px wide — banner must be a header SIBLING. Note: in the rollout
+  case the OLD ReplicaSet also leaves the graph (isHistorical drops superseded RS), so no owner chip
+  there — chip survives for crashloop-reap/job-cleanup where the owner lives on. One unreproduced
+  observation: a single round saw the ghost cleared entirely (drawer closed) — suspect an SSE
+  reconnect snapshot resolving the dead keepSel to null (defensible behavior); watch for it.
   Then shipped (phone regime, continued): **drawer becomes a full-width overlay ≤640px** (b2cb445) —
   side-by-side left the topology column ~110px and the toolbar's absolute chips (unclipped, can't
   shrink) bled straight across the drawer hero/tabs; overlay also upgrades reading width 263→375px;
@@ -349,6 +361,14 @@ Recent batches (newest first; `git log` has the commits):
 ---
 
 ## Open
+
+- **Toolbar vertical bulk at phone width** — *deferred (low value/risk ratio).* At 375px the topology
+  toolbar's four facet rows consume ~250px of 667, leaving ~400px of canvas. Workable: the drawer and
+  sidebar now overlay full-width, pinch zoom covers the cramped canvas, and the chips wrap correctly
+  (no overflow). A "fold filters behind a disclosure at ≤640px, keep the search row" design would
+  reclaim ~180px but touches the toolbar's roving focus / scroll-edge fades (the same delicacy that
+  deferred the TopologyToolbar extraction). **Reopen when:** a phone operator actually reports the
+  canvas too short, or the toolbar grows another facet row.
 
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
