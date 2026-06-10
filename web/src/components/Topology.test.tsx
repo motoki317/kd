@@ -34,6 +34,14 @@ describe('Topology', () => {
     expect(faded(container)).toBe(0)
   })
 
+  it('a ghost selection (deleted resource, drawer banner open) does not fade the canvas', () => {
+    // While the drawer shows a deleted resource's terminal state, selectedId points at an id with
+    // no card on canvas. A spotlight with no subject would fade EVERYTHING — so no spotlight.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="gone-uid" />)
+    expect(container.querySelectorAll('g.node').length).toBe(3)
+    expect(faded(container)).toBe(0)
+  })
+
   it('pinch: two touch pointers scale the canvas by their distance ratio, then hand off to pan', () => {
     // Phones never send wheel events, so the two-finger pinch is the ONLY touch zoom path. The
     // contract: spreading the fingers to 2x their distance doubles the scale (anchored at their

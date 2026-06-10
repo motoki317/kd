@@ -449,6 +449,9 @@ export default function Topology(props: Props) {
   const related = createMemo(() => {
     const id = props.selectedId
     if (!id) return null
+    // A ghost selection (the inspected resource was deleted; the drawer shows its terminal banner)
+    // has no card on canvas — a spotlight with no subject would just fade EVERYTHING. No spotlight.
+    if (!props.nodes.some((n) => n.id === id)) return null
     return spotlightSubtree(id, displayEdges())
   })
 
