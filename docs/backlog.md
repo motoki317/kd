@@ -35,7 +35,12 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b28 (2026-06-11, dogfooding D79–D90; next cycle: D91)** — the dead-credentials context switch
+- **b29 (2026-06-11, D91–D92 + refactor)** — CronWorkflow now offers aggregated logs of its
+  scheduled runs (the grandchild CronWorkflow→Workflow→pods chain; "did last night's backup succeed?"
+  — verified live, 1521 lines across real runs), which also activates the D78 never-run message for
+  it; refactor: the two byte-identical CR-condition scanners folded into crConditionField; CronWorkflow
+  aggregated logs verified clean at 375px (the 32px "overflow" was the frozen drawer-in animation).
+- **b28 (2026-06-11, dogfooding D79–D90)** — the dead-credentials context switch
   (a real shape that day) caught two lies: the stale selection ghosted into the drawer under a false
   "Deleted from the cluster" banner (selection now clears on ctx change), and disabling the broken
   current context's option made the native select silently display a DIFFERENT cluster (current
