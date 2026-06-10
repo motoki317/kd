@@ -188,6 +188,39 @@ edges.
   layout output — selecting a pod still needs to light its Node via the unrouted edge set.
 - **`nodeFaded` order:** selection first (a selected node never fades), then kind filter, then
   search ∩ health ∩ related-subtree. Keep that order if you add a filter.
+- **Ghost selections don't spotlight.** When the selected resource has no card on canvas (it was
+  deleted; see the drawer terminal state below), `related()` returns null — an empty spotlight
+  subtree would fade EVERYTHING. The 'f'-refit and edge spotlight degrade the same way.
+
+## Deleted-resource terminal state (drawer)
+
+When the inspected resource vanishes from the live graph (a rollout replaced the pod, a crashlooper
+was reaped, a finished job was cleaned up), the drawer does NOT close. App keeps the last *resolved*
+selection (`lastResolved` behind the `drawerNode` memo) while `selectedId` still points at the
+vanished id, and the drawer renders that ghost with an explicit `.drawer-deleted` banner (aria-live)
+over the last-known facts — the final status and log lines are exactly what a rollout-watcher wants
+to keep reading. Owner chips derive from the ghost, so the surviving ReplicaSet/Job chip is the
+one-click path to the replacement (in the rollout case the OLD ReplicaSet leaves the graph too —
+`isHistorical` drops superseded RS — so no chip there). Any new selection, explicit deselect, or
+namespace switch clears the ghost. The banner is a **sibling** of `.drawer-header`, not a child: a
+zero-basis flex item "fits" on a 100%-width sibling's wrapped line and collapses to 0px wide.
+
+## Phone-width overlay layers (≤640px)
+
+Desktop is three side-by-side flex columns (sidebar · canvas · drawer). At the phone breakpoint
+(`NARROW_SCREEN_QUERY` in App.tsx; matching tagged `@media` blocks in index.css) the panels become
+full-width overlays instead of squeezing the canvas. The z order, bottom-up:
+
+| z | layer | note |
+| --- | --- | --- |
+| 2 | `.topology-toolbar` | floats over the canvas top at every width |
+| 5 | `.topbar` | app chrome |
+| 30 | `.drawer` (overlay mode) | full-width over canvas + toolbar |
+| 40 | `.sidebar` (overlay mode) | above the drawer — opened deliberately; picking a namespace auto-dismisses it |
+| 60 | help panel | full-screen barrier |
+
+The sidebar also seeds HIDDEN at this width when no `kd:sidebarHidden` pref is stored, and the
+topbar compacts (brand text drops, switcher/crumb truncate) so the offline-retry pill stays reachable.
 
 ## Scope-keyed auto-fit
 

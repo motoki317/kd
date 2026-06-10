@@ -131,6 +131,11 @@ sleep 6   # SSE settle; ~15s for a remote EKS context's FIRST informer sync
   content (`details:not([open]) > :not(summary){display:none}`), so the section shows whether open or
   closed and the `<summary>` becomes a dead toggle — re-hide with an explicit `:not([open])` rule. (Only
   reproduces in a real browser; jsdom renders neither CSS nor native `<details>` toggling — verify live.)
+  In a `flex-wrap` row, a **zero-basis item "fits" beside a 100%-width sibling on the same line** (zero
+  hypothetical size fits zero remaining space) and renders 0px wide instead of wrapping — a full-width
+  banner added inside a flex header silently collapsed the summary beside it to invisible. Put the
+  banner OUTSIDE the flex row (a sibling), or give the squeezed item a real flex-basis. (Caught live in
+  the drawer deleted-banner work; jsdom reports no widths, so only a live measure shows it.)
 - **jsdom limits**: `offsetParent` is always null, `scrollIntoView`/`Element.animate` are missing (stub
   them), `getBoundingClientRect` returns zeros, and `animationend` never fires (assert the class was
   *added*, not auto-removed). Unit-test the DOM contract; verify the behaviour live.
