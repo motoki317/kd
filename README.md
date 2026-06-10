@@ -29,7 +29,8 @@ Pods. Unhealthy resources stand out in color, and troubled namespaces sort to th
 Click a resource to open its details. The summary answers "what is this and how is it doing" without
 opening the manifest: status with its reason, each container's state and live usage against its own
 limit (a container about to hit its memory limit is flagged), CPU/memory gauges against requests and
-limits, and each kind's defining facts — a Service's selector and endpoints, an Ingress's
+limits — a workload's summed across its replicas, the fill split per pod or per container — and each
+kind's defining facts: a Service's selector and endpoints, an Ingress's
 routes, a ConfigMap's keys, a Node's taints. Tabs carry live logs (multi-container streams merged and
 labelled, previous-crash output, level and text filters), recent events rolled up from the resource's
 children, and the raw manifest (YAML or JSON, with in-pane find). Owner chips walk up the tree, and
