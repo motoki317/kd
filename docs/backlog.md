@@ -236,7 +236,21 @@ Recent batches (newest first; `git log` has the commits):
   **drawer-overlay tab-bleed at phone width** (Tab from inside the drawer can reach canvas controls behind
   it — same long-standing severity as the desktop expanded-drawer behavior, never operator-felt; reopen
   with the modal-help inert slice below) and **modal help overlay inert siblings + initial focus** (M
-  effort; the overlay is dismiss-on-any-key today so the trap window is one keystroke wide). — a directed campaign to mature the UX by
+  effort; the overlay is dismiss-on-any-key today so the trap window is one keystroke wide).
+  Then shipped (delegated chips survey → verified survivors): **long chip values wrap inside the chip**
+  (16b8ef9) — a MetaChip value with a long unbreakable token (helm-style selector pair, cloud taint key)
+  set the chip's min-content and pushed it 57px past the drawer edge at phone width (measured on a real
+  operator-managed Service selector); `overflow-wrap: anywhere` on `.port-addr code`, the `.route-row`
+  treatment. **The "headless" address sentinel explains itself** (bbe7502) — the chip rendered the
+  sentinel like a real IP, with a Copy button that copied the literal word "headless"; now the LB
+  "pending" idiom (explanatory title, no copy), and real cluster IPs gain the title the ext chip had.
+  From the same survey, refuted: **`.port-chip` nowrap** (port strings are short bounded "name
+  port→target/proto"; the container wraps between chips — per-chip nowrap is correct); **StorageClass
+  `expandable` bare chip → MetaChip** (it's a boolean capability tag, not a label+value fact — MetaChip
+  would fabricate a value); **secretType row's DOM divergence** (it deliberately heads the data-keys row
+  list it classifies — proximity — and reuses the addr-label idiom inside the row form); **port/endpoint
+  chip labels** (the hero's type line sits directly above — proximity already disambiguates; the real gap
+  was the sentinel, fixed above). — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
   source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
   flows found a real, clearly-felt gap nearly every cycle. Shipped so far: Kinds-row overflow fade;
