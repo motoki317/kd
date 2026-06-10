@@ -26,6 +26,15 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b4 (beginner first-run dogfooding)** — fresh namespace says "this namespace is empty"
+  plainly instead of the unconnected-orphan riddle (4af7105); drawer gauge rows stop printing their
+  bound name twice ("Req — / 25m req" → bare value/bound, capacity-view repetition) (d869e92); Nodes
+  view Req/Use axis labels gain hover glosses + "(+59 other-ns)" speaks plainly (c3b7ee8); Kind view
+  shows full pod names — the tree's "…-suffix" parent dedup leaked into a view with no parent context,
+  making api/web pods indistinguishable (875a179). Delegated URL/deep-link survey: ~all refuted —
+  bogus `?kinds=` lands on the existing "No resources match" overlay + clear button (verified live);
+  unmatched `?sel=` auto-degrades (prior verdict); orphans/capRes/sel-mangling are hand-edit-only
+  shapes on machine-written URLs (low). URL surface verified mature.
 - **2026-06-10 b3 (beginner-first structural sweep)** — three delegated audits (UI text, docs, feature
   surface) + first-run dogfooding. Shipped: backlog condensed 718→366 lines (519210e); 40+ tooltips/
   hints/help entries rewritten to beginner-plain English, jargon dropped ("solo", "yank", "SSE")
