@@ -38,6 +38,7 @@ push detail to those.
 ```bash
 just build       # vite build → embed → go build  (the authority; sets the embed_web tag)
 just test        # go test + npm test
+just check       # gofmt gate + go vet + (advisory) golangci-lint + tsc — run before committing Go
 just dev         # Go API :9123 + Vite :5173 (proxied)
 go test ./...                # Go tests only
 cd web && npm test           # web tests only — MUST run from web/
