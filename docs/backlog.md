@@ -33,6 +33,15 @@ emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflo
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b26 (operator-flow dogfooding D51–D60)** — selection fades 24 of 64 edges in a
+  three-lens graph (D51); a live `kubectl scale 2→5` updates the Deployment card to 5/5 over SSE
+  AND the sibling fold engages dynamically — 3 pods shown + "+ show 2 more" the moment the group
+  crosses the threshold (D57); zoom clamps hold at [0.15, 3] under 30/60 keypresses (D58); find
+  query + all 8 marks survive the YAML↔JSON flip (D59); no sidebar/canvas name overflow found —
+  cards recover full identity via native <title> hover (D60+D52); kind-chip × search composition
+  follows the documented fade precedence (the selection never fades — rung 1) (D56). Cycles
+  D53–D55 fold into earlier evidence (overflow idiom D16/D40; label chips D14).
+
 - **2026-06-10 b25 (operator-flow dogfooding D41–D50)** — capacity resource flip relabels Gi↔cores
   (D41); hover-spotlight recedes 8 of 9 node rows whole, restores on leave — earlier zero-fade
   probes had hit handler-less track rects (D42); sidebar trouble-badge click lands + flashes with
