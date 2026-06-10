@@ -37,19 +37,18 @@ Use this view to find a resource by its kind.
 
 ![kd kinds view](./docs/images/kd_kinds.png)
 
-## Installation
+## Run locally
 
-### Running locally
+Download the `kd` binary from [the latest GitHub Releases](https://github.com/motoki317/kd/releases),
+then run it:
 
-Get the `kd` binary:
+```bash
+./kd
+```
 
-- Download from [the latest GitHub Releases](https://github.com/motoki317/kd/releases)
-- TODO: mise support
-- TODO: nix support
+kd reads your kubeconfig and serves the dashboard on http://localhost:9123/.
 
-kd reads your kubeconfig and will start on http://localhost:9123/.
-
-## Deploy
+## Deploy to a cluster
 
 ```bash
 docker build -t <ref> .                                      # one static image, web embedded
