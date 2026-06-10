@@ -89,6 +89,7 @@ docker-desktop; 8 of 11 shapes shipped a fix in their first pass:
 | Bad image / missing ConfigMap | typo image tag; envFrom a missing CM | waiting message carries the root cause |
 | Pending PVC | nonexistent storageClassName | Events tab shows "storageclass not found" zero clicks away |
 | Unschedulable pod | request more CPU than the node has | Unschedulable condition message in the headline |
+| Near-OOM (not yet killed) | `python3 -c "x = bytearray(113*1024*1024); import time; time.sleep(36000)"` under a 128Mi limit (python:3.12-alpine; the interpreter adds ~3Mi — size the bytearray to land 90–95%), beside an idle busybox sidecar | the at-risk container's card alarms in words ("over 90% of its limit, OOM risk") while the calm sidecar stays calm; segment/swatch colours join cards to the gauge stack. metrics-server lags ~30–60s after pod start |
 
 Cleanup: one throwaway namespace holds everything (`kubectl delete ns` at the end); a finalizer-stuck
 pod needs `kubectl patch --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'` first or

@@ -26,6 +26,19 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b10 (per-container display matures user-directed; container-card module)** — the pod
+  gauge's fill now stacks one coloured segment per container (hover names the share; total width
+  unchanged), keyed to each card by a square swatch, and cards show declared bounds with every
+  number labelled ("cpu req 10m | mem req 128Mi · lim 128Mi") instead of repeating live usage —
+  user-directed redesign in two rounds of feedback (3825567; the earlier text-row form: 921406f →
+  1bd2349 → 7be4aa4, whose live round caught the smaller-side unit rule rendering "320Ki/65536Ki").
+  The OOM alarm survives as words on the at-risk card (≥90% of its own memory limit; induced-shape
+  verified end-to-end with a 91%-of-limit pod — recipe added to the dogfooding catalogue). Container
+  cluster + image-ref helpers extracted to ContainerCards.tsx / ImageRef.tsx (the drawer's hottest
+  evolution spot now lives in a 165-line module; pure move, 069's commit). README caught up
+  (monitoring category, per-container usage). Refuted: "HPA floats as an island" — the convention
+  ref-scanner already links HPA -[refers]-> its scale target (verified against a live graph).
+
 - **2026-06-10 b9 (WCAG contrast pass + per-container usage)** — a computed-luminance walk over
   every visible text element found the dark theme's lighter accent (#4d8bf0) sinking white control
   text to 3.35:1; new `--on-accent` token flips to near-black on dark (5.6:1) across the four
