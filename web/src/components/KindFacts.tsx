@@ -173,7 +173,20 @@ export default function KindFacts(props: { node: KNode }) {
             <MetaChip label="for" value={props.node.certNames!} title="Names this certificate secures (commonName + dnsNames)" />
           </Show>
           <Show when={props.node.certExpiry}>
-            <MetaChip label="expires" value={`in ${relativeUntil(props.node.certExpiry!, useNow())}`} title="Certificate validity end (status.notAfter) — cert-manager renews before this" />
+            {(() => {
+              // A live cert expires in the future ("in 84d"); a renewal-failed cert is already past
+              // its notAfter, where "in 0s" reads as nonsense on the red card. Flip to "expired Nd
+              // ago" with the caution tint so the debugging moment (a TLS error) names the cause.
+              const expired = () => new Date(props.node.certExpiry!).getTime() < useNow().getTime()
+              return (
+                <MetaChip
+                  label={expired() ? 'status' : 'expires'}
+                  value={expired() ? `expired ${relativeAge(props.node.certExpiry!, useNow())} ago` : `in ${relativeUntil(props.node.certExpiry!, useNow())}`}
+                  title="Certificate validity end (status.notAfter) — cert-manager renews before this"
+                  class={expired() ? 'port-failed' : undefined}
+                />
+              )
+            })()}
           </Show>
           <Show when={props.node.certIssuer}>
             <MetaChip label="issuer" value={props.node.certIssuer!} title="Issuer that signs this certificate" />

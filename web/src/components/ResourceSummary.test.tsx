@@ -617,6 +617,18 @@ describe('ResourceSummary Certificate', () => {
     expect(text).toContain('api.example.com')
     expect(text).not.toContain('expires')
   })
+
+  it('reads "expired … ago" with the caution tint for a past-notAfter (renewal-failed) cert', () => {
+    const node: KNode = {
+      id: 'c3', kind: 'Certificate', name: 'stale-tls', health: 'Degraded', certNames: 'old.example.com',
+      certExpiry: new Date(Date.now() - 5 * 86400_000).toISOString(),
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const text = container.querySelector('.drawer-ports')?.textContent ?? ''
+    expect(text).toContain('expired')
+    expect(text).not.toContain('in 0s') // never the nonsense future-zero on an already-expired cert
+    expect(container.querySelector('.port-failed')).not.toBeNull()
+  })
 })
 
 describe('ResourceSummary PDB', () => {
