@@ -161,6 +161,13 @@ Recent batches (newest first; `git log` has the commits):
   sliver. Topbar panel-left toggle (far left, above the panel it controls; round utility chrome set),
   ≤640px: open sidebar overlays the canvas, defaults hidden with no stored pref, auto-dismisses on
   namespace pick. Verified live at 375x667 and 1280 (desktop unchanged).
+  Then shipped: **two-finger pinch zoom** (d2654f6) — phones send no wheel events, so the canvas had NO
+  touch zoom path (touch-action:none already made single-finger pan work). Two tracked touch pointers
+  switch pan→anchored zoom (wheel-path math, finger-distance ratio at the midpoint); third finger
+  ignored; lift-one hands off to pan re-anchored at the survivor (no canvas yank, no momentum). Unit
+  test pins the ratio/handoff contract; live-verified with synthetic touch pointers (ratio exactly 2.0).
+  Phone-regime survey: drawer at 375px already fits in-bounds (263px, expand affordance available) —
+  no change needed.
   Verified-mature this discovery pass (projections + shell, staging): Network view (IngressRoute drawer
   carries host→service·middlewares; Service drawer answers "backed by ready pods?" with the n/n ready
   chip + copyable selector; edge `<title>` names each relationship type), Volumes view (Pod→PVC "Bound
