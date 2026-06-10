@@ -19,12 +19,27 @@ features/docs, structural cleanup over micro-edits.
 
 **Verified mature (don't re-survey without code changes):** Events tab · Logs panel (incl. phone width)
 · search + keyboard flows · help overlay · manifest find (term/marks survive format toggle) · Network +
-Volumes projections · cluster scope at 666 resources · context switching · churn pan-preservation ·
-j/k triage flow · drawer expand mode · offline/dropped-stream trio · capacity view at production scale
-· relationship/kind-filter compose · owner-chip navigation + Alt+Left · rollout rendering · scale
-robustness (354-node namespace, 57 Degraded).
+Volumes projections · RBAC + Disruption + Monitoring projections (binding→role→SA spotlight; PDB
+guards chain; scrape→service, all walked live 2026-06-10) · cluster scope at 666 resources · context
+switching · churn pan-preservation · j/k triage flow · drawer expand mode · offline/dropped-stream trio
+· capacity view at production scale (incl. node-name → drawer) · relationship/kind-filter compose ·
+owner-chip navigation + Alt+Left · rollout rendering · scale robustness (354-node namespace, 57
+Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
+
+- **2026-06-10 b15 (structure for future changes; secondary projections matured; URL alias)** — the
+  drawer's per-kind facts blocks (300+ lines of Show blocks every spec-chip change touches) extracted
+  whole into KindFacts.tsx with their MetaChip/KeyValRow idioms (pure move, live-verified identical);
+  spec.go's routing extractors (Ingress/HTTPRoute/Traefik, the likeliest growth point — GRPCRoute
+  pends) split into spec_routing.go; segment palette moved into UsageGauges with its consumers (the
+  ContainerCards export was an inverted dependency). `rels=disruption` (the VISIBLE label) now
+  aliases the stable `scheduling` id — a hand-edited URL guessed from the UI was silently dropped,
+  PDBs read as plain orphans (cost a confused round live; parseRels moved to relationships.ts +
+  tests). RBAC/Disruption/Monitoring projections all walked live against real shapes → mature list.
+  Delegated adversarial survey of the fresh gauge code: 10 candidates, 8 refuted (4 by the surveyor
+  itself), 2 small hardenings folded (keyed-Show OOM warning; caption-row flex-wrap). README names
+  the workload rollup + split; AGENTS.md gains the gauge-modules row.
 
 - **2026-06-10 b14 (pod summed gauge returns; workload split by pod/container — user-directed)** —
   the pod drawer shows the summed gauge again ABOVE the per-container cards (both reads matter: total
