@@ -165,6 +165,10 @@ type ContainerStatus struct {
 	// declared (a zero request is the unset default, not a meaningful reservation).
 	CPURequestMilli int64 `json:"cpuRequestMilli,omitempty"`
 	MemRequestBytes int64 `json:"memRequestBytes,omitempty"`
+	// LastRestartAt is WHEN the container last exited (lastState.terminated.finishedAt, RFC3339) —
+	// it qualifies the restart count: "↻ 47" on a 200-day-old pod reads identically for an ancient
+	// flaky week and an actively-crashing container until you know the last one was 2 hours ago.
+	LastRestartAt string `json:"lastRestartAt,omitempty"`
 }
 
 // Edge is a typed relationship from one node to another.

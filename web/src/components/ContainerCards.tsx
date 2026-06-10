@@ -1,6 +1,8 @@
 import { For, Show } from 'solid-js'
 import { formatQuantity } from '../capacityLayout'
+import { useNow } from '../clock'
 import { healthColor, healthTextColor } from '../health'
+import { relativeAge } from '../time'
 import type { ContainerStatus, Health, ResourceUsage } from '../types'
 import ImageRef from './ImageRef'
 
@@ -157,9 +159,20 @@ export default function ContainerCards(props: { statuses: ContainerStatus[]; usa
                           {cs.state}
                           {notReady ? ' · not ready' : ''}
                         </span>
+                        {/* The age qualifies the count: "↻ 47" reads identically for an ancient
+                            flaky week and an active crashloop until you know the last restart was
+                            2 hours — or 60 days — ago. */}
                         <Show when={(cs.restarts ?? 0) > 0}>
-                          <span class="container-restarts" title={`${cs.restarts} restarts`}>
+                          <span
+                            class="container-restarts"
+                            title={
+                              cs.lastRestartAt
+                                ? `${cs.restarts} restarts — the last one ${relativeAge(cs.lastRestartAt, useNow())} ago`
+                                : `${cs.restarts} restarts`
+                            }
+                          >
                             ↻ {cs.restarts}
+                            {cs.lastRestartAt ? ` · ${relativeAge(cs.lastRestartAt, useNow())} ago` : ''}
                           </span>
                         </Show>
                       </div>

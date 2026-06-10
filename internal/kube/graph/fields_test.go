@@ -1196,6 +1196,16 @@ func TestLastTerminatedString(t *testing.T) {
 	if got.State != "Running" || got.LastTerminated != "OOMKilled (exit 137)" {
 		t.Errorf("containerStat = %+v, want State=Running LastTerminated=%q", got, "OOMKilled (exit 137)")
 	}
+	// WHEN it last exited qualifies the restart count ("↻ 47" two hours ago vs two months ago) —
+	// carried whenever a previous termination has a finish time, never invented when it doesn't.
+	if got.LastRestartAt != "" {
+		t.Errorf("containerStat without finishedAt carries LastRestartAt %q, want empty", got.LastRestartAt)
+	}
+	timed := cs
+	timed.LastTerminationState.Terminated.FinishedAt = metav1.NewTime(time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC))
+	if g := containerStat(timed, false, corev1.ResourceRequirements{}); g.LastRestartAt != "2026-06-10T12:00:00Z" {
+		t.Errorf("containerStat.LastRestartAt = %q, want the lastState finish time", g.LastRestartAt)
+	}
 
 	// containerStatuses joins each status with ITS spec container's requests/limits by name (statuses
 	// and specs are separate lists), so the drawer can show each container's declared bounds and gauge

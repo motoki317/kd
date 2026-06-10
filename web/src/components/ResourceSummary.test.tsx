@@ -132,6 +132,26 @@ describe('ResourceSummary container status dots', () => {
     expect(container.querySelectorAll('.container-swatch').length).toBe(0)
     expect(container.querySelectorAll('.container-usage').length).toBe(0) // nothing declared per container
   })
+  // The restart count alone reads identically for ancient history and an active crashloop —
+  // the age of the LAST restart is what makes "↻ N" interpretable.
+  it('dates the restart count when the last exit time is known', () => {
+    // +60s past the 2h boundary: useNow()'s clock is a hair behind this test's Date.now(), and an
+    // exact 2h offset floors to "1h" on that hair.
+    const twoHoursAgo = new Date(Date.now() - (2 * 3600 + 60) * 1000).toISOString()
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'app', ready: true, state: 'Running', restarts: 3, lastRestartAt: twoHoursAgo },
+          { name: 'sidecar', ready: true, state: 'Running', restarts: 1 }, // no time known → bare count
+        ])}
+        {...base}
+      />
+    ))
+    const chips = container.querySelectorAll('.container-restarts')
+    expect(chips[0].textContent).toBe('↻ 3 · 2h ago')
+    expect(chips[0].getAttribute('title')).toContain('the last one 2h ago')
+    expect(chips[1].textContent).toBe('↻ 1')
+  })
   it('says "not ready" in words on a Running container failing its readiness probe', () => {
     const { container } = render(() => (
       <ResourceSummary node={podWith([{ name: 'main', ready: false, state: 'Running' }])} {...base} />

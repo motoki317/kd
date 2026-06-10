@@ -155,6 +155,8 @@ export interface ContainerStatus {
   // Its declared requests (absent = unset) — with the limits, the card's "reserved / ceiling" facts.
   cpuRequestMilli?: number
   memRequestBytes?: number
+  // WHEN it last exited (RFC3339) — "↻ 47 · 2h ago" reads hot, "↻ 47 · 60d ago" reads stale.
+  lastRestartAt?: string
 }
 
 export interface KEdge {

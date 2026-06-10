@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -113,6 +114,12 @@ func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequ
 	}
 	if mem, ok := res.Requests[corev1.ResourceMemory]; ok {
 		st.MemRequestBytes = mem.Value()
+	}
+	// Unlike the LastTerminated TEXT (suppressed while currently Terminated — the State already
+	// shows that exit), the TIME is set whenever a previous termination exists: "when did this
+	// last die" qualifies the restart count in every state.
+	if t := cs.LastTerminationState.Terminated; t != nil && !t.FinishedAt.IsZero() {
+		st.LastRestartAt = t.FinishedAt.UTC().Format(time.RFC3339)
 	}
 	return st
 }
