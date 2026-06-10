@@ -33,6 +33,27 @@ emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflo
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b22 (operator-flow dogfooding D1–D20)** — twenty successive human-operator walks
+  through the live UI, each judged against the four principles + recognition: morning-check landing
+  & Alt+T triage cycle (D1 — caught and FIXED the macOS bug where Option+T composes key '†' so the
+  advertised shortcut never fired for Mac operators; e.code now matched too); search→Enter→Logs→
+  level-filter hunt (D2 — click-to-solo on level chips REJECTED: would break the app-wide
+  multi-toggle chip idiom for a 2-click saving); Service "why not serving" walk via the Network
+  lens with selection surviving the lens switch (D3); capacity review with CPU→Memory flip, segment
+  tooltip, node-name→drawer (D4); owner-chip ladder up + Alt+← retrace (D5); deep-link round trip
+  restoring pod+drawer+lens exactly (D6); live rollout watch — surge pod + both ReplicaSets shown
+  mid-flight, superseded RS drops, viewport never jumps (D7); keyboard-only triage j/k/Esc/? (D8);
+  phone-width tap flow in the real gesture order (D9); Kind view scan (D10); volumes lens PVC walk
+  (D11 — component-wide spotlight blobs across shared mounts; typed/depth-limited walk DEFERRED:
+  regression risk to the ownership spotlight, reopen on operator feedback); context switch
+  mid-investigation cleanly resets, same-named ns deliberately kept (D12); Events rollup with
+  child attribution (D13); label-chip copy no-ops silently on non-secure origin (D14); fold pills
+  not reproducible today — no crowded sibling group on either cluster, previously verified (D15);
+  RBAC binding→role spotlight, rel-chip reordering-by-count REJECTED (stable order = muscle
+  memory) (D16); search by image fragment and status text (D17); theme cycle with drawer open —
+  geometry stable, selection kept (D18); drawer expand 520→1280→520 (D19); help-overlay audit —
+  every advertised key verified live: ]/[ tab cycle, ⌘K, ⌘B, y, Alt+← (D20).
+
 - **2026-06-10 b21 (survey coverage complete: utils clean; segment gate green)** — the last
   unsurveyed surface (logs/names/search/ansi/favicon/health/usageAggregate/resourceBars utility
   modules) came back 0 real / 8 refuted (regex backtracking, truncation off-by-ones, SGR param
