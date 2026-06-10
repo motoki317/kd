@@ -250,7 +250,28 @@ Recent batches (newest first; `git log` has the commits):
   would fabricate a value); **secretType row's DOM divergence** (it deliberately heads the data-keys row
   list it classifies — proximity — and reuses the addr-label idiom inside the row form); **port/endpoint
   chip labels** (the hero's type line sits directly above — proximity already disambiguates; the real gap
-  was the sentinel, fixed above). — a directed campaign to mature the UX by
+  was the sentinel, fixed above).
+  Then shipped (own dogfooding while two delegated surveys ran): **an ExternalName service's inert
+  selector no longer fakes "no endpoints"** (cd61d25) — Kubernetes ignores the selector on a
+  type: ExternalName service, but kd treated it as real and painted a working DNS alias Degraded
+  (kubectl's own `create service externalname` generates such a selector, so the shape is common);
+  found because the hero read "no endpoints" while live-verifying the headless chip. Plus the
+  address-chip title made type-neutral (21ca62e) — "reachable inside the cluster" misdescribed the
+  ExternalName alias host the same field carries.
+  Delegated surveys (logs/events + search/keyboard): **both came back ~fully refuted — the surfaces
+  are mature** (matching the ~94% refutation-rate pattern; don't re-survey without code changes).
+  Refuted with evidence: events-empty TTL hint under warnings-only (the filter bar needs events
+  present; the count chip reads "0"); error-before-first-line shows "waiting" (the `gentle` memo is
+  exactly that design — the error chip always shows, wording keyed on pod status); jump-button count
+  hover-only (it's in the label whenever >0); `[`/`]` IME guard (the handler skips INPUT/TEXTAREA,
+  the only places composition happens); frame-all unreachable by keyboard (the count is a real button
+  in tab order, title documents it); Esc clear-then-blur two-stage (deliberate, the address-bar/editor
+  convention). Deferred, reopen on operator ask: per-line truncation for pathological multi-KB log
+  lines (M — real at the margins, rare); logs-header chip stacking at phone width (M/low — the
+  overlay-drawer landing mitigated it); manifest-find keyboard door (already in Open, unchanged).
+  Verified mature by own dogfooding: manifest find (typed term marks+counts "1/9", Enter/Shift+Enter
+  cycle wraps both directions, zero state says "no matches", term+marks survive the YAML/JSON toggle;
+  sole nit: the format toggle drops the current-match scroll anchor until the next Enter — low). — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
   source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
   flows found a real, clearly-felt gap nearly every cycle. Shipped so far: Kinds-row overflow fade;
