@@ -368,6 +368,19 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(unschedulable pod) = %q", got)
 	}
 
+	// ContainersNotReady is suppressed — "containers with unready status: [main]" restates what the
+	// status summary and the per-container cards already say.
+	crashing := &corev1.Pod{Status: corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{{
+			Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "ContainersNotReady",
+			Message: "containers with unready status: [main]",
+		}},
+	}}
+	if got := statusMessage(crashing, HealthDegraded); got != "" {
+		t.Errorf("statusMessage(crash-looping pod) = %q, want \"\" (tautology suppressed)", got)
+	}
+
 	// A CR's status.message is the canonical failure reason (Argo Workflow / Rollout / many controllers).
 	wf := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "argoproj.io/v1alpha1", "kind": "Workflow",

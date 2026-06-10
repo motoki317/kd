@@ -163,10 +163,12 @@ func statusMessage(obj runtime.Object, h Health) string {
 
 // blockingConditionMessage returns the message of the first pod condition that isn't satisfied (e.g. a
 // False PodScheduled carrying "0/3 nodes are available: 3 Insufficient cpu") — the scheduling/readiness
-// reason that the container statuses don't express.
+// reason that the container statuses don't express. ContainersNotReady is skipped: its "containers
+// with unready status: [x]" restates what the status summary (CrashLoopBackOff, Running 0/1) and the
+// per-container cards already say better.
 func blockingConditionMessage(conds []corev1.PodCondition) string {
 	for _, c := range conds {
-		if c.Status != corev1.ConditionTrue && c.Message != "" {
+		if c.Status != corev1.ConditionTrue && c.Message != "" && c.Reason != "ContainersNotReady" {
 			return c.Message
 		}
 	}
