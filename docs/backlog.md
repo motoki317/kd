@@ -45,6 +45,11 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
   ArgoCD app-of-apps, 544-resource cluster scope with zero Unknown noise, run-history CronJob
   (never-ran state correctly absent), 375px cert-chip wrap — all verified clean. Rejected: vendor
   CRD icons (built-ins-only line). GRPCRoute deferral re-verified (still no instances).
+  **Adversarial survey of the session's 10 changes caught 1 real / 9 clean: an RBAC bypass in the
+  same-session cluster-scope log fix** — a `Pod` addressed through `__cluster__` streamed any
+  namespace's pod, authorized only against the cluster scope; now each rode-along pod is re-checked
+  against its own namespace (regression test added). The exit-0 crashloop card-explainer also shipped
+  (D89): a Deployment running one-shot work reads its contradiction in words.
 - **b27 (2026-06-11, dogfooding D61–D78)** — shipped: cluster-scoped log streams
   (a Node's static-pod logs — etcd/apiserver one click away on a beginner's Docker Desktop; client
   sentinel + server logSnapshot), single-slash search fallback (label keys / image fragments were
