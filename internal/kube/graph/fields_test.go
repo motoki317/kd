@@ -1177,18 +1177,18 @@ func TestLastTerminatedString(t *testing.T) {
 		State:                corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 		LastTerminationState: term("OOMKilled", 137),
 	}
-	got := containerStat(cs, false, nil)
+	got := containerStat(cs, false, corev1.ResourceRequirements{})
 	if got.State != "Running" || got.LastTerminated != "OOMKilled (exit 137)" {
 		t.Errorf("containerStat = %+v, want State=Running LastTerminated=%q", got, "OOMKilled (exit 137)")
 	}
 
-	// containerStatuses joins each status with ITS spec container's limits by name (statuses and
-	// specs are separate lists), so the drawer can gauge a container's usage against its own bound.
-	// A container without limits carries zeros — "unbounded", rendered as a bare value client-side.
+	// containerStatuses joins each status with ITS spec container's requests/limits by name (statuses
+	// and specs are separate lists), so the drawer can show each container's declared bounds and gauge
+	// usage against its own limit. No declaration carries zeros — "unbounded"/"unset" client-side.
 	pod := &corev1.Pod{
 		Spec: corev1.PodSpec{Containers: []corev1.Container{
-			{Name: "app", Resources: corev1.ResourceRequirements{Limits: rl("500m", "256Mi")}},
-			{Name: "sidecar"}, // no limits declared
+			{Name: "app", Resources: corev1.ResourceRequirements{Limits: rl("500m", "256Mi"), Requests: rl("100m", "128Mi")}},
+			{Name: "sidecar"}, // no requests/limits declared
 		}},
 		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
 			{Name: "app", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
@@ -1199,8 +1199,11 @@ func TestLastTerminatedString(t *testing.T) {
 	if stats[0].CPULimitMilli != 500 || stats[0].MemLimitBytes != 256*1024*1024 {
 		t.Errorf("app limits = {%d, %d}, want {500, 256Mi}", stats[0].CPULimitMilli, stats[0].MemLimitBytes)
 	}
-	if stats[1].CPULimitMilli != 0 || stats[1].MemLimitBytes != 0 {
-		t.Errorf("sidecar limits = {%d, %d}, want zeros (none declared)", stats[1].CPULimitMilli, stats[1].MemLimitBytes)
+	if stats[0].CPURequestMilli != 100 || stats[0].MemRequestBytes != 128*1024*1024 {
+		t.Errorf("app requests = {%d, %d}, want {100, 128Mi}", stats[0].CPURequestMilli, stats[0].MemRequestBytes)
+	}
+	if stats[1].CPULimitMilli != 0 || stats[1].MemLimitBytes != 0 || stats[1].CPURequestMilli != 0 || stats[1].MemRequestBytes != 0 {
+		t.Errorf("sidecar bounds = %+v, want all zeros (none declared)", stats[1])
 	}
 
 	// A container caught currently Terminated (e.g. mid-crashloop) must NOT also carry LastTerminated:
@@ -1211,7 +1214,7 @@ func TestLastTerminatedString(t *testing.T) {
 		State:                corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}},
 		LastTerminationState: term("Error", 1),
 	}
-	if g := containerStat(crashing, false, nil); g.State != "Terminated: Error (exit 1)" || g.LastTerminated != "" {
+	if g := containerStat(crashing, false, corev1.ResourceRequirements{}); g.State != "Terminated: Error (exit 1)" || g.LastTerminated != "" {
 		t.Errorf("containerStat(crashing) = %+v, want State=%q LastTerminated empty", g, "Terminated: Error (exit 1)")
 	}
 }

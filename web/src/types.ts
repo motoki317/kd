@@ -152,6 +152,9 @@ export interface ContainerStatus {
   // a container near ITS memory limit (about to OOM) hides inside a pod total with headroom.
   cpuLimitMilli?: number
   memLimitBytes?: number
+  // Its declared requests (absent = unset) — with the limits, the card's "reserved / ceiling" facts.
+  cpuRequestMilli?: number
+  memRequestBytes?: number
 }
 
 export interface KEdge {

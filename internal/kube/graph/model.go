@@ -160,6 +160,11 @@ type ContainerStatus struct {
 	// 0 is not a meaningful limit (the kubelet rejects it), so omitempty is safe here.
 	CPULimitMilli int64 `json:"cpuLimitMilli,omitempty"`
 	MemLimitBytes int64 `json:"memLimitBytes,omitempty"`
+	// CPURequestMilli / MemRequestBytes are the container's declared requests — with the limits they
+	// answer "what did this container reserve vs what may it burst to" on its card. Zero = none
+	// declared (a zero request is the unset default, not a meaningful reservation).
+	CPURequestMilli int64 `json:"cpuRequestMilli,omitempty"`
+	MemRequestBytes int64 `json:"memRequestBytes,omitempty"`
 }
 
 // Edge is a typed relationship from one node to another.

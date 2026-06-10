@@ -70,21 +70,21 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	if !ok {
 		return nil
 	}
-	// Limits live on the spec containers, statuses on the status side — join by name so each
-	// card can gauge its usage share against its own bound.
-	limits := map[string]corev1.ResourceList{}
+	// Requests/limits live on the spec containers, statuses on the status side — join by name so
+	// each card can show its own declared bounds (and gauge usage against its own limit).
+	resources := map[string]corev1.ResourceRequirements{}
 	for _, c := range p.Spec.InitContainers {
-		limits[c.Name] = c.Resources.Limits
+		resources[c.Name] = c.Resources
 	}
 	for _, c := range p.Spec.Containers {
-		limits[c.Name] = c.Resources.Limits
+		resources[c.Name] = c.Resources
 	}
 	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses))
 	for _, cs := range p.Status.InitContainerStatuses {
-		out = append(out, containerStat(cs, true, limits[cs.Name]))
+		out = append(out, containerStat(cs, true, resources[cs.Name]))
 	}
 	for _, cs := range p.Status.ContainerStatuses {
-		out = append(out, containerStat(cs, false, limits[cs.Name]))
+		out = append(out, containerStat(cs, false, resources[cs.Name]))
 	}
 	if len(out) == 0 {
 		return nil
@@ -92,7 +92,7 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	return out
 }
 
-func containerStat(cs corev1.ContainerStatus, init bool, limits corev1.ResourceList) ContainerStatus {
+func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequirements) ContainerStatus {
 	// LastTerminated explains why a container that has since RESTARTED is now Running/Waiting — so it is
 	// only additive when the CURRENT state isn't itself a termination. A currently-Terminated container
 	// (e.g. caught mid-crashloop) already shows its exit in State; repeating the identical "last exit"
@@ -102,11 +102,17 @@ func containerStat(cs corev1.ContainerStatus, init bool, limits corev1.ResourceL
 		last = lastTerminatedString(cs.LastTerminationState)
 	}
 	st := ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: last}
-	if cpu, ok := limits[corev1.ResourceCPU]; ok {
+	if cpu, ok := res.Limits[corev1.ResourceCPU]; ok {
 		st.CPULimitMilli = cpu.MilliValue()
 	}
-	if mem, ok := limits[corev1.ResourceMemory]; ok {
+	if mem, ok := res.Limits[corev1.ResourceMemory]; ok {
 		st.MemLimitBytes = mem.Value()
+	}
+	if cpu, ok := res.Requests[corev1.ResourceCPU]; ok {
+		st.CPURequestMilli = cpu.MilliValue()
+	}
+	if mem, ok := res.Requests[corev1.ResourceMemory]; ok {
+		st.MemRequestBytes = mem.Value()
 	}
 	return st
 }

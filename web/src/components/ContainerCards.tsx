@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js'
-import { formatPair, type CapResource } from '../capacityLayout'
+import { formatQuantity } from '../capacityLayout'
 import { healthColor, healthTextColor } from '../health'
 import type { ContainerStatus, Health, ResourceUsage } from '../types'
 import ImageRef from './ImageRef'
@@ -42,36 +42,42 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
   ]
 }
 
-// ContainerUsageCell renders one resource's live "value / limit" on a container card — the gauge
-// idiom (value bright, bound dim), bare value when the container declares no limit. formatPair keeps
-// both sides in ONE unit; for CPU the unit follows the SMALLER nonzero side so a 2m draw under a
-// 2-core limit reads "2m / 2000m", not the rounded-away "0 / 2" (integer-core rounding eats small
-// draws). Memory keeps the LIMIT's unit: its one decimal keeps a small draw visible ("0.3Mi / 64Mi")
-// while a value-side unit renders the bound hostile ("320Ki / 65536Ki" — caught live).
-// Memory within 10% of its limit turns caution-coloured: past it the container is OOMKilled — the
-// one per-container emergency a healthy-looking pod total hides. CPU gets no caution (over-limit
-// merely throttles).
-function ContainerUsageCell(props: { label: string; value: number; limit?: number; res: CapResource }) {
-  const pair = () =>
-    formatPair(
-      props.value,
-      props.limit,
-      props.res,
-      props.res === 'cpu' && props.value > 0 && props.limit ? Math.min(props.value, props.limit) : props.limit,
-    )
-  const nearLimit = () => props.res === 'memory' && !!props.limit && props.value / props.limit! >= 0.9
+// CONTAINER_PALETTE colours the per-container segments of the pod usage bars and the matching card
+// swatches. First slot is the accent so a stack's lead segment matches the single-fill colour a
+// one-container pod draws; the rest are mid-tone hues picked to stay clear of the health vocabulary
+// (no green/red/amber — a segment colour must never read as a status) and legible on both themes.
+const CONTAINER_PALETTE = ['var(--accent)', '#9a6cf0', '#18a999', '#d6609a', '#7a8699', '#2aa3c8']
+
+// containerColorMap assigns each container its palette colour by position in the pod's container
+// order (init first, then app — the order the cards render in), so the bar segments and the card
+// swatches agree without threading indices around. Stable while the pod exists; palette cycles past
+// six containers.
+export function containerColorMap(statuses: ContainerStatus[]): Map<string, string> {
+  const m = new Map<string, string>()
+  statuses.forEach((cs, i) => m.set(cs.name, CONTAINER_PALETTE[i % CONTAINER_PALETTE.length]))
+  return m
+}
+
+// BoundsCell renders one resource's declared bounds with each number explicitly labelled —
+// "cpu req 10m · lim 500m" — because a bare "10m / 500m" reads like the gauges' usage-vs-bound
+// pairs and leaves which side is the request ambiguous (user feedback). Undeclared sides are
+// simply omitted (no "—"/"unset" placeholders): the row states what the spec states, nothing more.
+// Each side formats independently: these are the operator's own spec'd numbers, so "512Mi · 1Gi"
+// reads as written, no unit normalisation.
+function BoundsCell(props: { label: string; req?: number; lim?: number; res: 'cpu' | 'memory' }) {
   return (
     <>
       <span class="container-usage-label">{props.label}</span>
-      <span
-        class="container-usage-val"
-        classList={{ 'near-limit': nearLimit() }}
-        title={nearLimit() ? 'Using over 90% of its memory limit — at risk of being OOM-killed' : undefined}
-      >
-        {pair().value}
-      </span>
-      <Show when={props.limit}>
-        <span class="container-usage-cap">/ {pair().cap}</span>
+      <Show when={props.req}>
+        <span class="container-usage-label">req</span>
+        <span class="container-usage-val">{formatQuantity(props.req!, props.res)}</span>
+      </Show>
+      <Show when={props.req && props.lim}>
+        <span class="container-usage-sep">·</span>
+      </Show>
+      <Show when={props.lim}>
+        <span class="container-usage-label">lim</span>
+        <span class="container-usage-val">{formatQuantity(props.lim!, props.res)}</span>
       </Show>
     </>
   )
@@ -79,10 +85,17 @@ function ContainerUsageCell(props: { label: string; value: number; limit?: numbe
 
 // ContainerCards is a Pod's per-container section (cycle 338): runtime state and image belong
 // together — "which container is broken and what's it running?" — so each container is one card
-// pairing status (dot + state + restarts) with its live usage, last exit, and image, grouped into
-// Init vs app containers with counts so "how many of each, what images, are they OK" reads at a
-// glance. A floating tag (":latest"/none) flags an image a rolling restart could silently change.
+// pairing status (dot + state + restarts) with its declared bounds, last exit, and image, grouped
+// into Init vs app containers with counts so "how many of each, what images, are they OK" reads at
+// a glance. LIVE usage is NOT repeated here — the pod gauge above stacks one coloured segment per
+// container, joined to its card by the swatch next to the name. A floating tag (":latest"/none)
+// flags an image a rolling restart could silently change.
 export default function ContainerCards(props: { statuses: ContainerStatus[]; usage?: ResourceUsage }) {
+  const colors = () => containerColorMap(props.statuses)
+  // Swatches only when the bars actually stack (a breakdown exists): a colour key without coloured
+  // segments to join to is noise.
+  const hasSegments = () => (props.usage?.containers?.length ?? 0) > 1
+  const usageFor = (name: string) => props.usage?.containers?.find((c) => c.name === name)
   return (
     <div class="drawer-containers">
       <For each={containerGroups(props.statuses)}>
@@ -100,6 +113,15 @@ export default function ContainerCards(props: { statuses: ContainerStatus[]; usa
                   // in words (explicit over implicit): the blue dot alone doesn't explain why the
                   // pod shows 0/1 and the Service routes nothing to it.
                   const notReady = cs.state === 'Running' && !cs.ready && !cs.init
+                  // The one per-container emergency worth words on the card: memory over 90% of its
+                  // own limit means an OOM kill is imminent — a fact the pod-total gauge can hide
+                  // when another container has headroom. Live-checked against the usage feed even
+                  // though the card otherwise shows only declared bounds.
+                  const nearMemLimit = () => {
+                    const cu = usageFor(cs.name)
+                    return cu && cs.memLimitBytes ? (cu.memBytes ?? 0) / cs.memLimitBytes >= 0.9 : false
+                  }
+                  const hasBounds = cs.cpuRequestMilli || cs.cpuLimitMilli || cs.memRequestBytes || cs.memLimitBytes
                   return (
                     <div
                       class="container-card"
@@ -111,6 +133,16 @@ export default function ContainerCards(props: { statuses: ContainerStatus[]; usa
                       <div class="container-card-head">
                         <span class="dot" style={{ background: dot.color }} />
                         <span class="container-name">{cs.name}</span>
+                        {/* The colour key to this container's segment in the usage bars above — a
+                            square so it never reads as a (round) health dot. Only rendered when the
+                            container has a reading, i.e. a segment exists to point at. */}
+                        <Show when={hasSegments() && usageFor(cs.name)}>
+                          <span
+                            class="container-swatch"
+                            style={{ background: colors().get(cs.name) }}
+                            title="This container's colour in the usage bars above"
+                          />
+                        </Show>
                         <span
                           class="container-state"
                           style={{ color: dot.text }}
@@ -125,22 +157,33 @@ export default function ContainerCards(props: { statuses: ContainerStatus[]; usa
                           </span>
                         </Show>
                       </div>
-                      {/* This container's share of the pod's live draw (multi-container pods only —
-                          the server omits single-container breakdowns). Answers "which container is
-                          eating the memory?" right where the operator is already looking; the pod
-                          gauge above only shows the sum. keyed: each 15s usage tick delivers a new
-                          object, so the row re-renders with fresh numbers. */}
-                      <Show when={props.usage?.containers?.find((c) => c.name === cs.name)} keyed>
-                        {(cu) => (
-                          <div
-                            class="container-usage"
-                            title="This container's live share of the pod's usage, from metrics-server — gauged against its own limit when one is set"
-                          >
-                            <ContainerUsageCell label="cpu" value={cu.cpuMilli ?? 0} limit={cs.cpuLimitMilli} res="cpu" />
-                            <span class="container-usage-sep">·</span>
-                            <ContainerUsageCell label="mem" value={cu.memBytes ?? 0} limit={cs.memLimitBytes} res="memory" />
-                          </div>
-                        )}
+                      {/* The container's own declared bounds — "what did it reserve / what may it
+                          burst to". Live usage lives in the pod gauge's coloured segments above, so
+                          this row stays spec-only and the card doesn't repeat moving numbers. */}
+                      <Show when={hasBounds}>
+                        <div
+                          class="container-usage"
+                          title="Declared resources — req: reserved for scheduling · lim: the ceiling (memory past it is OOM-killed)"
+                        >
+                          <Show when={cs.cpuRequestMilli || cs.cpuLimitMilli}>
+                            <BoundsCell label="cpu" req={cs.cpuRequestMilli} lim={cs.cpuLimitMilli} res="cpu" />
+                          </Show>
+                          <Show when={(cs.cpuRequestMilli || cs.cpuLimitMilli) && (cs.memRequestBytes || cs.memLimitBytes)}>
+                            <span class="container-usage-sep">|</span>
+                          </Show>
+                          <Show when={cs.memRequestBytes || cs.memLimitBytes}>
+                            <BoundsCell label="mem" req={cs.memRequestBytes} lim={cs.memLimitBytes} res="memory" />
+                          </Show>
+                        </div>
+                      </Show>
+                      <Show when={nearMemLimit()}>
+                        <div
+                          class="container-near-limit"
+                          title="Live usage from metrics-server, gauged against this container's own memory limit"
+                        >
+                          mem {formatQuantity(usageFor(cs.name)!.memBytes ?? 0, 'memory')} — over 90% of its limit, at
+                          risk of OOM kill
+                        </div>
                       </Show>
                       <Show when={cs.lastTerminated}>
                         {/* Why it previously exited — surfaced inline next to the restart count so an

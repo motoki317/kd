@@ -2538,6 +2538,35 @@ button.conn.conn-retry:focus-visible {
   border-radius: 4px 0 0 4px;
   transition: width 0.2s;
 }
+/* Multi-container fill: one segment per container, widths proportional to each share (flex-grow =
+   value), colours keyed to the card swatches. Total width identical to the plain fill — the stack
+   changes WHO is using, never HOW MUCH. overflow hidden keeps inner segments inside the rounded end. */
+.metric-fill-stack {
+  display: flex;
+  background: none;
+  overflow: hidden;
+}
+.metric-seg {
+  height: 100%;
+  min-width: 1px; /* a sliver of a tiny share stays visible (and hoverable) instead of rounding to 0px */
+}
+/* The card-side colour key for a bar segment: a SQUARE (4px radius would read as the round health
+   dot) sized to the 11px card text, with the same colour its segment draws. */
+.container-swatch {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+/* The per-container OOM alarm: amber like .container-last-terminated (a caution, not a current
+   failure), indented to the card's detail column. Appears only when live memory crosses 90% of the
+   container's own limit, so a calm card stays calm. */
+.container-near-limit {
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--caution-text);
+  font-variant-numeric: tabular-nums;
+}
 /* Overshoot: the slice of the fill beyond the ceiling, hatched (colour-independent) so "past its
    request/limit" pulls the eye the same way the Nodes view's burst overlay does. */
 .metric-burst {
@@ -2741,12 +2770,9 @@ button.drawer-host:hover {
   font-variant-numeric: tabular-nums;
 }
 .container-usage .container-usage-val {
+  /* Plain weight: these are spec'd bounds, not the live value the gauges emphasise — equal-weight
+     text keeps the row from competing with the bars above (user feedback: no bold here). */
   color: var(--text);
-  font-weight: 500;
-}
-.container-usage .container-usage-val.near-limit {
-  color: var(--caution-text);
-  font-weight: 600;
 }
 /* Why the container previously exited (its last restart). Indented to align under the name like the
    image row, and amber (--health-suspended) — a PAST termination is a caution that must stand out from

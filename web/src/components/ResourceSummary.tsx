@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js'
-import { formatPair } from '../capacityLayout'
+import { formatPair, formatQuantity } from '../capacityLayout'
 import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
@@ -9,7 +9,7 @@ import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
-import ContainerCards from './ContainerCards'
+import ContainerCards, { containerColorMap } from './ContainerCards'
 import CopyButton from './CopyButton'
 import ImageRef from './ImageRef'
 
@@ -76,15 +76,31 @@ interface Props {
   hostCapacity?: Resources
 }
 
+// UsageSegment is one container's share of a pod's usage fill — the bars stack one coloured segment
+// per container (joined to its card by the swatch) so "which container is using it" reads visually
+// instead of as a second set of numbers under the cards.
+export interface UsageSegment {
+  name: string
+  color: string
+  cpuMilli: number
+  memBytes: number
+}
+
 // UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
 // Req, a Node's Cap + Alloc). Every bar in a group shares ONE linear scale (like the Nodes capacity
 // view), so the fill — LIVE USAGE — draws the SAME length on both bars, and each bar's TRACK LENGTH
 // encodes its bound: the bar ENDS at its ceiling (a 256Mi limit bar is visibly shorter than a 281Mi
 // request bar), not a tick on a fixed-width track. Usage past a bound EXTENDS the track past that
 // ceiling with the overshoot hatched — the Nodes-view "over its request/limit" idiom. Built by
-// drawerResourceBars.
+// drawerResourceBars. With `segments` (a multi-container pod), the fill is a stack of per-container
+// colours; the stack's total width is identical to the plain fill, since the breakdown sums to the
+// pod total by construction (joinUsage).
 const pct = (f: number) => `${Math.min(100, f * 100)}%`
-function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
+function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segments?: UsageSegment[] }) {
+  const segsFor = (res: 'cpu' | 'memory') =>
+    (props.segments ?? [])
+      .map((s) => ({ name: s.name, color: s.color, value: res === 'cpu' ? s.cpuMilli : s.memBytes }))
+      .filter((s) => s.value > 0)
   return (
     <Show when={props.groups.length > 0}>
       <div class="pod-metrics" role="group" aria-label="Resource usage against limits and requests">
@@ -112,9 +128,27 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
                           {/* Track length = the bound: the bar's right edge IS its ceiling (or the usage
                               when it bursts past). The relative bound lengths read directly off the bars. */}
                           <div class="metric-track" style={{ width: pct(extentFrac) }} />
-                          {/* Usage fill on the shared scale (same length across this group's bars). */}
+                          {/* Usage fill on the shared scale (same length across this group's bars).
+                              Multi-container pods stack one coloured segment per container (each
+                              proportional to its share; hover names it) — same total width as the
+                              plain fill, so the bound-vs-usage read is unchanged. */}
                           <Show when={b.usage != null}>
-                            <div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />
+                            <Show
+                              when={segsFor(g.res).length > 1}
+                              fallback={<div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />}
+                            >
+                              <div class="metric-fill metric-fill-stack" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }}>
+                                <For each={segsFor(g.res)}>
+                                  {(s) => (
+                                    <div
+                                      class="metric-seg"
+                                      style={{ 'flex-grow': String(s.value), background: s.color }}
+                                      title={`${s.name} · ${formatQuantity(s.value, g.res)}`}
+                                    />
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
                             {/* Overshoot: hatch the portion of the fill beyond the ceiling (where the track
                                 grew past the bound). */}
                             <Show when={b.over && b.boundFrac != null}>
@@ -156,6 +190,25 @@ export default function ResourceSummary(props: Props) {
   // Labels are high-signal metadata (app, version, team) the operator otherwise has to dig out of
   // the manifest. Sort by key for a stable, scannable order.
   const labels = createMemo(() => Object.entries(props.node.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+
+  // Per-container usage segments for the pod gauge, in card order (init first, then app) so the
+  // stack reads left-to-right like the cards read top-to-bottom, coloured by the shared map the
+  // card swatches use. Empty for single-container pods (the server omits their breakdown) and for
+  // containers without a reading — the stack then falls back to the plain accent fill.
+  const usageSegments = createMemo<UsageSegment[]>(() => {
+    const breakdown = props.usage?.containers
+    if (!breakdown || breakdown.length < 2) return []
+    const colors = containerColorMap(props.node.containerStatuses ?? [])
+    const order = (props.node.containerStatuses ?? []).map((cs) => cs.name)
+    return [...breakdown]
+      .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
+      .map((c) => ({
+        name: c.name,
+        color: colors.get(c.name) ?? 'var(--accent)',
+        cpuMilli: c.cpuMilli ?? 0,
+        memBytes: c.memBytes ?? 0,
+      }))
+  })
 
   return (
     <div class="drawer-summary">
@@ -263,6 +316,7 @@ export default function ResourceSummary(props: Props) {
             limit: props.node.limits,
             hostCapacity: props.hostCapacity,
           })}
+          segments={usageSegments()}
         />
       </Show>
       {/* A workload's rolled-up usage (its replicas summed), gauged against the summed requests/limits —
