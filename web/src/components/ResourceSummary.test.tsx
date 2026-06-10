@@ -59,6 +59,19 @@ describe('ResourceSummary container status dots', () => {
     expect(cards[0].classList.contains('h-healthy')).toBe(true) // running+ready stays green
     expect(cards[1].classList.contains('h-degraded')).toBe(true) // failed exit stays red, not gray
   })
+  it('says "not ready" in words on a Running container failing its readiness probe', () => {
+    const { container } = render(() => (
+      <ResourceSummary node={podWith([{ name: 'main', ready: false, state: 'Running' }])} {...base} />
+    ))
+    const state = container.querySelector('.container-state')!
+    expect(state.textContent).toBe('Running · not ready')
+    expect(state.getAttribute('title')).toContain('readiness probe')
+    // A ready container carries no suffix — the words appear only when something is wrong.
+    const { container: ok } = render(() => (
+      <ResourceSummary node={podWith([{ name: 'main', ready: true, state: 'Running' }])} {...base} />
+    ))
+    expect(ok.querySelector('.container-state')?.textContent).toBe('Running')
+  })
 })
 
 describe('ResourceSummary pod usage gauges', () => {

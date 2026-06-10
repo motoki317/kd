@@ -695,6 +695,10 @@ export default function ResourceSummary(props: Props) {
                   <For each={group.items}>
                     {(cs) => {
                       const dot = containerDot(cs)
+                      // A Running container that isn't ready is failing its readiness probe — say so
+                      // in words (explicit over implicit): the blue dot alone doesn't explain why the
+                      // pod shows 0/1 and the Service routes nothing to it.
+                      const notReady = cs.state === 'Running' && !cs.ready && !cs.init
                       return (
                       <div
                         class="container-card"
@@ -706,8 +710,13 @@ export default function ResourceSummary(props: Props) {
                         <div class="container-card-head">
                           <span class="dot" style={{ background: dot.color }} />
                           <span class="container-name">{cs.name}</span>
-                          <span class="container-state" style={{ color: dot.text }}>
+                          <span
+                            class="container-state"
+                            style={{ color: dot.text }}
+                            title={notReady ? 'Running, but not passing its readiness probe — Services send it no traffic' : undefined}
+                          >
                             {cs.state}
+                            {notReady ? ' · not ready' : ''}
                           </span>
                           <Show when={(cs.restarts ?? 0) > 0}>
                             <span class="container-restarts" title={`${cs.restarts} restarts`}>
