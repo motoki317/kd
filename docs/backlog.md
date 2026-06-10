@@ -36,7 +36,7 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
 - **b29 (2026-06-11, dogfooding D91–D96 + refactor)** — a cert-manager + Ingress legibility cluster
-  (mostly off moto-a1's real cert-manager/Argo shapes): CronWorkflow now offers aggregated logs of its
+  (mostly off a real cluster's cert-manager/Argo shapes): CronWorkflow now offers aggregated logs of its
   scheduled runs (the grandchild CronWorkflow→Workflow→pods chain; "did last night's backup succeed?"
   — 1521 lines live), which also activates the D78 never-run message for it; an Ingress shows its
   serving address ("ext localhost", the ALB hostname an operator curls) by generalizing the Service
