@@ -48,13 +48,19 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
 // (no green/red/amber — a segment colour must never read as a status) and legible on both themes.
 const CONTAINER_PALETTE = ['var(--accent)', '#9a6cf0', '#18a999', '#d6609a', '#7a8699', '#2aa3c8']
 
+// paletteColor cycles the palette — also used directly by the workload gauge, whose drawer has no
+// container cards (no swatches to join), so position alone keys its segment colours.
+export function paletteColor(i: number): string {
+  return CONTAINER_PALETTE[i % CONTAINER_PALETTE.length]
+}
+
 // containerColorMap assigns each container its palette colour by position in the pod's container
 // order (init first, then app — the order the cards render in), so the bar segments and the card
 // swatches agree without threading indices around. Stable while the pod exists; palette cycles past
 // six containers.
 export function containerColorMap(statuses: ContainerStatus[]): Map<string, string> {
   const m = new Map<string, string>()
-  statuses.forEach((cs, i) => m.set(cs.name, CONTAINER_PALETTE[i % CONTAINER_PALETTE.length]))
+  statuses.forEach((cs, i) => m.set(cs.name, paletteColor(i)))
   return m
 }
 

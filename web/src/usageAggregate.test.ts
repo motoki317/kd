@@ -38,6 +38,26 @@ describe('aggregateWorkloadUsage', () => {
     expect(agg?.requests).toEqual({ cpuMilli: 100, memBytes: undefined })
   })
 
+  it('sums per-container breakdowns by name across the fleet, name-sorted', () => {
+    // Two replicas of an app+sidecar pod: the workload gauge stacks "app vs sidecar fleet-wide",
+    // the same segment vocabulary the pod gauge uses.
+    const pods = [pod('a'), pod('b')]
+    const usage: Record<string, ResourceUsage> = {
+      a: { cpuMilli: 120, memBytes: 300, containers: [{ name: 'sidecar', cpuMilli: 20, memBytes: 100 }, { name: 'app', cpuMilli: 100, memBytes: 200 }] },
+      b: { cpuMilli: 130, memBytes: 320, containers: [{ name: 'app', cpuMilli: 105, memBytes: 210 }, { name: 'sidecar', cpuMilli: 25, memBytes: 110 }] },
+    }
+    const agg = aggregateWorkloadUsage(pods, usage)
+    expect(agg?.usage.containers).toEqual([
+      { name: 'app', cpuMilli: 205, memBytes: 410 },
+      { name: 'sidecar', cpuMilli: 45, memBytes: 210 },
+    ])
+  })
+
+  it('omits the breakdown when there is no real split (single-container pods carry none)', () => {
+    const agg = aggregateWorkloadUsage([pod('a'), pod('b')], { a: { cpuMilli: 10 }, b: { cpuMilli: 20 } })
+    expect(agg?.usage.containers).toBeUndefined()
+  })
+
   it('returns null when no descendant pod has a usage reading', () => {
     expect(aggregateWorkloadUsage([pod('a', { cpuMilli: 100 })], {})).toBeNull()
     expect(aggregateWorkloadUsage([pod('a')], undefined)).toBeNull()

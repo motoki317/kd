@@ -9,7 +9,7 @@ import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
-import ContainerCards, { containerColorMap } from './ContainerCards'
+import ContainerCards, { containerColorMap, paletteColor } from './ContainerCards'
 import CopyButton from './CopyButton'
 import ImageRef from './ImageRef'
 
@@ -84,6 +84,28 @@ export interface UsageSegment {
   color: string
   cpuMilli: number
   memBytes: number
+}
+
+// workloadSegments builds the rolled-up gauge's stack from the fleet-summed breakdown (same visual
+// language as the pod gauge — one colour per container name). A workload's breakdown can undercount
+// its total mid-rollout (a pod reporting only one of its containers carries no breakdown but still
+// counts in the sum), so any shortfall past 2% becomes an explicit dim "not yet attributed" segment —
+// the stack must never stretch partial shares to fill the whole width.
+function workloadSegments(u: ResourceUsage): UsageSegment[] {
+  const breakdown = u.containers
+  if (!breakdown || breakdown.length < 2) return []
+  const segs = breakdown.map((c, i) => ({
+    name: c.name,
+    color: paletteColor(i),
+    cpuMilli: c.cpuMilli ?? 0,
+    memBytes: c.memBytes ?? 0,
+  }))
+  const cpuRest = (u.cpuMilli ?? 0) - segs.reduce((s, x) => s + x.cpuMilli, 0)
+  const memRest = (u.memBytes ?? 0) - segs.reduce((s, x) => s + x.memBytes, 0)
+  if (cpuRest > (u.cpuMilli ?? 0) * 0.02 || memRest > (u.memBytes ?? 0) * 0.02) {
+    segs.push({ name: 'not yet attributed', color: 'var(--text-dim)', cpuMilli: Math.max(0, cpuRest), memBytes: Math.max(0, memRest) })
+  }
+  return segs
 }
 
 // UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
@@ -331,6 +353,7 @@ export default function ResourceSummary(props: Props) {
               request: wu().requests,
               limit: wu().limits,
             })}
+            segments={workloadSegments(wu().usage)}
             caption={
               wu().meteredPods < wu().podCount
                 ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`

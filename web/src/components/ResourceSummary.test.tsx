@@ -235,6 +235,33 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows[1].textContent).toContain('/ 0.2') // summed request as the Req ceiling
     expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 3 pods')
   })
+  // The workload gauge speaks the pod gauge's segment vocabulary: the fleet-summed breakdown stacks
+  // one colour per container name. A breakdown that undercounts the total (a mid-rollout pod counted
+  // in the sum but reporting no per-container split) must NOT stretch to fill the bar — the shortfall
+  // becomes an explicit dim "not yet attributed" segment.
+  it('stacks the workload fill per container, with an explicit segment for unattributed usage', () => {
+    const dep: KNode = { id: 'd3', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const workloadUsage = {
+      // totals include a third, breakdown-less pod: 300m total vs 250m attributed
+      usage: {
+        cpuMilli: 300,
+        memBytes: 600 * 1024 * 1024,
+        containers: [
+          { name: 'app', cpuMilli: 200, memBytes: 400 * 1024 * 1024 },
+          { name: 'sidecar', cpuMilli: 50, memBytes: 100 * 1024 * 1024 },
+        ],
+      },
+      limits: { cpuMilli: 1000, memBytes: 1024 * 1024 * 1024 },
+      podCount: 3,
+      meteredPods: 3,
+    }
+    const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
+    const segs = [...container.querySelectorAll('.metric-fill-stack')][0].querySelectorAll('.metric-seg')
+    expect(segs.length).toBe(3)
+    expect(segs[0].getAttribute('title')).toBe('app · 200m')
+    expect(segs[1].getAttribute('title')).toBe('sidecar · 50m')
+    expect(segs[2].getAttribute('title')).toBe('not yet attributed · 50m')
+  })
   it('caption notes partial metering when some replicas have no reading yet', () => {
     const dep: KNode = { id: 'd2', kind: 'StatefulSet', name: 'db', health: 'Healthy' }
     const workloadUsage = {

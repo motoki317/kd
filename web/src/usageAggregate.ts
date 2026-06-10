@@ -1,4 +1,4 @@
-import type { KNode, Resources, ResourceUsage } from './types'
+import type { ContainerUsage, KNode, Resources, ResourceUsage } from './types'
 
 // WorkloadUsage is a workload's resource consumption rolled up from its descendant pods, so the drawer
 // can gauge a Deployment/StatefulSet's TOTAL live usage against its TOTAL reservation — the "how much is
@@ -35,12 +35,21 @@ export function aggregateWorkloadUsage(
   let hasReqMem = false
   let hasLimCpu = false
   let hasLimMem = false
+  // Per-container sums across the fleet ("is the sidecar overhead material workload-wide?") — the
+  // same names recur on every replica, so summing by name keeps the pod-level segment vocabulary.
+  const byName = new Map<string, { cpuMilli: number; memBytes: number }>()
   for (const p of pods) {
     const u = usage[p.id]
     if (!u) continue // unmetered pod: excluded from BOTH sides so the ratio stays like-for-like
     metered++
     cpuMilli += u.cpuMilli ?? 0
     memBytes += u.memBytes ?? 0
+    for (const c of u.containers ?? []) {
+      const acc = byName.get(c.name) ?? { cpuMilli: 0, memBytes: 0 }
+      acc.cpuMilli += c.cpuMilli ?? 0
+      acc.memBytes += c.memBytes ?? 0
+      byName.set(c.name, acc)
+    }
     if (p.requests?.cpuMilli != null) {
       hasReqCpu = true
       reqCpu += p.requests.cpuMilli
@@ -59,8 +68,13 @@ export function aggregateWorkloadUsage(
     }
   }
   if (metered === 0) return null
+  // Name-sorted like the server's per-pod breakdown, so segment order is stable across ticks.
+  // Only emitted when there's a real split to show (same >1 gate as the wire format).
+  const containers: ContainerUsage[] = [...byName.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, v]) => ({ name, cpuMilli: v.cpuMilli, memBytes: v.memBytes }))
   return {
-    usage: { cpuMilli, memBytes },
+    usage: { cpuMilli, memBytes, containers: containers.length > 1 ? containers : undefined },
     requests: hasReqCpu || hasReqMem ? { cpuMilli: hasReqCpu ? reqCpu : undefined, memBytes: hasReqMem ? reqMem : undefined } : undefined,
     limits: hasLimCpu || hasLimMem ? { cpuMilli: hasLimCpu ? limCpu : undefined, memBytes: hasLimMem ? limMem : undefined } : undefined,
     podCount: pods.length,
