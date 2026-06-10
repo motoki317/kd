@@ -672,6 +672,26 @@ describe('isFloatingImageTag', () => {
   })
 })
 
+describe('ImageRef digest display', () => {
+  // 64 hex chars of digest dominate a card (3 wrapped lines of noise for 8 chars of identity).
+  // The DISPLAY truncates; identity stays intact on hover (title) and on Copy (full ref).
+  it('truncates a rendered sha256 digest to its first 8 hex chars', () => {
+    const digest = 'a'.repeat(64)
+    const img = `registry.example.com/team/app:v1@sha256:${digest}`
+    const { container } = render(() => (
+      <ResourceSummary node={{ id: 'p', kind: 'Pod', name: 'x', health: 'Healthy', images: [img] }} {...base} />
+    ))
+    expect(container.querySelector('.image-ref-tag')?.textContent).toBe('@sha256:aaaaaaaa…')
+    expect(container.querySelector('.drawer-image')?.getAttribute('title')).toBe(img) // full ref on hover
+  })
+  it('leaves plain tags untouched', () => {
+    const { container } = render(() => (
+      <ResourceSummary node={{ id: 'p', kind: 'Pod', name: 'x', health: 'Healthy', images: ['app:v2.3.4'] }} {...base} />
+    ))
+    expect(container.querySelector('.image-ref-tag')?.textContent).toBe(':v2.3.4')
+  })
+})
+
 describe('parseImageRef', () => {
   it('splits a full ECR ref into dim prefix, repo name, and emphasised tag', () => {
     expect(parseImageRef('111122223333.dkr.ecr.us-west-2.amazonaws.com/argoproj/argoexec:v4.0.5')).toEqual({

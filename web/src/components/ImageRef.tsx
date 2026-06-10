@@ -40,12 +40,18 @@ export function parseImageRef(img: string): { prefix: string; name: string; tag:
 // per-container cards and the workload image list so both read identically (one place to evolve).
 export default function ImageRef(props: { image: string; wrapClass: string }) {
   const parts = createMemo(() => parseImageRef(props.image))
+  // A digest pin's 64 hex chars dominate the card (3 wrapped lines of noise for 8 chars of
+  // identity); show enough to compare/recognise, keep the full ref on hover and on Copy.
+  const displayTag = () => {
+    const m = parts().tag.match(/^(@sha256:[0-9a-f]{8})[0-9a-f]{48,}$/)
+    return m ? `${m[1]}…` : parts().tag
+  }
   return (
     <div class={props.wrapClass} title={props.image}>
       <code class="image-ref">
         <span class="image-ref-prefix">{parts().prefix}</span>
         {parts().name}
-        <span class="image-ref-tag">{parts().tag}</span>
+        <span class="image-ref-tag">{displayTag()}</span>
       </code>
       <Show when={isFloatingImageTag(props.image)}>
         <span
