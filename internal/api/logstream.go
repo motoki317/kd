@@ -46,8 +46,17 @@ const allContainers = "__all__"
 // carries its source pod name.
 func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 	ns, kind, name := r.PathValue("ns"), r.PathValue("kind"), r.PathValue("name")
-	if _, ok := a.authorize(w, r, ns, "logs", "get"); !ok {
+	id, ok := a.authorize(w, r, ns, "logs", "get")
+	if !ok {
 		return
+	}
+	// The cluster-scope log path merges pods from EVERY namespace (a Node's static pods ride along),
+	// but the request was authorized only against the cluster scope (empty namespace). Re-check each
+	// rode-along pod against ITS OWN namespace so a `Pod` addressed through `__cluster__` can't read
+	// logs a namespace-scoped `logs` deny forbids. A plain namespace request already snapshots only
+	// the one authorized namespace, so this predicate passes everything there (and isn't consulted).
+	canReadPodLogs := func(podNS string) bool {
+		return a.enforcer.Enforce(id.User, id.Groups, podNS, "logs", "get")
 	}
 	store, ok := a.resolveStore(w, r)
 	if !ok {
@@ -79,10 +88,10 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		// created mid-rollout join the stream. It never closes `lines`; the writer loop below ends
 		// only when the client disconnects (ctx done), so a momentary zero-pod gap mid-rollout no
 		// longer tears the stream down.
-		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, lines, gone)
+		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, canReadPodLogs, lines, gone)
 	} else {
 		// One-shot: resolve the descendant pods once, dump each, and close when all are done.
-		pods, _ := podsForResource(logSnapshot(store, ns), kind, name)
+		pods, _ := podsForResource(logSnapshot(store, ns, canReadPodLogs), kind, name)
 		var wg sync.WaitGroup
 		for _, pod := range pods {
 			wg.Add(1)
@@ -149,13 +158,13 @@ var logResolveInterval = 3 * time.Second
 // disappears from the snapshot (deleted while tailing), it signals `gone` once per transition — a
 // zero-pod gap with the resource still present stays silent (the mid-rollout tolerance) — so the
 // viewer can say "stream ended" instead of "waiting for log output…" forever.
-func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine, gone chan<- struct{}) {
+func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, canReadPodLogs func(string) bool, out chan<- logLine, gone chan<- struct{}) {
 	var mu sync.Mutex
 	streaming := make(map[string]bool) // pod names with a live streamer, so we never double-stream
 
 	wasGone := false
 	resolve := func() {
-		pods, rootExists := podsForResource(logSnapshot(store, ns), kind, name)
+		pods, rootExists := podsForResource(logSnapshot(store, ns, canReadPodLogs), kind, name)
 		if !rootExists {
 			if !wasGone && gone != nil {
 				wasGone = true
@@ -201,14 +210,16 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 // own snapshot; for the cluster scope it merges in every pod cluster-wide, because a cluster-scoped
 // root's descendant pods (a control-plane Node's static pods, whose ownerReferences point at the
 // Node) are namespaced and therefore absent from the cluster-scope snapshot — without them the Node's
-// Logs tab waited on "no pods" forever even though the displayed graph promised them.
-func logSnapshot(store Store, ns string) []runtime.Object {
+// Logs tab waited on "no pods" forever even though the displayed graph promised them. Each rode-along
+// pod is gated by canReadPodLogs(pod.Namespace) so the cluster-scope route can't read logs a
+// namespace-scoped policy denies (the request was authorized only against the cluster scope).
+func logSnapshot(store Store, ns string, canReadPodLogs func(string) bool) []runtime.Object {
 	snap := store.SnapshotNamespace(ns)
 	if ns != ClusterScopeNamespace {
 		return snap
 	}
 	for _, obj := range graph.AsTypedSlice(store.SnapshotNodesAndPods()) {
-		if _, ok := obj.(*corev1.Pod); ok {
+		if p, ok := obj.(*corev1.Pod); ok && canReadPodLogs(p.Namespace) {
 			snap = append(snap, obj)
 		}
 	}

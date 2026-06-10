@@ -462,6 +462,38 @@ func TestLogStreamForbidden(t *testing.T) {
 	}
 }
 
+// TestClusterScopeLogStreamRespectsNamespaceDeny guards the cluster-scope log path against an RBAC
+// bypass: the path merges pods from every namespace (a Node's static pods ride along), but the
+// request is authorized only against the cluster scope. A pod whose namespace the caller is denied
+// `logs` on must NOT stream just because it was addressed through `__cluster__`. dev is allowed the
+// cluster scope (readonly default) but denied shop logs, so the cluster-scope request returns 200
+// (cluster logs are permitted) yet yields NO log event for the shop pod web-1.
+func TestClusterScopeLogStreamRespectsNamespaceDeny(t *testing.T) {
+	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	url := srv.URL + ctxPath + "/namespaces/" + api.ClusterScopeNamespace + "/resources/Pod/web-1/log/stream?follow=false"
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("X-Forwarded-User", "dev")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("log stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (cluster-scope logs are allowed)", resp.StatusCode)
+	}
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		if strings.HasPrefix(sc.Text(), "event: log") {
+			t.Fatal("streamed a shop pod's logs via the cluster scope despite a shop logs deny — RBAC bypass")
+		}
+		if strings.HasPrefix(sc.Text(), "event: done") {
+			break // one-shot dump finished with no pods, as expected
+		}
+	}
+}
+
 // TestContextsHandlerInClusterMode covers the gating contract used by the client switcher:
 // in-cluster mode reports enabled=false and a single ready context, so the UI knows to hide
 // the switcher (FR-001 / FR-005).

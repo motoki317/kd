@@ -217,7 +217,7 @@ func TestSuperviseLogStreamsReportsResourceGone(t *testing.T) {
 	t.Cleanup(cancel)
 	lines := make(chan logLine, 64)
 	gone := make(chan struct{}, 1)
-	go superviseLogStreams(ctx, st, "shop", "Pod", "web-a", "", false, nil, lines, gone)
+	go superviseLogStreams(ctx, st, "shop", "Pod", "web-a", "", false, nil, func(string) bool { return true }, lines, gone)
 	go func() { // drain so streamers never block on the lines channel
 		for {
 			select {
@@ -257,7 +257,7 @@ func TestSuperviseLogStreamsReportsResourceGone(t *testing.T) {
 	t.Cleanup(cancel2)
 	gone2 := make(chan struct{}, 1)
 	setSnapshot(dep) // Deployment exists, no pods yet
-	go superviseLogStreams(ctx2, st, "shop", "Deployment", "web", "", false, nil, lines, gone2)
+	go superviseLogStreams(ctx2, st, "shop", "Deployment", "web", "", false, nil, func(string) bool { return true }, lines, gone2)
 	select {
 	case <-gone2:
 		t.Fatal("gone fired for a zero-pod gap with the resource still present")
