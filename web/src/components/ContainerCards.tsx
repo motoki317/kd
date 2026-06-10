@@ -105,9 +105,11 @@ export default function ContainerCards(props: {
                   const notReady = cs.state === 'Running' && !cs.ready && !cs.init
                   // The one per-container emergency worth words: memory over 90% of its own limit
                   // means an OOM kill is imminent — explicit text on top of the bar's near-full read.
+                  // Returns the reading itself so the message quotes the SAME value it was judged on
+                  // (no second usageFor call hiding behind a non-null assertion).
                   const nearMemLimit = () => {
                     const cu = usageFor(cs)
-                    return cu && cs.memLimitBytes ? (cu.memBytes ?? 0) / cs.memLimitBytes >= 0.9 : false
+                    return cu && cs.memLimitBytes && (cu.memBytes ?? 0) / cs.memLimitBytes >= 0.9 ? cu : undefined
                   }
                   // This container's own gauge: usage vs ITS req/lim. Skipped for finished
                   // containers (bounds are meaningless after a clean exit) and when there is
@@ -166,13 +168,15 @@ export default function ContainerCards(props: {
                         </div>
                       </Show>
                       <Show when={nearMemLimit()}>
-                        <div
-                          class="container-near-limit"
-                          title="Live usage from metrics-server, gauged against this container's own memory limit"
-                        >
-                          mem {formatQuantity(usageFor(cs)!.memBytes ?? 0, 'memory')} — over 90% of its limit, at
-                          risk of OOM kill
-                        </div>
+                        {(cu) => (
+                          <div
+                            class="container-near-limit"
+                            title="Live usage from metrics-server, gauged against this container's own memory limit"
+                          >
+                            mem {formatQuantity(cu().memBytes ?? 0, 'memory')} — over 90% of its limit, at
+                            risk of OOM kill
+                          </div>
+                        )}
                       </Show>
                       <Show when={cs.lastTerminated}>
                         {/* Why it previously exited — surfaced inline next to the restart count so an

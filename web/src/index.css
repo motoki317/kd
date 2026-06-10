@@ -2627,11 +2627,13 @@ button.conn.conn-retry:focus-visible {
   margin-top: 1px;
 }
 /* Caption + gauge-scoped controls on one row: the group-by toggle sits left, the caption keeps its
-   right-aligned home under the value column. */
+   right-aligned home under the value column. Wraps rather than overflowing if a future locale or
+   control makes the row outgrow a phone-width drawer. */
 .metric-caption-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .metric-caption-row .metric-caption {
   flex: 1;
