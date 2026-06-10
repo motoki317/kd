@@ -684,7 +684,9 @@ func hpaScale(obj runtime.Object) string {
 	if !hasCur && !hasDes {
 		return "" // status not populated yet (freshly created) — nothing to show
 	}
-	if hasDes && des != cur {
+	// desiredReplicas 0 means "couldn't compute" (an HPA never scales to zero — minReplicas ≥ 1),
+	// so "1 → 0" would read as an impossible scale-down on a broken autoscaler.
+	if hasDes && des > 0 && des != cur {
 		return fmt.Sprintf("%d → %d", cur, des)
 	}
 	return fmt.Sprintf("%d", cur)

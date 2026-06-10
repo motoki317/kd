@@ -202,6 +202,33 @@ func crHealthFromConditions(u *unstructured.Unstructured) Health {
 	return HealthUnknown
 }
 
+// hpaConditionMessage explains a degraded HPA the way hpaHealth judges it: the ScalingActive /
+// AbleToScale = False condition's message ("failed to get cpu utilization: missing request for
+// cpu…"), which lives in neither Ready nor Available — the only types the generic
+// crConditionMessage reads — so a broken autoscaler was a red card with no words.
+func hpaConditionMessage(u *unstructured.Unstructured) string {
+	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
+	if err != nil || !found {
+		return ""
+	}
+	for _, want := range []string{"ScalingActive", "AbleToScale"} {
+		for _, c := range conds {
+			m, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			if typ, _ := m["type"].(string); typ != want {
+				continue
+			}
+			if s, _ := m["status"].(string); s == "False" {
+				msg, _ := m["message"].(string)
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
 // crConditionMessage returns the message of the CR's Ready/Available condition when that condition isn't
 // True — the "why" behind a degraded CR (a Certificate's "Issuing certificate…", an ExternalSecret's
 // provider error), which most controllers put in conditions[].message rather than a top-level

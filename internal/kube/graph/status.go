@@ -124,7 +124,13 @@ func statusMessage(obj runtime.Object, h Health) string {
 		if leaf := argoWorkflowMessage(o); leaf != "" {
 			msg = leaf
 		} else if msg == "" {
-			msg = crConditionMessage(o)
+			// HPAs carry their fault in ScalingActive/AbleToScale, not Ready/Available — match the
+			// condition selection to hpaHealth's verdict.
+			if o.GroupVersionKind().Group == "autoscaling" {
+				msg = hpaConditionMessage(o)
+			} else {
+				msg = crConditionMessage(o)
+			}
 		}
 	case *corev1.Pod:
 		msg = blockingConditionMessage(o.Status.Conditions)

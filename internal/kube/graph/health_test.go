@@ -434,6 +434,20 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(finalizer-stuck pod) = %q, want the finalizer name", got)
 	}
 
+	// A broken HPA explains itself: its fault lives in ScalingActive (not Ready/Available), so the
+	// generic CR condition reader left a red card with no words.
+	hpa := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler",
+		"status": map[string]any{"conditions": []any{
+			map[string]any{"type": "AbleToScale", "status": "True", "message": "the HPA controller was able to get the target's current scale"},
+			map[string]any{"type": "ScalingActive", "status": "False", "reason": "FailedGetResourceMetric",
+				"message": "failed to get cpu utilization: missing request for cpu in container main of Pod api-b-abc"},
+		}},
+	}}
+	if got := statusMessage(hpa, HealthDegraded); !strings.Contains(got, "missing request for cpu") {
+		t.Errorf("statusMessage(broken HPA) = %q, want the ScalingActive message", got)
+	}
+
 	// A failed Job says it has terminally given up — "0/1 · failed 2" alone reads as still retrying.
 	deadJob := &batchv1.Job{Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
 		{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded",

@@ -804,6 +804,10 @@ func TestHPAScaleAndRange(t *testing.T) {
 	if got := hpaScale(hpa(2, 10, 5, 5, true, true)); got != "5" {
 		t.Errorf("hpaScale(stable) = %q, want \"5\"", got)
 	}
+	// desired 0 means "couldn't compute" (HPAs never scale to zero) — no impossible "1 → 0" arrow
+	if got := hpaScale(hpa(1, 5, 1, 0, true, true)); got != "1" {
+		t.Errorf("hpaScale(broken) = %q, want \"1\" (no arrow to an uncomputed 0)", got)
+	}
 	if got := hpaRange(hpa(2, 10, 5, 5, true, true)); got != "2–10" {
 		t.Errorf("hpaRange = %q, want \"2–10\"", got)
 	}
