@@ -24,9 +24,28 @@ guards chain; scrape→service, all walked live 2026-06-10) · cluster scope at 
 switching · churn pan-preservation · j/k triage flow · drawer expand mode · offline/dropped-stream trio
 · capacity view at production scale (incl. node-name → drawer) · relationship/kind-filter compose ·
 owner-chip navigation + Alt+Left · rollout rendering · scale robustness (354-node namespace, 57
-Degraded).
+Degraded) · client core (App.tsx/api.ts SSE wiring, surveyed 0/11) · canvas layout math
+(layout.ts/capacityLayout.ts/Topology.tsx, surveyed) · light theme (all views + drawer, token-driven)
+· first-run landing · unreachable-context diagnosis.
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
+
+- **2026-06-10 b18 (dead-context offline; two repaint gaps; light-theme audit)** — dogfooding an
+  unwalked error path (a kubeconfig context whose endpoint is dead, via a scratch kubeconfig) caught
+  the canvas promising "connecting…" forever: the namespace-list failure meant no namespace was ever
+  picked, the subscribe effect never ran, and nothing moved connState — it now goes offline, refetches
+  the contexts list, and the existing canvas diagnosis names the cause; the offline pill's retry also
+  refetches the list. Delegated graph-package survey (1 real / 9 refuted) caught Service.Selector
+  missing from nodeEqual (stale "why no endpoints" chip on endpoint-neutral selector edits); following
+  that thread found Allocatable/CapacityRes/Requests/Limits also uncompared (stale node size on a
+  hot-resized VM) — fixed, and the diff test tables are now exhaustive with a reflective
+  decides-every-field check so an undecided Node field can't ship again. Light-theme audit across all
+  three views + drawer: clean (token-driven by construction; recipe recorded in the dogfooding skill;
+  the log pane's deliberate dark ground now has its WHY in CSS). Client-core survey: 0 real / 11
+  refuted — App.tsx/api.ts SSE wiring joins the mature surfaces. Layout survey: 2 nominal
+  (gridDims(0)/blockDims(0) NaN) refuted as unreachable (every callsite filters non-empty first).
+  First-run walk (cleared storage, bare URL): clean — lands on the most-troubled namespace by design.
+  README + hero screenshot + AGENTS.md/frontend-internals pointers verified current.
 
 - **2026-06-10 b17 (gauge ADR; store survey; goroutine-leak fix)** — the attribution-vs-totals gauge
   design arc recorded as an ADR (per-card self-gauging, plain-fill pod sum, by-pod workload split
