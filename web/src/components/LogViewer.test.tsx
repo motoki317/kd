@@ -196,6 +196,21 @@ describe('LogViewer', () => {
     await findByText('stream interrupted')
   })
 
+  // A Succeeded Workflow / Complete Job whose pods were already GC'd streams nothing, forever —
+  // "waiting for log output…" would have the operator waiting on logs that can never arrive.
+  it('tells a finished run apart from a silent live one in the empty state', () => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated containers={[]} restarts={0} status="Succeeded" />
+    ))
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('this run already finished')
+    cleanup()
+    // A live resource keeps the genuine waiting message — its logs may still come.
+    const live = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated containers={[]} restarts={0} status="Running" />
+    ))
+    expect(live.container.querySelector('.logs-waiting')?.textContent).toBe('waiting for log output…')
+  })
+
   it('names the hidden-line count and offers a reset when a filter hides every line', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />

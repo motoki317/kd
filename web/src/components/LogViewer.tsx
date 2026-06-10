@@ -47,6 +47,12 @@ export default function LogViewer(props: Props) {
   // The tailed resource was deleted server-side: the follow stream will produce nothing more, so
   // "waiting for log output…" would be a lie. Cleared if a same-name re-create resumes the stream.
   const [gone, setGone] = createSignal(false)
+  // A terminally-finished run (Succeeded Workflow, Complete Job, Succeeded/Failed Pod) whose stream
+  // stays empty will stay empty forever — its pods either printed nothing or were already cleaned up
+  // (Argo GC, TTL). "waiting for log output…" would have the operator waiting on logs that can never
+  // arrive (cost a confused round live on a day-old Succeeded Workflow). Exact statuses only: an
+  // evicted pod's status carries kubelet's free-text message, which a substring match could trip on.
+  const finishedRun = () => ['Succeeded', 'Failed', 'Complete', 'Error'].includes(props.status ?? '')
   // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
   // history, new lines stop yanking them down (a "Latest" button jumps back).
   const [pinned, setPinned] = createSignal(true)
@@ -659,7 +665,9 @@ export default function LogViewer(props: Props) {
                   ? 'no previous logs for this container'
                   : gone()
                     ? 'log stream ended — the resource was deleted'
-                    : 'waiting for log output…'
+                    : finishedRun()
+                      ? 'this run already finished — no log output remains (its pods may have been cleaned up)'
+                      : 'waiting for log output…'
               }
             >
               {/* Name the count so a PERSISTED level filter that hides a fresh pod's whole output reads
