@@ -2550,13 +2550,23 @@ button.conn.conn-retry:focus-visible {
   height: 100%;
   min-width: 1px; /* a sliver of a tiny share stays visible (and hoverable) instead of rounding to 0px */
 }
-/* The card-side colour key for a bar segment: a SQUARE (4px radius would read as the round health
-   dot) sized to the 11px card text, with the same colour its segment draws. */
+/* The legend's colour key for a workload-gauge segment: a SQUARE (4px radius would read as the
+   round health dot) sized to the 11px legend text, with the same colour its segment draws. */
 .container-swatch {
   flex: none;
   width: 9px;
   height: 9px;
   border-radius: 2px;
+}
+/* A container card's own resource bars (usage vs ITS req/lim). Indented to the card's detail
+   column; tighter spacing than the standalone drawer gauges — the card head already labels whose
+   numbers these are. */
+.container-bars {
+  padding-left: 16px;
+}
+.container-bars .pod-metrics {
+  margin-top: 2px;
+  gap: 5px;
 }
 /* Workload-gauge legend: names each segment colour where no container cards follow to do it. */
 .metric-legend {
@@ -2773,23 +2783,6 @@ button.drawer-host:hover {
   margin-left: auto;
   color: var(--degraded-text);
   flex: none;
-}
-/* A container's live share of the pod's draw (multi-container pods only). Indented under the name
-   like the image row (proximity: the number sits on the card it describes); labels dim, values bright
-   (contrast), tabular-nums so the 15s refresh doesn't jitter the row. */
-.container-usage {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  padding-left: 16px;
-  font-size: 11px;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-.container-usage .container-usage-val {
-  /* Plain weight: these are spec'd bounds, not the live value the gauges emphasise — equal-weight
-     text keeps the row from competing with the bars above (user feedback: no bold here). */
-  color: var(--text);
 }
 /* Why the container previously exited (its last restart). Indented to align under the name like the
    image row, and amber (--health-suspended) — a PAST termination is a caution that must stand out from

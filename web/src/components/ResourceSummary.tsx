@@ -1,17 +1,17 @@
 import { createMemo, For, Show } from 'solid-js'
-import { formatPair, formatQuantity } from '../capacityLayout'
 import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
 import { ruleHasWildcardVerb } from '../rbac'
-import { drawerResourceBars, type ResGroupModel } from '../resourceBars'
+import { drawerResourceBars } from '../resourceBars'
 import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
-import ContainerCards, { containerColorMap, paletteColor } from './ContainerCards'
+import ContainerCards, { paletteColor } from './ContainerCards'
 import CopyButton from './CopyButton'
 import ImageRef from './ImageRef'
+import UsageGauges, { type UsageSegment } from './UsageGauges'
 
 // endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
 // Degraded misconfiguration (selector matches nothing), some-but-not-all ready is Progressing (a
@@ -76,16 +76,6 @@ interface Props {
   hostCapacity?: Resources
 }
 
-// UsageSegment is one container's share of a pod's usage fill — the bars stack one coloured segment
-// per container (joined to its card by the swatch) so "which container is using it" reads visually
-// instead of as a second set of numbers under the cards.
-export interface UsageSegment {
-  name: string
-  color: string
-  cpuMilli: number
-  memBytes: number
-}
-
 // workloadSegments builds the rolled-up gauge's stack from the fleet-summed breakdown (same visual
 // language as the pod gauge — one colour per container name). A workload's breakdown can undercount
 // its total mid-rollout (a pod reporting only one of its containers carries no breakdown but still
@@ -108,127 +98,6 @@ function workloadSegments(u: ResourceUsage): UsageSegment[] {
   return segs
 }
 
-// UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a Pod's Lim +
-// Req, a Node's Cap + Alloc). Every bar in a group shares ONE linear scale (like the Nodes capacity
-// view), so the fill — LIVE USAGE — draws the SAME length on both bars, and each bar's TRACK LENGTH
-// encodes its bound: the bar ENDS at its ceiling (a 256Mi limit bar is visibly shorter than a 281Mi
-// request bar), not a tick on a fixed-width track. Usage past a bound EXTENDS the track past that
-// ceiling with the overshoot hatched — the Nodes-view "over its request/limit" idiom. Built by
-// drawerResourceBars. With `segments` (a multi-container pod), the fill is a stack of per-container
-// colours; the stack's total width is identical to the plain fill, since the breakdown sums to the
-// pod total by construction (joinUsage).
-const pct = (f: number) => `${Math.min(100, f * 100)}%`
-function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segments?: UsageSegment[]; legend?: boolean }) {
-  const segsFor = (res: 'cpu' | 'memory') =>
-    (props.segments ?? [])
-      .map((s) => ({ name: s.name, color: s.color, value: res === 'cpu' ? s.cpuMilli : s.memBytes }))
-      .filter((s) => s.value > 0)
-  return (
-    <Show when={props.groups.length > 0}>
-      <div class="pod-metrics" role="group" aria-label="Resource usage against limits and requests">
-        <For each={props.groups}>
-          {(g) => (
-            <div class="metric-group">
-              {/* The resource heading groups its bars (Proximity); the per-bar Lim/Req (or Cap/Alloc)
-                  label names which bound each tick marks. */}
-              <div class="metric-group-label">{g.label}</div>
-              <For each={g.bars}>
-                {(b) => {
-                  const pair = formatPair(b.usage, b.ceil, g.res, g.unitRef)
-                  const ref = b.unconstrained ? 'unset' : `${pair.cap} ${b.label.toLowerCase()}`
-                  const ratio = b.usage != null && b.ceil ? b.usage / b.ceil : 0
-                  // The visible track ends AT the bound (its ceiling), or past it — at the usage — when
-                  // usage overshoots. So a smaller bound draws a shorter bar (Req shorter than Lim) and a
-                  // burst grows the bar past its ceiling, like a Nodes-view bullet.
-                  const extentFrac = Math.max(b.fillFrac, b.boundFrac ?? 0)
-                  return (
-                    <div class="metric-row">
-                      <span class="metric-sublabel">{b.label}</span>
-                      {/* An unconstrained bar (no bound) shows a dashed empty track — never a fake-full bar. */}
-                      <div class="metric-bar" classList={{ unconstrained: b.unconstrained }} title={b.unconstrained ? `${pair.value} used · ungauged` : `${pair.value} used · ${ref}${b.over ? ` · ${ratio.toFixed(1)}× over` : ''}`}>
-                        <Show when={!b.unconstrained}>
-                          {/* Track length = the bound: the bar's right edge IS its ceiling (or the usage
-                              when it bursts past). The relative bound lengths read directly off the bars. */}
-                          <div class="metric-track" style={{ width: pct(extentFrac) }} />
-                          {/* Usage fill on the shared scale (same length across this group's bars).
-                              Multi-container pods stack one coloured segment per container (each
-                              proportional to its share; hover names it) — same total width as the
-                              plain fill, so the bound-vs-usage read is unchanged. */}
-                          <Show when={b.usage != null}>
-                            <Show
-                              when={segsFor(g.res).length > 1}
-                              fallback={<div class="metric-fill" classList={{ over: b.over }} style={{ width: pct(b.fillFrac) }} />}
-                            >
-                              {/* role=img + aria-label: the shares are otherwise hover-only (segment
-                                  titles on plain divs) — one label per stack keeps them readable
-                                  to a screen reader without N virtual-cursor stops. */}
-                              <div
-                                class="metric-fill metric-fill-stack"
-                                classList={{ over: b.over }}
-                                style={{ width: pct(b.fillFrac) }}
-                                role="img"
-                                aria-label={`per container: ${segsFor(g.res)
-                                  .map((s) => `${s.name} ${formatQuantity(s.value, g.res)}`)
-                                  .join(', ')}`}
-                              >
-                                <For each={segsFor(g.res)}>
-                                  {(s) => (
-                                    <div
-                                      class="metric-seg"
-                                      style={{ 'flex-grow': String(s.value), background: s.color }}
-                                      title={`${s.name} · ${formatQuantity(s.value, g.res)}`}
-                                    />
-                                  )}
-                                </For>
-                              </div>
-                            </Show>
-                            {/* Overshoot: hatch the portion of the fill beyond the ceiling (where the track
-                                grew past the bound). */}
-                            <Show when={b.over && b.boundFrac != null}>
-                              <div class="metric-burst" style={{ left: pct(b.boundFrac!), width: `${Math.min(100, b.fillFrac * 100) - b.boundFrac! * 100}%` }} />
-                            </Show>
-                          </Show>
-                        </Show>
-                      </div>
-                      {/* Bare "value / bound" — the row's sublabel already names the bound, so a "req"
-                          suffix would print it twice; matches the capacity view's bare pairs. The
-                          worded form stays on the bar's hover title. */}
-                      <span class="metric-val">
-                        <b>{pair.value}</b>
-                        <span class="metric-ref"> / {b.unconstrained ? 'unset' : pair.cap}</span>
-                      </span>
-                    </div>
-                  )
-                }}
-              </For>
-            </div>
-          )}
-        </For>
-        {/* Legend naming each segment colour — for gauges with no container cards below (the
-            workload rollup), where the colours would otherwise be hover-only (explicit over
-            implicit). The pod gauge skips it: its cards carry the swatches. */}
-        <Show when={props.legend && (props.segments?.length ?? 0) > 1}>
-          <div class="metric-legend">
-            <For each={props.segments}>
-              {(s) => (
-                <span class="metric-legend-item">
-                  <span class="container-swatch" style={{ background: s.color }} />
-                  {s.name}
-                </span>
-              )}
-            </For>
-          </div>
-        </Show>
-        {/* For a rolled-up workload gauge: name what the bars sum so the operator doesn't read a
-            Deployment's "3 cores" as one pod's (explicit over implicit). */}
-        <Show when={props.caption}>
-          <div class="metric-caption">{props.caption}</div>
-        </Show>
-      </div>
-    </Show>
-  )
-}
-
 // ResourceSummary is the drawer header's "what is this resource" block: identity, the runtime meta
 // line, and the kind-specific spec each view cares about (Service address/ports/endpoints, Ingress
 // routes, Role rules, binding subjects), plus images, per-container status, owner navigation, and
@@ -238,25 +107,6 @@ export default function ResourceSummary(props: Props) {
   // Labels are high-signal metadata (app, version, team) the operator otherwise has to dig out of
   // the manifest. Sort by key for a stable, scannable order.
   const labels = createMemo(() => Object.entries(props.node.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)))
-
-  // Per-container usage segments for the pod gauge, in card order (init first, then app) so the
-  // stack reads left-to-right like the cards read top-to-bottom, coloured by the shared map the
-  // card swatches use. Empty for single-container pods (the server omits their breakdown) and for
-  // containers without a reading — the stack then falls back to the plain accent fill.
-  const usageSegments = createMemo<UsageSegment[]>(() => {
-    const breakdown = props.usage?.containers
-    if (!breakdown || breakdown.length < 2) return []
-    const colors = containerColorMap(props.node.containerStatuses ?? [])
-    const order = (props.node.containerStatuses ?? []).map((cs) => cs.name)
-    return [...breakdown]
-      .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
-      .map((c) => ({
-        name: c.name,
-        color: colors.get(c.name) ?? 'var(--accent)',
-        cpuMilli: c.cpuMilli ?? 0,
-        memBytes: c.memBytes ?? 0,
-      }))
-  })
 
   return (
     <div class="drawer-summary">
@@ -348,12 +198,12 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
-      {/* CPU/memory resource bars — live usage gauged against each bound (a Pod's Lim + Req, a Node's
-          Cap + Alloc), each bar's length sized to its ceiling and the fill extending past it (hatched)
-          on a burst. The "am I bursting past my request / spilling past allocatable" answer the operator
-          otherwise gets only from `kubectl top` + `describe`. Shown when there's anything to gauge —
-          usage OR a declared bound. */}
-      <Show when={props.node.kind === 'Pod' || props.node.kind === 'Node'}>
+      {/* CPU/memory resource bars — live usage gauged against each bound (a Node's Cap + Alloc),
+          each bar's length sized to its ceiling and the fill extending past it (hatched) on a burst.
+          A Pod WITH container cards gets its bars per container ON the cards instead (the per-pod
+          sum can't say which container is hitting ITS limit — user-directed); this pod-level gauge
+          remains only for the cardless case (a Pending pod has spec bounds but no statuses yet). */}
+      <Show when={props.node.kind === 'Node' || (props.node.kind === 'Pod' && (props.node.containerStatuses?.length ?? 0) === 0)}>
         <UsageGauges
           groups={drawerResourceBars({
             isNode: props.node.kind === 'Node',
@@ -364,7 +214,6 @@ export default function ResourceSummary(props: Props) {
             limit: props.node.limits,
             hostCapacity: props.hostCapacity,
           })}
-          segments={usageSegments()}
         />
       </Show>
       {/* A workload's rolled-up usage (its replicas summed), gauged against the summed requests/limits —

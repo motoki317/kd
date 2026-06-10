@@ -197,26 +197,29 @@ edges.
 
 ## Drawer resource gauges (`resourceBars.ts` + `UsageGauges`)
 
-Per resource (CPU/Mem), one bar per bound — a Pod's Lim+Req, a Node's Cap+Alloc, a workload's summed
-Lim+Req — all on ONE shared linear scale (`scaleBars`): the fill is live usage (identical length on
-every bar in the group), each bar's TRACK length encodes its bound, and usage past a bound extends
-the track with a hatched overshoot (the Nodes-view bullet idiom). Key invariants:
+Per resource (CPU/Mem), one bar per bound — a container's Lim+Req, a Node's Cap+Alloc, a workload's
+summed Lim+Req — all on ONE shared linear scale (`scaleBars`): the fill is live usage (identical
+length on every bar in the group), each bar's TRACK length encodes its bound, and usage past a bound
+extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key invariants:
 
-- **Per-container stacks.** A multi-container pod's fill is a stack of per-container segments
-  (`UsageSegment`), widths proportional to each share, colours from `CONTAINER_PALETTE`
+- **A pod's gauges live on its container cards.** Each container card carries its OWN bars — that
+  container's usage against ITS req/lim — because a pod-summed gauge can't say which container is
+  near the ceiling (user-directed). A pod renders a top-level gauge only when it has no cards
+  (no `containerStatuses` yet, e.g. Pending); finished containers get no bars; a container with a
+  reading but no bounds gets the dashed "ungauged" track. Memory ≥90% of the container's OWN limit
+  additionally alarms in words on the card (imminent OOM).
+- **Per-container stacks are workload-only.** The rollup gauge's fill is a stack of per-container
+  segments (`UsageSegment`), widths proportional to each share, colours from `CONTAINER_PALETTE`
   (`ContainerCards.tsx` — leads with the accent so a stack's first segment matches the single-fill
   colour; deliberately no green/red/amber, a segment colour must never read as a status). The stack's
-  total width equals the plain fill: it changes WHO, never HOW MUCH. Colour joins: pod drawer →
-  square swatches on the container cards; workload drawer (no cards) → a `metric-legend` row.
+  total width equals the plain fill: it changes WHO, never HOW MUCH. No cards follow the rollup, so
+  a `metric-legend` row names the colours.
 - **Workload remainder.** The rollup sums per-pod breakdowns by name (`aggregateWorkloadUsage`); a
   pod mid-report carries no breakdown but still counts in the total, so any shortfall past 2%
   renders as an explicit dim "not yet attributed" segment — partial shares never stretch to fill.
 - **Server gate.** The wire only carries a breakdown for pods with >1 container reading (joinUsage);
-  single-container pods fall back to the plain fill everywhere.
-- **Cards show spec, bars show usage.** Container cards carry declared bounds only ("cpu req 10m |
-  mem lim 128Mi") — live numbers live in the bars. The one exception: memory ≥90% of the container's
-  OWN limit alarms in words on the card (imminent OOM is the per-container emergency a pod-total
-  gauge can hide).
+  a single-container pod's card reads the pod total as its own usage (the omitted breakdown would
+  just repeat it).
 
 ## Deleted-resource terminal state (drawer)
 
