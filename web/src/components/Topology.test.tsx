@@ -85,6 +85,15 @@ describe('Topology', () => {
     const reason = reasoned.container.querySelector('.topology-empty-reason')
     expect(reason?.textContent).toContain('getting credentials')
     expect(reason?.getAttribute('title')).toContain('getting credentials') // full chain on hover
+    reasoned.unmount()
+    // No-access (the namespace list loaded fine but is empty): a permissions answer from a healthy
+    // cluster — no spinner (nothing will arrive) and it outranks offline ("can't reach" would
+    // misdiagnose it).
+    const noAccess = render(() => (
+      <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} noAccess={true} />
+    ))
+    expect(noAccess.container.querySelector('.topology-empty-spinner')).toBeFalsy()
+    expect(noAccess.container.querySelector('.topology-empty-text')?.textContent).toContain('No namespaces are visible')
   })
 
   it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {

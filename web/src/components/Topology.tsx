@@ -56,6 +56,10 @@ interface Props {
   // "Connecting…" spinner (which implies active progress) — it shows a static "can't reach" message
   // pointing at the retry control, so the operator knows to act rather than wait.
   offline?: boolean
+  // The namespace list loaded fine but is EMPTY: the cluster answered, this account just has no
+  // read access. A terminal state of its own — neither "connecting" (nothing will arrive) nor
+  // "offline" (nothing failed).
+  noAccess?: boolean
   // The active context's cache-build error, shown under the offline empty-state headline so the
   // failure diagnoses itself (expired credentials vs unreachable API) instead of a bare "retry".
   offlineReason?: string
@@ -1459,25 +1463,31 @@ export default function Topology(props: Props) {
           </svg>
           <div class="topology-empty-text">
             <Show when={props.connected} fallback={
-              <Show when={props.offline} fallback={
-                <>
-                  {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
-                      than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
-                  <span class="topology-empty-spinner" aria-hidden="true" />
-                  Connecting…
-                </>
-              }>
-                {/* Offline with no data (e.g. an unreachable context): a static message, NOT the
-                    spinner — the connection failed, so point at the retry control rather than
-                    implying progress. */}
-                Can't reach the cluster — use “offline · retry” above to reconnect.
-                {/* The server-reported reason (when the context's cache failed to build): a Go error
-                    chain whose TAIL names the root cause ("getting credentials: exec: …"), telling
-                    an expired-SSO operator the fix is a login, not another retry. Dim and clamped —
-                    diagnosis, not the headline; the full chain stays in the title. */}
-                <Show when={props.offlineReason}>
-                  <div class="topology-empty-reason" title={props.offlineReason}>{props.offlineReason}</div>
+              // no-access outranks offline: with zero visible namespaces, "can't reach the
+              // cluster" misdiagnoses what is actually a permissions answer from a healthy one.
+              <Show when={props.noAccess} fallback={
+                <Show when={props.offline} fallback={
+                  <>
+                    {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
+                        than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
+                    <span class="topology-empty-spinner" aria-hidden="true" />
+                    Connecting…
+                  </>
+                }>
+                  {/* Offline with no data (e.g. an unreachable context): a static message, NOT the
+                      spinner — the connection failed, so point at the retry control rather than
+                      implying progress. */}
+                  Can't reach the cluster — use “offline · retry” above to reconnect.
+                  {/* The server-reported reason (when the context's cache failed to build): a Go error
+                      chain whose TAIL names the root cause ("getting credentials: exec: …"), telling
+                      an expired-SSO operator the fix is a login, not another retry. Dim and clamped —
+                      diagnosis, not the headline; the full chain stays in the title. */}
+                  <Show when={props.offlineReason}>
+                    <div class="topology-empty-reason" title={props.offlineReason}>{props.offlineReason}</div>
+                  </Show>
                 </Show>
+              }>
+                No namespaces are visible to this account — ask whoever runs kd to grant access.
               </Show>
             }>
               Nothing to show in this namespace.

@@ -136,6 +136,11 @@ export default function App() {
     if (untrack(connState) !== 'offline') void refetchContexts()
     setConnState('offline')
   })
+  // An empty namespace list that loaded FINE is its own terminal state, distinct from offline:
+  // the cluster answered, this account just can't see anything (lockdown policy). Without it the
+  // canvas spun "connecting…" forever — no namespace means the subscribe effect never runs, so
+  // connState never moves. Gated on 'ready' so the unresolved pre-fetch state doesn't flash it.
+  const noNamespaces = createMemo(() => namespaces.state === 'ready' && namespaceList().length === 0)
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
@@ -643,7 +648,10 @@ export default function App() {
             brand · context · breadcrumb · status · theme. */}
         {/* When offline (cycle 291), the conn pill becomes clickable as a manual reconnect:
             EventSource auto-reconnects, but on a long backoff — operators who know the server is
-            back shouldn't have to wait it out. role/title shift to reflect the affordance. */}
+            back shouldn't have to wait it out. role/title shift to reflect the affordance.
+            Hidden entirely in the no-access state: with no namespace there is no stream for the
+            pill to describe, and "connecting…" would promise progress that can never come. */}
+        <Show when={!noNamespaces()}>
         <Show
           when={connState() === 'offline'}
           fallback={
@@ -676,6 +684,7 @@ export default function App() {
           >
             offline · retry
           </button>
+        </Show>
         </Show>
         {/* Theme toggle (cycle 301): one button cycles system → light → dark. The glyph names the
             CURRENT mode (auto/sun/moon) and the title spells out what a click switches to, so the
@@ -773,6 +782,7 @@ export default function App() {
             }}
             connected={connected()}
             offline={connState() === 'offline'}
+            noAccess={noNamespaces()}
             // The active context's cache-build error (expired credentials, unreachable API) — the
             // diagnosis behind an offline state. Without it the empty-state's "use retry" sends an
             // operator with an expired SSO session into a retry loop; the reason ("getting
