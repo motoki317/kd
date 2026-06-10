@@ -1242,12 +1242,15 @@ export default function Topology(props: Props) {
     }
     // When any filter is active, frame just the lit subset — otherwise "Fit" gives you a
     // viewport of mostly-faded cards with the actual interesting nodes shrunk down. With no
-    // filter the full layout is the right frame (cycle 214).
+    // filter the full layout BOX is the right frame (cycle 214) — NOT the node boxes: in the
+    // capacity view layout().nodes are small hit-targets (pod segments, node labels) while the
+    // drawn content is the full-width tracks/bars, so framing the boxes zoomed Fit to 1.4x and
+    // left the track running 4 viewports wide on a phone. The box also covers kind-band headers.
     const lit = matches() || props.healthFilter || activeKinds()
       ? l.nodes.filter((n) => !nodeFaded(n))
-      : l.nodes
-    if (lit.length === 0) {
-      // Filter excluded everything — fall back to the full layout so Fit isn't a dead button.
+      : null
+    if (!lit || lit.length === 0) {
+      // No filter (or a filter that excluded everything): frame the whole drawn layout.
       const target = computeFitFor(0, 0, l.width, l.height, 1.4)
       target.scale *= 0.92
       animateTo(target)
