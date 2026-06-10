@@ -1,67 +1,53 @@
 # kd — Kubernetes dashboard
 
-See a whole namespace as one picture. kd draws your resources and the links between them, so you can
-tell at a glance which Deployment owns which Pods, what mounts a Secret, or why a Pod won't start —
-without running a dozen `kubectl` commands.
+![kd main view](./docs/images/kd_main.png)
 
-It's read-only and live. It watches the cluster and updates as things change, and there's no login to
-set up.
+A human-friendly, read-only, live Kubernetes dashboard for cluster operators and application developers.
 
-![A namespace as one picture: Ingress → Services → Pods ← ReplicaSets ← Deployments, with a Service's details open](docs/screenshot.png)
+kd draws your cluster for the human eye — related resources side by side, sizes drawn to scale,
+problems standing out in color — so you debug at a glance instead of through a maze of `kubectl` commands.
 
 ## Features
 
-### Views
+There are three main views: Relationship, Nodes, and Kind.
 
-You arrange the canvas yourself. Switch how resources are grouped:
+### Relationship view
 
-- **Relationship** — an ArgoCD-style tree, children fanning out from their parents.
-- **Nodes** — bars sized by capacity and usage, to see where resources actually go. Pods bursting
-  past their requests or running near their limits are flagged on the bar.
-- **Kind** — every resource boxed by type.
+An ArgoCD-style tree, with resources linked by their relationships.
+See at a glance which resource creates or references which one.
 
-Then pick which links to draw: ownership, network, volumes, RBAC, disruption, or monitoring. Custom resources show
-up too — Workflows, Certificates, ArgoCD Applications, and anything else a CRD defines, down to their
-Pods. Unhealthy resources stand out in color, and troubled namespaces sort to the top.
+Pick which links to draw: ownership, network, volumes, RBAC, disruption, or monitoring.
+Custom resources show up too — Workflows, Certificates, ArgoCD Applications, and anything else a CRD defines, down to their Pods.
 
-### Resource details
+![kd multiple relationships view](./docs/images/kd_multi_relation.png)
 
-Click a resource to open its details. The summary answers "what is this and how is it doing" without
-opening the manifest: status with its reason, each container's state and live usage against its own
-limit (a container about to hit its memory limit is flagged), CPU/memory gauges against requests and
-limits — a workload's summed across its replicas, the fill split per pod or per container — and each
-kind's defining facts: a Service's selector and endpoints, an Ingress's
-routes, a ConfigMap's keys, a Node's taints. Tabs carry live logs (multi-container streams merged and
-labelled, previous-crash output, level and text filters), recent events rolled up from the resource's
-children, and the raw manifest (YAML or JSON, with in-pane find). Owner chips walk up the tree, and
-the panel expands when log lines need the room.
+### Nodes view
 
-### Search and sharing
+All bars are drawn to one shared scale: a node with twice the capacity gets a bar twice as long,
+and so does a pod using twice the memory. Big things look big and small things look small,
+just as you would expect.
+Use this view to instantly spot which nodes and pods use the most CPU and memory.
 
-Search by name, kind, label, image, status, host, or IP. The current view lives in the URL, so you can
-share a link to exactly what you're looking at.
+![kd nodes view](./docs/images/kd_nodes.png)
 
-Works where you are: full keyboard control on a desktop (press `?` for the reference), and a
-phone-sized layout — panels overlay the canvas, drag to pan, pinch to zoom — for checking a page
-from wherever it finds you.
+### Kind view
 
-## Run it
+Every resource in the namespace is shown, grouped by its kind.
+Use this view to find a resource by its kind.
 
-You need Go 1.26+, Node 24+, and a working `kubectl` context. With Nix, `nix develop` sets up the tools.
+![kd kinds view](./docs/images/kd_kinds.png)
 
-```bash
-just dev   # API on :9123, web on :5173 — open http://localhost:5173
-```
+## Installation
 
-To run the real binary against your kubeconfig, build it and start it:
+### Running locally
 
-```bash
-just build
-./kd
-```
+Get the `kd` binary:
 
-With no proxy auth configured, kd starts read-only as a `dev` user, so this just works. Run `just` to
-see every command.
+- Download from [the latest GitHub Releases](https://github.com/motoki317/kd/releases)
+- TODO: mise support
+- TODO: nix support
+
+kd reads your kubeconfig and will start on http://localhost:9123/.
 
 ## Deploy
 
@@ -74,8 +60,17 @@ kd has no login of its own. It trusts a user header (`X-Forwarded-User`) from yo
 access with a `policy.csv` file (ArgoCD/Casbin style, reloaded when it changes). See
 [charts/kd/README.md](charts/kd/README.md) for the full setup and every value.
 
-## How it works
+## Development
 
-One Go binary watches every resource type — CRDs included — with a client-go cache, builds the
-relationship graph on the server, and serves it to a Solid.js + SVG web app over REST and SSE. Design
-decisions are written up in [docs/ADR/](docs/ADR/).
+You need Go 1.26+, Node 24+, and a working `kubectl` context. With Nix, `nix develop` sets up the tools.
+
+```bash
+just dev   # API on :9123, web on :5173 — open http://localhost:5173
+```
+
+To build and run the real binary:
+
+```bash
+just build
+./kd   # Web on :9123
+```
