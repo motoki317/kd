@@ -47,6 +47,22 @@ describe('LogViewer', () => {
     expect(select.value).toBe('__all__')
   })
 
+  it('turns "waiting for log output…" into a terminal notice when the tailed resource is deleted', () => {
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('waiting for log output')
+    eventSources.at(-1)!.emit('gone', {})
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('log stream ended — the resource was deleted')
+    // A same-name re-create resumes streaming: a new line supersedes the stale notice.
+    eventSources.at(-1)!.emit('log', { pod: 'web-1', line: 'back from the dead' })
+    expect(container.querySelector('.logs-waiting')).toBeNull()
+    expect(container.textContent).toContain('back from the dead')
+    // Deleted again with lines on screen: the end-of-stream marker renders at the tail (the
+    // empty-state text only covers the nothing-arrived case).
+    eventSources.at(-1)!.emit('gone', {})
+    expect(container.querySelector('.logs-waiting')?.textContent).toContain('log stream ended')
+    expect(container.textContent).toContain('back from the dead') // lines stay
+  })
+
   it('hides the picker for a single-container pod and for aggregated logs', () => {
     const single = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     expect(single.container.querySelector('.logs-container')).toBeNull()

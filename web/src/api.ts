@@ -161,6 +161,7 @@ export function streamLogs(
   onLine: (entry: LogEntry) => void,
   onError?: () => void,
   onDone?: () => void,
+  onGone?: () => void,
 ): () => void {
   const params = new URLSearchParams({ follow: opts.previous ? 'false' : 'true' })
   if (opts.container) params.set('container', opts.container)
@@ -174,6 +175,9 @@ export function streamLogs(
   // The one-shot (previous-logs) dump emits `done` when it has streamed everything; the live follow
   // stream never does. Lets the viewer tell "nothing yet, still streaming" from "finished, empty".
   es.addEventListener('done', () => onDone?.())
+  // The follow stream's supervisor reports the tailed resource being deleted — distinct from a
+  // connection error and from a mid-rollout zero-pod gap (which stays silent).
+  es.addEventListener('gone', () => onGone?.())
   es.onerror = () => onError?.()
   return () => es.close()
 }

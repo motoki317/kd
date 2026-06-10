@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/kubernetes"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -169,6 +172,96 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	}
 	if !sawA || !sawB {
 		t.Errorf("follow stream saw web-a=%v web-b=%v, want both (pod created mid-stream must join)", sawA, sawB)
+	}
+}
+
+// stubLogStore satisfies just the two Store methods superviseLogStreams touches; objs() controls
+// the snapshot per call, so the test mutates the "cluster" deterministically (no informer plumbing).
+type stubLogStore struct {
+	Store
+	objs   func() []runtime.Object
+	client kubernetes.Interface
+}
+
+func (s *stubLogStore) SnapshotNamespace(string) []runtime.Object { return s.objs() }
+func (s *stubLogStore) Client() kubernetes.Interface              { return s.client }
+
+// TestSuperviseLogStreamsReportsResourceGone guards the deleted-while-tailing fix: when the tailed
+// resource itself vanishes from the snapshot, the supervisor signals `gone` (once per transition) so
+// the viewer can render a terminal state instead of "waiting for log output…" forever. A zero-pod
+// gap with the resource still PRESENT stays silent — the mid-rollout tolerance.
+func TestSuperviseLogStreamsReportsResourceGone(t *testing.T) {
+	saved := logResolveInterval
+	logResolveInterval = 20 * time.Millisecond
+	t.Cleanup(func() { logResolveInterval = saved })
+
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-a", UID: "pa"}, Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web", UID: "dep-uid"}}
+	var mu sync.Mutex
+	snapshot := []runtime.Object{pod}
+	st := &stubLogStore{
+		objs: func() []runtime.Object {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]runtime.Object(nil), snapshot...)
+		},
+		client: fake.NewSimpleClientset(pod),
+	}
+	setSnapshot := func(objs ...runtime.Object) {
+		mu.Lock()
+		snapshot = objs
+		mu.Unlock()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	lines := make(chan logLine, 64)
+	gone := make(chan struct{}, 1)
+	go superviseLogStreams(ctx, st, "shop", "Pod", "web-a", "", false, nil, lines, gone)
+	go func() { // drain so streamers never block on the lines channel
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-lines:
+			}
+		}
+	}()
+
+	expectGone := func(want bool, what string) {
+		t.Helper()
+		select {
+		case <-gone:
+			if !want {
+				t.Fatalf("unexpected gone signal: %s", what)
+			}
+		case <-time.After(400 * time.Millisecond):
+			if want {
+				t.Fatalf("no gone signal: %s", what)
+			}
+		}
+	}
+
+	expectGone(false, "resource present and streaming")
+	setSnapshot() // the pod is deleted while tailing
+	expectGone(true, "resource deleted from the snapshot")
+	expectGone(false, "gone fires once per transition, not every tick")
+	setSnapshot(pod) // a same-name re-create resumes streaming…
+	expectGone(false, "resource back")
+	setSnapshot() // …and a second deletion is a new transition
+	expectGone(true, "second deletion")
+
+	// Zero pods with the resource still present is the mid-rollout gap — silent by design.
+	cancel()
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	t.Cleanup(cancel2)
+	gone2 := make(chan struct{}, 1)
+	setSnapshot(dep) // Deployment exists, no pods yet
+	go superviseLogStreams(ctx2, st, "shop", "Deployment", "web", "", false, nil, lines, gone2)
+	select {
+	case <-gone2:
+		t.Fatal("gone fired for a zero-pod gap with the resource still present")
+	case <-time.After(150 * time.Millisecond):
 	}
 }
 

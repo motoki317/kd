@@ -73,15 +73,16 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 
 	// This loop is the only writer to w; pod streamers fan into the shared channel.
 	lines := make(chan logLine, 64)
+	gone := make(chan struct{}, 1)
 	if follow {
 		// A supervisor keeps streamers running for the live descendant pod set, re-resolving so pods
 		// created mid-rollout join the stream. It never closes `lines`; the writer loop below ends
 		// only when the client disconnects (ctx done), so a momentary zero-pod gap mid-rollout no
 		// longer tears the stream down.
-		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, lines)
+		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, lines, gone)
 	} else {
 		// One-shot: resolve the descendant pods once, dump each, and close when all are done.
-		pods := podsForResource(store.SnapshotNamespace(ns), kind, name)
+		pods, _ := podsForResource(store.SnapshotNamespace(ns), kind, name)
 		var wg sync.WaitGroup
 		for _, pod := range pods {
 			wg.Add(1)
@@ -118,6 +119,14 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
+		case <-gone:
+			// The tailed resource was deleted: tell the client so the viewer renders a terminal
+			// state instead of "waiting…" forever. Connection stays open — a same-name re-create
+			// (a rerun Job) resumes streaming and new lines supersede the notice.
+			if !writeSSE(w, "gone", struct{}{}) {
+				return
+			}
+			flusher.Flush()
 		case <-heartbeat.C:
 			// Keep the connection open through proxies even while idle (e.g. no pods yet).
 			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
@@ -136,13 +145,29 @@ var logResolveInterval = 3 * time.Second
 // descendant pods. It re-resolves on a short interval and starts a streamer for any pod not already
 // being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted StatefulSet
 // member) join the merged stream without the client reconnecting. Each streamer removes itself when
-// its pod's log ends. Runs until ctx is cancelled; never closes out.
-func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine) {
+// its pod's log ends. Runs until ctx is cancelled; never closes out. When the RESOURCE itself
+// disappears from the snapshot (deleted while tailing), it signals `gone` once per transition — a
+// zero-pod gap with the resource still present stays silent (the mid-rollout tolerance) — so the
+// viewer can say "stream ended" instead of "waiting for log output…" forever.
+func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, out chan<- logLine, gone chan<- struct{}) {
 	var mu sync.Mutex
 	streaming := make(map[string]bool) // pod names with a live streamer, so we never double-stream
 
+	wasGone := false
 	resolve := func() {
-		for _, pod := range podsForResource(store.SnapshotNamespace(ns), kind, name) {
+		pods, rootExists := podsForResource(store.SnapshotNamespace(ns), kind, name)
+		if !rootExists {
+			if !wasGone && gone != nil {
+				wasGone = true
+				select {
+				case gone <- struct{}{}:
+				default:
+				}
+			}
+			return
+		}
+		wasGone = false
+		for _, pod := range pods {
 			mu.Lock()
 			if streaming[pod.Name] {
 				mu.Unlock()
@@ -175,15 +200,17 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 // podsForResource returns the pods whose logs represent the given resource: the pod itself if kind is
 // Pod, otherwise every pod reachable through ownerReferences. It builds with BuildForLogs so a
 // COMPLETED run's pods are reachable — a finished Job/CronJob/Workflow has nothing but completed pods,
-// and excluding them (as the displayed graph does) made its Logs tab silently empty.
-func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
+// and excluding them (as the displayed graph does) made its Logs tab silently empty. The second
+// return distinguishes "resource gone" from "resource exists, zero pods right now" (a mid-rollout
+// gap) — the supervisor reports the former to the client, never the latter.
+func podsForResource(objs []runtime.Object, kind, name string) ([]*corev1.Pod, bool) {
 	// Snapshots arrive as *unstructured.Unstructured from the dynamic-informer store. Convert
 	// known kinds (Pod included) so the type assertion below works regardless of input shape.
 	objs = graph.AsTypedSlice(objs)
 	g := graph.BuildForLogs(objs)
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {
-		return nil
+		return nil, false
 	}
 	want := make(map[string]bool)
 	for _, p := range g.DescendantPodNames(rootID) {
@@ -195,7 +222,7 @@ func podsForResource(objs []runtime.Object, kind, name string) []*corev1.Pod {
 			pods = append(pods, p)
 		}
 	}
-	return pods
+	return pods, true
 }
 
 // streamPodLogs follows one pod's logs, sending each line (tagged with the pod name) to out until

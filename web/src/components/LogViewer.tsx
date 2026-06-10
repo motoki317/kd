@@ -44,6 +44,9 @@ export default function LogViewer(props: Props) {
   // means the crashed container wrote nothing, so the empty state must read "no previous logs", not an
   // indefinite "waiting…". The live follow stream never completes, so this stays false there.
   const [completed, setCompleted] = createSignal(false)
+  // The tailed resource was deleted server-side: the follow stream will produce nothing more, so
+  // "waiting for log output…" would be a lie. Cleared if a same-name re-create resumes the stream.
+  const [gone, setGone] = createSignal(false)
   // Follow the tail only while the viewport is at the bottom; once the user scrolls up to read
   // history, new lines stop yanking them down (a "Latest" button jumps back).
   const [pinned, setPinned] = createSignal(true)
@@ -254,6 +257,7 @@ export default function LogViewer(props: Props) {
     setLines([])
     setError(false)
     setCompleted(false)
+    setGone(false)
     setPinned(true)
     setUnseenLines(0)
     const close = streamLogs(
@@ -264,6 +268,7 @@ export default function LogViewer(props: Props) {
       { tailLines: 200, container: c || undefined, previous: prev, timestamps: ts },
       (entry) => {
         setError(false) // a line arriving means the stream recovered
+        setGone(false) // a same-name re-create resumed streaming — the notice is stale
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
         // While scrolled up, count incoming lines so the Latest button can advertise the backlog.
         if (!pinned()) setUnseenLines((n) => Math.min(n + 1, 999))
@@ -271,6 +276,7 @@ export default function LogViewer(props: Props) {
       },
       () => setError(true),
       () => setCompleted(true),
+      () => setGone(true),
     )
     onCleanup(close)
   })
@@ -634,6 +640,12 @@ export default function LogViewer(props: Props) {
             )
           }}
         </For>
+        {gone() && visibleLines().length > 0 && (
+          // The tailed resource died with lines already on screen (often a final kubelet notice):
+          // mark the end of the stream where the eye is — at the tail — instead of relying on the
+          // empty-state text that only renders when nothing arrived.
+          <div class="logs-waiting">— log stream ended: the resource was deleted —</div>
+        )}
         {visibleLines().length === 0 && !error() && (
           // Distinguish "logs exist but every line is hidden by a filter" from "no logs yet". The
           // old check looked only at the text filter, so toggling off all level chips (or all pod
@@ -642,7 +654,13 @@ export default function LogViewer(props: Props) {
           <div class="logs-waiting">
             <Show
               when={lines().length > 0}
-              fallback={completed() ? 'no previous logs for this container' : 'waiting for log output…'}
+              fallback={
+                completed()
+                  ? 'no previous logs for this container'
+                  : gone()
+                    ? 'log stream ended — the resource was deleted'
+                    : 'waiting for log output…'
+              }
             >
               {/* Name the count so a PERSISTED level filter that hides a fresh pod's whole output reads
                   as "30 lines are here, hidden" not "this pod is silent", and offer a one-click reset
