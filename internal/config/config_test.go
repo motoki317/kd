@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"flag"
 	"net/netip"
 	"testing"
 	"time"
@@ -17,6 +19,14 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if c.PolicyReloadInterval != 10*time.Second || c.Resync != 10*time.Minute {
 		t.Errorf("default durations = reload %v, resync %v", c.PolicyReloadInterval, c.Resync)
+	}
+}
+
+func TestLoadHelpReturnsErrHelp(t *testing.T) {
+	// main distinguishes "-h was requested" (clean exit, no ERROR log) from a real config
+	// failure by this sentinel — ContinueOnError must keep surfacing it unwrapped-or-wrapped.
+	if _, err := Load([]string{"-h"}); !errors.Is(err, flag.ErrHelp) {
+		t.Errorf("Load(-h) error = %v, want flag.ErrHelp", err)
 	}
 }
 

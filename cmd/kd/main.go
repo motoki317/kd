@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -39,6 +40,11 @@ func main() {
 
 func run() error {
 	cfg, err := config.Load(os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		// -h is a requested exit, not a failure — flag already printed the usage; an ERROR log
+		// here would make a new operator's first command look like a crash.
+		os.Exit(2)
+	}
 	if err != nil {
 		return err
 	}
