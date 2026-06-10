@@ -35,11 +35,18 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b29 (2026-06-11, D91–D92 + refactor)** — CronWorkflow now offers aggregated logs of its
+- **b29 (2026-06-11, dogfooding D91–D96 + refactor)** — a cert-manager + Ingress legibility cluster
+  (mostly off moto-a1's real cert-manager/Argo shapes): CronWorkflow now offers aggregated logs of its
   scheduled runs (the grandchild CronWorkflow→Workflow→pods chain; "did last night's backup succeed?"
-  — verified live, 1521 lines across real runs), which also activates the D78 never-run message for
-  it; refactor: the two byte-identical CR-condition scanners folded into crConditionField; CronWorkflow
-  aggregated logs verified clean at 375px (the 32px "overflow" was the frozen drawer-in animation).
+  — 1521 lines live), which also activates the D78 never-run message for it; an Ingress shows its
+  serving address ("ext localhost", the ALB hostname an operator curls) by generalizing the Service
+  external-address reader; an Issuer/ClusterIssuer shows its backing CA ("ACME · Let's Encrypt
+  (staging — untrusted)" caution-tinted — the #1 cert-manager mistake); an expired Certificate reads
+  "expired N ago" not "in 0s". Refactor: the two byte-identical CR-condition scanners folded into
+  crConditionField. Verified clean: Ingress→Service→Pod Network chain + routing table, CronWorkflow
+  logs at 375px (the 32px "overflow" was the frozen drawer-in animation), monitor ns 0-Unknown CRs,
+  beginner Deployment+Service+Ingress walk. New technique catalogued: minimal open-schema CRD to
+  live-verify a CR chip without the operator installed.
 - **b28 (2026-06-11, dogfooding D79–D90)** — the dead-credentials context switch
   (a real shape that day) caught two lies: the stale selection ghosted into the drawer under a false
   "Deleted from the cluster" banner (selection now clears on ctx change), and disabling the broken
