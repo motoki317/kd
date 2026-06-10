@@ -72,6 +72,30 @@ e6b9290). The same subresource trick induces other rollup states (a Pod phase, a
 unavailable-replica count) on docker-desktop — prefer it over a destructive real action, and over
 shipping a status-string change on unit tests alone when the directive wants the render confirmed.
 
+### Induced-failure shapes (the highest-hit-rate discovery method, 2026-06-10 b5)
+
+Where status injection fakes a state, **creating real broken resources in a throwaway namespace**
+exercises the full controller chain (conditions, events, pod lifecycles) and asks the beginner
+question per shape: *does the UI say WHY, in words, near the red thing?* One `kubectl apply` each on
+docker-desktop; 8 of 11 shapes shipped a fix in their first pass:
+
+| Shape | Recipe | What it verifies |
+| --- | --- | --- |
+| Quota-blocked rollout | tiny ResourceQuota + Deployment requesting more | Deployment/RS headline = ReplicaFailure cause, not "minimum availability"; quota drawer shows used/hard |
+| Never-ready pod | readinessProbe at a wrong port, behind a Service | "Running · not ready" on the container; Service "0/1 ready" |
+| Terminally-failed Job | `backoffLimit: 1` + `exit 1` | headline says it gave up (not still-retrying) |
+| Finalizer-stuck delete | pod with a bogus finalizer, then `delete --wait=false` | headline names the finalizer |
+| OOM crash-loop | shell var doubling under a 20Mi limit | "last exit: OOMKilled (exit 137)" chip |
+| Bad image / missing ConfigMap | typo image tag; envFrom a missing CM | waiting message carries the root cause |
+| Pending PVC | nonexistent storageClassName | Events tab shows "storageclass not found" zero clicks away |
+| Unschedulable pod | request more CPU than the node has | Unschedulable condition message in the headline |
+
+Cleanup: one throwaway namespace holds everything (`kubectl delete ns` at the end); a finalizer-stuck
+pod needs `kubectl patch --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'` first or
+the namespace hangs Terminating. Strategic-merge `-p '{"metadata":{"finalizers":[]}}'` does NOT clear
+it ("no change"). Use clearly-fictional names (`hungry`, `doomed`, `zombie`) — they end up in
+screenshots and backlog notes.
+
 **Last verified clean at production scale (2026-06-05):** a real EKS staging cluster (72 nodes / 39
 namespaces) — cluster-scope relationship layout had **0 overlapping node cards** (the `placeColumns`
 depth-column layout holds), cluster- and namespace-scope capacity bars had **0 overshoot rows**
