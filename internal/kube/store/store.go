@@ -164,6 +164,15 @@ func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metri
 // kind, waits for the initial cache sync, then wires change handlers + the CRD watcher. The
 // caller's context cancellation tears every informer down.
 func (c *Cache) Start(ctx context.Context) error {
+	resources, err := c.disc.Discover(ctx)
+	if err != nil {
+		return fmt.Errorf("store: discover: %w", err)
+	}
+	c.registerEager(resources)
+
+	// Mirror ctx cancellation onto stopCh only once startup is past its failure exit: nothing
+	// consumes stopCh before factory.Start, and the registry builds each context exactly once
+	// against a Background ctx — a watcher launched before a failed Discover would block forever.
 	go func() {
 		<-ctx.Done()
 		// Idempotent close so manual Shutdown + ctx-cancel both work.
@@ -173,12 +182,6 @@ func (c *Cache) Start(ctx context.Context) error {
 			close(c.stopCh)
 		}
 	}()
-
-	resources, err := c.disc.Discover(ctx)
-	if err != nil {
-		return fmt.Errorf("store: discover: %w", err)
-	}
-	c.registerEager(resources)
 
 	// Start every registered informer, then block until they're synced. A failing watch
 	// (RBAC denied, gone CRD) won't ever HasSynced; we time-bound the wait so a single bad
