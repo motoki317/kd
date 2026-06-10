@@ -202,6 +202,13 @@ func (b *edgeBuilder) containerRefs(id, ns string, c corev1.Container) {
 }
 
 func (b *edgeBuilder) serviceEdges(id, ns string, svc *corev1.Service, nodes []Node) {
+	// An ExternalName service is a pure DNS alias: Kubernetes ignores its selector (the endpoint
+	// controllers never create endpoints for it), so a leftover selector — kubectl's own
+	// `create service externalname` generates one — must not select pods or paint a working
+	// alias Degraded "no endpoints".
+	if svc.Spec.Type == corev1.ServiceTypeExternalName {
+		return
+	}
 	if len(svc.Spec.Selector) == 0 {
 		return // selectorless: endpoints are managed externally, so we report no readiness
 	}

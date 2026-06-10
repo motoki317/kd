@@ -100,6 +100,18 @@ metadata:
 spec:
   selector:
     app: ghost
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alias-svc
+  namespace: shop
+  uid: svc5
+spec:
+  type: ExternalName
+  externalName: db.example.com
+  selector:
+    app: web
 `
 	g := Build(decodeFixture(t, fixture))
 
@@ -132,6 +144,17 @@ spec:
 	down := nodeByName(g, "Service", "down-svc")
 	if down.Health != HealthDegraded || down.Status != "0/1 ready" {
 		t.Errorf("down-svc = %q/%q, want Degraded/\"0/1 ready\"", down.Health, down.Status)
+	}
+
+	// An ExternalName service is a DNS alias whose selector Kubernetes ignores (kubectl's generator
+	// emits one anyway) — it must stay calm with no endpoint readiness, even though its selector
+	// happens to match pods.
+	alias := nodeByName(g, "Service", "alias-svc")
+	if alias.Endpoints != nil {
+		t.Errorf("ExternalName service should have no endpoints, got %+v", alias.Endpoints)
+	}
+	if alias.Health != HealthHealthy {
+		t.Errorf("alias-svc health = %q, want Healthy (selector is inert on ExternalName)", alias.Health)
 	}
 }
 
