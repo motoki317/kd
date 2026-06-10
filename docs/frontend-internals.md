@@ -224,6 +224,26 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
   a single-container pod's card reads the pod total as its own usage (the omitted breakdown would
   just repeat it).
 
+## Canvas empty-state ladder
+
+With no nodes to draw, the canvas explains WHY, on a strict rung order — identity failures outrank
+connectivity ones, because "can't reach the cluster" misdiagnoses a permissions answer:
+
+1. **authFailed** — the contexts bootstrap 401/403'd (proxy sent no identity / policy denies the
+   user): "Not signed in…". Nothing else can load, so it outranks everything.
+2. **noAccess** — the namespace list loaded `ready` but EMPTY (lockdown policy): "No namespaces are
+   visible…". Cluster healthy; permissions answer.
+3. **offline** — the stream or a bootstrap fetch failed: "Can't reach the cluster" + the
+   server-reported context error as a dim diagnosis line. The pill becomes the retry button, which
+   also refetches whichever bootstrap fetch (contexts/namespaces) failed.
+4. **connecting** — spinner; only while progress is genuinely possible.
+5. connected + empty graph — "Nothing to show in this namespace" + a hint naming the active lens.
+
+States 1–2 exist because they are *terminal*: with no namespace ever picked, the subscribe effect
+never runs, so nothing else would move `connState` off its initial 'connecting' — each was a
+live-caught forever-spinner (dead kubeconfig context, `-default-role ''` lockdown, untrusted-proxy
+401). The conn pill hides on 1–2 (there is no stream for it to describe).
+
 ## Deleted-resource terminal state (drawer)
 
 When the inspected resource vanishes from the live graph (a rollout replaced the pod, a crashlooper

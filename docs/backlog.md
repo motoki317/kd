@@ -30,6 +30,20 @@ Degraded) · client core (App.tsx/api.ts SSE wiring, surveyed 0/11) · canvas la
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b19 (first-contact honesty: every bootstrap failure now answers)** — systematically
+  dogfooding first-contact/error paths (which healthy-cluster dogfooding never hits) closed the
+  whole silent-hang family: a no-access account (`-default-role ''` → empty namespace list) and a
+  no-identity bootstrap (untrusted proxy → 401 contexts) each spun "connecting…" forever for the
+  same structural reason as the dead context — no namespace picked ⇒ subscribe effect never runs ⇒
+  connState never moves. Each is now a terminal state on a strict empty-state rung order (auth >
+  no-access > offline > connecting, documented in frontend-internals) with the conn pill hidden
+  where no stream exists. CLI first-contact polished too: `-h` no longer logs a spurious ERROR
+  (flag.ErrHelp → clean exit 2), and a fresh machine with no kubeconfig gets "no contexts found
+  (looked at …): set --kubeconfig or KUBECONFIG…" instead of `registry: unknown context: ""`.
+  Repo hygiene: 12 gofmt-drifted files formatted and `just check` now gates on gofmt. Server logs
+  under real staging load: clean. Auth middleware verified correct from trusted/untrusted peers
+  (an apparent 401-with-header was the probe hitting ::1 outside the 127.0.0.1/32 trust list).
+
 - **2026-06-10 b18 (dead-context offline; two repaint gaps; light-theme audit)** — dogfooding an
   unwalked error path (a kubeconfig context whose endpoint is dead, via a scratch kubeconfig) caught
   the canvas promising "connecting…" forever: the namespace-list failure meant no namespace was ever
