@@ -31,393 +31,82 @@ not-signed-in, each live-verified) · auth+rbac (security-lens survey, 0 real) �
 (logs/names/search/ansi/favicon/health/usageAggregate/resourceBars, surveyed 0/8) · beginner
 emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflow).
 
-Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
+Recent batches (newest first; **one line per batch** — `git log` carries the full WHY per commit, the
+`docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
+"Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **2026-06-10 b26 (operator-flow dogfooding D51–D60)** — selection fades 24 of 64 edges in a
-  three-lens graph (D51); a live `kubectl scale 2→5` updates the Deployment card to 5/5 over SSE
-  AND the sibling fold engages dynamically — 3 pods shown + "+ show 2 more" the moment the group
-  crosses the threshold (D57); zoom clamps hold at [0.15, 3] under 30/60 keypresses (D58); find
-  query + all 8 marks survive the YAML↔JSON flip (D59); no sidebar/canvas name overflow found —
-  cards recover full identity via native <title> hover (D60+D52); kind-chip × search composition
-  follows the documented fade precedence (the selection never fades — rung 1) (D56). Cycles
-  D53–D55 fold into earlier evidence (overflow idiom D16/D40; label chips D14).
-
-- **2026-06-10 b25 (operator-flow dogfooding D41–D50)** — capacity resource flip relabels Gi↔cores
-  (D41); hover-spotlight recedes 8 of 9 node rows whole, restores on leave — earlier zero-fade
-  probes had hit handler-less track rects (D42); sidebar trouble-badge click lands + flashes with
-  a clear title (D43); Group radiogroup: arrows move aria-checked with focus following, wrapping
-  (D44); deleted-pod ghost drawer keeps last state under an aria-live banner (D45); 800px window
-  with drawer open crushes the canvas to a sliver — judged deliberate priority-ordered
-  degradation (the just-opened drawer keeps readable width; ⌘B/close recovers; ≤640 switches to
-  overlays) (D46); 4 rapid namespace switches — last click wins, stream live, no race artifacts
-  (D47); log text×level filters compose (D48); 8-replica DaemonSet aggregates 1035 lines with
-  per-pod chips sharing the app-wide hide-toggle semantics, every line source-labelled (D49);
-  in-app navigation never grows browser history — replace-not-push confirmed, Alt+← is the in-app
-  back (D50).
-
-- **2026-06-10 b24 (operator-flow dogfooding D31–D40)** — ten more walks: previous-crash logs not
-  reproducible today (no restarted pod on either cluster; b16's induced crashloop covered it)
-  (D31); timestamps prefix + wrap class toggles (D32); Alt+click line copy silent no-op on
-  non-secure origin, no crash (D33); error-jump button + Shift+E correctly conditional — a probe
-  matched the toolbar's ERR chip, not a line badge; zero error lines ⇒ hidden button is right
-  (D34); `po/api` kind-scoped search lights only matching Pods (D35); share button no-op clean
-  (D36); drag-pan tracks the pointer exactly once the probe hits the real canvas SVG (D39); kinds
-  row at cluster scope: 26 chips, one line, `.scroll-r` edge fade (D40). Bonus: the sticky
-  network-only lens made cluster scope render empty — and the canvas explained itself ("666
-  unconnected resources are hidden" + one-click show); the fold pills (D15's gap) verified there:
-  "+ show 68 more" APIServices expands 65→133 with a symmetric "− show 68 fewer" to collapse.
-
-- **2026-06-10 b23 (operator-flow dogfooding D21–D30)** — ten more live walks: namespace
-  slash-filter → ↑↓ → Enter landing (D21); kind×health filter composition (D22); manifest find
-  flow (D23 — caught and SHIPPED: ⌘F on the Manifest tab fell through to browser find while the
-  strictly-stronger in-pane find sat unfocused; it now serves both panes, help row updated);
-  multi-container log picker with Init/App optgroups + init-stream switch (D24); orphans toggle
-  76→27→76 round trip (D25); zoom keys verified, f-fit geometry not headless-measurable (rAF
-  frozen — documented limitation, fit verified in prior live cycles) (D26); health-legend
-  spotlight 1-lit/43-faded with clean clear (D27); events warnings-only toggle correctly
-  conditional on warnings existing — no dead control on calm resources (D28); tainted Fargate
-  node drawer reads its NoSchedule taint verbatim (D29); Traefik IngressRoute table shows
-  host → backend · middleware (D30).
-
-- **2026-06-10 b22 (operator-flow dogfooding D1–D20)** — twenty successive human-operator walks
-  through the live UI, each judged against the four principles + recognition: morning-check landing
-  & Alt+T triage cycle (D1 — caught and FIXED the macOS bug where Option+T composes key '†' so the
-  advertised shortcut never fired for Mac operators; e.code now matched too); search→Enter→Logs→
-  level-filter hunt (D2 — click-to-solo on level chips REJECTED: would break the app-wide
-  multi-toggle chip idiom for a 2-click saving); Service "why not serving" walk via the Network
-  lens with selection surviving the lens switch (D3); capacity review with CPU→Memory flip, segment
-  tooltip, node-name→drawer (D4); owner-chip ladder up + Alt+← retrace (D5); deep-link round trip
-  restoring pod+drawer+lens exactly (D6); live rollout watch — surge pod + both ReplicaSets shown
-  mid-flight, superseded RS drops, viewport never jumps (D7); keyboard-only triage j/k/Esc/? (D8);
-  phone-width tap flow in the real gesture order (D9); Kind view scan (D10); volumes lens PVC walk
-  (D11 — component-wide spotlight blobs across shared mounts; typed/depth-limited walk DEFERRED:
-  regression risk to the ownership spotlight, reopen on operator feedback); context switch
-  mid-investigation cleanly resets, same-named ns deliberately kept (D12); Events rollup with
-  child attribution (D13); label-chip copy no-ops silently on non-secure origin (D14); fold pills
-  not reproducible today — no crowded sibling group on either cluster, previously verified (D15);
-  RBAC binding→role spotlight, rel-chip reordering-by-count REJECTED (stable order = muscle
-  memory) (D16); search by image fragment and status text (D17); theme cycle with drawer open —
-  geometry stable, selection kept (D18); drawer expand 520→1280→520 (D19); help-overlay audit —
-  every advertised key verified live: ]/[ tab cycle, ⌘K, ⌘B, y, Alt+← (D20).
-
-- **2026-06-10 b21 (survey coverage complete: utils clean; segment gate green)** — the last
-  unsurveyed surface (logs/names/search/ansi/favicon/health/usageAggregate/resourceBars utility
-  modules) came back 0 real / 8 refuted (regex backtracking, truncation off-by-ones, SGR param
-  skips, scale guards, locale sorts — all already-handled with tests). Every package and client
-  module is now surveyed-clean or fixed. Full segment gate: 617 web tests + all Go suites + `just
-  check` (now in AGENTS.md's build/test block) + embed build, all green.
-
-- **2026-06-10 b20 (security survey clean; empty-state a11y; beginner emergency shapes)** —
-  delegated security survey of internal/auth + internal/rbac (header spoofing, reload races,
-  dev-mode auto-enable, SSE/RBAC gaps, traversal): 9 refuted, 1 refuted on triage
-  (authenticated-but-unpoliced /contexts·/kinds metadata is a commented design choice — discovery,
-  not data; namespaces/resources stay RBAC-filtered) — the auth layer joins the mature surfaces.
-  The canvas empty state became a live region (the conn pill, the only other role=status, hides in
-  the identity states — terminal answers were silent to screen readers). Walked the two classic
-  beginner failures live: an induced unschedulable pod (bare `kubectl run` shape) verifies clean —
-  empty canvas points at "N unconnected resources are hidden" with a one-click show-orphaned, the
-  card reads the scheduler's "0/1 nodes available: Insufficient cpu" verbatim; a failed Workflow on
-  the staging cluster still triages end-to-end after the App.tsx changes. Phone-width (375px)
-  no-access state fits without overflow (the overlaying sidebar carries its own honest message).
-  ADR index verified complete against the files.
-
-- **2026-06-10 b19 (first-contact honesty: every bootstrap failure now answers)** — systematically
-  dogfooding first-contact/error paths (which healthy-cluster dogfooding never hits) closed the
-  whole silent-hang family: a no-access account (`-default-role ''` → empty namespace list) and a
-  no-identity bootstrap (untrusted proxy → 401 contexts) each spun "connecting…" forever for the
-  same structural reason as the dead context — no namespace picked ⇒ subscribe effect never runs ⇒
-  connState never moves. Each is now a terminal state on a strict empty-state rung order (auth >
-  no-access > offline > connecting, documented in frontend-internals) with the conn pill hidden
-  where no stream exists. CLI first-contact polished too: `-h` no longer logs a spurious ERROR
-  (flag.ErrHelp → clean exit 2), and a fresh machine with no kubeconfig gets "no contexts found
-  (looked at …): set --kubeconfig or KUBECONFIG…" instead of `registry: unknown context: ""`.
-  Repo hygiene: 12 gofmt-drifted files formatted and `just check` now gates on gofmt. Server logs
-  under real staging load: clean. Auth middleware verified correct from trusted/untrusted peers
-  (an apparent 401-with-header was the probe hitting ::1 outside the 127.0.0.1/32 trust list).
-
-- **2026-06-10 b18 (dead-context offline; two repaint gaps; light-theme audit)** — dogfooding an
-  unwalked error path (a kubeconfig context whose endpoint is dead, via a scratch kubeconfig) caught
-  the canvas promising "connecting…" forever: the namespace-list failure meant no namespace was ever
-  picked, the subscribe effect never ran, and nothing moved connState — it now goes offline, refetches
-  the contexts list, and the existing canvas diagnosis names the cause; the offline pill's retry also
-  refetches the list. Delegated graph-package survey (1 real / 9 refuted) caught Service.Selector
-  missing from nodeEqual (stale "why no endpoints" chip on endpoint-neutral selector edits); following
-  that thread found Allocatable/CapacityRes/Requests/Limits also uncompared (stale node size on a
-  hot-resized VM) — fixed, and the diff test tables are now exhaustive with a reflective
-  decides-every-field check so an undecided Node field can't ship again. Light-theme audit across all
-  three views + drawer: clean (token-driven by construction; recipe recorded in the dogfooding skill;
-  the log pane's deliberate dark ground now has its WHY in CSS). Client-core survey: 0 real / 11
-  refuted — App.tsx/api.ts SSE wiring joins the mature surfaces. Layout survey: 2 nominal
-  (gridDims(0)/blockDims(0) NaN) refuted as unreachable (every callsite filters non-empty first).
-  First-run walk (cleared storage, bare URL): clean — lands on the most-troubled namespace by design.
-  README + hero screenshot + AGENTS.md/frontend-internals pointers verified current.
-
-- **2026-06-10 b17 (gauge ADR; store survey; goroutine-leak fix)** — the attribution-vs-totals gauge
-  design arc recorded as an ADR (per-card self-gauging, plain-fill pod sum, by-pod workload split
-  default, truthful-zero rule) so the next redesign starts from the rationale, not archaeology.
-  Delegated adversarial survey of internal/kube/store+registry: 10 candidates, 8 refuted by the
-  surveyor, 1 refuted on triage (CRD-reconcile capturing Start's ctx IS the intended teardown
-  contract), 1 shipped — Start launched its ctx→stopCh watcher before Discover could fail, so each
-  bad kubeconfig context (built exactly once, against Background) leaked one forever-parked
-  goroutine; the launch now sits after the failure exit. LogViewer toolbar split rejected (no clean
-  state seam — see Rejected). Favicon badge + Events tab re-verifies were probe bugs, not app bugs.
-
-- **2026-06-10 b16 (ManifestPanel; finished-run logs honesty; emergency shapes re-verified)** — the
-  manifest tab's whole fetch+find cluster (format radiogroup, keyed resource, query, match stepping,
-  per-node reset) extracted into ManifestPanel (the KindFacts seam applied to DetailDrawer, 731→567;
-  live-verified find count, format refetch, marks surviving the toggle). A finished run (Succeeded
-  Workflow with GC'd pods) read "waiting for log output…" forever — terminal statuses now get "this
-  run already finished — no log output remains" (exact-match statuses only; evicted pods carry
-  free-text). Live walks: induced OOM crashloop reads "↻ 3 · 28s ago" + "Terminated: OOMKilled
-  (exit 137)" on a red card with honest empty bars; the by-pod default split exposed a real 4×
-  memory imbalance between two replicas of one workload; Kind view at 218 resources / 23 kinds;
-  aggregated workload logs at 405 lines. Delegated adversarial survey of internal/api: 10
-  candidates, 10 refuted (context propagation, ticker cleanup, RBAC, wire contract all pinned) —
-  the server layer joins the mature surfaces.
-
-- **2026-06-10 b15 (structure for future changes; secondary projections matured; URL alias)** — the
-  drawer's per-kind facts blocks (300+ lines of Show blocks every spec-chip change touches) extracted
-  whole into KindFacts.tsx with their MetaChip/KeyValRow idioms (pure move, live-verified identical);
-  spec.go's routing extractors (Ingress/HTTPRoute/Traefik, the likeliest growth point — GRPCRoute
-  pends) split into spec_routing.go; segment palette moved into UsageGauges with its consumers (the
-  ContainerCards export was an inverted dependency). `rels=disruption` (the VISIBLE label) now
-  aliases the stable `scheduling` id — a hand-edited URL guessed from the UI was silently dropped,
-  PDBs read as plain orphans (cost a confused round live; parseRels moved to relationships.ts +
-  tests). RBAC/Disruption/Monitoring projections all walked live against real shapes → mature list.
-  Delegated adversarial survey of the fresh gauge code: 10 candidates, 8 refuted (4 by the surveyor
-  itself), 2 small hardenings folded (keyed-Show OOM warning; caption-row flex-wrap). README names
-  the workload rollup + split; AGENTS.md gains the gauge-modules row.
-
-- **2026-06-10 b14 (pod summed gauge returns; workload split by pod/container — user-directed)** —
-  the pod drawer shows the summed gauge again ABOVE the per-container cards (both reads matter: total
-  at a glance + per-container attribution below; plain fill, no re-keying); the workload rollup's
-  fill now splits one segment per POD by default (an uneven replica IS the finding — an 8-replica
-  DaemonSet read one pod at 3-4× its siblings live; segments use the topology's "…-suffix" names so
-  legend and canvas agree) with a persisted caption-row toggle to the per-container-name split
-  (kd:workloadGaugeBy); stack aria prefix names the active split (ef9d163). Verified at phone width
-  (toggle row + 8-item legend fit 390px) and across a context switch (pref survives). Earlier same
-  day: induced near-OOM re-verified against the per-card design (91% Lim fill + hatched Req
-  overshoot + amber words on the at-risk card only); near-OOM recipe expectation updated.
-
-- **2026-06-10 b13 (per-container bars land on the cards — user-directed)** — a pod's gauges moved
-  ONTO its container cards: each card gauges its own usage against ITS req/lim (a pod-summed gauge
-  can't say which container is near the ceiling), retiring the bounds text row and the pod-level
-  stack/swatches; stacks + legend stay workload-rollup-only; UsageGauges extracted to its own module
-  (8ad8eb3). Restart counts date their last restart ("↻ 3 · 2h ago", 6f913a2). Follow-ons caught by
-  re-reading the fresh code + live dogfooding: the host-node "Node" ceiling had silently become
-  unreachable for running pods — restored per-card (7297211); a 2m reading under a cores-keyed
-  ceiling rendered "0 / 1" — a non-zero side now borrows its natural unit instead of displaying as
-  zero, both sides guarded (26d0e2c). Verified live on a real 2-container pod (per-card bars, near-
-  request memory reads directly), a 1-container pod (pod-total fallback), and a workload stack +
-  legend; frontend-internals gauge section rewritten to the new contract. Rejected: Req=Lim bar
-  collapse (see below).
-
-- **2026-06-10 b12 (saturation legibility; evicted pods; gauge internals doc)** — a saturated HPA's
-  replicas chip reads "2 · at max" caution-tinted (ScalingLimited stays no health signal — only the
-  TooManyReplicas reason marks it; TooFewReplicas idling at the floor stays unmarked; induced-verified
-  live with a CPU-spin under maxReplicas:2, 3eca308). An evicted pod surfaces kubelet's status.message
-  cause ("The node was low on resource: memory…") instead of a bare red "Evicted" (24b912f). Drawer
-  gauge invariants (shared scale, segment stacks, workload remainder, spec-on-cards/usage-in-bars)
-  documented in frontend-internals (one read for the next contributor). Saturated-HPA + stuck-rollout
-  recipes added to the dogfooding catalogue. Flow-verified seamless: the right-sizing review — one
-  click per workload shows summed usage vs req/lim ("2m / 20m" = over-provisioned at a glance), no
-  fake bars for undeclared bounds. Refuted as already-handled: suspended CronWorkflow (Suspended
-  health + status), paused Deployment ("Paused"/Suspended), pod-level scale chips on cards (drawer
-  is the right home).
-
-- **2026-06-10 b11 (segment vocabulary completed; ops-docs accuracy; stuck rollout)** — the workload
-  gauge stacks fleet-summed per-container segments with an explicit dim "not yet attributed"
-  remainder (6a70c7a) and a swatch+name legend, since no cards follow it to key the colours
-  (f44d452); stacks carry a per-container aria-label (shares were hover-only — a11y regression of
-  the redesign, 253296b); rendered sha256 digests truncate to 8 hex chars (a config-reloader ref
-  wrapped 3 lines, 4b895c2). Chart docs: the narrow-RBAC example silently killed every usage gauge
-  (no metrics.k8s.io rule — added) and the eagerKinds example claimed events could be cache-fed
-  (they can't, always live; README + values.yaml, 2 commits). Stuck-rollout shape (induced
-  progressDeadlineSeconds + failing probe): the Available tautology beat "ReplicaSet … has timed
-  out progressing" on array order — ranking now explicit, Available last (405ae6b). Delegated
-  re-survey of every changed drawer/log file: 4 candidates, 3 refuted on read (swatch flex:none IS
-  0 0 auto; drawer-status sits inside the hero's padding; gone-signal reset is pre-paint and a
-  closed EventSource delivers no late events), 1 folded as a one-line wrap-defence on legend items
-  — the ~94% refutation rate holds even on freshly-changed code.
-
-- **2026-06-10 b10 (per-container display matures user-directed; container-card module)** — the pod
-  gauge's fill now stacks one coloured segment per container (hover names the share; total width
-  unchanged), keyed to each card by a square swatch, and cards show declared bounds with every
-  number labelled ("cpu req 10m | mem req 128Mi · lim 128Mi") instead of repeating live usage —
-  user-directed redesign in two rounds of feedback (3825567; the earlier text-row form: 921406f →
-  1bd2349 → 7be4aa4, whose live round caught the smaller-side unit rule rendering "320Ki/65536Ki").
-  The OOM alarm survives as words on the at-risk card (≥90% of its own memory limit; induced-shape
-  verified end-to-end with a 91%-of-limit pod — recipe added to the dogfooding catalogue). Container
-  cluster + image-ref helpers extracted to ContainerCards.tsx / ImageRef.tsx (the drawer's hottest
-  evolution spot now lives in a 165-line module; pure move, 069's commit). README caught up
-  (monitoring category, per-container usage). Refuted: "HPA floats as an island" — the convention
-  ref-scanner already links HPA -[refers]-> its scale target (verified against a live graph).
-
-- **2026-06-10 b9 (WCAG contrast pass + per-container usage)** — a computed-luminance walk over
-  every visible text element found the dark theme's lighter accent (#4d8bf0) sinking white control
-  text to 3.35:1; new `--on-accent` token flips to near-black on dark (5.6:1) across the four
-  text-bearing accent fills, and `.log-json-extra` lifts 4.14→5.2:1 on the fixed-dark log pane
-  (b1bd510). The audit's off-screen sibling: white on vivid `--health-degraded` badges measured
-  3.7:1 at 10px bold — `--degraded-badge` (#c73e36, the existing degraded-text ink) carries the
-  sidebar trouble count + warning-events tab at 5.0:1, vivid hue kept for dots/borders/fills
-  (088fb42). User-requested: a pod's container cards now show each container's live cpu/mem share
-  (joinUsage keeps metrics-server's per-container breakdown for multi-container pods; client joins
-  by name) — "which container is eating the memory?" without `kubectl top --containers`; verified
-  live, shares sum exactly to the pod gauge (921406f). Deferred idea (needs a dependency): CronJob/
-  CronWorkflow "next run" chip — no cron-expression parser in go.mod; reopen only if a parser
-  arrives for another reason or the ask recurs from a user.
-
-- **2026-06-10 b8 (storage/DS shapes, triage flow, RBAC flow)** — a Released+Retain PV reads
-  Suspended (amber, waits on an operator forever) instead of Progressing (promised motion that
-  never comes), and names the stale claimRef blocking any new bind (22f17a7). A DaemonSet shows its
-  node selector as a chip, caution-tinted at 0/0 — "which nodes does this run on" lived only in the
-  manifest, and a selector matching nothing is exactly why a DS shows a contented 0/0 (35049d4).
-  A URL-seeded namespace that can't open (RBAC-denied / deleted / absent from a switched context)
-  now says so in a transient dismissible strip instead of silently landing the operator on the
-  fallback view (9f03da1; found by driving kd under a restrictive policy.csv with -default-role "").
-  Flow-verified mature (no seams): the morning-triage journey on a real cluster — trouble badge →
-  worst namespace → j → Degraded pod drawer → owner chip to the failed Workflow (its real deadline
-  message in the headline) → Alt+Left back → j onward; zero mouse trips after the badge click.
-  Restricted-operator view verified: sidebar lists only permitted namespaces, no [cluster] row.
-
-- **2026-06-10 b7 (HPA, STS chain, logs-gone, API survey)** — a broken HPA explains itself: its
-  fault lives in ScalingActive/AbleToScale, neither of which the generic CR condition reader scans,
-  so a non-functioning autoscaler was a red card with no words; also "1 → 0" (desiredReplicas=0 =
-  "couldn't compute") no longer renders as an impossible scale-to-zero (5fa839c). Logs viewer says
-  when the tailed resource was deleted — supervisor signals `gone` once per transition (zero-pod
-  mid-rollout gaps stay silent by design), viewer renders a terminal notice or an end-of-stream
-  marker at the tail; verified live with a delete-while-tailing round (e5a5a7b; the lines-on-screen
-  case was caught live — a final kubelet noise line had defeated the empty-state-only first cut).
-  Delegated API error-path survey: graph-SSE stale-out judged a deliberate trade-off (selection/
-  filter preservation beats disconnecting); events 502 wording left as-is (8s repoll masks
-  transients); 403 naming, context-unreachable, deleted-manifest, empty-slice contracts all verified
-  handled. Verified already-handled shapes: broken sidecar (right container red, "not ready" named),
-  STS + unbindable PVC chain (pod points at the PVC, PVC events name the missing class), event ×N
-  gloss live (coalesced BackOff ×5). Docs drift fixed: frontend-internals capacity scale rule
-  (7ec575e); induced-failure recipes catalogued in the dogfooding skill (b0ff111, b6).
-
-- **2026-06-10 b6 (correctness under induced shapes + refactor/survey wave)** — biggest catch: a
-  typo'd NAMED targetPort showed a false "1/1 ready" (readiness derives from selector matches since
-  Endpoints objects are deliberately uncached) — pods now count Ready only when a port resolves, and
-  the service says `targetPort "http" matches no container port name…` (f209067; regression-scanned
-  39 staging namespaces: zero false flags). A pending pod requesting more than the biggest node drew
-  its Unscheduled track kilopixels off-canvas and poisoned auto-fit — the scale now keys on
-  max(capacity, demand), node rows shrink proportionally, which IS the honest 1:4 picture (839d392).
-  A cordoned node row says "· cordoned" in amber with a gloss — bar-wise it looked identical to a
-  healthy node (b611788). Failed-Job/finalizer/tautology slices continued b5. Event "×N" gets a
-  plain-words hover (59bb2a2, the Manifest+Events survey's sole survivor — that surface verified
-  mature otherwise). Refactor survey (narrow lens, last 30 commits): one real seam — the quota chip
-  had copied the data-keys " · " split renderer; extracted KeyValRow (7c5f861); status.go per-kind
-  condition scans judged genuinely different (no helper), theme tokens mirrored, server/client
-  defaultLogContainer in lockstep. Induced-failure recipes catalogued in the dogfooding skill doc
-  (b0ff111). Verified already-handled: unschedulable pod headline (full scheduler message survives
-  the ContainersNotReady filter); PVC/OOM shapes (b5).
-
-- **2026-06-10 b5 (induced-failure shapes + drawer width)** — drove the failure states a beginner
-  actually hits, against live induced resources. Quota-blocked Deployment: headline now shows the
-  ReplicaFailure cause ("exceeded quota: …") instead of the Available tautology ("does not have
-  minimum availability") that array-order picked (ad07a1a); the red RS card beside it explains itself
-  too — RS ReplicaFailure surfaced, its only condition type (206d7c2); clicking the quota itself now
-  answers "how much room is left" — ResourceQuota drawer shows used/hard per resource via the data-key
-  chip idiom, ResourceQuota registered in typedFactories (bdfebc1). Readiness-probe failure: a Running
-  container failing its probe says "Running · not ready" in words + a probe hover, where only the dot
-  hue changed before (b74e348). **User-reported fix:** drawer header action icons (expand/share/close)
-  overlay on a surface pill instead of flexing beside the summary — every summary row (bars, chips,
-  container cards) regains ~100px; only the hero reserves clearance (239864d); regression-passed on
-  production shapes (long names, init containers, scrolled summary, both themes). Delegated
-  first-load/sidebar survey: [cluster] row hover now explains "Resources outside any namespace —
-  Nodes, PersistentVolumes, ClusterRoles" (69c1e46); refuted: breadcrumb placeholder during connect
-  (low-value — conn pill + canvas already say "connecting…", crumb appears on the fast namespace-list
-  fetch); empty-ns ServiceAccount wording expansion (current text already names it as Kubernetes-added);
-  offline selection-loss warning (selection IS preserved when the resource survives); "(default)"
-  context-switcher gloss (self-evident to its multi-context audience).
-  Second wave (same induced-shape method): failed Job headline says it has given up — the Failed
-  condition message ("reached the specified backoff limit") replaces ambiguity about retrying
-  (67d416e); a pod stuck Terminating names the finalizer holding it, the "kubectl delete hangs"
-  dead end (ab9a375); the ContainersNotReady tautology ("containers with unready status: [main]")
-  is suppressed from pod headlines — status summary + container cards say it better (70eea09).
-  Verified already-handled: Pending PVC (drawer opens on Events showing "storageclass not found" +
-  class chip); OOMKilled (CrashLoopBackOff status + "last exit: OOMKilled (exit 137)" chip + restart
-  badge, one click from the canvas).
-- **2026-06-10 b4 (beginner first-run dogfooding)** — fresh namespace says "this namespace is empty"
-  plainly instead of the unconnected-orphan riddle (4af7105); drawer gauge rows stop printing their
-  bound name twice ("Req — / 25m req" → bare value/bound, capacity-view repetition) (d869e92); Nodes
-  view Req/Use axis labels gain hover glosses + "(+59 other-ns)" speaks plainly (c3b7ee8); Kind view
-  shows full pod names — the tree's "…-suffix" parent dedup leaked into a view with no parent context,
-  making api/web pods indistinguishable (875a179). Delegated URL/deep-link survey: ~all refuted —
-  bogus `?kinds=` lands on the existing "No resources match" overlay + clear button (verified live);
-  unmatched `?sel=` auto-degrades (prior verdict); orphans/capRes/sel-mangling are hand-edit-only
-  shapes on machine-written URLs (low). URL surface verified mature.
-  Also: a waiting container's state now carries its root-cause message — "Waiting: ErrImagePull —
-  …not found" instead of the bare reason; CrashLoopBackOff keeps reason-only (its message is backoff
-  mechanics, the cause lives in the last-exit chip) (dbb5822, induced ImagePullBackOff flow).
-  Waiting-message re-verified on the second key shape: CreateContainerConfigError reads
-  `…— configmap "missing-config" not found` live (the beginner's most common config mistake names
-  its missing object in one click). Refuted: "Nodes view misleads with 0-usage when metrics-server
-  is absent" — already-handled, the `hasUsage:false` canvas hint says "metrics-server unavailable —
-  bars sized by requests" (CapacityView.tsx honesty hint).
-  Delegated refactor survey: **0 qualifying candidates — internal organization verified healthy.**
-  The per-kind accretion in spec.go/ResourceSummary.tsx is intentional (5 small places per kind, the
-  build.go inventory stays at-a-glance; a registry would obscure it); selector/CR-essence logic
-  already centralized (selectorSummary, asUnstructuredKind, MetaChip); Topology.tsx is large because
-  it IS the orchestrator — no seam extracts without prop-drilling (CapacityView was the clean one,
-  done). Source future refactors from a concrete blocked change, not re-surveys.
-- **2026-06-10 b3 (beginner-first structural sweep)** — three delegated audits (UI text, docs, feature
-  surface) + first-run dogfooding. Shipped: backlog condensed 718→366 lines (519210e); 40+ tooltips/
-  hints/help entries rewritten to beginner-plain English, jargon dropped ("solo", "yank", "SSE")
-  (a965c9c); README hero screenshot from fictional demo data, TODOs dropped (2831e75); deleted-banner
-  text halved. **Feature-surface audit verdict: already restrained** — controls are contextual (kind
-  chips/health pills/orphan toggle appear only when relevant; secondary rels already fold), and the
-  audit's fold candidates (level chips → dropdown, severity dots removal, theme/share/JSON demotion)
-  each trade away an explicit affordance for little chrome; kind abbreviations are kubectl-canonical
-  short names (PO/SVC/DEPLOY/CM). Do not prune features without a concrete beginner-felt pain. Docs
-  audit: README/charts/ADRs/internals all appropriately sized; the bloat was backlog-only (fixed). — light-theme troubled-text contrast: --degraded-text /
-  --progressing-text inks + healthTextColor, statuses/reasons now ≥4.5:1 in light (6f46508);
-  ExternalName service's inert selector no longer fakes "no endpoints" Degraded (cd61d25) + address-chip
-  title made type-neutral (21ca62e); "headless" address sentinel explains itself, no bogus copy
-  (bbe7502); long chip values wrap inside the chip instead of escaping the drawer (16b8ef9).
-- **2026-06-10 b1 (phone/touch + a11y + folds)** — phone overlays inert the covered canvas (890429a);
-  NARROW_SCREEN_QUERY consolidated into screen.ts; deleted-resource drawer banner + ghost selection
-  no longer fades the canvas (e6b2901); drawer full-width phone overlay (b2cb445); topbar fits 375px
-  (50d3c07); two-finger pinch zoom (d2654f6); sidebar toggle + phone sidebar overlay (d5d3489);
-  capacity Fit frames the drawn layout, not hit-boxes (14b4db3); triage-aware fold representatives in
-  the connectivity view (c15ab85); workload gauge sums its bound over the metered pods (24b240a);
-  filtered count pill doubles as a frame-the-matches button (5291ac7); Alt-click copies an event;
-  policy 403s name themselves; pending LB external address explains itself; HPA "metric" chip + ArgoCD
-  Application dest/rev chips; offline context shows the cache-build error; near-limit notch survives
-  tiny segments; aggregate-fold tooltips name the click action; capacity hover-spotlight recedes whole
-  node rows (7f18088); CapacityView extracted from Topology.tsx; favicon badge reflects the whole
-  cluster; sidebar trouble-count aria-live; share URL round-trips Nodes-view pods (3-part sel);
-  Service selector copyable; finished-but-empty previous logs end with a `done` event, not a spinner;
-  Nodes-view count speaks pods · nodes.
-- **2026-06-06→09 (operator-dogfooding, drawer/CR legibility)** — merged multi-container logs with
-  per-container chips (0c767a3); drawer expand reclaims summary height (a84b7e6); secondary
-  relationship lenses fold behind "+N more" (b92ce55); pod CPU/memory usage gauges (3b5386e) → node
-  gauges (4ef6096) → unit consistency via formatPair (1a96e68); VictoriaMetrics operator CR health
-  mapped (1e589dd); HPA ScalingActive + ApplicationSet ErrorOccurred → Degraded (e629880; 0 Unknown
-  dots cluster-wide); kube-root-ca.crt mount-edge star suppressed (955dc33) then the node dropped
-  entirely (df5ad8d); Karpenter NodeClaim "spot · type" (e98eedd); admission-webhook-config summary
-  (b206cc4); aggregated-APIService backend + unavailable reason (2ba815f); usage-gauge overshoot laps
-  (c87185a→82b3655); Nodes view clickable node names + full FQDN (749be8e, 8177eb8); Service pod
-  selector chip, caution at 0 endpoints (c453dae); legacy Endpoints kind skipped (4315b4a); combined
-  log view defaults timestamps on (b34e695); scattered triage filter frames the worst match (24e231d);
-  workload usage rollup across replicas (badaf12); wgpolicy/Kyverno reports classify by summary
-  (0cb87b8); Traefik Middleware says what it does (c810a3b); NetworkPolicy lists real peers + ports
-  (2bf0d78); PDB "2 healthy" not "2/1" (171949f); IngressRoute middleware chain (7cf1c7d); labels
-  disclosure actually collapses (c508760); this-namespace nodes float first in Nodes view (7e98d66);
-  failed Workflow ranks primary step over exit-handler (d3ed4c9); Kind-view health filter floats
-  matching cards into visible slots (9d4438c); Terminating namespace reads "Terminating" (d3c5536).
-- **2026-06-05 b1–b5 + 2026-05-29** — edgeless namespaces hung on "connecting…" (nil edges → client
-  throw); SSE capacity flood fix; expand-fit zoom direction; ARIA tablist/radiogroup sweep + rovingFocus;
-  copy-success live region; cluster-scope drawer `{ns}` 404 fix; frozen-compositor harness pitfalls
-  persisted (rAF, drawer-in keyframe); server-surface survey (policy.csv re-parse, auth groups test,
-  store teardown). Lessons live in the skills; per-fix detail in git log.
+- **b22–b26 (2026-06-10, operator-flow dogfooding D1–D60; next cycle: D61)** — sixty successive
+  human-operator walks through the live UI (landing/triage, logs, capacity, lenses, keyboard, phone,
+  deep links, rollouts, SSE churn, a11y, manifest find, folds, history). Two fixes shipped: macOS
+  Option+T composing '†' so Alt+T never fired (e.code now matched); ⌘F on the Manifest tab fell
+  through to browser find (now serves both panes). Everything else verified clean or already-handled.
+- **b21 (2026-06-10)** — survey coverage complete: client utils 0 real / 8 refuted; full segment gate
+  green (617 web tests + Go suites + `just check` + embed build).
+- **b20 (2026-06-10)** — auth/rbac security survey 0 real; canvas empty state became a live region;
+  beginner emergency shapes (unschedulable, failed Workflow) walked clean; 375px no-access state fits.
+- **b19 (2026-06-10)** — every bootstrap failure now answers: no-access, no-identity, and dead-context
+  each get a terminal state instead of "connecting…" forever (strict empty-state rung order); CLI `-h`
+  and no-kubeconfig first-contact polished; gofmt gate added to `just check`.
+- **b18 (2026-06-10)** — dead-context offline handling; nodesEqual gaps fixed (Service.Selector, Node
+  resources) + a reflective decides-every-field diff test; light-theme audit clean; client-core and
+  layout surveys clean.
+- **b17 (2026-06-10)** — gauge-attribution ADR recorded; store survey shipped a Start goroutine-leak
+  fix (watcher launched before Discover could fail); favicon/Events re-flags were probe bugs.
+- **b16 (2026-06-10)** — ManifestPanel extracted (drawer 731→567); finished-run logs read "this run
+  already finished" instead of waiting forever; internal/api survey 10/10 refuted.
+- **b15 (2026-06-10)** — KindFacts.tsx + spec_routing.go extracted (pure moves); `rels=disruption`
+  URL alias (visible label now parses); RBAC/Disruption/Monitoring projections matured.
+- **b14 (2026-06-10)** — pod summed gauge returns above the container cards; workload rollup splits
+  one segment per pod by default with a persisted by-container toggle (ef9d163).
+- **b13 (2026-06-10)** — per-container bars moved onto the cards (8ad8eb3); restart counts dated
+  (6f913a2); host-Node ceiling restored (7297211); non-zero side borrows its natural unit (26d0e2c).
+- **b12 (2026-06-10)** — saturated HPA reads "2 · at max" (3eca308); evicted pods name kubelet's
+  cause (24b912f); gauge invariants documented in frontend-internals.
+- **b11 (2026-06-10)** — workload gauge per-container segments + legend + aria (6a70c7a, f44d452,
+  253296b); sha256 digests truncate (4b895c2); chart docs: metrics RBAC rule + events-not-cacheable
+  fixed; stuck-rollout condition ranking made explicit (405ae6b).
+- **b10 (2026-06-10)** — pod gauge stacks per-container segments keyed to card swatches; cards show
+  declared bounds with every number labelled (3825567); OOM alarm in words on the at-risk card;
+  ContainerCards/ImageRef extracted.
+- **b9 (2026-06-10)** — WCAG contrast pass: `--on-accent` + `--degraded-badge` inks (b1bd510,
+  088fb42); per-container live usage joins the cards (921406f).
+- **b8 (2026-06-10)** — Released+Retain PV reads Suspended + names its stale claimRef (22f17a7); DS
+  node-selector chip (35049d4); URL-seeded namespace that can't open says so (9f03da1); morning-triage
+  and restricted-operator flows verified seamless.
+- **b7 (2026-06-10)** — broken HPA explains itself (5fa839c); logs viewer says the tailed resource was
+  deleted (e5a5a7b); API error-path survey verified handled; docs drift fixed (7ec575e, b0ff111).
+- **b6 (2026-06-10)** — typo'd named targetPort no longer reads "1/1 ready" (f209067); capacity scale
+  keys on max(capacity, demand) (839d392); cordoned node row says so (b611788); KeyValRow extracted
+  (7c5f861); event ×N hover gloss (59bb2a2).
+- **b5 (2026-06-10)** — induced-failure beginner shapes: quota-blocked rollout cause (ad07a1a,
+  206d7c2, bdfebc1), probe failure in words (b74e348), failed Job says it gave up (67d416e),
+  finalizer-stuck delete named (ab9a375), ContainersNotReady tautology suppressed (70eea09);
+  user-reported drawer header actions overlay fix (239864d).
+- **b4 (2026-06-10)** — empty namespace says so plainly (4af7105); gauge label dedup (d869e92); Kind
+  view full pod names (875a179); waiting containers carry root-cause messages (dbb5822); URL surface
+  mature; refactor survey: 0 qualifying candidates, organization verified healthy.
+- **b3 (2026-06-10)** — beginner-first structural sweep: backlog condensed 718→366 (519210e); 40+ UI
+  texts rewritten beginner-plain (a965c9c); README hero from fictional demo data (2831e75);
+  feature-surface audit verdict: already restrained — do not prune without a concrete beginner pain.
+- **b2 (2026-06-10)** — light-theme troubled-text inks ≥4.5:1 (6f46508); ExternalName service no
+  longer fakes "no endpoints" (cd61d25); "headless" address sentinel explains itself (bbe7502); long
+  chip values wrap (16b8ef9).
+- **b1 (2026-06-10, phone/touch + a11y + folds)** — phone overlays inert the canvas (890429a); drawer
+  full-width overlay (b2cb445); pinch zoom (d2654f6); sidebar toggle (d5d3489); capacity Fit frames
+  the drawn layout (14b4db3); triage-aware fold representatives (c15ab85); filtered count pill flies
+  to matches (5291ac7); plus ~10 smaller slices (see git log 2026-06-10).
+- **2026-06-06→09 (operator-dogfooding, drawer/CR legibility)** — multi-container logs, drawer
+  expand, secondary-lens folds, usage gauges, CR health mappings, Nodes-view clickable names, log
+  message-first rendering, scattered-triage framing — ~40 slices, all hashed in Done below.
+- **2026-06-05 b1–b5 + 2026-05-29** — edgeless-namespace hang, SSE capacity flood, expand-fit zoom
+  direction, ARIA sweep + rovingFocus, cluster-scope drawer 404, server-surface survey.
 
 Small deferrals from these batches (reopen on operator ask): per-line truncation for multi-KB log
 lines; logs-header chip stacking at phone width; co-routed multi-type edges draw identical paths;
 drawer-overlay Tab-bleed at phone width + modal-help inert siblings; TopologyToolbar extraction;
 manifest format-toggle drops the find scroll anchor; one unreproduced ghost-clear on SSE reconnect
-(watch for it).
+(watch for it); Volumes-lens typed/depth-limited spotlight walk (regression risk to the ownership
+spotlight — see the PVC-spotlight row in Rejected).
 
 ## Open
 
@@ -607,6 +296,9 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | Also surface the DisruptionAllowed reason on a **Healthy** PDB that reports `disruptionsAllowed: 0` (above its floor but blocked by SyncFailed) | low-value + risky (2026-06-06, live docker-desktop app-ns: `pdb-wide-a` 10/8, `pdb-wide-b` 11/8, both `disruptionsAllowed=0` SyncFailed). The high-value case (a *Degraded* PDB's why) shipped in e84f8f6; extending it to Healthy PDBs would route an alarm-styled `.drawer-message` onto a **green** resource, fighting `statusMessage`'s deliberate "a healthy resource has no why worth the payload" gate. The blocked state is already flagged by the caution-coloured "can disrupt 0" chip, and the `CalculateExpectedPodCountFailed` warning is one click away in the Events tab. A drain-planning operator is already inspecting the PDB; not worth alarming every green at-floor PDB (where 0 is *correct* protective behaviour) to catch the rare above-floor-SyncFailed case. Do NOT extend the message gate to Healthy PDBs. |
 | "An ECK `Elasticsearch` CR uses a non-standard `status.health: green/yellow/red` field, so kd falls through to Unknown" | already-handled (2026-06-06, live docker-desktop + kubectl). `crHealth` (`health_cr.go:221`) has a dedicated stack-health switch reading `status.health`: green→Healthy, yellow→Progressing, red→Degraded, unknown→Unknown, with `crHealthFromConditions` as the default fallback. `crStatusSummary` combines it with `crPhase` into "Ready · yellow" — the *same* "explain a non-green dot on an otherwise-Ready resource" pattern as the node-status pressure suffix. Confirmed against a real yellow Elasticsearch (`health=yellow phase=Ready` → kd shows `Progressing`, status "Ready · yellow"). Complete across all three colours; do NOT re-investigate the "stack CR health = Unknown?" hypothesis. |
 | "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
+| Click-to-solo on log level chips (click ERR = show only errors) | rejected (2026-06-10 b22 D2) — would break the app-wide multi-toggle chip idiom (every chip row composes via independent toggles) for a 2-click saving; the "↧ N err" jump button already covers "take me to the errors" |
+| Reorder relationship chips by edge count (busiest lens first) | rejected (2026-06-10 b22 D16) — stable chip order is muscle memory; a count-driven reorder makes the toolbar shuffle between namespaces and sessions for no triage gain |
+| Drawer open at a ~800px window crushes the canvas to a sliver | working-as-designed (2026-06-10 b25 D46) — deliberate priority-ordered degradation: the just-opened drawer keeps readable width (the operator's focus is the drawer), ⌘B or closing recovers the canvas, and ≤640px switches to full-width overlays. Don't add a mid-width breakpoint |
 
 ## Done
 
