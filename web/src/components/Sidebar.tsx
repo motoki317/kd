@@ -219,7 +219,9 @@ export default function Sidebar(props: Props) {
                     classList={{ active: c().name === props.selected }}
                     aria-current={c().name === props.selected ? 'page' : undefined}
                     onClick={() => props.onSelect(c().name)}
-                    title={rowTitle(c())}
+                    // Unlike namespace rows, "[cluster]" is jargon a beginner can't decode from the
+                    // name alone — the hover says what lives here before the health hint.
+                    title={`Resources outside any namespace — Nodes, PersistentVolumes, ClusterRoles · ${rowTitle(c())}`}
                   >
                     <span class="ns-dot" style={{ background: healthColor(c().health) }} title={healthHint[c().health]} />
                     {/* Tiny cluster/server glyph echoes the Node icon and signals "cluster scope"

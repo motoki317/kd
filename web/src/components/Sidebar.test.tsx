@@ -279,6 +279,10 @@ describe('Sidebar', () => {
     // Click forwards CLUSTER_SCOPE through onSelect — the server uses this exact value in URLs.
     fireEvent.click(getByText('[cluster]'))
     expect(onSelect).toHaveBeenCalledWith(CLUSTER_SCOPE)
+    // "[cluster]" is jargon — its hover must explain what lives here, then the health hint.
+    const title = container.querySelector('.ns-cluster')?.getAttribute('title') ?? ''
+    expect(title).toContain('outside any namespace')
+    expect(title).toContain('Degraded')
   })
 
   // A programmatic jump (Alt+T / first-load) bumps the flash tick; the selected row pulses so the
