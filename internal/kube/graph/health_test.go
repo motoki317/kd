@@ -386,6 +386,18 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(stuck Deployment) = %q", got)
 	}
 
+	// ReplicaFailure beats Available=False whatever the array order: it names the creation-failure
+	// cause (here a quota denial) while Available's message is the unactionable tautology.
+	quotaBlocked := &appsv1.Deployment{Status: appsv1.DeploymentStatus{Conditions: []appsv1.DeploymentCondition{
+		{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionFalse,
+			Message: "Deployment does not have minimum availability."},
+		{Type: appsv1.DeploymentReplicaFailure, Status: corev1.ConditionTrue, Reason: "FailedCreate",
+			Message: "pods \"api-b-abc\" is forbidden: exceeded quota: tiny, requested: requests.cpu=500m, limited: requests.cpu=100m"},
+	}}}
+	if got := statusMessage(quotaBlocked, HealthDegraded); !strings.Contains(got, "exceeded quota") {
+		t.Errorf("statusMessage(quota-blocked Deployment) = %q, want the ReplicaFailure cause", got)
+	}
+
 	// A degraded PDB surfaces its DisruptionAllowed condition message — the WHY behind "can disrupt 0"
 	// (here the controller can't evaluate the budget at all, the misconfigured-empty-selector case).
 	pdbSync := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{

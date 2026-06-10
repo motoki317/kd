@@ -150,11 +150,17 @@ func blockingConditionMessage(conds []corev1.PodCondition) string {
 
 // deploymentProblemMessage returns the explanatory message of a Deployment's degraded condition: a
 // ReplicaFailure that's True, or a Progressing/Available that's False (e.g. ProgressDeadlineExceeded).
+// ReplicaFailure wins regardless of condition order: it carries the actual creation-failure cause
+// (quota exceeded, admission denial) while Available=False is the tautological "does not have minimum
+// availability" — picking by array order showed the tautology and buried the cause in the Events tab.
 func deploymentProblemMessage(d *appsv1.Deployment) string {
 	for _, c := range d.Status.Conditions {
-		degraded := c.Type == appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionTrue
-		degraded = degraded || (c.Type != appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionFalse)
-		if degraded && c.Message != "" {
+		if c.Type == appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionTrue && c.Message != "" {
+			return c.Message
+		}
+	}
+	for _, c := range d.Status.Conditions {
+		if c.Type != appsv1.DeploymentReplicaFailure && c.Status == corev1.ConditionFalse && c.Message != "" {
 			return c.Message
 		}
 	}
