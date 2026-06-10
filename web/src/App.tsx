@@ -431,6 +431,7 @@ export default function App() {
   // client re-projects it locally, so they're pure client-side relayouts.
   // The first run keeps URL-seeded filters (?kinds=) — only an actual change resets them.
   let firstSubscribe = true
+  let lastSubscribedCtx: string | null = null
   createEffect(() => {
     const c = ctx()
     const ns = namespace()
@@ -440,7 +441,14 @@ export default function App() {
     // stable), so a manual reconnect keeps the selection. A namespace change naturally clears it:
     // the old UID won't be in the new namespace's graph. untrack so reading the current selection
     // doesn't make this effect re-subscribe on selection.
-    const keepSel = untrack(selectedId)
+    // A CONTEXT change clears it immediately instead of waiting for the new snapshot to resolve
+    // it away: if the new cluster never answers (dead credentials), the stale selection ghosted
+    // into the drawer with a false "Deleted from the cluster" banner — the resource is fine, the
+    // cluster is unreachable (D79).
+    const ctxChanged = lastSubscribedCtx !== null && lastSubscribedCtx !== c
+    lastSubscribedCtx = c
+    if (ctxChanged) setSelectedId(null)
+    const keepSel = ctxChanged ? null : untrack(selectedId)
     if (!firstSubscribe) {
       // A stale search/health/kind filter would fade the whole new graph. Cleared only on
       // real transitions — initial mount keeps URL-seeded filters.
