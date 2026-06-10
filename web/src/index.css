@@ -3768,6 +3768,9 @@ button.event-source:focus-visible {
     animation: none;
   }
 }
+/* Logs keep a dark terminal ground in BOTH themes (the CI-log idiom) — deliberately NOT theme
+   tokens: the severity badges, level washes, and the white hover wash below are all tuned for this
+   ground, and a light variant would need a parallel palette for marginal value. */
 .logs-body {
   margin: 0;
   padding: 8px 16px 12px;
