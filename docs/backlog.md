@@ -35,7 +35,17 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b27 (2026-06-11, dogfooding D61–D78; next cycle: D79)** — shipped: cluster-scoped log streams
+- **b28 (2026-06-11, dogfooding D79–D90; next cycle: D91)** — the dead-credentials context switch
+  (a real shape that day) caught two lies: the stale selection ghosted into the drawer under a false
+  "Deleted from the cluster" banner (selection now clears on ctx change), and disabling the broken
+  current context's option made the native select silently display a DIFFERENT cluster (current
+  option never disabled; `selected` declared per option). A second reachable cluster opened fresh
+  shapes: cert-manager Certificate drawer gained its essence chips (names / expires-in / issuer —
+  the spec-chip pattern + a future-direction relativeUntil); real Degraded no-endpoints Service,
+  ArgoCD app-of-apps, 544-resource cluster scope with zero Unknown noise, run-history CronJob
+  (never-ran state correctly absent), 375px cert-chip wrap — all verified clean. Rejected: vendor
+  CRD icons (built-ins-only line). GRPCRoute deferral re-verified (still no instances).
+- **b27 (2026-06-11, dogfooding D61–D78)** — shipped: cluster-scoped log streams
   (a Node's static-pod logs — etcd/apiserver one click away on a beginner's Docker Desktop; client
   sentinel + server logSnapshot), single-slash search fallback (label keys / image fragments were
   unsearchable), never-run CronJob Logs honesty, drag-pan text-selection suppression, sidebar filter
@@ -311,6 +321,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | Click-to-solo on log level chips (click ERR = show only errors) | rejected (2026-06-10 b22 D2) — would break the app-wide multi-toggle chip idiom (every chip row composes via independent toggles) for a 2-click saving; the "↧ N err" jump button already covers "take me to the errors" |
 | Reorder relationship chips by edge count (busiest lens first) | rejected (2026-06-10 b22 D16) — stable chip order is muscle memory; a count-driven reorder makes the toolbar shuffle between namespaces and sessions for no triage gain |
 | Drawer open at a ~800px window crushes the canvas to a sliver | working-as-designed (2026-06-10 b25 D46) — deliberate priority-ordered degradation: the just-opened drawer keeps readable width (the operator's focus is the drawer), ⌘B or closing recovers the canvas, and ≤640px switches to full-width overlays. Don't add a mid-width breakpoint |
+| Dedicated icons for vendor CRD kinds (cert-manager Certificate/Order, Argo Workflow, ArgoCD Application, …) | rejected (2026-06-11 D88) — the deliberate line in `icons.tsx` is built-in kinds only; every CRD gets the fallback square + its kind label (CERT, WF, APP), which already identifies it. One vendor icon opens per-vendor sprawl with no canonical source for the glyphs, and tiny-size legibility is the constraint that killed acronym labels too |
 
 ## Done
 
