@@ -86,13 +86,17 @@ rbac:
         - nodes
         - pods
         - services
-        - endpoints
         - configmaps
         - secrets
         - persistentvolumeclaims
         - serviceaccounts
         - events
       verbs: ["get", "list", "watch"]
+    # Without this, every usage gauge goes dark: the capacity view's Use bars and the drawer's
+    # CPU/memory gauges read live consumption from metrics-server under the same identity.
+    - apiGroups: ["metrics.k8s.io"]
+      resources: ["pods", "nodes"]
+      verbs: ["get", "list"]
     - apiGroups: [""]
       resources: ["pods/log"]
       verbs: ["get"]
@@ -117,5 +121,6 @@ By default kd starts an informer for every discovered kind except the high-cardi
 `ephemeralreports`):
 
 - `config.skipKinds: "workflows,leases"` — extra resource names to skip, on top of the defaults.
-- `config.eagerKinds: "events"` — resource names to force-include, overriding both the defaults and
-  `skipKinds`. Useful to feed the events view from cache rather than on-demand requests.
+- `config.eagerKinds: "leases"` — resource names to force-include, overriding both the defaults and
+  `skipKinds`. (Not useful for `events`: the Events tab always queries the API live — short-lived,
+  high-cardinality events are deliberately never cached.)
