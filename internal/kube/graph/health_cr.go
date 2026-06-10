@@ -666,9 +666,11 @@ func crPhase(u *unstructured.Unstructured) string {
 	return s
 }
 
-// crConditionStatus returns the status ("True"/"False"/"Unknown") of the named top-level
-// status.conditions[] entry, or "" when the condition is absent.
-func crConditionStatus(u *unstructured.Unstructured, typ string) string {
+// crConditionField returns one scalar field ("status"/"reason"/…) of the named top-level
+// status.conditions[] entry, or "" when the condition or that field is absent. The shared scanner
+// behind crConditionStatus/crConditionReason — condition types are unique per object, so first-match
+// is the only match.
+func crConditionField(u *unstructured.Unstructured, typ, field string) string {
 	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
 	if err != nil || !found {
 		return ""
@@ -679,30 +681,22 @@ func crConditionStatus(u *unstructured.Unstructured, typ string) string {
 			continue
 		}
 		if t, _ := m["type"].(string); t == typ {
-			s, _ := m["status"].(string)
-			return s
+			v, _ := m[field].(string)
+			return v
 		}
 	}
 	return ""
+}
+
+// crConditionStatus returns the status ("True"/"False"/"Unknown") of the named top-level
+// status.conditions[] entry, or "" when the condition is absent.
+func crConditionStatus(u *unstructured.Unstructured, typ string) string {
+	return crConditionField(u, typ, "status")
 }
 
 // crConditionReason returns the short reason token (e.g. "FailedDiscoveryCheck") of the named
 // status.conditions[] entry — the compact "why" behind a non-True condition, preferred over the long
 // free-text message for a status chip. Empty when the condition or its reason is absent.
 func crConditionReason(u *unstructured.Unstructured, typ string) string {
-	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
-	if err != nil || !found {
-		return ""
-	}
-	for _, c := range conds {
-		m, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		if t, _ := m["type"].(string); t == typ {
-			r, _ := m["reason"].(string)
-			return r
-		}
-	}
-	return ""
+	return crConditionField(u, typ, "reason")
 }
