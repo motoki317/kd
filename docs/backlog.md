@@ -180,6 +180,9 @@ Recent batches (newest first; `git log` has the commits):
   there — chip survives for crashloop-reap/job-cleanup where the owner lives on. One unreproduced
   observation: a single round saw the ghost cleared entirely (drawer closed) — suspect an SSE
   reconnect snapshot resolving the dead keepSel to null (defensible behavior); watch for it.
+  Follow-up shipped: **ghost selection no longer fades the canvas** (e6b2901) — the empty spotlight
+  subtree faded every card; related() now nulls when the selection has no node on canvas (verified
+  live: 0 of 4 faded behind the banner).
   Then shipped (phone regime, continued): **drawer becomes a full-width overlay ≤640px** (b2cb445) —
   side-by-side left the topology column ~110px and the toolbar's absolute chips (unclipped, can't
   shrink) bled straight across the drawer hero/tabs; overlay also upgrades reading width 263→375px;
