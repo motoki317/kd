@@ -99,7 +99,7 @@ export default function Sidebar(props: Props) {
   )
 
   return (
-    <nav class="sidebar" aria-label="Namespaces">
+    <nav id="ns-sidebar" class="sidebar" aria-label="Namespaces">
       <div class="sidebar-title">
         Namespaces
         {/* Total namespace count next to the title — quick "how big is this cluster's RBAC

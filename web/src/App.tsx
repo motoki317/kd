@@ -20,6 +20,7 @@ import type { CapResource } from './capacityLayout'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
+import { isNarrowScreen, NARROW_SCREEN_QUERY } from './screen'
 
 // Group-by is the layout strategy — how resources are arranged on the canvas. It replaced the old
 // fixed view tabs: grouping is now orthogonal to *which relationships are drawn* (the composable
@@ -29,10 +30,6 @@ import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref
 const GROUP_IDS = GROUP_OPTIONS.map((g) => g.id)
 const REL_IDS = new Set(REL_CATEGORIES.map((c) => c.id))
 const DEFAULT_RELS = (): Set<RelCategory> => new Set<RelCategory>(['ownership'])
-// The phone-width breakpoint, below which the sidebar/drawer become full-width overlays and the
-// topbar compacts. CSS media queries can't read a JS constant, so the SAME query is repeated in
-// index.css `@media` blocks tagged "NARROW_SCREEN_QUERY" — change it here, grep for that tag there.
-const NARROW_SCREEN_QUERY = '(max-width: 640px)'
 
 // Parse a comma-separated relationship list (URL or localStorage). Returns null when the source is
 // absent (so the next source / the default applies); an explicit empty string round-trips to the
@@ -157,13 +154,21 @@ export default function App() {
   // reload doesn't surprise them with the sidebar re-appearing. Default expanded — except on a
   // phone-width screen with no stored pref, where the 220px sidebar would leave a sliver of
   // canvas: there it starts hidden and overlays the topology when opened (see the
-  // NARROW_SCREEN_QUERY media blocks in index.css). matchMedia is guarded for jsdom, which
-  // doesn't implement it.
-  const isNarrowScreen = () => typeof matchMedia === 'function' && matchMedia(NARROW_SCREEN_QUERY).matches
+  // NARROW_SCREEN_QUERY media blocks in index.css; constants in screen.ts).
   const [sidebarHidden, setSidebarHidden] = createSignal(
     (readRawPref('kd:sidebarHidden') ?? (isNarrowScreen() ? '1' : '0')) === '1',
   )
   createEffect(() => writePref('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
+  // REACTIVE phone-width signal for overlay gating (isNarrowScreen is a one-shot read): while the
+  // sidebar OVERLAYS the canvas, the covered surface must leave the Tab order (inert below) — a
+  // keyboard user tabbing the overlay otherwise lands on invisible toolbar chips under it.
+  const [narrowScreen, setNarrowScreen] = createSignal(isNarrowScreen())
+  if (typeof matchMedia === 'function') {
+    const mq = matchMedia(NARROW_SCREEN_QUERY)
+    const onMq = () => setNarrowScreen(mq.matches)
+    mq.addEventListener('change', onMq)
+    onCleanup(() => mq.removeEventListener('change', onMq))
+  }
   // Theme preference (cycle 301): light / dark / system, cycled from a topbar toggle. The effect
   // persists the choice and re-stamps <html data-theme>; index.tsx already applied it pre-render.
   // When the choice is 'system', track OS scheme changes live so the canvas follows a mid-session
@@ -559,6 +564,7 @@ export default function App() {
           class="sidebar-btn"
           type="button"
           aria-expanded={!sidebarHidden()}
+          aria-controls="ns-sidebar"
           title={sidebarHidden() ? 'Show the namespace sidebar (Ctrl/⌘+B)' : 'Hide the namespace sidebar (Ctrl/⌘+B)'}
           aria-label={sidebarHidden() ? 'Show the namespace sidebar' : 'Hide the namespace sidebar'}
           onClick={() => setSidebarHidden((v) => !v)}
@@ -715,7 +721,10 @@ export default function App() {
           flash={nsFlash()}
           onJumpToTrouble={jumpToTrouble}
         />
-        <main class="main">
+        {/* While the sidebar OVERLAYS the canvas (phone width), everything under it leaves the Tab
+            order — without inert, a keyboard user tabbing the overlay lands on invisible toolbar
+            chips beneath it. Desktop side-by-side keeps both surfaces interactive. */}
+        <main class="main" inert={narrowScreen() && !sidebarHidden()}>
           <Topology
             nodes={nodes()}
             edges={edges()}

@@ -11,6 +11,7 @@ import { LOGGABLE_KINDS } from '../loggable'
 import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
 import ResourceSummary from './ResourceSummary'
+import { isNarrowScreen } from '../screen'
 
 interface Props {
   // ctx names the kubeconfig context whose cache this drawer reads. Threaded through so events
@@ -98,8 +99,13 @@ export default function DetailDrawer(props: Props) {
           // base. Gated on focus actually being inside the drawer, so a mouse user who clicked the
           // canvas to deselect doesn't get focus yanked into the search. Degrades to a no-op if the
           // search isn't present (cluster-scope/empty states), which is no worse than today.
+          // Phone width: focusing the search input would pop the on-screen keyboard the moment the
+          // drawer closes — land on the topbar's sidebar toggle instead (visible, no keyboard).
           if (asideEl && asideEl.contains(document.activeElement)) {
-            ;(document.querySelector('.topology-search input') as HTMLElement | null)?.focus()
+            const target = isNarrowScreen()
+              ? (document.querySelector('.sidebar-btn') as HTMLElement | null)
+              : (document.querySelector('.topology-search input') as HTMLElement | null)
+            target?.focus()
           }
           setExiting(true)
           exitTimer = setTimeout(() => {
