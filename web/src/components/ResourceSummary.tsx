@@ -202,9 +202,12 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string }) {
                           </Show>
                         </Show>
                       </div>
+                      {/* Bare "value / bound" — the row's sublabel already names the bound, so a "req"
+                          suffix would print it twice; matches the capacity view's bare pairs. The
+                          worded form stays on the bar's hover title. */}
                       <span class="metric-val">
                         <b>{pair.value}</b>
-                        <span class="metric-ref"> / {ref}</span>
+                        <span class="metric-ref"> / {b.unconstrained ? 'unset' : pair.cap}</span>
                       </span>
                     </div>
                   )

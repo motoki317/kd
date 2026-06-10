@@ -79,9 +79,10 @@ describe('ResourceSummary pod usage gauges', () => {
     expect([...rows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Lim', 'Req', 'Lim', 'Req'])
     // Both CPU bars show the SAME usage (120m), gauged against the limit (500m) then the request (100m).
     expect(rows[0].querySelector('.metric-val b')?.textContent).toBe('120m')
-    expect(rows[0].textContent).toContain('500m lim')
+    expect(rows[0].textContent).toContain('Lim')
+    expect(rows[0].textContent).toContain('/ 500m')
     expect(rows[1].querySelector('.metric-val b')?.textContent).toBe('120m') // usage again, not the request
-    expect(rows[1].textContent).toContain('100m req')
+    expect(rows[1].textContent).toContain('/ 100m')
   })
   it('sizes each bar to its bound and hatches the overshoot when usage runs past a shorter bound', () => {
     // CPU 120m, limit 500m, request 100m → groupMax 500. The fill (0.24) is the SAME on both bars; the
@@ -109,7 +110,7 @@ describe('ResourceSummary pod usage gauges', () => {
     const cpu = container.querySelector('.pod-metrics .metric-row')!
     expect(cpu.querySelector('.metric-sublabel')?.textContent).toBe('Node')
     expect(cpu.querySelector('.metric-bar.unconstrained')).toBeNull() // it IS gauged — against the node
-    expect(cpu.textContent).toContain('4 node') // 4000m → 4 cores, the ceiling
+    expect(cpu.textContent).toContain('/ 4') // 4000m → 4 cores, the ceiling (sublabel 'Node' names it)
   })
   it('shows a dashed unconstrained track when there is no bound and no host capacity at all', () => {
     const noBounds: KNode = { id: 'p3', kind: 'Pod', name: 'web-3', health: 'Healthy' }
@@ -129,7 +130,7 @@ describe('ResourceSummary pod usage gauges', () => {
     // Track length still encodes the relative bounds without metrics: Lim spans the full scale, Req is
     // its fraction (CPU 100m/500m = 20%, Mem 256Mi/512Mi = 50%).
     expect([...rows].map((r) => (r.querySelector('.metric-track') as HTMLElement).style.width)).toEqual(['100%', '20%', '100%', '50%'])
-    expect(rows[0].textContent).toContain('500m lim') // the bound still reads
+    expect(rows[0].textContent).toContain('/ 500m') // the bound still reads
     cleanup()
     const svc: KNode = { id: 's', kind: 'Service', name: 'web', health: 'Healthy' }
     const withUsage = render(() => <ResourceSummary node={svc} {...base} usage={{ cpuMilli: 50 }} />)
@@ -149,8 +150,8 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows.length).toBe(4)
     // CPU Lim bar: summed usage (240m) against the summed limit (1 core) → "0.24 / 1 lim".
     expect(rows[0].querySelector('.metric-val b')?.textContent).toBe('0.24')
-    expect(rows[0].textContent).toContain('1 lim')
-    expect(rows[1].textContent).toContain('0.2 req') // summed request as the Req ceiling
+    expect(rows[0].textContent).toContain('/ 1')
+    expect(rows[1].textContent).toContain('/ 0.2') // summed request as the Req ceiling
     expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 3 pods')
   })
   it('caption notes partial metering when some replicas have no reading yet', () => {
@@ -181,7 +182,7 @@ describe('ResourceSummary pod usage gauges', () => {
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
     expect(rows.length).toBe(4)
     expect([...rows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Cap', 'Alloc', 'Cap', 'Alloc'])
-    expect(rows[0].textContent).toContain('3.9 / 4 cap') // cores, capacityRes drives the unit
+    expect(rows[0].textContent).toContain('3.9 / 4') // cores, capacityRes drives the unit (sublabel 'Cap' names the bound)
     expect(rows[0].querySelector('.metric-burst')).toBeNull() // under capacity → no overshoot
     expect(rows[1].querySelector('.metric-burst')).toBeTruthy() // past allocatable → fill runs past the Alloc ceiling
   })
