@@ -33,6 +33,19 @@ emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflo
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b25 (operator-flow dogfooding D41–D50)** — capacity resource flip relabels Gi↔cores
+  (D41); hover-spotlight recedes 8 of 9 node rows whole, restores on leave — earlier zero-fade
+  probes had hit handler-less track rects (D42); sidebar trouble-badge click lands + flashes with
+  a clear title (D43); Group radiogroup: arrows move aria-checked with focus following, wrapping
+  (D44); deleted-pod ghost drawer keeps last state under an aria-live banner (D45); 800px window
+  with drawer open crushes the canvas to a sliver — judged deliberate priority-ordered
+  degradation (the just-opened drawer keeps readable width; ⌘B/close recovers; ≤640 switches to
+  overlays) (D46); 4 rapid namespace switches — last click wins, stream live, no race artifacts
+  (D47); log text×level filters compose (D48); 8-replica DaemonSet aggregates 1035 lines with
+  per-pod chips sharing the app-wide hide-toggle semantics, every line source-labelled (D49);
+  in-app navigation never grows browser history — replace-not-push confirmed, Alt+← is the in-app
+  back (D50).
+
 - **2026-06-10 b24 (operator-flow dogfooding D31–D40)** — ten more walks: previous-crash logs not
   reproducible today (no restarted pod on either cluster; b16's induced crashloop covered it)
   (D31); timestamps prefix + wrap class toggles (D32); Alt+click line copy silent no-op on
