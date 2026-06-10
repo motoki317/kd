@@ -366,10 +366,22 @@ export default function ResourceSummary(props: Props) {
           is copyable for pasting into a curl/port-forward. */}
       <Show when={props.node.clusterIP || props.node.externalIP || (props.node.ports?.length ?? 0) > 0 || props.node.selector}>
         <div class="drawer-ports">
+          {/* "headless" is the server's sentinel for ClusterIP: None — jargon, not an address, so it
+              gets the "pending" external-IP treatment: an explanatory title and no copy affordance
+              (copying the literal word is meaningless; the pods themselves are the addresses). */}
           <Show when={props.node.clusterIP}>
-            <span class="port-addr">
+            <span
+              class="port-addr"
+              title={
+                props.node.clusterIP === 'headless'
+                  ? 'Headless service — no virtual IP; DNS resolves the service name straight to the backing pod IPs'
+                  : 'Service address — reachable inside the cluster'
+              }
+            >
               <code>{props.node.clusterIP}</code>
-              <CopyButton text={() => props.node.clusterIP!} title="Copy address" />
+              <Show when={props.node.clusterIP !== 'headless'}>
+                <CopyButton text={() => props.node.clusterIP!} title="Copy address" />
+              </Show>
             </span>
           </Show>
           {/* For a LoadBalancer/NodePort service the external address is the actual "reach it from

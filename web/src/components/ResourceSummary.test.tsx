@@ -242,6 +242,26 @@ describe('ResourceSummary external address', () => {
     expect(ext.getAttribute('title')).toContain('External address')
     expect(ext.querySelector('.copy-btn')).toBeTruthy()
   })
+  it('explains the "headless" address sentinel and offers no copy for it', () => {
+    // "headless" is a sentinel like the LB "pending": jargon, not a pasteable address, so it gets an
+    // explanatory title and no copy button, while a real cluster IP keeps both.
+    const headless: KNode = {
+      id: 's5', kind: 'Service', name: 'hl', health: 'Healthy', clusterIP: 'headless',
+    }
+    const { container } = render(() => <ResourceSummary node={headless} {...base} />)
+    const addr = container.querySelector('.drawer-ports .port-addr')!
+    expect(addr.getAttribute('title')).toContain('Headless service')
+    expect(addr.querySelector('.copy-btn')).toBeNull()
+  })
+  it('titles a real cluster IP as the in-cluster service address, copyable', () => {
+    const svc: KNode = {
+      id: 's6', kind: 'Service', name: 'web', health: 'Healthy', clusterIP: '10.0.0.6',
+    }
+    const { container } = render(() => <ResourceSummary node={svc} {...base} />)
+    const addr = container.querySelector('.drawer-ports .port-addr')!
+    expect(addr.getAttribute('title')).toContain('Service address')
+    expect(addr.querySelector('.copy-btn')).toBeTruthy()
+  })
 })
 
 describe('ResourceSummary labels', () => {
