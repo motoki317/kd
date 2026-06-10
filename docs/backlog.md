@@ -26,6 +26,19 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b13 (per-container bars land on the cards — user-directed)** — a pod's gauges moved
+  ONTO its container cards: each card gauges its own usage against ITS req/lim (a pod-summed gauge
+  can't say which container is near the ceiling), retiring the bounds text row and the pod-level
+  stack/swatches; stacks + legend stay workload-rollup-only; UsageGauges extracted to its own module
+  (8ad8eb3). Restart counts date their last restart ("↻ 3 · 2h ago", 6f913a2). Follow-ons caught by
+  re-reading the fresh code + live dogfooding: the host-node "Node" ceiling had silently become
+  unreachable for running pods — restored per-card (7297211); a 2m reading under a cores-keyed
+  ceiling rendered "0 / 1" — a non-zero side now borrows its natural unit instead of displaying as
+  zero, both sides guarded (26d0e2c). Verified live on a real 2-container pod (per-card bars, near-
+  request memory reads directly), a 1-container pod (pod-total fallback), and a workload stack +
+  legend; frontend-internals gauge section rewritten to the new contract. Rejected: Req=Lim bar
+  collapse (see below).
+
 - **2026-06-10 b12 (saturation legibility; evicted pods; gauge internals doc)** — a saturated HPA's
   replicas chip reads "2 · at max" caution-tinted (ScalingLimited stays no health signal — only the
   TooManyReplicas reason marks it; TooFewReplicas idling at the floor stays unmarked; induced-verified
@@ -373,6 +386,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 
 | Candidate | Verdict |
 |---|---|
+| Collapse a container's identical Req+Lim bars into one "Req=Lim" bar (Guaranteed QoS) | rejected (2026-06-10) — the sublabel grid track is a fixed 34px ("Req=Lim" can't fit), a variable row count per card breaks the Lim/Req repetition idiom across cards, and two equal bars already say "req = lim" in the established language |
 | Flag an Unavailable APIService (broken aggregated API) | already-handled (2026-06-06) — `crHealthFromConditions` reads the `Available` condition (False → Degraded) and surfaces its message; no APIService-specific rule needed |
 | Unknown `?ctx=` "silently shows another cluster's data" (trust problem) | refuted (cycle 26) — App.tsx:96-99 validates ctx against the fetched list and `setCtx(info.default)`; verified live the breadcrumb + URL self-correct to the real fallback context (no "bogus" anywhere), so there is no mislead |
 | Persist substring filter + case-toggle across resource navigation | wrong (misreads Solid reactivity — components remount) |
