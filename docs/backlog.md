@@ -35,6 +35,9 @@ Recent batches (newest first; one line per slice — `git log` carries the full 
   bogus `?kinds=` lands on the existing "No resources match" overlay + clear button (verified live);
   unmatched `?sel=` auto-degrades (prior verdict); orphans/capRes/sel-mangling are hand-edit-only
   shapes on machine-written URLs (low). URL surface verified mature.
+  Also: a waiting container's state now carries its root-cause message — "Waiting: ErrImagePull —
+  …not found" instead of the bare reason; CrashLoopBackOff keeps reason-only (its message is backoff
+  mechanics, the cause lives in the last-exit chip) (dbb5822, induced ImagePullBackOff flow).
 - **2026-06-10 b3 (beginner-first structural sweep)** — three delegated audits (UI text, docs, feature
   surface) + first-run dogfooding. Shipped: backlog condensed 718→366 lines (519210e); 40+ tooltips/
   hints/help entries rewritten to beginner-plain English, jargon dropped ("solo", "yank", "SSE")
