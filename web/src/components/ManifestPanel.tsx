@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, on, Show, Suspense } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { fetchResource, isForbidden, type ManifestFormat } from '../api'
 import { splitByMatch } from '../logs'
 import { nextRovingIndex } from '../rovingFocus'
@@ -75,6 +75,23 @@ export default function ManifestPanel(props: {
     setManifestMatchIdx(0)
     if (manifestQuery() && manifestMatchCount() > 0) queueMicrotask(() => scrollManifestMatch(0))
   }))
+  // Cmd/Ctrl+F focuses the in-manifest find while this tab shows — the same idiom the Logs tab
+  // teaches (one keystroke, both panes), and this find is strictly stronger than the browser's
+  // (match count, stepping, marks that survive the YAML/JSON toggle). Other tabs keep native find.
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!props.active) return
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+        if (!findInput) return
+        e.preventDefault()
+        findInput.focus()
+        findInput.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    onCleanup(() => window.removeEventListener('keydown', onKey))
+  })
+  let findInput: HTMLInputElement | undefined
 
   return (
     <section
@@ -121,6 +138,7 @@ export default function ManifestPanel(props: {
             the matches (scrolling each into view), Esc clears without leaving the drawer. */}
         <input
           class="manifest-find"
+          ref={findInput}
           placeholder="find in manifest…  (Enter ↓ · Shift+Enter ↑)"
           aria-label="Find in manifest"
           value={manifestQuery()}

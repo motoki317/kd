@@ -916,7 +916,7 @@ export default function App() {
                   <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)
                 </li>
                 <li>
-                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Filter logs · <kbd>Shift</kbd>+<kbd>E</kbd> next error line
+                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Find in logs / manifest · <kbd>Shift</kbd>+<kbd>E</kbd> next error line
                 </li>
                 <li>
                   <strong>[cluster]</strong> Cluster-wide resources (Nodes, PVs, CRDs)
