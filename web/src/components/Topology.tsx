@@ -197,11 +197,11 @@ export default function Topology(props: Props) {
     const edges = displayEdges()
     // Kind grouping: every resource in a per-kind box; the projected edges still draw on top
     // (suppressed until selection — see renderedEdges) so the cross-kind matrix stays readable.
-    // While triaging by the health legend ("show me Degraded"), bias each kind box's folded
-    // representatives toward matching cards so the box's face shows the trouble, not arbitrary
+    // While triaging by the health legend ("show me Degraded"), bias each fold's visible
+    // representatives toward matching cards so the fold's face shows the trouble, not arbitrary
     // healthy siblings. Health-filter only (a discrete click); live search stays fade-only (no
-    // per-keystroke relayout — see the fade comment below). Reading healthFilter only on this
-    // branch keeps the connectivity/Nodes layouts from recomputing when the filter toggles.
+    // per-keystroke relayout — see the fade comment below). The Kind and relationship branches
+    // both read healthFilter (relayout on toggle is acceptable for a click); Nodes does not.
     if (props.groupBy === 'kind') {
       const hf = props.healthFilter
       return layoutGraphByKind(props.nodes, edges, expandedClusters(), hf ? (n) => n.health === hf : undefined)
@@ -216,7 +216,8 @@ export default function Topology(props: Props) {
     // stacked in a vertical column to the right (LR). Orphans (no displayed edge) are split OUT of the
     // tree and laid out Kind-view style in a section BELOW it (layoutGraphWithOrphans), so the tree
     // reads as the relationship backbone and the loose resources read as a per-kind inventory. The
-    // caller-side split keys off orphanIds; the health filter biases the orphan kind-folds like Kind view.
+    // caller-side split keys off orphanIds; the health filter biases EVERY fold's representatives —
+    // sibling-subtree pills, hub leaf grids, orphan kind-folds — like the Kind view.
     const orph = orphanIds()
     const connected = orph.size ? visibleNodes().filter((n) => !orph.has(n.id)) : visibleNodes()
     const orphans = orph.size ? visibleNodes().filter((n) => orph.has(n.id)) : []

@@ -510,6 +510,62 @@ describe('layoutGraph', () => {
     expect(l.nodes.some((n) => n.collapse?.groupKind === 'Secret')).toBe(false)
   })
 
+  // Triage contract (matches the Kind view): with a health filter active, a fold's visible
+  // representatives are the MATCHING cards, not the name-ordinal head+tail — a Degraded resource
+  // must never hide behind a "+N more" pill while the operator is filtering for it. One test per
+  // fold path: hub leaf grids, sibling subtrees, orphan blocks.
+  it('floats a health-filter match into a folded hub leaf grid (triage representatives)', () => {
+    const hub: KNode = { id: 'owner', kind: 'ReplicaSet', name: 'r1', health: 'Healthy' }
+    const pods: KNode[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `p${i}`, kind: 'Pod', name: `pod-${i}`, health: i === 7 ? ('Degraded' as const) : ('Healthy' as const),
+    }))
+    const e: KEdge[] = pods.map((p) => ({ from: 'owner', to: p.id, type: 'ownerReference' as const }))
+    // Without the filter, pod-7 is mid-run and folds away.
+    const plain = layoutGraph([hub, ...pods], e, 'LR')
+    expect(plain.nodes.some((n) => n.id === 'p7')).toBe(false)
+    // With the filter, pod-7 takes a visible slot; the fold stays the same size (still one pill).
+    const l = layoutGraph([hub, ...pods], e, 'LR', new Set(), (n) => n.health === 'Degraded')
+    expect(l.nodes.some((n) => n.id === 'p7')).toBe(true)
+    expect(l.nodes.filter((n) => n.kind === 'Pod')).toHaveLength(COLLAPSE_VISIBLE)
+    expect(l.nodes.find((n) => n.collapse)!.collapse!.hidden).toHaveLength(20 - COLLAPSE_VISIBLE)
+  })
+
+  it('floats a health-filter match into a folded sibling-subtree group, keeping its subtree', () => {
+    // Same fixture as the sibling-subtree fold above: wf-3 (a middle sibling whose Pod folds away
+    // there) is now Degraded — under the filter it must surface WITH its Pod subtree intact.
+    const tmpl: KNode = { id: 'tmpl', kind: 'WorkflowTemplate', name: 'build', health: 'Healthy' }
+    const wfs: KNode[] = []
+    const pods: KNode[] = []
+    const e: KEdge[] = []
+    for (let i = 0; i < 6; i++) {
+      const id = `wf${i}`
+      wfs.push({ id, kind: 'Workflow', name: `wf-${i}`, health: i === 3 ? 'Degraded' : 'Healthy' })
+      e.push({ from: 'tmpl', to: id, type: 'refers' })
+      if (i % 3 === 0) {
+        pods.push({ id: `${id}-pod`, kind: 'Pod', name: `${id}-pod`, health: 'Healthy' })
+        e.push({ from: id, to: `${id}-pod`, type: 'ownerReference' })
+      }
+    }
+    const l = layoutGraph([tmpl, ...wfs, ...pods], e, 'LR', new Set(), (n) => n.health === 'Degraded')
+    const drawnWfs = l.nodes.filter((n) => n.kind === 'Workflow').map((n) => n.id)
+    expect(drawnWfs).toContain('wf3') // the match surfaced…
+    expect(drawnWfs).toHaveLength(COLLAPSE_VISIBLE) // …without growing the fold
+    expect(l.nodes.some((n) => n.id === 'wf3-pod')).toBe(true) // its subtree came along
+    expect(l.nodes.find((n) => n.collapse)!.collapse!.hidden).toHaveLength(6 - COLLAPSE_VISIBLE)
+  })
+
+  it('floats a health-filter match into a folded orphan block', () => {
+    const cms = Array.from({ length: 9 }, (_, i) => ({
+      id: `cm${i}`, kind: 'ConfigMap', name: `cfg-${i}`, health: i === 4 ? ('Degraded' as const) : ('Healthy' as const),
+    }))
+    const plain = layoutGraph(cms, [], 'LR')
+    expect(plain.nodes.some((n) => n.id === 'cm4')).toBe(false)
+    const l = layoutGraph(cms, [], 'LR', new Set(), (n) => n.health === 'Degraded')
+    expect(l.nodes.some((n) => n.id === 'cm4')).toBe(true)
+    expect(l.nodes.filter((n) => n.kind === 'ConfigMap')).toHaveLength(COLLAPSE_VISIBLE)
+    expect(l.nodes.find((n) => n.collapse)!.collapse!.hidden).toHaveLength(9 - COLLAPSE_VISIBLE)
+  })
+
   it('routes LR edges orthogonally: parent right edge → child left edge, axis-aligned segments', () => {
     // Deployment → ReplicaSet → 2 Pods. Each edge must leave the parent's RIGHT edge and enter the
     // child's LEFT edge, with every segment purely horizontal or vertical (the "blocky" ArgoCD look).

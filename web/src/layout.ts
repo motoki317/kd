@@ -185,11 +185,14 @@ function splitForFold(
 // the intricate column / leaf-block placement downstream is untouched: a pill is just another child
 // of the hub. Pure degree-1 leaf clusters (a Node's 50 Pods) are deliberately LEFT ALONE — they fold
 // more compactly through the existing leaf-block grid — so this only engages when a same-kind sibling
-// group contains a non-leaf (a child with its own children).
+// group contains a non-leaf (a child with its own children). `prioritize` (the active health filter)
+// floats matching siblings into the visible slots, so a triage filter shows the troubled runs as the
+// group's face instead of burying them behind the pill (same contract as the Kind view, 9d4438c).
 function foldSiblingSubtrees(
   nodes: KNode[],
   edges: KEdge[],
   expanded: ReadonlySet<string>,
+  prioritize?: (n: KNode) => boolean,
 ): { nodes: KNode[]; edges: KEdge[] } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const childEdgesOf = new Map<string, KEdge[]>()
@@ -255,7 +258,7 @@ function foldSiblingSubtrees(
       if (group.every((g) => claimed.has(g.node.id))) continue
       const key = `sib:${parentId}:${kind}`
       const isExpanded = expanded.has(key)
-      const { visible, hidden, pillIndex } = splitForFold(group.map((g) => g.node), isExpanded)
+      const { visible, hidden, pillIndex } = splitForFold(group.map((g) => g.node), isExpanded, byName, prioritize)
       if (hidden.length < COLLAPSE_MIN_HIDDEN) continue
       for (const g of group) claimed.add(g.node.id) // own every member (visible + hidden) — fold it once
 
@@ -483,10 +486,10 @@ export function connGroups(layout: Layout): { key: string; expanded: boolean; x:
 // Secrets, EphemeralReports, … would otherwise be a wall of single cards; folded per kind they read as
 // one framed "+N more" block. Every cell carries the `orphan:<kind>` collapseGroup so connGroups draws
 // the dashed frame, and the pill drives expand/collapse through the same key as any other fold.
-function orphanBlock(kind: string, list: KNode[], expanded: ReadonlySet<string>): Component {
+function orphanBlock(kind: string, list: KNode[], expanded: ReadonlySet<string>, prioritize?: (n: KNode) => boolean): Component {
   const key = `orphan:${kind}`
   const isExpanded = expanded.has(key)
-  const split = splitForFold(list, isExpanded)
+  const split = splitForFold(list, isExpanded, byName, prioritize)
   const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
   if (split.hidden.length) {
     const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
@@ -508,11 +511,13 @@ function orphanBlock(kind: string, list: KNode[], expanded: ReadonlySet<string>)
 // vertical column (see packComponents). Edges with a missing endpoint are dropped defensively (the
 // server should not emit them). `rankdir` switches the per-component direction — 'LR' (what every
 // relationship view passes) reads left-to-right so a parent's children fan out to its right, like
-// an ArgoCD tree; 'TB' (the default, kept for callers/tests) reads top-down.
-export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Layout {
+// an ArgoCD tree; 'TB' (the default, kept for callers/tests) reads top-down. `prioritize` (the active
+// health filter) reaches every fold site — sibling-subtree pills, orphan blocks, hub leaf grids — so
+// triage never hides a matching card behind a "+N more" pill.
+export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set(), prioritize?: (n: KNode) => boolean): Layout {
   // Fold crowded same-kind sibling subtrees (e.g. many Workflows under one WorkflowTemplate) before
   // anything else, so the rest of the pipeline lays out the reduced graph + its pills normally.
-  ;({ nodes, edges } = foldSiblingSubtrees(nodes, edges, expanded))
+  ;({ nodes, edges } = foldSiblingSubtrees(nodes, edges, expanded, prioritize))
   const present = new Set(nodes.map((n) => n.id))
   const laidEdges = edges.filter((e) => present.has(e.from) && present.has(e.to))
 
@@ -532,7 +537,7 @@ export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'
   const orphanComponents: Component[] = []
   for (const [kind, list] of [...orphansByKind].sort(([a], [b]) => a.localeCompare(b))) {
     if (list.length < FANOUT_MIN) continue
-    orphanComponents.push(orphanBlock(kind, list, expanded))
+    orphanComponents.push(orphanBlock(kind, list, expanded, prioritize))
     for (const n of list) blocked.add(n.id)
   }
 
@@ -541,7 +546,7 @@ export function layoutGraph(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR'
   // ordering by it would shuffle trees arbitrarily; the smallest kind/name in a component is stable
   // (adding/removing a pod doesn't change it) and reads sensibly (workload roots sort near the top).
   groups.sort((a, b) => componentKey(a.nodes).localeCompare(componentKey(b.nodes)))
-  const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir, expanded))
+  const components = groups.map((g) => layoutComponent(g.nodes, g.edges, rankdir, expanded, prioritize))
 
   // Grouped orphan blocks pack after the connectivity trees, so the tree backbone reads first.
   return packComponents([...components, ...orphanComponents])
@@ -570,7 +575,7 @@ export function layoutGraphWithOrphans(
   expanded: ReadonlySet<string> = new Set(),
   prioritize?: (n: KNode) => boolean,
 ): OrphanLayout {
-  const rel = layoutGraph(connected, edges, 'LR', expanded)
+  const rel = layoutGraph(connected, edges, 'LR', expanded, prioritize)
   if (orphans.length === 0) return { ...rel, orphanGroups: [] }
   // Orphans have no edges between them (that is what makes them orphans), so the Kind layout's
   // cross-kind edges resolve to nothing — pass an empty edge set.
@@ -709,6 +714,7 @@ function collapseHubLeaves(
   leaves: KNode[],
   edges: KEdge[],
   expanded: ReadonlySet<string>,
+  prioritize?: (n: KNode) => boolean,
 ): { blocks: LeafBlock[]; pills: { id: string; type: EdgeType }[] } {
   const byKind = new Map<string, KNode[]>()
   for (const l of leaves) {
@@ -721,7 +727,7 @@ function collapseHubLeaves(
   for (const [kind, list] of [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const key = `sib:${hubId}:${kind}`
     const isExpanded = expanded.has(key)
-    const split = splitForFold(list, isExpanded)
+    const split = splitForFold(list, isExpanded, byName, prioritize)
     const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
     if (split.hidden.length) {
       const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
@@ -752,7 +758,7 @@ function collapseHubLeaves(
 // beside (LR) / under (TB) its hub. Only fan-OUT children are wrapped — a fan-IN hub's many parents
 // stay in the Dagre skeleton so they align in their own depth column rather than folding into a
 // confusing partial frame (see the per-hub note below).
-function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>): { hubs: Hub[]; wrapped: Set<string> } {
+function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>, prioritize?: (n: KNode) => boolean): { hubs: Hub[]; wrapped: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const outdeg = new Map<string, number>()
   for (const e of edges) outdeg.set(e.from, (outdeg.get(e.from) ?? 0) + 1)
@@ -803,7 +809,7 @@ function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<string>)
     // Group this hub's leaves per kind and fold each crowded kind into its own "+N older" pill
     // (D5/D6). All kind blocks sit at one depth (stacked down the column in LR), so a multi-kind CRD
     // owner's Services / Secrets / … all read as direct children on the same level.
-    const collapsed = collapseHubLeaves(id, leaves, edges, expanded)
+    const collapsed = collapseHubLeaves(id, leaves, edges, expanded, prioritize)
     hubs.push({
       id,
       blocks: collapsed.blocks,
@@ -1128,8 +1134,8 @@ function placeWithDagre(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Se
 // rankdir picks the strategy: 'LR' (every connectivity view) uses placeColumns — strict depth columns
 // with grid-wrapped hubs; 'TB' (test/legacy) uses placeWithDagre. Edge routing, bundled hub↔pill
 // edges, and normalization are shared across both.
-function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set()): Component {
-  const { hubs, wrapped } = findHubs(nodes, edges, expanded)
+function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 'TB', expanded: ReadonlySet<string> = new Set(), prioritize?: (n: KNode) => boolean): Component {
+  const { hubs, wrapped } = findHubs(nodes, edges, expanded, prioritize)
   const positioned = rankdir === 'LR'
     ? placeColumns(nodes, edges, hubs, wrapped)
     : placeWithDagre(nodes, edges, hubs, wrapped, rankdir)
