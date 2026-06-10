@@ -1,15 +1,14 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
-import { CLUSTER_SCOPE, fetchEvents, fetchResource, isForbidden, type ManifestFormat } from '../api'
+import { CLUSTER_SCOPE, fetchEvents, isForbidden } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
-import { splitByMatch } from '../logs'
 import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
 import { LOGGABLE_KINDS } from '../loggable'
-import CopyButton from './CopyButton'
 import LogViewer from './LogViewer'
+import ManifestPanel from './ManifestPanel'
 import ResourceSummary from './ResourceSummary'
 import { isNarrowScreen } from '../screen'
 
@@ -175,11 +174,10 @@ export default function DetailDrawer(props: Props) {
   // On selection change, keep the current tab if the new resource has it — so triaging the same tab
   // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
   // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
-  // Tab panel scroll containers — reset to the top whenever the displayed resource changes so a
-  // long previous events list or scrolled-down manifest doesn't carry the operator's prior
-  // position into a fresh resource (cycle 272).
+  // Tab panel scroll container — reset to the top whenever the displayed resource changes so a
+  // long previous events list doesn't carry the operator's prior position into a fresh resource
+  // (cycle 272). The manifest's matching reset lives in ManifestPanel.
   let eventsPanelEl: HTMLDivElement | undefined
-  let manifestSectionEl: HTMLElement | undefined
   createEffect(
     on(
       () => displayNode()?.id,
@@ -197,8 +195,6 @@ export default function DetailDrawer(props: Props) {
           setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest'))
         }
         if (eventsPanelEl) eventsPanelEl.scrollTop = 0
-        const mp = manifestSectionEl?.querySelector('.manifest') as HTMLElement | null
-        if (mp) mp.scrollTop = 0
       },
     ),
   )
@@ -212,16 +208,8 @@ export default function DetailDrawer(props: Props) {
       ? { ctx: props.ctx, ns: displayNode()!.namespace || CLUSTER_SCOPE, kind: displayNode()!.kind, name: displayNode()!.name }
       : null
 
-  // YAML is the default manifest view (what operators read); JSON stays one click away. Format is
-  // part of the resource key, so flipping it refetches the server-rendered text. Manifest and events
-  // are fetched as soon as a node is selected, so switching tabs is instant.
-  const [format, setFormat] = createSignal<ManifestFormat>('yaml')
-  // Refs so the format radiogroup's arrow keys can move DOM focus to follow the roving tabindex.
-  const formatRefs: Partial<Record<ManifestFormat, HTMLButtonElement>> = {}
-  const [detail] = createResource(
-    () => (props.node ? { ...key()!, format: format() } : null),
-    (k) => fetchResource(k.ctx, k.ns, k.kind, k.name, k.format),
-  )
+  // Events are fetched as soon as a node is selected, so switching tabs is instant. (The manifest
+  // fetch lives in ManifestPanel, keyed the same way.)
   const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ctx, k.ns, k.kind, k.name))
   const warnings = () => events()?.filter((e) => e.type === 'Warning').length ?? 0
   // Warnings-only toggle: noisy resources emit many Normal events (Pulled, Created, Started…) that
@@ -229,48 +217,6 @@ export default function DetailDrawer(props: Props) {
   // the filter doesn't silently follow operators into a new context.
   const [warnOnly, setWarnOnly] = createSignal(false)
   createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
-  // Within-manifest search: long YAMLs hide an env var or a strategy buried 80 lines down. Resets
-  // on selection change so the query doesn't follow into a new resource's manifest. The memo guards
-  // detail.error the same way shownEvents does — the resource throws on read when errored.
-  const [manifestQuery, setManifestQuery] = createSignal('')
-  // 0-based index of the "current" highlighted match within the manifest. Pressing Enter in the
-  // find field scrolls to the next match and bumps this index; the matching <mark> gets a stronger
-  // styling so the operator can tell "this is where you are" vs the other matches.
-  const [manifestMatchIdx, setManifestMatchIdx] = createSignal(0)
-  createEffect(on(() => displayNode()?.id, () => {
-    setManifestQuery('')
-    setManifestMatchIdx(0)
-  }))
-  const manifestSegments = createMemo(() => {
-    if (detail.error) return []
-    return splitByMatch(detail() ?? '', manifestQuery())
-  })
-  const manifestMatchCount = createMemo(() => (manifestQuery() ? manifestSegments().filter((s) => s.match).length : 0))
-  let manifestPre: HTMLPreElement | undefined
-  function scrollManifestMatch(idx: number) {
-    if (!manifestPre) return
-    const marks = manifestPre.querySelectorAll<HTMLElement>('mark.manifest-match')
-    const target = marks[idx]
-    if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }
-  function stepMatch(dir: 1 | -1) {
-    const total = manifestMatchCount()
-    if (total === 0) return
-    const next = (manifestMatchIdx() + dir + total) % total
-    setManifestMatchIdx(next)
-    queueMicrotask(() => scrollManifestMatch(next))
-  }
-  // On a query change, reset to the first match AND scroll it into view — so typing reveals the first
-  // hit immediately, the way the browser's own find does. Without the scroll the count read "1/3"
-  // while the manifest stayed pinned at the top with the hit below the fold, and the first Enter then
-  // appeared to skip straight to "2/3". Deferred a microtask so the freshly-rendered <mark>s exist
-  // before we scroll. Placed below scrollManifestMatch/manifestMatchCount so the eager `on` (defer:
-  // false) doesn't reference them in the temporal dead zone.
-  createEffect(on(manifestQuery, () => {
-    setManifestMatchIdx(0)
-    if (manifestQuery() && manifestMatchCount() > 0) queueMicrotask(() => scrollManifestMatch(0))
-  }))
-
   const shownEvents = createMemo(() => {
     // The resource throws when errored; reading events() then surfaces an uncaught rejection. The
     // outer Show gates the JSX, but the memo also runs reactively so we must short-circuit here.
@@ -613,117 +559,7 @@ export default function DetailDrawer(props: Props) {
             </Suspense>
           </div>
 
-          <section
-            class="manifest-section"
-            classList={{ hidden: tab() !== 'manifest' }}
-            ref={manifestSectionEl}
-            role="tabpanel"
-            id="drawer-tabpanel-manifest"
-            aria-labelledby="drawer-tab-manifest"
-          >
-            <div class="manifest-head">
-              {/* Single-select (YAML vs JSON) → a radiogroup, matching the toolbar's Group/Resource
-                  segmented controls: a screen reader hears "radio group, YAML selected, 1 of 2" and
-                  ←/→ move between formats. Plain toggle buttons left the active format unannounced. */}
-              <span
-                class="manifest-format"
-                role="radiogroup"
-                aria-label="Manifest format"
-                onKeyDown={(e) => {
-                  const ids: ManifestFormat[] = ['yaml', 'json']
-                  const i = nextRovingIndex(e.key, ids.indexOf(format()), ids.length)
-                  if (i === null) return
-                  e.preventDefault()
-                  setFormat(ids[i])
-                  formatRefs[ids[i]]?.focus()
-                }}
-              >
-                <For each={['yaml', 'json'] as const}>
-                  {(f) => (
-                    <button
-                      ref={(el) => (formatRefs[f] = el)}
-                      role="radio"
-                      aria-checked={format() === f}
-                      tabindex={format() === f ? 0 : -1}
-                      classList={{ active: format() === f }}
-                      onClick={() => setFormat(f)}
-                    >
-                      {f.toUpperCase()}
-                    </button>
-                  )}
-                </For>
-              </span>
-              {/* Within-manifest find: case-insensitive substring highlight. Enter steps through
-                  the matches (scrolling each into view), Esc clears without leaving the drawer. */}
-              <input
-                class="manifest-find"
-                placeholder="find in manifest…  (Enter ↓ · Shift+Enter ↑)"
-                aria-label="Find in manifest"
-                value={manifestQuery()}
-                onInput={(e) => setManifestQuery(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    // Two-stage Esc: clear first, then blur (matches the other find/search fields,
-                    // cycle 268). Keeps the global Esc handler from running until both are done.
-                    if (manifestQuery()) setManifestQuery('')
-                    else (e.currentTarget as HTMLInputElement).blur()
-                  }
-                  else if (e.key === 'Enter') {
-                    e.preventDefault()
-                    stepMatch(e.shiftKey ? -1 : 1)
-                  }
-                }}
-              />
-              <Show when={manifestQuery()}>
-                <span class="manifest-find-count" classList={{ none: manifestMatchCount() === 0 }}>
-                  {manifestMatchCount() === 0
-                    ? 'no matches'
-                    : `${manifestMatchIdx() + 1}/${manifestMatchCount()}`}
-                </span>
-              </Show>
-              <CopyButton text={() => detail() ?? ''} title="Copy manifest" />
-            </div>
-            <Suspense fallback={<div class="drawer-loading">loading…</div>}>
-              {/* detail() throws if the fetch errored, so check detail.error before reading it.
-                  Same 403 split as the events tab: a policy denial names itself. */}
-              <Show
-                when={!detail.error && detail() != null}
-                fallback={
-                  <div class="drawer-loading">
-                    {isForbidden(detail.error) ? 'Access denied — your kd role can\'t read this manifest.' : 'unavailable'}
-                  </div>
-                }
-              >
-                <pre class="manifest" ref={manifestPre} tabindex="0">
-                  <Show when={manifestQuery()} fallback={detail()}>
-                    {(() => {
-                      // Per-segment render: each match gets a sequential index so the "current"
-                      // mark can be styled differently from the others. Counter lives outside the
-                      // For loop because Solid doesn't expose the running match index naturally.
-                      let mi = -1
-                      return (
-                        <For each={manifestSegments()}>
-                          {(p) => {
-                            if (!p.match) return <>{p.text}</>
-                            mi++
-                            const idx = mi
-                            return (
-                              <mark
-                                class="manifest-match"
-                                classList={{ current: idx === manifestMatchIdx() }}
-                              >
-                                {p.text}
-                              </mark>
-                            )
-                          }}
-                        </For>
-                      )
-                    })()}
-                  </Show>
-                </pre>
-              </Show>
-            </Suspense>
-          </section>
+          <ManifestPanel resKey={key()} nodeId={displayNode()?.id} active={tab() === 'manifest'} />
         </aside>
       )}
     </Show>
