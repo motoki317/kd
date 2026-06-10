@@ -440,10 +440,12 @@ describe('Topology', () => {
     // One capacity row for the node, one usage segment per pod.
     expect(container.querySelectorAll('.cap-row').length).toBe(1)
     expect(container.querySelectorAll('.cap-seg.use').length).toBe(2)
-    // Explicit Req/Use axis labels are present (item: explicit over implicit).
-    const axis = [...container.querySelectorAll('.cap-axis-label')].map((e) => e.textContent)
-    expect(axis).toContain('Req')
-    expect(axis).toContain('Use')
+    // Explicit Req/Use axis labels are present (item: explicit over implicit), each glossed by a
+    // hover <title> so a first-time reader can learn what the two bars mean.
+    const axis = [...container.querySelectorAll('.cap-axis-label')]
+    expect(axis.some((e) => e.textContent?.startsWith('Req'))).toBe(true)
+    expect(axis.some((e) => e.textContent?.startsWith('Use'))).toBe(true)
+    expect(axis.every((e) => e.querySelector('title'))).toBe(true)
     // The capacity view draws no relationship edges (containment carries scheduling).
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
   })

@@ -146,7 +146,7 @@ export default function CapacityView(props: {
                     keeps only the node's identity + pod count. */}
                 <tspan class="cap-row-meta">
                   {` · ${pods} pod${pods === 1 ? '' : 's'}`}
-                  {row.otherCount > 0 ? ` (+${row.otherCount} other-ns)` : ''}
+                  {row.otherCount > 0 ? ` (+${row.otherCount} in other namespaces)` : ''}
                 </tspan>
                 <Show when={row.overcommit}>
                   <tspan class="cap-warn"> · overcommit</tspan>
@@ -155,7 +155,7 @@ export default function CapacityView(props: {
 
               {/* Requested bar: this namespace's pods sized by request, then the single folded
                   "other namespaces" block. The "Req" axis label sits in the left gutter. */}
-              <text class="cap-axis-label" x={row.x - 6} y={row.reqBarY + 12}>Req</text>
+              <text class="cap-axis-label" x={row.x - 6} y={row.reqBarY + 12}>Req<title>Reserved by pod requests</title></text>
               <rect class="cap-track req" x={row.x} y={row.reqBarY} width={row.trackW} height={CAP_BAR_H} rx="2" />
               <For each={row.reqSegs}>
                 {(s) => (
@@ -210,7 +210,7 @@ export default function CapacityView(props: {
                   "other namespaces" block. The node's TOTAL usage (all namespaces incl. system
                   overhead, from NodeMetrics) is a faint backdrop so the segments read against
                   the node's real utilization. */}
-              <text class="cap-axis-label" x={row.x - 6} y={row.trackY + 12}>Use</text>
+              <text class="cap-axis-label" x={row.x - 6} y={row.trackY + 12}>Use<title>In use right now</title></text>
               <rect class="cap-track use" x={row.x} y={row.trackY} width={row.useTrackW} height={CAP_BAR_H} rx="2" />
               <Show when={row.nodeUse !== undefined}>
                 <rect
@@ -393,7 +393,10 @@ function CapBulletBar(props: {
   const over = createMemo(() => props.refVal !== undefined && fill() > refLen() + 0.5)
   return (
     <>
-      <text class="cap-axis-label" x={props.x - 6} y={props.y + 9}>{props.axis}</text>
+      <text class="cap-axis-label" x={props.x - 6} y={props.y + 9}>
+        {props.axis}
+        <title>{props.axis === 'Req' ? 'Reserved by pod requests' : 'In use right now'}</title>
+      </text>
       <rect class={`cap-track ${props.barClass}`} x={props.x} y={props.y} width={extent()} height={CAP_BULLET_BAR_H} rx="2" />
       <rect
         class={`cap-seg ${props.barClass}`}
