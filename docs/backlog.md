@@ -38,6 +38,11 @@ Recent batches (newest first; one line per slice — `git log` carries the full 
   Also: a waiting container's state now carries its root-cause message — "Waiting: ErrImagePull —
   …not found" instead of the bare reason; CrashLoopBackOff keeps reason-only (its message is backoff
   mechanics, the cause lives in the last-exit chip) (dbb5822, induced ImagePullBackOff flow).
+  Waiting-message re-verified on the second key shape: CreateContainerConfigError reads
+  `…— configmap "missing-config" not found` live (the beginner's most common config mistake names
+  its missing object in one click). Refuted: "Nodes view misleads with 0-usage when metrics-server
+  is absent" — already-handled, the `hasUsage:false` canvas hint says "metrics-server unavailable —
+  bars sized by requests" (CapacityView.tsx honesty hint).
   Delegated refactor survey: **0 qualifying candidates — internal organization verified healthy.**
   The per-kind accretion in spec.go/ResourceSummary.tsx is intentional (5 small places per kind, the
   build.go inventory stays at-a-glance; a registry would obscure it); selector/CR-essence logic
