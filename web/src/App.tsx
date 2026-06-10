@@ -40,9 +40,11 @@ function parseRels(raw: string | null): Set<RelCategory> | null {
 
 export default function App() {
   // The contexts list drives the topbar switcher (FR-005) and the default context the URL falls back
-  // to (FR-004). It loads once on mount; the kubeconfig is snapshot at server start so a poll would
-  // never change the set.
-  const [contextsRes] = createResource(fetchContexts)
+  // to (FR-004). It loads once on mount — the kubeconfig is snapshot at server start so the SET
+  // never changes — but the per-context STATUS/error do change (a context is "pending" until first
+  // touched; its cache-build failure lands after this initial fetch), so the stream-error path
+  // refetches to pick up the diagnosis the offline empty-state shows.
+  const [contextsRes, { refetch: refetchContexts }] = createResource(fetchContexts)
   const contextsInfo = createMemo(() => (contextsRes.error ? null : contextsRes() ?? null))
   // Seed namespace/ctx/grouping/relationships from the URL so a link or reload restores the same
   // place. Grouping + relationship filter also fall back to localStorage (then their defaults), so
@@ -414,7 +416,14 @@ export default function App() {
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
       summary: (s) => setLiveSummary(s),
       capacity: (c) => setCapacity(c),
-      error: () => setConnState('offline'),
+      error: () => {
+        // On the TRANSITION into offline, refetch the contexts list: the failure that just broke
+        // the stream also populated the context's status/error server-side (it was "pending" at
+        // the initial fetch), and the empty-state diagnosis reads from it. Transition-gated so
+        // EventSource's auto-retry storm doesn't hammer /contexts.
+        if (connState() !== 'offline') void refetchContexts()
+        setConnState('offline')
+      },
     })
     onCleanup(close)
   })
@@ -672,6 +681,12 @@ export default function App() {
             }}
             connected={connected()}
             offline={connState() === 'offline'}
+            // The active context's cache-build error (expired credentials, unreachable API) — the
+            // diagnosis behind an offline state. Without it the empty-state's "use retry" sends an
+            // operator with an expired SSO session into a retry loop; the reason ("getting
+            // credentials: exec…") names the actual fix. Only the switcher's disabled-option
+            // tooltip carried it before, which native selects barely surface.
+            offlineReason={contextsInfo()?.contexts.find((c) => c.name === ctx())?.error}
             groupBy={groupBy()}
             onGroupBy={setGroupBy}
             capResource={capResource()}

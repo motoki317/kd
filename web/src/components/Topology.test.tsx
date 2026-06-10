@@ -45,6 +45,17 @@ describe('Topology', () => {
     const offline = render(() => <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} />)
     expect(offline.container.querySelector('.topology-empty-spinner')).toBeFalsy()
     expect(offline.container.querySelector('.topology-empty-text')?.textContent).toContain("Can't reach the cluster")
+    // No context error known → no empty diagnosis block.
+    expect(offline.container.querySelector('.topology-empty-reason')).toBeNull()
+    offline.unmount()
+    // With a server-reported context error, the offline state diagnoses itself — an expired-SSO
+    // operator needs "getting credentials: exec…" to know the fix is a login, not another retry.
+    const reasoned = render(() => (
+      <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} offlineReason="store: discover: getting credentials: exec: executable not found" />
+    ))
+    const reason = reasoned.container.querySelector('.topology-empty-reason')
+    expect(reason?.textContent).toContain('getting credentials')
+    expect(reason?.getAttribute('title')).toContain('getting credentials') // full chain on hover
   })
 
   it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {

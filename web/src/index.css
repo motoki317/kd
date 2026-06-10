@@ -1214,7 +1214,25 @@ button.conn.conn-retry:focus-visible {
   font-size: 13px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  /* Lets the offline diagnosis line below wrap onto its own full-width row. */
+  flex-wrap: wrap;
+}
+/* The server-reported reason behind an offline context (a Go error chain) — dim diagnosis under the
+   headline, clamped to a few lines (the tail names the root cause; the full chain is in the title). */
+.topology-empty-reason {
+  flex-basis: 100%;
+  margin: 6px auto 0;
+  max-width: 560px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 /* Small ring spinner for the "connecting" empty state: borders the dim text color, with the top
    border tinted accent so the rotation is visible. Hidden under prefers-reduced-motion since the

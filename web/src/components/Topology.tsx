@@ -56,6 +56,9 @@ interface Props {
   // "Connecting…" spinner (which implies active progress) — it shows a static "can't reach" message
   // pointing at the retry control, so the operator knows to act rather than wait.
   offline?: boolean
+  // The active context's cache-build error, shown under the offline empty-state headline so the
+  // failure diagnoses itself (expired credentials vs unreachable API) instead of a bare "retry".
+  offlineReason?: string
   // groupBy selects the layout strategy: 'kind' → per-kind boxes, 'nodes' → host containers,
   // 'relationship' (default) → relationship depth-column tree. Replaces the old viewId. The
   // segmented control that sets it lives in this toolbar (onGroupBy); App owns the signal.
@@ -1385,6 +1388,13 @@ export default function Topology(props: Props) {
                     spinner — the connection failed, so point at the retry control rather than
                     implying progress. */}
                 Can't reach the cluster — use “offline · retry” above to reconnect.
+                {/* The server-reported reason (when the context's cache failed to build): a Go error
+                    chain whose TAIL names the root cause ("getting credentials: exec: …"), telling
+                    an expired-SSO operator the fix is a login, not another retry. Dim and clamped —
+                    diagnosis, not the headline; the full chain stays in the title. */}
+                <Show when={props.offlineReason}>
+                  <div class="topology-empty-reason" title={props.offlineReason}>{props.offlineReason}</div>
+                </Show>
               </Show>
             }>
               Nothing to show in this namespace.
