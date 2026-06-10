@@ -28,6 +28,19 @@ Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b16 (ManifestPanel; finished-run logs honesty; emergency shapes re-verified)** — the
+  manifest tab's whole fetch+find cluster (format radiogroup, keyed resource, query, match stepping,
+  per-node reset) extracted into ManifestPanel (the KindFacts seam applied to DetailDrawer, 731→567;
+  live-verified find count, format refetch, marks surviving the toggle). A finished run (Succeeded
+  Workflow with GC'd pods) read "waiting for log output…" forever — terminal statuses now get "this
+  run already finished — no log output remains" (exact-match statuses only; evicted pods carry
+  free-text). Live walks: induced OOM crashloop reads "↻ 3 · 28s ago" + "Terminated: OOMKilled
+  (exit 137)" on a red card with honest empty bars; the by-pod default split exposed a real 4×
+  memory imbalance between two replicas of one workload; Kind view at 218 resources / 23 kinds;
+  aggregated workload logs at 405 lines. Delegated adversarial survey of internal/api: 10
+  candidates, 10 refuted (context propagation, ticker cleanup, RBAC, wire contract all pinned) —
+  the server layer joins the mature surfaces.
+
 - **2026-06-10 b15 (structure for future changes; secondary projections matured; URL alias)** — the
   drawer's per-kind facts blocks (300+ lines of Show blocks every spec-chip change touches) extracted
   whole into KindFacts.tsx with their MetaChip/KeyValRow idioms (pure move, live-verified identical);
