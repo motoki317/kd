@@ -96,12 +96,14 @@ describe('ResourceSummary container status dots', () => {
         node={podWith([
           { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500, memLimitBytes: 256 * 1024 * 1024 },
           { name: 'sidecar', ready: true, state: 'Running' }, // no limits declared → bare values
+          { name: 'tiny', ready: true, state: 'Running', memLimitBytes: 64 * 1024 * 1024 },
         ])}
         {...base}
         usage={{
           containers: [
             { name: 'app', cpuMilli: 250, memBytes: 240 * 1024 * 1024 }, // ~94% of the mem limit
             { name: 'sidecar', cpuMilli: 2, memBytes: 8 * 1024 * 1024 },
+            { name: 'tiny', cpuMilli: 0, memBytes: 320 * 1024 }, // far below its limit
           ],
         }}
       />
@@ -115,6 +117,8 @@ describe('ResourceSummary container status dots', () => {
     expect(rows[0].querySelectorAll('.near-limit').length).toBe(1)
     expect(rows[1].textContent).toBe('cpu2m·mem8Mi')
     expect(rows[1].querySelector('.near-limit')).toBeNull()
+    // Memory keeps the LIMIT's unit so a tiny draw reads "0.3Mi / 64Mi", never "320Ki / 65536Ki".
+    expect(rows[2].textContent).toBe('cpu0·mem0.3Mi/ 64Mi')
   })
   it('shows no usage rows without a breakdown (single-container pod, or metrics-server absent)', () => {
     const { container } = render(() => (

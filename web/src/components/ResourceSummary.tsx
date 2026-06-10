@@ -155,14 +155,21 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
 
 // ContainerUsageCell renders one resource's live "value / limit" on a container card — the gauge
 // idiom (value bright, bound dim), bare value when the container declares no limit. formatPair keeps
-// both sides in ONE unit; the unit follows the SMALLER nonzero side so a 2m draw under a 2-core
-// limit reads "2m / 2000m", not the rounded-away "0 / 2" (the live value is what this row is for).
+// both sides in ONE unit; for CPU the unit follows the SMALLER nonzero side so a 2m draw under a
+// 2-core limit reads "2m / 2000m", not the rounded-away "0 / 2" (integer-core rounding eats small
+// draws). Memory keeps the LIMIT's unit: its one decimal keeps a small draw visible ("0.3Mi / 64Mi")
+// while a value-side unit renders the bound hostile ("320Ki / 65536Ki" — caught live).
 // Memory within 10% of its limit turns caution-coloured: past it the container is OOMKilled — the
 // one per-container emergency a healthy-looking pod total hides. CPU gets no caution (over-limit
 // merely throttles).
 function ContainerUsageCell(props: { label: string; value: number; limit?: number; res: CapResource }) {
   const pair = () =>
-    formatPair(props.value, props.limit, props.res, props.value > 0 && props.limit ? Math.min(props.value, props.limit) : props.limit)
+    formatPair(
+      props.value,
+      props.limit,
+      props.res,
+      props.res === 'cpu' && props.value > 0 && props.limit ? Math.min(props.value, props.limit) : props.limit,
+    )
   const nearLimit = () => props.res === 'memory' && !!props.limit && props.value / props.limit! >= 0.9
   return (
     <>
