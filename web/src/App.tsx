@@ -125,6 +125,17 @@ export default function App() {
   // first load / namespace switch when nothing is wrong — the stream just hasn't yielded yet.
   const [connState, setConnState] = createSignal<'connecting' | 'live' | 'offline'>('connecting')
   const connected = () => connState() === 'live'
+  // A failed namespace-list fetch is a cluster-level failure (unreachable or forbidden context),
+  // not just a sidebar problem: with no namespace ever picked the subscribe effect never runs, so
+  // nothing else would move connState off its initial 'connecting' — the pill and the canvas would
+  // promise progress forever (caught live against a dead kubeconfig context). Treat it like a
+  // stream error: go offline, and refresh the contexts list (transition-gated, like the stream's
+  // error path) so the canvas diagnosis can name the server's reason for THIS context.
+  createEffect(() => {
+    if (!namespaces.error) return
+    if (untrack(connState) !== 'offline') void refetchContexts()
+    setConnState('offline')
+  })
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
   // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
@@ -656,7 +667,12 @@ export default function App() {
             type="button"
             aria-label="Reconnect to the cluster"
             title="Offline — click to reconnect"
-            onClick={() => setReconnectTick((n) => n + 1)}
+            onClick={() => {
+              // With no namespace (the list itself failed) the subscribe effect has nothing to
+              // re-run against — retry the list too, so one button serves both failure classes.
+              if (namespaces.error) void refetchNamespaces()
+              setReconnectTick((n) => n + 1)
+            }}
           >
             offline · retry
           </button>
