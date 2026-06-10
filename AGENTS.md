@@ -150,6 +150,11 @@ sleep 6   # SSE settle; ~15s for a remote EKS context's FIRST informer sync
 
 ## UI design principles (user-stated)
 
+kd's core aim: a **human-friendly** dashboard built with deep consideration of human cognitive
+characteristics — the UI lets perception do the work (spot, compare, scan) rather than making the
+operator read and reason. In user-facing copy, show this concretely ("big things look big") instead
+of asserting it with adverbs like "intuitively".
+
 Apply the **four design principles** to every visual change — group **related** info so it reads at a
 glance, and make structure legible without a legend. Each is grounded in a real kd example:
 
