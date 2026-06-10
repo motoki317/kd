@@ -364,7 +364,10 @@ export default function App() {
       // one (cycles worst-first, wrapping). No-op when the whole cluster is Healthy (nothing to jump
       // to) so the key never yanks you to an arbitrary ns. First landing matches the first-load
       // default selection (cycle 320); repeats walk the rest of the troubled set.
-      if (e.altKey && (e.key === 't' || e.key === 'T') && !typing) {
+      // e.code too: macOS composes Option+T into key '†', so a key-only match never fires for Mac
+      // operators — code is the physical key, immune to the composition (kept alongside key so
+      // non-QWERTY layouts where 'T' sits elsewhere still match on what's printed).
+      if (e.altKey && (e.key === 't' || e.key === 'T' || e.code === 'KeyT') && !typing) {
         if (jumpToTrouble()) e.preventDefault()
         return
       }
