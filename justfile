@@ -36,8 +36,9 @@ test-go:
 test-web:
     cd web && npm test --if-present
 
-# Static checks: go vet + golangci-lint + client typecheck.
+# Static checks: gofmt + go vet + golangci-lint + client typecheck.
 check:
+    @u="$(gofmt -l cmd internal)"; if [ -n "$u" ]; then echo "gofmt needed:"; echo "$u"; exit 1; fi
     go vet ./...
     golangci-lint run ./... || true
     cd web && npx tsc -b --noEmit
