@@ -33,6 +33,18 @@ emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflo
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b23 (operator-flow dogfooding D21–D30)** — ten more live walks: namespace
+  slash-filter → ↑↓ → Enter landing (D21); kind×health filter composition (D22); manifest find
+  flow (D23 — caught and SHIPPED: ⌘F on the Manifest tab fell through to browser find while the
+  strictly-stronger in-pane find sat unfocused; it now serves both panes, help row updated);
+  multi-container log picker with Init/App optgroups + init-stream switch (D24); orphans toggle
+  76→27→76 round trip (D25); zoom keys verified, f-fit geometry not headless-measurable (rAF
+  frozen — documented limitation, fit verified in prior live cycles) (D26); health-legend
+  spotlight 1-lit/43-faded with clean clear (D27); events warnings-only toggle correctly
+  conditional on warnings existing — no dead control on calm resources (D28); tainted Fargate
+  node drawer reads its NoSchedule taint verbatim (D29); Traefik IngressRoute table shows
+  host → backend · middleware (D30).
+
 - **2026-06-10 b22 (operator-flow dogfooding D1–D20)** — twenty successive human-operator walks
   through the live UI, each judged against the four principles + recognition: morning-check landing
   & Alt+T triage cycle (D1 — caught and FIXED the macOS bug where Option+T composes key '†' so the
