@@ -2570,6 +2570,10 @@ button.conn.conn-retry:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  /* Same defence the card's .container-name carries: a max-length (63-char) container name must
+     wrap inside the drawer, not push it into horizontal scroll. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* The per-container OOM alarm: amber like .container-last-terminated (a caution, not a current
    failure), indented to the card's detail column. Appears only when live memory crosses 90% of the
