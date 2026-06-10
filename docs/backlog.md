@@ -222,8 +222,21 @@ Recent batches (newest first; `git log` has the commits):
   the target ctx falls back to most-troubled with a row flash — App.tsx auto-pick). Refuted: **Namespace
   card "open namespace" drawer action** — the omnipresent sidebar (health dots + filter) is the same one
   click; a drawer affordance saves nothing (low-value).
-
-- **2026-06-06 (operator-dogfooding campaign, IN PROGRESS)** — a directed campaign to mature the UX by
+  Then shipped (delegated a11y survey → verified survivor): **phone overlays leave the covered canvas out
+  of the Tab order** (890429a) — at ≤640px the sidebar overlay hid the canvas visually but kept it
+  tabbable (keyboard focus landed on invisible toolbar chips beneath it); `.main` now goes `inert` while
+  the sidebar overlays (reactive matchMedia signal follows rotation; desktop side-by-side never inerts),
+  the toggle gains `aria-controls`, and drawer-close focus-restore at narrow width targets the sidebar
+  button instead of the search input (focusing a text input pops the phone's on-screen keyboard).
+  NARROW_SCREEN_QUERY moved to `screen.ts` (App↔DetailDrawer import cycle). Verified live at 375x667
+  (inert on while open, focus into covered search blocked, lifted on pick) and 1280 (never inert).
+  From the same survey, refuted: **double SR announcement on selection clear** — `selectionLabel(null)`
+  returns `''` (names.ts), so the live region empties rather than double-firing. Deprioritized: zoom-level
+  announcements (continuous gesture → aria-live spam; no operator task reads the zoom number). Deferred:
+  **drawer-overlay tab-bleed at phone width** (Tab from inside the drawer can reach canvas controls behind
+  it — same long-standing severity as the desktop expanded-drawer behavior, never operator-felt; reopen
+  with the modal-help inert slice below) and **modal help overlay inert siblings + initial focus** (M
+  effort; the overlay is dismiss-on-any-key today so the trap window is one keystroke wide). — a directed campaign to mature the UX by
   running real human-operator flows via agent-browser (docker-desktop + a real EKS staging cluster), not
   source surveys. Re-confirmed the b1 lesson hard: the source surface read "mature", yet driving actual
   flows found a real, clearly-felt gap nearly every cycle. Shipped so far: Kinds-row overflow fade;
