@@ -44,7 +44,9 @@ export default function Sidebar(props: Props) {
   // cursor. Health is already conveyed by the dot colour, so a stable A→Z list is easier to operate.
   // Exclude the cluster entry — it has its own pinned row above the list.
   const shown = createMemo(() => {
-    const f = filter().toLowerCase()
+    // Trimmed like the resource search: a name pasted from a terminal carries trailing
+    // whitespace, which otherwise silently matches nothing.
+    const f = filter().trim().toLowerCase()
     return props.namespaces
       .filter((n) => n.name !== CLUSTER_SCOPE && n.name.toLowerCase().includes(f))
       .slice()

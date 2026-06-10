@@ -185,6 +185,15 @@ describe('Sidebar', () => {
     expect(names).toEqual(['bbb'])
   })
 
+  it('trims paste whitespace in the filter, like the resource search', async () => {
+    const { container, getByPlaceholderText } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    fireEvent.input(getByPlaceholderText(/Filter/), { target: { value: 'bbb ' } })
+    const names = [...container.querySelectorAll('.ns-name')].map((e) => e.textContent)
+    expect(names).toEqual(['bbb'])
+  })
+
   it('shows an error message when loading failed', () => {
     const { getByText } = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={true} />)
     expect(getByText("Couldn't load namespaces.")).toBeTruthy()
