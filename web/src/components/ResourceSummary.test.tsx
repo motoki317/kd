@@ -315,6 +315,18 @@ describe('ResourceSummary data keys', () => {
     expect(container.querySelector('.data-key')).toBeNull()
     expect(container.querySelector('.secret-type')).toBeNull()
   })
+
+  it('lists a ResourceQuota\'s used/hard rows with the same key/value split', () => {
+    const node: KNode = {
+      id: 'q', kind: 'ResourceQuota', name: 'tiny', health: 'Healthy',
+      quotaUsage: ['requests.cpu · 50m / 100m', 'requests.memory · 0 / 128Mi'],
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const rows = [...container.querySelectorAll('.route-row.data-key')]
+    expect(rows).toHaveLength(2)
+    expect(rows[0].querySelector('.data-key-name')?.textContent).toBe('requests.cpu')
+    expect(rows[0].querySelector('.data-key-size')?.textContent).toBe('50m / 100m')
+  })
 })
 
 describe('ResourceSummary batch', () => {

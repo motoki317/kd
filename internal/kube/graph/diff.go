@@ -87,6 +87,7 @@ func nodeEqual(a, b Node) bool {
 		a.RoleRef == b.RoleRef &&
 		slices.Equal(a.Subjects, b.Subjects) && // a binding's subject edit must repaint
 		slices.Equal(a.DataKeys, b.DataKeys) && // a ConfigMap/Secret key add/remove/resize must repaint
+		slices.Equal(a.QuotaUsage, b.QuotaUsage) && // quota consumption moving must repaint
 		a.SecretType == b.SecretType &&
 		a.AccessModes == b.AccessModes && // a PVC binding to a PV can fill in its modes/class — repaint
 		a.StorageClass == b.StorageClass &&

@@ -95,6 +95,7 @@ type Node struct {
 	ScaleMetrics string          `json:"scaleMetrics,omitempty"` // the metric driving an HPA, "cpu 72% / 80%" (current / target) — why it scales
 	AppDest     string           `json:"appDest,omitempty"`     // an ArgoCD Application's deploy destination ("[cluster/]namespace") — where its workloads live
 	AppRevision string           `json:"appRevision,omitempty"` // an ArgoCD Application's synced revision (short SHA / tag) — what's actually deployed
+	QuotaUsage  []string         `json:"quotaUsage,omitempty"`  // a ResourceQuota's consumption, "resource · used / hard" — "how much room is left?"
 	PDBPolicy   string           `json:"pdbPolicy,omitempty"`   // a PodDisruptionBudget's policy, "min 2" / "max 1" (the configured intent)
 	Disruptions string           `json:"disruptions,omitempty"` // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks here); "" for non-PDBs
 	Provisioner string           `json:"provisioner,omitempty"` // a StorageClass's provisioner (the CSI driver / volume plugin) — its defining fact

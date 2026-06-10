@@ -105,6 +105,7 @@ export interface KNode {
   roleRef?: string
   subjects?: string[]
   dataKeys?: string[] // a ConfigMap/Secret's data keys, "key · size" (names + sizes only, never values)
+  quotaUsage?: string[] // a ResourceQuota's consumption, "resource · used / hard"
   secretType?: string // a Secret's type (Opaque, kubernetes.io/tls, …)
   accessModes?: string // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
   storageClass?: string // a PVC/PV's storage class

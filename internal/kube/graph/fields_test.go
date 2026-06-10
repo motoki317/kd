@@ -694,6 +694,34 @@ func TestDataKeys(t *testing.T) {
 	}
 }
 
+func TestQuotaUsage(t *testing.T) {
+	q := &corev1.ResourceQuota{Status: corev1.ResourceQuotaStatus{
+		Hard: corev1.ResourceList{
+			"requests.cpu":    resource.MustParse("100m"),
+			"requests.memory": resource.MustParse("128Mi"),
+		},
+		Used: corev1.ResourceList{"requests.cpu": resource.MustParse("50m")},
+	}}
+	// Sorted by resource name; a resource absent from used means zero tracked consumption.
+	want := []string{"requests.cpu · 50m / 100m", "requests.memory · 0 / 128Mi"}
+	if got := quotaUsage(q); !slices.Equal(got, want) {
+		t.Errorf("quotaUsage =\n%v\nwant\n%v", got, want)
+	}
+
+	// Before the controller fills status, fall back to spec.hard so a just-created quota still shows
+	// its limits.
+	fresh := &corev1.ResourceQuota{Spec: corev1.ResourceQuotaSpec{
+		Hard: corev1.ResourceList{"pods": resource.MustParse("10")},
+	}}
+	if got := quotaUsage(fresh); !slices.Equal(got, []string{"pods · 0 / 10"}) {
+		t.Errorf("quotaUsage(fresh) = %v", got)
+	}
+
+	if got := quotaUsage(&corev1.Pod{}); got != nil {
+		t.Errorf("quotaUsage(Pod) = %v, want nil", got)
+	}
+}
+
 func TestAccessModesAndStorageClass(t *testing.T) {
 	gp3 := "gp3"
 	pvc := &corev1.PersistentVolumeClaim{Spec: corev1.PersistentVolumeClaimSpec{

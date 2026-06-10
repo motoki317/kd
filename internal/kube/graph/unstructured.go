@@ -37,6 +37,7 @@ var typedFactories = map[string]func() runtime.Object{
 	"v1/ServiceAccount":                        func() runtime.Object { return &corev1.ServiceAccount{} },
 	"v1/Endpoints":                             func() runtime.Object { return &corev1.Endpoints{} },
 	"v1/Event":                                 func() runtime.Object { return &corev1.Event{} },
+	"v1/ResourceQuota":                         func() runtime.Object { return &corev1.ResourceQuota{} },
 	"apps/v1/Deployment":                       func() runtime.Object { return &appsv1.Deployment{} },
 	"apps/v1/ReplicaSet":                       func() runtime.Object { return &appsv1.ReplicaSet{} },
 	"apps/v1/StatefulSet":                      func() runtime.Object { return &appsv1.StatefulSet{} },

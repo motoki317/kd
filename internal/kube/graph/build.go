@@ -79,6 +79,7 @@ func buildGraph(objs []runtime.Object, keepCompletedPods bool) *Graph {
 			RoleRef:           bindingRoleRef(obj),
 			Subjects:          bindingSubjects(obj),
 			DataKeys:          dataKeys(obj),
+			QuotaUsage:        quotaUsage(obj),
 			SecretType:        secretType(obj),
 			AccessModes:       accessModes(obj),
 			StorageClass:      storageClass(obj),

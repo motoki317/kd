@@ -647,6 +647,26 @@ export default function ResourceSummary(props: Props) {
           </For>
         </div>
       </Show>
+      {/* A ResourceQuota's consumption ("resource · used / hard") — the only fact an operator wants
+          from a quota: how much room is left. Reuses the data-key row idiom (name bright, numbers
+          dim) so quota rows read like every other key/value chip. */}
+      <Show when={(props.node.quotaUsage?.length ?? 0) > 0}>
+        <div class="drawer-routes">
+          <For each={props.node.quotaUsage}>
+            {(row) => {
+              const sep = row.lastIndexOf(' · ')
+              return sep < 0 ? (
+                <code class="route-row">{row}</code>
+              ) : (
+                <code class="route-row data-key" title="Used / limit in this namespace">
+                  <span class="data-key-name">{row.slice(0, sep)}</span>
+                  <span class="data-key-size">{row.slice(sep + 3)}</span>
+                </code>
+              )
+            }}
+          </For>
+        </div>
+      </Show>
       {/* Containers (cycle 338): a Pod's per-container runtime state and its image belong together —
           "which container is broken and what's it running?" — so each container is one card pairing
           status (dot + state + restarts) with its image, grouped into Init vs app containers with

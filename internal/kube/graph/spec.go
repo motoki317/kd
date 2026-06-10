@@ -510,6 +510,39 @@ func dataKeys(obj runtime.Object) []string {
 	return out
 }
 
+// quotaUsage rolls a ResourceQuota's per-resource consumption into "resource · used / hard" rows —
+// the only fact an operator wants from a quota (how much room is left), which the manifest splits
+// across status.used and status.hard. Falls back to spec.hard when the controller hasn't filled
+// status yet; a resource absent from used genuinely means zero tracked consumption.
+func quotaUsage(obj runtime.Object) []string {
+	q, ok := obj.(*corev1.ResourceQuota)
+	if !ok {
+		return nil
+	}
+	hard := q.Status.Hard
+	if len(hard) == 0 {
+		hard = q.Spec.Hard
+	}
+	if len(hard) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(hard))
+	for name := range hard {
+		names = append(names, string(name))
+	}
+	sort.Strings(names)
+	out := make([]string, len(names))
+	for i, name := range names {
+		used := "0"
+		if u, ok := q.Status.Used[corev1.ResourceName(name)]; ok {
+			used = u.String()
+		}
+		h := hard[corev1.ResourceName(name)]
+		out[i] = name + " · " + used + " / " + h.String()
+	}
+	return out
+}
+
 // accessModeShort abbreviates a PVC/PV access mode to the form operators read in `kubectl get pvc`
 // (RWO/ROX/RWX/RWOP), so the drawer answers "can more than one pod mount this?" at a glance.
 func accessModeShort(m corev1.PersistentVolumeAccessMode) string {
