@@ -139,6 +139,16 @@ func statusMessage(obj runtime.Object, h Health) string {
 				break
 			}
 		}
+	case *batchv1.Job:
+		// The Failed condition's message ("Job has reached the specified backoff limit", "Job was
+		// active longer than specified deadline") tells the operator the Job has terminally given up
+		// — fix and re-create, don't wait — which "0/1 · failed 2" alone doesn't.
+		for _, c := range o.Status.Conditions {
+			if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue && c.Message != "" {
+				msg = c.Message
+				break
+			}
+		}
 	case *policyv1.PodDisruptionBudget:
 		msg = pdbBlockMessage(o)
 	}

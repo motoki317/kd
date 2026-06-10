@@ -408,6 +408,15 @@ func TestStatusMessage(t *testing.T) {
 		t.Errorf("statusMessage(quota-blocked ReplicaSet) = %q, want the ReplicaFailure cause", got)
 	}
 
+	// A failed Job says it has terminally given up — "0/1 · failed 2" alone reads as still retrying.
+	deadJob := &batchv1.Job{Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{
+		{Type: batchv1.JobFailed, Status: corev1.ConditionTrue, Reason: "BackoffLimitExceeded",
+			Message: "Job has reached the specified backoff limit"},
+	}}}
+	if got := statusMessage(deadJob, HealthDegraded); got != "Job has reached the specified backoff limit" {
+		t.Errorf("statusMessage(failed Job) = %q, want the Failed condition message", got)
+	}
+
 	// A degraded PDB surfaces its DisruptionAllowed condition message — the WHY behind "can disrupt 0"
 	// (here the controller can't evaluate the budget at all, the misconfigured-empty-selector case).
 	pdbSync := &policyv1.PodDisruptionBudget{Status: policyv1.PodDisruptionBudgetStatus{
