@@ -7,7 +7,7 @@ without running a dozen `kubectl` commands.
 It's read-only and live. It watches the cluster and updates as things change, and there's no login to
 set up.
 
-<!-- TODO: hero screenshot / short demo gif of the topology view -->
+![A namespace as one picture: Ingress → Services → Pods ← ReplicaSets ← Deployments, with a Service's details open](docs/screenshot.png)
 
 ## Features
 
@@ -23,8 +23,6 @@ You arrange the canvas yourself. Switch how resources are grouped:
 Then pick which links to draw: ownership, network, volumes, RBAC, or disruption. Custom resources show
 up too — Workflows, Certificates, ArgoCD Applications, and anything else a CRD defines, down to their
 Pods. Unhealthy resources stand out in color, and troubled namespaces sort to the top.
-
-<!-- TODO: gif showing the group-by switch and relationship filters -->
 
 ### Resource details
 
