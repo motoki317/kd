@@ -116,6 +116,26 @@ the namespace hangs Terminating. Strategic-merge `-p '{"metadata":{"finalizers":
 it ("no change"). Use clearly-fictional names (`hungry`, `doomed`, `zombie`) — they end up in
 screenshots and backlog notes.
 
+**Live-verifying a CR spec-chip without the operator installed.** A new CR-essence chip (Certificate,
+Issuer, an operator's CRD) needs live verification against real `*unstructured` data, but the operator
+may be unreachable (a flaky remote cluster) or absent on docker-desktop. Install a **minimal open-schema
+CRD** + one instance — the chip reads the informer's unstructured object, no controller needed:
+```bash
+kubectl --context docker-desktop apply -f - <<'EOF'
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: { name: clusterissuers.cert-manager.io }
+spec:
+  group: cert-manager.io
+  scope: Cluster
+  names: { plural: clusterissuers, singular: clusterissuer, kind: ClusterIssuer, shortNames: [ciss] }
+  versions: [{ name: v1, served: true, storage: true, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }]
+EOF
+# then apply a real-shaped instance, restart kd (new GVR → new informer), and drive the drawer.
+```
+This caught nothing wrong but PROVED the staging-issuer caution path live (D96). Restart kd after the
+CRD lands — the dynamic-informer factory discovers GVRs at startup. Clean up the CRD + instance after.
+
 **Last verified clean at production scale (2026-06-05):** a real EKS staging cluster (72 nodes / 39
 namespaces) — cluster-scope relationship layout had **0 overlapping node cards** (the `placeColumns`
 depth-column layout holds), cluster- and namespace-scope capacity bars had **0 overshoot rows**
