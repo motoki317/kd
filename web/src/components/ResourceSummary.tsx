@@ -455,6 +455,20 @@ export default function ResourceSummary(props: Props) {
           </Show>
         </div>
       </Show>
+      {/* A DaemonSet's node selector — "which nodes does this run on" is its defining fact, and a
+          selector matching no node is exactly why one shows a contented "0/0" with no pods anywhere.
+          Caution tint when nothing is scheduled, mirroring the Service selector's matches-nothing cue. */}
+      <Show when={props.node.nodeSelector}>
+        <div class="drawer-ports">
+          <MetaChip
+            label="node selector"
+            value={props.node.nodeSelector!}
+            title="Runs only on nodes carrying these labels"
+            class={props.node.status === '0/0' ? 'port-caution' : undefined}
+            copy
+          />
+        </div>
+      </Show>
       {/* A PVC/PV's access modes + storage class — the rest of its essence past the status's "Bound
           10Gi": can more than one pod mount it (RWO vs RWX), and which provisioner/tier (gp3 vs
           standard). Labelled chips (explicit over implicit), reusing the Service address row's idiom. */}

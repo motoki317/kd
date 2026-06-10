@@ -100,6 +100,7 @@ export interface KNode {
   externalIP?: string
   ports?: string[]
   selector?: string // a Service's pod selector "k=v, k=v" — the "why no endpoints" answer; absent for selectorless
+  nodeSelector?: string // a DaemonSet's node selector — matching no node explains a contented "0/0"
   routes?: string[]
   rules?: string[]
   roleRef?: string

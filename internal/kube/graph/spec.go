@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -81,17 +82,35 @@ func serviceClusterIP(obj runtime.Object) string {
 // it — those have no selector to debug. Mirrors the selector kd already surfaces for NetworkPolicies.
 func serviceSelector(obj runtime.Object) string {
 	svc, ok := obj.(*corev1.Service)
-	if !ok || len(svc.Spec.Selector) == 0 {
+	if !ok {
 		return ""
 	}
-	keys := make([]string, 0, len(svc.Spec.Selector))
-	for k := range svc.Spec.Selector {
+	return labelMapString(svc.Spec.Selector)
+}
+
+// dsNodeSelector formats a DaemonSet's node selector — "which nodes does this run on" is a DS's
+// defining fact, and a selector matching no node is exactly why one shows a contented "0/0".
+func dsNodeSelector(obj runtime.Object) string {
+	d, ok := obj.(*appsv1.DaemonSet)
+	if !ok {
+		return ""
+	}
+	return labelMapString(d.Spec.Template.Spec.NodeSelector)
+}
+
+// labelMapString renders a label map deterministically as "k=v, k=v" (sorted; "" when empty).
+func labelMapString(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+"="+svc.Spec.Selector[k])
+		parts = append(parts, k+"="+m[k])
 	}
 	return strings.Join(parts, ", ")
 }

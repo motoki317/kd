@@ -329,6 +329,23 @@ describe('ResourceSummary data keys', () => {
     expect(container.querySelector('.secret-type')).toBeNull()
   })
 
+  it('shows a DaemonSet\'s node selector, cautioned when nothing is scheduled (0/0)', () => {
+    const node: KNode = {
+      id: 'ds', kind: 'DaemonSet', name: 'gpu-agent', health: 'Healthy', status: '0/0',
+      nodeSelector: 'gpu=true',
+    }
+    const { container } = render(() => <ResourceSummary node={node} {...base} />)
+    const chip = [...container.querySelectorAll('.port-addr')].find((c) => c.textContent?.includes('node selector'))!
+    expect(chip.textContent).toContain('gpu=true')
+    expect(chip.classList.contains('port-caution')).toBe(true) // 0/0 → the selector is the suspect
+    // Scheduled somewhere → informational, no caution tint.
+    const ok = render(() => (
+      <ResourceSummary node={{ ...node, id: 'ds2', status: '3/3' }} {...base} />
+    ))
+    const okChip = [...ok.container.querySelectorAll('.port-addr')].find((c) => c.textContent?.includes('node selector'))!
+    expect(okChip.classList.contains('port-caution')).toBe(false)
+  })
+
   it('lists a ResourceQuota\'s used/hard rows with the same key/value split', () => {
     const node: KNode = {
       id: 'q', kind: 'ResourceQuota', name: 'tiny', health: 'Healthy',

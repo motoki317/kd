@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -691,6 +692,21 @@ func TestDataKeys(t *testing.T) {
 	}
 	if got := secretType(&corev1.ConfigMap{}); got != "" {
 		t.Errorf("secretType(non-secret) = %q, want empty", got)
+	}
+}
+
+func TestDsNodeSelector(t *testing.T) {
+	ds := &appsv1.DaemonSet{Spec: appsv1.DaemonSetSpec{Template: corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{NodeSelector: map[string]string{"gpu": "true", "arch": "arm64"}},
+	}}}
+	if got := dsNodeSelector(ds); got != "arch=arm64, gpu=true" { // sorted, deterministic
+		t.Errorf("dsNodeSelector = %q", got)
+	}
+	if got := dsNodeSelector(&appsv1.DaemonSet{}); got != "" {
+		t.Errorf("dsNodeSelector(no selector) = %q, want \"\"", got)
+	}
+	if got := dsNodeSelector(&corev1.Pod{}); got != "" {
+		t.Errorf("dsNodeSelector(non-DS) = %q, want \"\"", got)
 	}
 }
 
