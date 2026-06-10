@@ -1464,7 +1464,11 @@ export default function Topology(props: Props) {
               <circle cx="102" cy="36" r="2.6" class="empty-card-icon" />
             </g>
           </svg>
-          <div class="topology-empty-text">
+          {/* role=status: the connecting→offline/no-access/not-signed-in transitions must be
+              announced — the conn pill (the other live region) HIDES in the identity states, so
+              without this a screen reader hears nothing when the canvas reaches its terminal
+              answer. */}
+          <div class="topology-empty-text" role="status">
             <Show when={props.connected} fallback={
               // Rung order: auth > no-access > offline > connecting. Identity failures outrank
               // connectivity ones — with zero visible namespaces or no identity at all, "can't

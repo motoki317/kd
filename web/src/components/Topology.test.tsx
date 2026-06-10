@@ -100,6 +100,9 @@ describe('Topology', () => {
       <Topology nodes={[]} edges={[]} search="" {...base} connected={false} offline={true} noAccess={true} authFailed={true} />
     ))
     expect(auth.container.querySelector('.topology-empty-text')?.textContent).toContain('Not signed in')
+    // The empty state is a live region: the conn pill (the other role=status) hides in the
+    // identity states, so this is the only announcement of the terminal answer.
+    expect(auth.container.querySelector('.topology-empty-text')?.getAttribute('role')).toBe('status')
   })
 
   it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {
