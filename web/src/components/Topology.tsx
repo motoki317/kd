@@ -435,7 +435,10 @@ export default function Topology(props: Props) {
     if (r > 0) return `↻${r}`
     return age
   }
-  const label = (n: KNode) => cardName(n.name, ownerName().get(n.id))
+  // The parent-prefix dedup ("…-5tkrx") assumes the parent card is visibly adjacent — true only in
+  // the relationship tree. In the Kind view pods from different apps share one box, so a deduped
+  // name hides exactly the part that tells them apart; show the (middle-truncated) full name there.
+  const label = (n: KNode) => cardName(n.name, props.groupBy === 'relationship' ? ownerName().get(n.id) : undefined)
 
   // When a node is selected, walk its connected component (edges treated as undirected) so the
   // entire relationship tree containing the selection stays lit while everything else fades out —

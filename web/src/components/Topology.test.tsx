@@ -1092,6 +1092,24 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.node').length).toBe(3)
   })
 
+  it('parent-prefix name dedup applies only where the parent is visibly adjacent (the tree)', () => {
+    // In the relationship tree a pod under its owner reads "…-suffix" (the prefix is the card above
+    // it). In the Kind view pods from different apps share one box — the prefix IS the identity, so
+    // the full name must show.
+    const owned: KNode[] = [
+      { id: 'rs', kind: 'ReplicaSet', name: 'api-7d9f', health: 'Healthy' },
+      { id: 'po', kind: 'Pod', name: 'api-7d9f-2xkp', health: 'Healthy' },
+    ]
+    const ownEdges: KEdge[] = [{ from: 'rs', to: 'po', type: 'ownerReference' }]
+    const rel = render(() => <Topology nodes={owned} edges={ownEdges} search="" {...base} groupBy="relationship" />)
+    const relPod = [...rel.container.querySelectorAll('.node-name')].find((e) => /2xkp/.test(e.textContent ?? ''))
+    expect(relPod?.textContent).toBe('…-2xkp')
+    cleanup()
+    const kind = render(() => <Topology nodes={owned} edges={ownEdges} search="" {...base} groupBy="kind" />)
+    const kindPod = [...kind.container.querySelectorAll('.node-name')].find((e) => /2xkp/.test(e.textContent ?? ''))
+    expect(kindPod?.textContent).toBe('api-7d9f-2xkp')
+  })
+
   it('search match count + Enter-cycle respect the active kind filter (cycle 314)', () => {
     // Search "web" matches the Deployment "web" and the Pod "web-abc" (2). With a Pod-only kind
     // filter active, only the Pod should count as a match — the faded Deployment must be excluded.
