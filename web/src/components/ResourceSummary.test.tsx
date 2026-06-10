@@ -228,7 +228,7 @@ describe('ResourceSummary external address', () => {
     const ext = container.querySelector('.port-ext')!
     expect(ext.classList.contains('port-caution')).toBe(true)
     expect(ext.getAttribute('title')).toContain('LoadBalancer')
-    expect(ext.getAttribute('title')).toContain('pending indefinitely')
+    expect(ext.getAttribute('title')).toContain('pending forever')
     expect(ext.querySelector('.copy-btn')).toBeNull()
   })
   it('keeps a real external address plain and copyable', () => {
@@ -250,7 +250,7 @@ describe('ResourceSummary external address', () => {
     }
     const { container } = render(() => <ResourceSummary node={headless} {...base} />)
     const addr = container.querySelector('.drawer-ports .port-addr')!
-    expect(addr.getAttribute('title')).toContain('Headless service')
+    expect(addr.getAttribute('title')).toContain('Headless')
     expect(addr.querySelector('.copy-btn')).toBeNull()
   })
   it('titles a real cluster IP as the in-cluster service address, copyable', () => {

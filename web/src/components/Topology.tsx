@@ -1494,7 +1494,7 @@ export default function Topology(props: Props) {
             // Surface the structured-form (cycle 295) on hover so an operator who pasted a
             // Kind/name and got a single hit can intuit why — also discoverable for those who
             // haven't read the help overlay.
-            title="Search name · kind · status · host · IP · image · labels. Type Kind/name (e.g. po/web-abc) for a structured lookup; Enter cycles matches."
+            title="Search by name, kind, status, IP, image, or label. Enter steps through matches; po/web finds one kind."
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={(e) => {
@@ -1540,10 +1540,10 @@ export default function Topology(props: Props) {
             // is outside the match set (or no selection).
             title={
               matchPos() > 0
-                ? `Match ${matchPos()} of ${matches()!.size}. Click to frame all; Enter for next, Shift+Enter for previous.`
+                ? `Match ${matchPos()} of ${matches()!.size} — click to frame all`
                 : matches()!.size === 0
-                  ? 'No resources match the current search.'
-                  : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}. Click to frame them, or press Enter to step through.`
+                  ? 'Nothing matches this search'
+                  : `Click to frame the ${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`
             }
           >
             <Show
@@ -1633,7 +1633,7 @@ export default function Topology(props: Props) {
                     tabindex={capResource() === r.id ? 0 : -1}
                     classList={{ active: capResource() === r.id }}
                     onClick={() => setCapResource(r.id)}
-                    title={`Size node tracks and pod segments by ${r.label}`}
+                    title={`Size the bars by ${r.label}`}
                   >
                     {r.label}
                   </button>
@@ -1666,7 +1666,7 @@ export default function Topology(props: Props) {
                   classList={{ active: props.relFilter?.has(c.id) ?? false }}
                   aria-pressed={props.relFilter?.has(c.id) ?? false}
                   onClick={(e) => props.onRelFilter?.(c.id, e.shiftKey)}
-                  title={`${c.hint} · Click to toggle · Shift+click to solo`}
+                  title={`${c.hint} · Shift+click to show only this`}
                 >
                   {c.label}
                   <span class="rel-chip-count">{c.count}</span>
@@ -1681,7 +1681,7 @@ export default function Topology(props: Props) {
                 tabindex={-1}
                 aria-expanded={relsExpanded()}
                 onClick={toggleRelsExpanded}
-                title={relsExpanded() ? 'Hide the specialized relationship lenses' : 'Show RBAC, Disruption, Monitoring'}
+                title={relsExpanded() ? 'Show fewer relationship types' : 'Show RBAC, Disruption, Monitoring'}
               >
                 {relsExpanded() ? 'less' : `+${foldableRelCount()} more`}
               </button>
@@ -1734,7 +1734,7 @@ export default function Topology(props: Props) {
           <div class="toolbar-facet">
             <label
               class="toolbar-checkbox"
-              title="Resources with no relationship in view are hidden by default. Degraded ones still surface under the Degraded health filter."
+              title="Also show resources with no connection in this view"
             >
               <input
                 type="checkbox"
@@ -1776,14 +1776,14 @@ export default function Topology(props: Props) {
                   onClick={(e) => props.onKindFilter?.(c.kind, e.shiftKey)}
                   title={
                     c.worst
-                      ? `Click to toggle ${c.kind} · Shift+click to solo — at least one ${c.worst}`
-                      : `Click to toggle ${c.kind} · Shift+click to solo`
+                      ? `${c.kind} · Shift+click to show only this — some are ${c.worst}`
+                      : `${c.kind} · Shift+click to show only this`
                   }
                   // The visible chip is a compact abbreviation + count ("SA42"), which a screen reader
                   // would announce as a cryptic string. Give it a real accessible NAME (the full kind +
                   // count + any trouble) so AT reads "ServiceAccount, 42" — the title stays as the
                   // interaction-hint description, and aria-pressed conveys the toggle state.
-                  aria-label={`${c.kind}, ${c.count}${c.worst ? `, at least one ${c.worst}` : ''}`}
+                  aria-label={`${c.kind}, ${c.count}${c.worst ? `, some ${c.worst}` : ''}`}
                   aria-pressed={activeKinds()?.has(c.kind) ?? false}
                 >
                   <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">

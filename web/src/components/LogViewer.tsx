@@ -358,7 +358,7 @@ export default function LogViewer(props: Props) {
             classList={{ active: previous() }}
             aria-pressed={previous()}
             onClick={() => setPrevious((p) => !p)}
-            title="Logs from the previous (crashed) container"
+            title="Logs from before the last restart"
           >
             previous
           </button>
@@ -368,7 +368,7 @@ export default function LogViewer(props: Props) {
           classList={{ active: timestamps() }}
           aria-pressed={timestamps()}
           onClick={() => setTimestamps((t) => !t)}
-          title="Show each line's emission time"
+          title="Show timestamps"
         >
           timestamps
         </button>
@@ -377,7 +377,7 @@ export default function LogViewer(props: Props) {
           classList={{ active: wrap() }}
           aria-pressed={wrap()}
           onClick={toggleWrap}
-          title={wrap() ? 'Stop wrapping long lines (scroll horizontally)' : 'Wrap long lines'}
+          title={wrap() ? 'Stop wrapping lines — scroll sideways instead' : 'Wrap long lines'}
         >
           wrap
         </button>
@@ -449,7 +449,7 @@ export default function LogViewer(props: Props) {
             <span
               class="logs-count"
               classList={{ none: visibleLines().length === 0 }}
-              title={`${visibleLines().length} of ${lines().length} lines shown (rest hidden by the active filters)`}
+              title={`${visibleLines().length} of ${lines().length} lines shown — the rest are hidden by filters`}
             >
               {visibleLines().length}/{lines().length}
             </span>

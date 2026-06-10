@@ -332,8 +332,7 @@ export default function DetailDrawer(props: Props) {
                 the header, NOT a child: in the header's flex row the zero-basis summary "fits" on
                 the banner's 100%-width line and collapses to 0px. */}
             <div class="drawer-deleted" role="status" aria-live="polite">
-              No longer in the cluster — deleted or replaced while you were inspecting it. Facts
-              below are the last known state{props.owners.length ? '; the owner chip below leads to any replacement' : ''}.
+              Deleted from the cluster — showing its last known state{props.owners.length ? '. The owner chip leads to any replacement' : ''}.
             </div>
           </Show>
           <header class="drawer-header">

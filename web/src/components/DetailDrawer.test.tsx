@@ -49,7 +49,7 @@ describe('DetailDrawer', () => {
       <DetailDrawer ctx="test-ctx" node={configMap} deleted={true} owners={[owner]} onNavigate={() => {}} onClose={() => {}} />
     ))
     const banner = deleted.container.querySelector('.drawer-deleted')
-    expect(banner?.textContent).toContain('No longer in the cluster')
+    expect(banner?.textContent).toContain('Deleted from the cluster')
     expect(banner?.textContent).toContain('owner chip') // owner present → points at the replacement path
     expect(banner?.getAttribute('aria-live')).toBe('polite')
     expect(deleted.container.querySelector('.drawer-name')?.textContent).toContain('settings')

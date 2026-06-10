@@ -123,13 +123,13 @@ export default function Sidebar(props: Props) {
               class="ns-trouble ns-trouble-btn"
               title={
                 troubled() > 1
-                  ? `Step through the ${troubled()} namespaces needing attention (worst first) — click again for the next`
-                  : 'Jump to the namespace needing attention'
+                  ? `${troubled()} namespaces need attention — click to visit each, worst first`
+                  : 'Go to the namespace needing attention'
               }
               aria-label={
                 troubled() > 1
                   ? `Step to the next of ${troubled()} namespaces needing attention`
-                  : 'Jump to the namespace needing attention'
+                  : 'Go to the namespace needing attention'
               }
               onClick={() => props.onJumpToTrouble?.()}
             >

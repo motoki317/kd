@@ -96,7 +96,7 @@ function ImageRef(props: { image: string; wrapClass: string }) {
       <Show when={isFloatingImageTag(props.image)}>
         <span
           class="image-floating-tag"
-          title="Image lacks a pinned digest or version tag — rolling restart can change the running image"
+          title="No pinned version — a restart may pull a different image"
         >
           floating tag
         </span>
@@ -374,7 +374,7 @@ export default function ResourceSummary(props: Props) {
               class="port-addr"
               title={
                 props.node.clusterIP === 'headless'
-                  ? 'Headless service — no virtual IP; DNS resolves the service name straight to the backing pod IPs'
+                  ? 'Headless — no service IP; DNS returns the pod IPs directly'
                   : // Type-neutral on purpose: this value is a cluster IP for a ClusterIP/NodePort/LB
                     // service but the aliased EXTERNAL host for an ExternalName one — "reachable inside
                     // the cluster" would misdescribe the latter. The hero's type line disambiguates.
@@ -400,8 +400,8 @@ export default function ResourceSummary(props: Props) {
               classList={{ 'port-caution': props.node.externalIP === 'pending' }}
               title={
                 props.node.externalIP === 'pending'
-                  ? 'No external address assigned yet — the LoadBalancer provider is still provisioning one. On a cluster with no LoadBalancer controller this stays pending indefinitely.'
-                  : 'External address (LoadBalancer / externalIPs)'
+                  ? 'No address yet — the LoadBalancer is provisioning. With no LoadBalancer controller it stays pending forever.'
+                  : 'External address'
               }
             >
               <span class="addr-label">ext</span>
@@ -429,7 +429,7 @@ export default function ResourceSummary(props: Props) {
             <MetaChip
               label="selector"
               value={props.node.selector!}
-              title="Pod selector — the labels a backing Pod must carry"
+              title="Labels a Pod must have to back this Service"
               class={props.node.endpoints?.total === 0 ? 'port-caution' : undefined}
               copy
             />
@@ -474,13 +474,13 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.scaleReplicas || props.node.scaleRange || props.node.scaleMetrics}>
         <div class="drawer-ports">
           <Show when={props.node.scaleReplicas}>
-            <MetaChip label="replicas" value={props.node.scaleReplicas!} title="Current replicas (→ desired while scaling)" />
+            <MetaChip label="replicas" value={props.node.scaleReplicas!} title="Running replicas — shows the target while scaling" />
           </Show>
           <Show when={props.node.scaleRange}>
-            <MetaChip label="range" value={props.node.scaleRange!} title="Min–max replica bounds" />
+            <MetaChip label="range" value={props.node.scaleRange!} title="Allowed replica range" />
           </Show>
           <Show when={props.node.scaleMetrics}>
-            <MetaChip label="metric" value={props.node.scaleMetrics!} title="Scaling metric — current / target ('—' = no reading yet)" />
+            <MetaChip label="metric" value={props.node.scaleMetrics!} title="Scaling metric: current / target" />
           </Show>
         </div>
       </Show>
@@ -491,7 +491,7 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.appDest || props.node.appRevision}>
         <div class="drawer-ports">
           <Show when={props.node.appDest}>
-            <MetaChip label="dest" value={props.node.appDest!} title="Deploy destination — the namespace this Application's workloads live in" />
+            <MetaChip label="dest" value={props.node.appDest!} title="Namespace this Application deploys into" />
           </Show>
           <Show when={props.node.appRevision}>
             <MetaChip label="rev" value={props.node.appRevision!} title="Last synced revision" copy />
@@ -511,7 +511,7 @@ export default function ResourceSummary(props: Props) {
             <MetaChip
               label="can disrupt"
               value={props.node.disruptions!}
-              title="Voluntary evictions allowed right now (0 → a node drain will block here)"
+              title="Pods that may be evicted right now — 0 blocks a node drain"
               class={props.node.disruptions === '0' ? 'port-caution' : undefined}
             />
           </Show>
@@ -522,7 +522,7 @@ export default function ResourceSummary(props: Props) {
           carries the caution colour like the PDB "can disrupt 0" state (explicit over implicit). */}
       <Show when={props.node.taints}>
         <div class="drawer-ports">
-          <MetaChip label="taints" value={props.node.taints!} title="Taints — a pod needs a matching toleration to schedule here" class="port-caution" />
+          <MetaChip label="taints" value={props.node.taints!} title="A pod needs a matching toleration to run on this node" class="port-caution" />
         </div>
       </Show>
       {/* A StorageClass's policy details. The provisioner (+ default marker) is the hero status now —
@@ -533,7 +533,7 @@ export default function ResourceSummary(props: Props) {
       <Show when={props.node.provisioner}>
         <div class="drawer-ports">
           <Show when={props.node.reclaimPolicy}>
-            <MetaChip label="reclaim" value={props.node.reclaimPolicy!} title="Reclaim policy — what happens to the PV when its PVC is deleted" />
+            <MetaChip label="reclaim" value={props.node.reclaimPolicy!} title="What happens to the volume when its claim is deleted" />
           </Show>
           <Show when={props.node.volumeBinding}>
             <MetaChip label="binding" value={props.node.volumeBinding!} title="Volume binding mode" />
@@ -561,7 +561,7 @@ export default function ResourceSummary(props: Props) {
             {(r) => {
               const broad = ruleHasWildcardVerb(r)
               return (
-                <code class="route-row" classList={{ 'route-priv': broad }} title={broad ? 'Wildcard verb — this rule grants every action on its resources' : undefined}>
+                <code class="route-row" classList={{ 'route-priv': broad }} title={broad ? 'This rule allows every action on its resources' : undefined}>
                   <Show when={broad}>
                     <span class="route-priv-tag">wildcard</span>
                   </Show>
@@ -695,7 +695,7 @@ export default function ResourceSummary(props: Props) {
                         <Show when={cs.lastTerminated}>
                           {/* Why it previously exited — surfaced inline next to the restart count so an
                               operator sees "OOMKilled" without digging into the manifest's lastState. */}
-                          <div class="container-last-terminated" title="Reason the container previously exited (its last restart)">
+                          <div class="container-last-terminated" title="Why the container last restarted">
                             last exit: {cs.lastTerminated}
                           </div>
                         </Show>
@@ -741,7 +741,7 @@ export default function ResourceSummary(props: Props) {
                 // .copied state confirms without a tooltip.
                 <button
                   class="label-chip"
-                  title={`Click to copy ${k}${v ? `=${v}` : ''}${v ? ' · Shift+click for value only' : ''}`}
+                  title={`Copy ${k}${v ? `=${v}` : ''}${v ? ' · Shift+click: value only' : ''}`}
                   onClick={async (e) => {
                     // Capture el BEFORE await — DOM nulls currentTarget after the synchronous
                     // handler returns. Same pattern as the drawer share button (cycle 275/281).

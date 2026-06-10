@@ -578,7 +578,7 @@ export default function App() {
         <button
           class="brand"
           type="button"
-          title="Reset view (group by relationship, ownership only, no filters)"
+          title="Reset to the default view"
           aria-label="Reset to default view"
           onClick={() => {
             setGroupBy('relationship')
@@ -639,8 +639,8 @@ export default function App() {
               aria-live="polite"
               title={
                 connState() === 'live'
-                  ? 'Live updates via SSE — graph reflects cluster state in real time'
-                  : 'Opening the SSE stream to the cluster'
+                  ? 'Live — the view updates as the cluster changes'
+                  : 'Connecting to the cluster'
               }
             >
               {connState() === 'live' ? 'live' : 'connecting…'}
@@ -651,7 +651,7 @@ export default function App() {
             class="conn conn-retry"
             type="button"
             aria-label="Reconnect to the cluster"
-            title="No connection to the server. Click to reconnect now."
+            title="Offline — click to reconnect"
             onClick={() => setReconnectTick((n) => n + 1)}
           >
             offline · retry
@@ -827,38 +827,37 @@ export default function App() {
                   <kbd>/</kbd> Filter namespaces · <kbd>↑</kbd> <kbd>↓</kbd> step through them (<kbd>Enter</kbd> opens the top match)
                 </li>
                 <li>
-                  <kbd>Alt</kbd>+<kbd>T</kbd> Step to the next troubled namespace (worst first; repeat to cycle through them)
+                  <kbd>Alt</kbd>+<kbd>T</kbd> Next troubled namespace (worst first)
                 </li>
                 <li>
                   <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
                   <div class="help-hint">
-                    Searches name, kind, status, host, IP, image, and labels. Type
-                    {' '}<code>Kind/name</code>{' '} (e.g. <code>po/web-abc</code>) for a structured lookup.
+                    Matches name, kind, status, IP, image, and labels. <code>po/web-abc</code> finds one kind.
                   </div>
                 </li>
                 <li>
                   <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
                 </li>
                 <li>
-                  <kbd>y</kbd> Copy the selected resource's <code>Kind/name</code> (yank, paste into <code>kubectl</code>)
+                  <kbd>y</kbd> Copy the selection as <code>Kind/name</code> for <code>kubectl</code>
                 </li>
                 <li>
                   <kbd>⌘</kbd><kbd>B</kbd> / <kbd>Ctrl</kbd><kbd>B</kbd> Toggle the namespace sidebar
                 </li>
                 <li>
-                  Click owner chip Walk up the ownership tree
+                  Click an owner chip to open the owner
                 </li>
                 <li>
-                  <kbd>Alt</kbd>+<kbd>←</kbd> Step back through the drawer's navigation history
+                  <kbd>Alt</kbd>+<kbd>←</kbd> Back to the previously viewed resource
                 </li>
                 <li>
                   <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)
                 </li>
                 <li>
-                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Filter the log lines · <kbd>Shift</kbd>+<kbd>E</kbd> Jump to the next error line
+                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Filter logs · <kbd>Shift</kbd>+<kbd>E</kbd> next error line
                 </li>
                 <li>
-                  <strong>[cluster]</strong> Pinned sidebar entry — cluster-scoped resources (Nodes, PVs, CRDs, cluster CRs)
+                  <strong>[cluster]</strong> Cluster-wide resources (Nodes, PVs, CRDs)
                 </li>
               </ul>
             </section>
@@ -880,8 +879,8 @@ export default function App() {
               <h4>Relationships</h4>
               <ul>
                 <li class="help-hint">
-                  Toggle which relationships are drawn — they compose, so several can be on at once.
-                  Click a relationship chip in the toolbar (<kbd>Shift</kbd>+click solos).
+                  Chips in the toolbar toggle each relationship; several can be on at once.
+                  <kbd>Shift</kbd>+click shows only one.
                 </li>
                 <For each={REL_CATEGORIES}>
                   {(c) => (
@@ -896,14 +895,14 @@ export default function App() {
               <h4>Actions</h4>
               <ul>
                 <li>
-                  <kbd>Esc</kbd> Help → field blur → drawer → clear all filters
+                  <kbd>Esc</kbd> Closes one layer per press: help, typing focus, drawer, then filters
                 </li>
                 <li>
                   <kbd>?</kbd> Toggle this help
                 </li>
-                <li>Click a legend health Spotlight only those resources</li>
-                <li>Click a kind chip Toggle that kind in the filter (multi-select) · <kbd>Shift</kbd>+click solos</li>
-                <li><kbd>f</kbd> · double-click canvas Fit the topology to view</li>
+                <li>Click a health pill to spotlight those resources</li>
+                <li>Click a kind chip to filter by it · <kbd>Shift</kbd>+click shows only it</li>
+                <li><kbd>f</kbd> or double-click the canvas to fit everything in view</li>
                 <li><kbd>=</kbd> <kbd>-</kbd> Zoom in / out · <kbd>0</kbd> Reset zoom to 100%</li>
               </ul>
             </section>
@@ -919,14 +918,14 @@ export default function App() {
                     <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="2" />
                     <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
                   </svg>
-                  Owns (ownerReference) — the controller→child backbone
+                  Owns — a controller and what it manages
                 </li>
                 <li>
                   <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
                     <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
                     <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
                   </svg>
-                  Non-ownership — {nonOwnershipEdgeLabels().join(' / ')}
+                  Other links — {nonOwnershipEdgeLabels().join(', ')}
                 </li>
               </ul>
             </section>
