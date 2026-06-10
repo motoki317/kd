@@ -80,6 +80,7 @@ func nodeEqual(a, b Node) bool {
 		a.ClusterIP == b.ClusterIP && // "" → IP once assigned must repaint
 		a.ExternalIP == b.ExternalIP && // a LoadBalancer's "pending" → assigned address must repaint
 		slices.Equal(a.Ports, b.Ports) && // a Service port edit must repaint
+		a.Selector == b.Selector && // a Service's pod-selector edit must repaint (the "why no endpoints" chip)
 		a.NodeSelector == b.NodeSelector && // a DaemonSet's node-selector edit must repaint
 		slices.Equal(a.Routes, b.Routes) && // an Ingress rule edit must repaint
 		slices.Equal(a.NetPol, b.NetPol) && // a NetworkPolicy rule edit must repaint
