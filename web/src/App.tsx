@@ -10,7 +10,7 @@ import { faviconDataUrl, worstHealth } from './favicon'
 import { matchSel, navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
 import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
 import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
-import { REL_CATEGORIES } from './relationships'
+import { parseRels, REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
 import { readPref, readRawPref, writePref } from './prefs'
 import { toggleInSet } from './filterToggle'
@@ -28,16 +28,7 @@ import { isNarrowScreen, NARROW_SCREEN_QUERY } from './screen'
 // Topology toolbar (GROUP_OPTIONS is shared from there); App keeps the signal, the URL/localStorage
 // persistence, the number-key shortcuts (1..3), and the help overlay listing.
 const GROUP_IDS = GROUP_OPTIONS.map((g) => g.id)
-const REL_IDS = new Set(REL_CATEGORIES.map((c) => c.id))
 const DEFAULT_RELS = (): Set<RelCategory> => new Set<RelCategory>(['ownership'])
-
-// Parse a comma-separated relationship list (URL or localStorage). Returns null when the source is
-// absent (so the next source / the default applies); an explicit empty string round-trips to the
-// empty set, letting "all relationships off" persist rather than snapping back to the default.
-function parseRels(raw: string | null): Set<RelCategory> | null {
-  if (raw === null) return null
-  return new Set(raw.split(',').filter((x): x is RelCategory => REL_IDS.has(x as RelCategory)))
-}
 
 export default function App() {
   // The contexts list drives the topbar switcher (FR-005) and the default context the URL falls back

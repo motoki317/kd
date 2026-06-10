@@ -35,6 +35,26 @@ export const REL_CATEGORIES: RelCategoryDef[] = [
 
 const BY_ID = new Map(REL_CATEGORIES.map((c) => [c.id, c]))
 
+const REL_IDS = new Set<string>(REL_CATEGORIES.map((c) => c.id))
+// The `scheduling` id survives its "Disruption" relabel for URL/localStorage stability — but anyone
+// hand-editing a shared URL guesses from the VISIBLE label, and an unknown id is silently dropped
+// (the PDBs then read as plain orphans, with nothing saying why). Accept the label as an alias on
+// the read side; the app keeps writing the stable id.
+const REL_ALIASES: Record<string, RelCategory> = { disruption: 'scheduling' }
+
+// Parse a comma-separated relationship list (URL or localStorage). Returns null when the source is
+// absent (so the next source / the default applies); an explicit empty string round-trips to the
+// empty set, letting "all relationships off" persist rather than snapping back to the default.
+export function parseRels(raw: string | null): Set<RelCategory> | null {
+  if (raw === null) return null
+  return new Set(
+    raw
+      .split(',')
+      .map((x) => REL_ALIASES[x.toLowerCase()] ?? x.toLowerCase())
+      .filter((x): x is RelCategory => REL_IDS.has(x)),
+  )
+}
+
 // Edges rendered with from/to swapped before layout, so the referenced provider reads as the
 // parent (leftmost column) — matching the owner→owned direction of the rest of the tree. `refers`
 // is stored referrer→referenced (Workflow→WorkflowTemplate) but the template is the conceptual

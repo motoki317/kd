@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeEdgeTypes, projectEdges, relCategoriesPresent, REL_CATEGORIES } from './relationships'
+import { activeEdgeTypes, parseRels, projectEdges, relCategoriesPresent, REL_CATEGORIES } from './relationships'
 import type { KEdge, RelCategory } from './types'
 
 const e = (from: string, to: string, type: KEdge['type']): KEdge => ({ from, to, type })
@@ -67,5 +67,21 @@ describe('relCategoriesPresent', () => {
   })
   it('is empty for an edgeless graph', () => {
     expect(relCategoriesPresent([]).size).toBe(0)
+  })
+})
+
+describe('parseRels', () => {
+  it('parses known ids, dropping unknown ones', () => {
+    expect(parseRels('ownership,network,bogus')).toEqual(new Set(['ownership', 'network']))
+  })
+  it('distinguishes "absent" (null → fall through) from "explicitly empty" (empty set persists)', () => {
+    expect(parseRels(null)).toBeNull()
+    expect(parseRels('')).toEqual(new Set())
+  })
+  it('accepts the visible "Disruption" label as an alias for the stable scheduling id', () => {
+    // The category kept its pre-relabel id for URL/localStorage stability, but a hand-edited URL
+    // guesses from the label the UI shows — that guess must land, not silently orphan the PDBs.
+    expect(parseRels('ownership,disruption')).toEqual(new Set(['ownership', 'scheduling']))
+    expect(parseRels('Disruption')).toEqual(new Set(['scheduling'])) // case-insensitive for hand edits
   })
 })
