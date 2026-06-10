@@ -34,6 +34,27 @@ describe('Topology', () => {
     expect(faded(container)).toBe(0)
   })
 
+  it('pinch: two touch pointers scale the canvas by their distance ratio, then hand off to pan', () => {
+    // Phones never send wheel events, so the two-finger pinch is the ONLY touch zoom path. The
+    // contract: spreading the fingers to 2x their distance doubles the scale (anchored at their
+    // midpoint), and lifting one finger ends the zoom — the survivor pans without a scale jump.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    const s0 = num(world(), /scale\(([-\d.]+)\)/)
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerDown(svg, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    fireEvent.pointerMove(svg, { pointerId: 2, clientX: 300, clientY: 100 })
+    expect(num(world(), /scale\(([-\d.]+)\)/)).toBeCloseTo(s0 * 2, 5)
+    // One finger lifts: the leftover finger pans from ITS position — translate moves, scale holds.
+    fireEvent.pointerUp(svg, { pointerId: 2, pointerType: 'touch' })
+    const txAfterPinch = num(world(), /translate\(([-\d.]+)/)
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 120, clientY: 100 })
+    expect(num(world(), /scale\(([-\d.]+)\)/)).toBeCloseTo(s0 * 2, 5)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeCloseTo(txAfterPinch + 20, 5)
+  })
+
   it('empty-state distinguishes connecting (spinner) from offline (static, points at retry)', () => {
     // Connecting: an empty graph with connected=false and not offline → spinner + "Connecting…".
     const connecting = render(() => <Topology nodes={[]} edges={[]} search="" {...base} connected={false} />)

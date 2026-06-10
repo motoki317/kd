@@ -738,6 +738,13 @@ export default function Topology(props: Props) {
   let vx = 0
   let vy = 0
   let lastMoveT = 0
+  // Two-finger pinch zoom (touch). Phones send no wheel events, so without this the graph simply
+  // could not be zoomed on a touch screen (the only zoom paths were wheel/trackpad and keyboard).
+  // Tracks live touch points by pointerId; at exactly two the gesture switches from pan to zoom.
+  // touch-action: none on the svg (index.css) keeps the browser from stealing these as native
+  // scroll/zoom and cancelling the pointer stream.
+  const pinchPts = new Map<number, { x: number; y: number }>()
+  let pinchDist = 0
 
   // Smoothly animate viewport (tx/ty/scale) to a target over ~360ms with easeOutCubic.
   // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
@@ -1051,6 +1058,22 @@ export default function Topology(props: Props) {
   // Pan only after the pointer moves past a small threshold, so a plain click still reaches a
   // node's onClick (capturing the pointer on press would redirect the click to the SVG).
   function onPointerDown(e: PointerEvent) {
+    if (e.pointerType === 'touch') {
+      pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (pinchPts.size >= 2) {
+        // Second finger landed: the gesture is now a zoom, not a pan — and not a click either,
+        // so the pan machinery stands down entirely. A third+ finger is tracked but ignored —
+        // the zoom keeps following the first two so it can't hijack an in-flight pinch.
+        if (pinchPts.size === 2) {
+          const [a, b] = [...pinchPts.values()]
+          pinchDist = Math.hypot(b.x - a.x, b.y - a.y)
+        }
+        pointerDown = false
+        dragging = false
+        cancelAnimationFrame(animFrame)
+        return
+      }
+    }
     pointerDown = true
     dragging = false
     startX = lastX = e.clientX
@@ -1060,6 +1083,24 @@ export default function Topology(props: Props) {
     cancelAnimationFrame(animFrame) // grabbing the canvas stops any in-flight coast
   }
   function onPointerMove(e: PointerEvent) {
+    if (pinchPts.has(e.pointerId)) pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinchPts.size >= 2) {
+      const [a, b] = [...pinchPts.values()]
+      const dist = Math.hypot(b.x - a.x, b.y - a.y)
+      if (pinchDist > 0 && dist > 0) {
+        // Zoom toward the fingers' midpoint, keeping the graph point between them fixed — the
+        // same anchored-zoom math as the wheel path, factored by the finger-distance ratio.
+        const rect = svg!.getBoundingClientRect()
+        const mx = (a.x + b.x) / 2 - rect.left
+        const my = (a.y + b.y) / 2 - rect.top
+        const s = Math.min(Math.max(scale() * (dist / pinchDist), 0.15), 3)
+        setTx(mx - ((mx - tx()) / scale()) * s)
+        setTy(my - ((my - ty()) / scale()) * s)
+        setScale(s)
+      }
+      pinchDist = dist
+      return
+    }
     if (!pointerDown) return
     if (!dragging && Math.hypot(e.clientX - startX, e.clientY - startY) > 4) {
       dragging = true
@@ -1109,6 +1150,22 @@ export default function Topology(props: Props) {
     animFrame = requestAnimationFrame(tick)
   }
   function onPointerUp(e: PointerEvent) {
+    if (pinchPts.delete(e.pointerId) && pinchDist > 0) {
+      // A pinch finger lifted. If one finger remains, hand it back to the pan path re-anchored at
+      // its CURRENT position — without this the leftover finger's first move yanked the canvas by
+      // the distance between the two fingers. No momentum: a pinch is not a flick.
+      pinchDist = 0
+      const rest = [...pinchPts.values()][0]
+      if (rest) {
+        pointerDown = true
+        dragging = true
+        startX = lastX = rest.x
+        startY = lastY = rest.y
+        vx = vy = 0
+        lastMoveT = performance.now()
+      }
+      return
+    }
     const wasDragging = dragging
     pointerDown = false
     dragging = false
@@ -1750,6 +1807,7 @@ export default function Topology(props: Props) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onDblClick={onBackgroundDblClick}
       >
         <defs>
