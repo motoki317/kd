@@ -33,6 +33,18 @@ emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflo
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b24 (operator-flow dogfooding D31–D40)** — ten more walks: previous-crash logs not
+  reproducible today (no restarted pod on either cluster; b16's induced crashloop covered it)
+  (D31); timestamps prefix + wrap class toggles (D32); Alt+click line copy silent no-op on
+  non-secure origin, no crash (D33); error-jump button + Shift+E correctly conditional — a probe
+  matched the toolbar's ERR chip, not a line badge; zero error lines ⇒ hidden button is right
+  (D34); `po/api` kind-scoped search lights only matching Pods (D35); share button no-op clean
+  (D36); drag-pan tracks the pointer exactly once the probe hits the real canvas SVG (D39); kinds
+  row at cluster scope: 26 chips, one line, `.scroll-r` edge fade (D40). Bonus: the sticky
+  network-only lens made cluster scope render empty — and the canvas explained itself ("666
+  unconnected resources are hidden" + one-click show); the fold pills (D15's gap) verified there:
+  "+ show 68 more" APIServices expands 65→133 with a symmetric "− show 68 fewer" to collapse.
+
 - **2026-06-10 b23 (operator-flow dogfooding D21–D30)** — ten more live walks: namespace
   slash-filter → ↑↓ → Enter landing (D21); kind×health filter composition (D22); manifest find
   flow (D23 — caught and SHIPPED: ⌘F on the Manifest tab fell through to browser find while the
