@@ -1,7 +1,7 @@
 import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, describe, expect, it } from 'vitest'
 import ResourceSummary from './ResourceSummary'
-import { isFloatingImageTag, parseImageRef } from './ResourceSummary'
+import { isFloatingImageTag, parseImageRef } from './ImageRef'
 import type { KNode } from '../types'
 
 afterEach(cleanup)
