@@ -94,10 +94,12 @@ describe('ResourceSummary container status dots', () => {
     expect(cpuSegs[1].getAttribute('title')).toBe('sidecar · 50m')
     expect((cpuSegs[0] as HTMLElement).style.flexGrow).toBe('250')
     expect((cpuSegs[1] as HTMLElement).style.flexGrow).toBe('50')
-    // Both cards carry swatches in distinct colours (the join to the segments above).
-    const swatches = [...container.querySelectorAll('.container-swatch')] as HTMLElement[]
+    // Both cards carry swatches in distinct colours (the join to the segments above); the cards ARE
+    // the legend, so the pod gauge renders no separate legend row.
+    const swatches = [...container.querySelectorAll('.container-card .container-swatch')] as HTMLElement[]
     expect(swatches.length).toBe(2)
     expect(swatches[0].style.background).not.toBe(swatches[1].style.background)
+    expect(container.querySelector('.metric-legend')).toBeNull()
     // Cards show declared bounds only, each number explicitly labelled req/lim (a bare "x / y"
     // reads like the gauges' usage pairs — user feedback); undeclared sides are simply omitted.
     const rows = container.querySelectorAll('.container-usage')
@@ -261,6 +263,9 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(segs[0].getAttribute('title')).toBe('app · 200m')
     expect(segs[1].getAttribute('title')).toBe('sidecar · 50m')
     expect(segs[2].getAttribute('title')).toBe('not yet attributed · 50m')
+    // No container cards follow a workload gauge, so a legend names the colours (not hover-only).
+    const legend = [...container.querySelectorAll('.metric-legend-item')]
+    expect(legend.map((l) => l.textContent)).toEqual(['app', 'sidecar', 'not yet attributed'])
   })
   it('caption notes partial metering when some replicas have no reading yet', () => {
     const dep: KNode = { id: 'd2', kind: 'StatefulSet', name: 'db', health: 'Healthy' }

@@ -2558,6 +2558,19 @@ button.conn.conn-retry:focus-visible {
   height: 9px;
   border-radius: 2px;
 }
+/* Workload-gauge legend: names each segment colour where no container cards follow to do it. */
+.metric-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.metric-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 /* The per-container OOM alarm: amber like .container-last-terminated (a caution, not a current
    failure), indented to the card's detail column. Appears only when live memory crosses 90% of the
    container's own limit, so a calm card stays calm. */

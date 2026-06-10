@@ -118,7 +118,7 @@ function workloadSegments(u: ResourceUsage): UsageSegment[] {
 // colours; the stack's total width is identical to the plain fill, since the breakdown sums to the
 // pod total by construction (joinUsage).
 const pct = (f: number) => `${Math.min(100, f * 100)}%`
-function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segments?: UsageSegment[] }) {
+function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segments?: UsageSegment[]; legend?: boolean }) {
   const segsFor = (res: 'cpu' | 'memory') =>
     (props.segments ?? [])
       .map((s) => ({ name: s.name, color: s.color, value: res === 'cpu' ? s.cpuMilli : s.memBytes }))
@@ -193,6 +193,21 @@ function UsageGauges(props: { groups: ResGroupModel[]; caption?: string; segment
             </div>
           )}
         </For>
+        {/* Legend naming each segment colour — for gauges with no container cards below (the
+            workload rollup), where the colours would otherwise be hover-only (explicit over
+            implicit). The pod gauge skips it: its cards carry the swatches. */}
+        <Show when={props.legend && (props.segments?.length ?? 0) > 1}>
+          <div class="metric-legend">
+            <For each={props.segments}>
+              {(s) => (
+                <span class="metric-legend-item">
+                  <span class="container-swatch" style={{ background: s.color }} />
+                  {s.name}
+                </span>
+              )}
+            </For>
+          </div>
+        </Show>
         {/* For a rolled-up workload gauge: name what the bars sum so the operator doesn't read a
             Deployment's "3 cores" as one pod's (explicit over implicit). */}
         <Show when={props.caption}>
@@ -354,6 +369,7 @@ export default function ResourceSummary(props: Props) {
               limit: wu().limits,
             })}
             segments={workloadSegments(wu().usage)}
+            legend
             caption={
               wu().meteredPods < wu().podCount
                 ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`
