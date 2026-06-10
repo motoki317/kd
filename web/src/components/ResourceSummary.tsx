@@ -9,10 +9,10 @@ import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { Health, KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
-import ContainerCards, { paletteColor } from './ContainerCards'
+import ContainerCards from './ContainerCards'
 import CopyButton from './CopyButton'
 import ImageRef from './ImageRef'
-import UsageGauges, { type UsageSegment } from './UsageGauges'
+import UsageGauges, { paletteColor, type UsageSegment } from './UsageGauges'
 
 // endpointHealth colors a Service's endpoint readout like everything else: no backends at all is a
 // Degraded misconfiguration (selector matches nothing), some-but-not-all ready is Progressing (a

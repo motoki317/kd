@@ -2,13 +2,24 @@ import { For, Show, type JSX } from 'solid-js'
 import { formatPair, formatQuantity } from '../capacityLayout'
 import type { ResGroupModel } from '../resourceBars'
 
-// UsageSegment is one container's share of a usage fill — the workload rollup stacks one coloured
-// segment per container so "which container is using it" reads visually fleet-wide.
+// UsageSegment is one named share of a usage fill — the workload rollup stacks one coloured segment
+// per pod (or per container name) so "who is using it" reads visually fleet-wide.
 export interface UsageSegment {
   name: string
   color: string
   cpuMilli: number
   memBytes: number
+}
+
+// SEGMENT_PALETTE colours the stacked segments (the rollup has no cards, so position-keyed colours +
+// a legend stand in). First slot is the accent so a stack's lead segment matches the single-fill
+// colour; the rest are mid-tone hues picked to stay clear of the health vocabulary (no
+// green/red/amber — a segment colour must never read as a status) and legible on both themes.
+const SEGMENT_PALETTE = ['var(--accent)', '#9a6cf0', '#18a999', '#d6609a', '#7a8699', '#2aa3c8']
+
+// paletteColor cycles the palette — segment builders key it by position.
+export function paletteColor(i: number): string {
+  return SEGMENT_PALETTE[i % SEGMENT_PALETTE.length]
 }
 
 // UsageGauges renders the CPU + memory resource bars: per resource, one bar per bound (a container's

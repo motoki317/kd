@@ -46,18 +46,6 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
   ]
 }
 
-// CONTAINER_PALETTE colours the workload gauge's per-container segments (the rollup has no cards, so
-// position-keyed colours + a legend stand in). First slot is the accent so a stack's lead segment
-// matches the single-fill colour; the rest are mid-tone hues picked to stay clear of the health
-// vocabulary (no green/red/amber — a segment colour must never read as a status) and legible on both
-// themes.
-const CONTAINER_PALETTE = ['var(--accent)', '#9a6cf0', '#18a999', '#d6609a', '#7a8699', '#2aa3c8']
-
-// paletteColor cycles the palette — used by the workload gauge's fleet-summed segments.
-export function paletteColor(i: number): string {
-  return CONTAINER_PALETTE[i % CONTAINER_PALETTE.length]
-}
-
 // num turns the wire's omitempty zero into "undeclared" for the gauge model — a 0 request/limit is
 // the unset default, not a meaningful bound.
 const num = (v?: number) => (v ? v : undefined)
