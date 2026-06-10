@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library'
+import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { afterEach, describe, expect, it } from 'vitest'
 import ResourceSummary from './ResourceSummary'
 import { isFloatingImageTag, parseImageRef } from './ImageRef'
@@ -60,11 +60,10 @@ describe('ResourceSummary container status dots', () => {
     expect(cards[1].classList.contains('h-degraded')).toBe(true) // failed exit stays red, not gray
   })
   // "Which container is hitting ITS bound" must read directly: each container card carries its OWN
-  // gauge — live usage against that container's req/lim — instead of one pod-summed gauge that hides
-  // which container is near the ceiling (user-directed). The bounds live in the bars, so the cards
-  // need no bounds text row; with no shared pod gauge there is nothing for stacked segments or
-  // swatches to key.
-  it('gauges each container card against its own req/lim instead of one pod-summed gauge', () => {
+  // gauge — live usage against that container's req/lim. The pod-level SUMMED gauge renders above
+  // the cards too (the whole pod at a glance — user-requested back), as a plain fill: per-container
+  // attribution lives on the cards, so the top gauge needs no stacked segments or swatch keys.
+  it('gauges each container card against its own req/lim, with a plain summed gauge up top', () => {
     const mi = 1024 * 1024
     const { container } = render(() => (
       <ResourceSummary
@@ -86,13 +85,17 @@ describe('ResourceSummary container status dots', () => {
         }}
       />
     ))
-    // Every gauge lives inside a card — the pod-level summed gauge (and the per-container stack +
-    // swatch legend it needed) is gone.
+    // One summed gauge above the cards + one gauge per card. The top gauge keeps the plain fill —
+    // no stack, no swatches — because the cards below carry the per-container story.
     const gauges = [...container.querySelectorAll('.pod-metrics')]
-    expect(gauges.length).toBe(2)
-    expect(gauges.every((g) => g.closest('.container-card') !== null)).toBe(true)
+    expect(gauges.length).toBe(3)
+    expect(gauges.filter((g) => g.closest('.container-card') === null).length).toBe(1)
     expect(container.querySelector('.metric-fill-stack')).toBeNull()
     expect(container.querySelector('.container-swatch')).toBeNull()
+    // The top gauge sums the pod: 300m of the pod's 500m limit.
+    const top = gauges.find((g) => g.closest('.container-card') === null)!
+    expect(top.querySelector('.metric-val b')?.textContent).toBe('300m')
+    expect(top.textContent).toContain('/ 500m')
     // app: CPU 250m gauged against ITS Lim 500m and Req 100m (over → hatched), Mem 240Mi vs 256Mi.
     const appRows = container.querySelectorAll('.container-card')[0].querySelectorAll('.metric-row')
     expect([...appRows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Lim', 'Req', 'Lim'])
@@ -276,13 +279,19 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(withUsage.container.querySelector('.pod-metrics')).toBeNull()
   })
   it('renders a workload rollup with Lim/Req bars and a "summed across N pods" caption', () => {
+    const mi = 1024 * 1024
     const dep: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const workloadUsage = {
-      usage: { cpuMilli: 240, memBytes: 600 * 1024 * 1024 },
-      requests: { cpuMilli: 200, memBytes: 512 * 1024 * 1024 },
-      limits: { cpuMilli: 1000, memBytes: 1024 * 1024 * 1024 },
+      usage: { cpuMilli: 240, memBytes: 600 * mi },
+      requests: { cpuMilli: 200, memBytes: 512 * mi },
+      limits: { cpuMilli: 1000, memBytes: 1024 * mi },
       podCount: 3,
       meteredPods: 3,
+      pods: [
+        { name: 'web-6d9f-aa', cpuMilli: 80, memBytes: 200 * mi },
+        { name: 'web-6d9f-bb', cpuMilli: 80, memBytes: 200 * mi },
+        { name: 'web-6d9f-cc', cpuMilli: 80, memBytes: 200 * mi },
+      ],
     }
     const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
     const rows = container.querySelectorAll('.pod-metrics .metric-row')
@@ -293,11 +302,51 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows[1].textContent).toContain('/ 0.2') // summed request as the Req ceiling
     expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 3 pods')
   })
-  // The workload gauge speaks the pod gauge's segment vocabulary: the fleet-summed breakdown stacks
-  // one colour per container name. A breakdown that undercounts the total (a mid-rollout pod counted
-  // in the sum but reporting no per-container split) must NOT stretch to fill the bar — the shortfall
-  // becomes an explicit dim "not yet attributed" segment.
-  it('stacks the workload fill per container, with an explicit segment for unattributed usage', () => {
+  // The workload gauge's fill splits one share per POD by default — replicas should pull even
+  // weight, so an uneven segment IS the finding — named like the topology names them ("…-suffix").
+  // A toggle regroups the same fill per container NAME fleet-wide, and the choice persists.
+  it('splits the workload fill by pod by default, with a persisted toggle to per-container', () => {
+    localStorage.removeItem('kd:workloadGaugeBy')
+    const mi = 1024 * 1024
+    const dep: KNode = { id: 'd3', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const workloadUsage = {
+      usage: {
+        cpuMilli: 300,
+        memBytes: 600 * mi,
+        containers: [
+          { name: 'app', cpuMilli: 250, memBytes: 500 * mi },
+          { name: 'sidecar', cpuMilli: 50, memBytes: 100 * mi },
+        ],
+      },
+      limits: { cpuMilli: 1000, memBytes: 1024 * mi },
+      podCount: 2,
+      meteredPods: 2,
+      pods: [
+        { name: 'web-6d9f-aaaaa', cpuMilli: 100, memBytes: 200 * mi },
+        { name: 'web-6d9f-bbbbb', cpuMilli: 200, memBytes: 400 * mi },
+      ],
+    }
+    const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
+    const segs = () => [...container.querySelectorAll('.metric-fill-stack')][0].querySelectorAll('.metric-seg')
+    expect([...segs()].map((s) => s.getAttribute('title'))).toEqual(['…-aaaaa · 100m', '…-bbbbb · 200m'])
+    // The screen-reader label names the split it describes — these segments are pods, not containers.
+    expect(container.querySelector('.metric-fill-stack')?.getAttribute('aria-label')).toBe('per pod: …-aaaaa 100m, …-bbbbb 200m')
+    // No container cards follow a workload gauge, so a legend names the colours (not hover-only).
+    expect([...container.querySelectorAll('.metric-legend-item')].map((l) => l.textContent)).toEqual(['…-aaaaa', '…-bbbbb'])
+    // Regroup per container: same fill, different split — and the habit sticks across drawers.
+    const btn = [...container.querySelectorAll('.gauge-group-btn')].find((b) => b.textContent === 'by container')!
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(btn)
+    expect([...segs()].map((s) => s.getAttribute('title'))).toEqual(['app · 250m', 'sidecar · 50m'])
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+    expect(localStorage.getItem('kd:workloadGaugeBy')).toBe('container')
+    localStorage.removeItem('kd:workloadGaugeBy')
+  })
+  // A breakdown that undercounts the total (a mid-rollout pod counted in the sum but reporting no
+  // per-container split) must NOT stretch to fill the bar — the shortfall becomes an explicit dim
+  // "not yet attributed" segment.
+  it('stacks the per-container split with an explicit segment for unattributed usage', () => {
+    localStorage.setItem('kd:workloadGaugeBy', 'container')
     const dep: KNode = { id: 'd3', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const workloadUsage = {
       // totals include a third, breakdown-less pod: 300m total vs 250m attributed
@@ -312,6 +361,11 @@ describe('ResourceSummary pod usage gauges', () => {
       limits: { cpuMilli: 1000, memBytes: 1024 * 1024 * 1024 },
       podCount: 3,
       meteredPods: 3,
+      pods: [
+        { name: 'web-6d9f-aa', cpuMilli: 100, memBytes: 200 * 1024 * 1024 },
+        { name: 'web-6d9f-bb', cpuMilli: 100, memBytes: 200 * 1024 * 1024 },
+        { name: 'web-6d9f-cc', cpuMilli: 100, memBytes: 200 * 1024 * 1024 },
+      ],
     }
     const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
     const segs = [...container.querySelectorAll('.metric-fill-stack')][0].querySelectorAll('.metric-seg')
@@ -319,9 +373,9 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(segs[0].getAttribute('title')).toBe('app · 200m')
     expect(segs[1].getAttribute('title')).toBe('sidecar · 50m')
     expect(segs[2].getAttribute('title')).toBe('not yet attributed · 50m')
-    // No container cards follow a workload gauge, so a legend names the colours (not hover-only).
     const legend = [...container.querySelectorAll('.metric-legend-item')]
     expect(legend.map((l) => l.textContent)).toEqual(['app', 'sidecar', 'not yet attributed'])
+    localStorage.removeItem('kd:workloadGaugeBy')
   })
   it('caption notes partial metering when some replicas have no reading yet', () => {
     const dep: KNode = { id: 'd2', kind: 'StatefulSet', name: 'db', health: 'Healthy' }
@@ -330,6 +384,10 @@ describe('ResourceSummary pod usage gauges', () => {
       requests: { cpuMilli: 100 },
       podCount: 3,
       meteredPods: 2,
+      pods: [
+        { name: 'db-0', cpuMilli: 50, memBytes: 100 * 1024 * 1024 },
+        { name: 'db-1', cpuMilli: 50, memBytes: 100 * 1024 * 1024 },
+      ],
     }
     const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
     expect(container.querySelector('.metric-caption')?.textContent).toBe('summed across 2 of 3 pods')

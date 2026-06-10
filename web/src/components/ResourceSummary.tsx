@@ -1,7 +1,8 @@
-import { createMemo, For, Show } from 'solid-js'
+import { createMemo, createSignal, For, Show } from 'solid-js'
 import { healthColor, healthHint, healthTextColor } from '../health'
 import { kindFromRef, kindIcon } from '../icons'
 import { shortNodeName } from '../names'
+import { readRawPref, writePref } from '../prefs'
 import { ruleHasWildcardVerb } from '../rbac'
 import { drawerResourceBars } from '../resourceBars'
 import { relativeAge } from '../time'
@@ -76,12 +77,30 @@ interface Props {
   hostCapacity?: Resources
 }
 
-// workloadSegments builds the rolled-up gauge's stack from the fleet-summed breakdown (same visual
-// language as the pod gauge — one colour per container name). A workload's breakdown can undercount
-// its total mid-rollout (a pod reporting only one of its containers carries no breakdown but still
-// counts in the sum), so any shortfall past 2% becomes an explicit dim "not yet attributed" segment —
-// the stack must never stretch partial shares to fill the whole width.
-function workloadSegments(u: ResourceUsage): UsageSegment[] {
+// podShareName shortens a replica's name to its unique trailing segment ("…-7j2ql"), the same
+// relative display the topology gives controller-generated children — the legend and the canvas then
+// agree on what a pod is called. A pod not named under the workload keeps its full name.
+function podShareName(pod: string, workload: string): string {
+  return pod.startsWith(workload + '-') ? '…-' + pod.slice(pod.lastIndexOf('-') + 1) : pod
+}
+
+// workloadSegments builds the rolled-up gauge's stack: one share per POD (the default — replicas
+// should pull even weight, so an outlier segment IS the finding) or per container NAME summed
+// fleet-wide (is the sidecar overhead material?). The pod split sums exactly to the total by
+// construction (unmetered pods are excluded from both sides). The container split can undercount its
+// total mid-rollout (a pod reporting no per-container breakdown still counts in the sum), so any
+// shortfall past 2% becomes an explicit dim "not yet attributed" segment — the stack must never
+// stretch partial shares to fill the whole width.
+function workloadSegments(wu: WorkloadUsage, by: 'pod' | 'container', workload: string): UsageSegment[] {
+  if (by === 'pod') {
+    return wu.pods.map((p, i) => ({
+      name: podShareName(p.name, workload),
+      color: paletteColor(i),
+      cpuMilli: p.cpuMilli ?? 0,
+      memBytes: p.memBytes ?? 0,
+    }))
+  }
+  const u = wu.usage
   const breakdown = u.containers
   if (!breakdown || breakdown.length < 2) return []
   const segs = breakdown.map((c, i) => ({
@@ -198,12 +217,13 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">{props.node.capacity}</span>
         </Show>
       </div>
-      {/* CPU/memory resource bars — live usage gauged against each bound (a Node's Cap + Alloc),
-          each bar's length sized to its ceiling and the fill extending past it (hatched) on a burst.
-          A Pod WITH container cards gets its bars per container ON the cards instead (the per-pod
-          sum can't say which container is hitting ITS limit — user-directed); this pod-level gauge
-          remains only for the cardless case (a Pending pod has spec bounds but no statuses yet). */}
-      <Show when={props.node.kind === 'Node' || (props.node.kind === 'Pod' && (props.node.containerStatuses?.length ?? 0) === 0)}>
+      {/* CPU/memory resource bars — live usage gauged against each bound (a Node's Cap + Alloc, a
+          Pod's summed Req + Lim), each bar's length sized to its ceiling and the fill extending past
+          it (hatched) on a burst. A Pod shows BOTH this summed gauge (the whole pod at a glance —
+          user-requested back after a per-card-only round) and per-container bars on each card below
+          (which container is near ITS bound); the plain fill here keeps the total readable without
+          re-keying card colours. */}
+      <Show when={props.node.kind === 'Node' || props.node.kind === 'Pod'}>
         <UsageGauges
           groups={drawerResourceBars({
             isNode: props.node.kind === 'Node',
@@ -220,23 +240,50 @@ export default function ResourceSummary(props: Props) {
           the "how much is this Deployment actually using vs reserving?" answer no single pod can give.
           Rendered like a Pod gauge (same request/limit semantics) with a caption naming the rollup. */}
       <Show when={props.workloadUsage}>
-        {(wu) => (
-          <UsageGauges
-            groups={drawerResourceBars({
-              isNode: false,
-              usage: wu().usage,
-              request: wu().requests,
-              limit: wu().limits,
-            })}
-            segments={workloadSegments(wu().usage)}
-            legend
-            caption={
-              wu().meteredPods < wu().podCount
-                ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`
-                : `summed across ${wu().podCount} ${wu().podCount === 1 ? 'pod' : 'pods'}`
-            }
-          />
-        )}
+        {(wu) => {
+          // Which way the fill splits: per replica (default — an uneven pod is the finding) or per
+          // container name fleet-wide. A display habit, so it persists like the other kd:* prefs.
+          const [gaugeBy, setGaugeBy] = createSignal<'pod' | 'container'>(
+            readRawPref('kd:workloadGaugeBy') === 'container' ? 'container' : 'pod',
+          )
+          const setBy = (v: 'pod' | 'container') => {
+            setGaugeBy(v)
+            writePref('kd:workloadGaugeBy', v)
+          }
+          const groupBtn = (v: 'pod' | 'container', label: string, title: string) => (
+            <button class="gauge-group-btn" classList={{ active: gaugeBy() === v }} aria-pressed={gaugeBy() === v} onClick={() => setBy(v)} title={title}>
+              {label}
+            </button>
+          )
+          return (
+            <UsageGauges
+              groups={drawerResourceBars({
+                isNode: false,
+                usage: wu().usage,
+                request: wu().requests,
+                limit: wu().limits,
+              })}
+              segments={workloadSegments(wu(), gaugeBy(), props.node.name)}
+              segmentsLabel={`per ${gaugeBy()}`}
+              legend
+              caption={
+                wu().meteredPods < wu().podCount
+                  ? `summed across ${wu().meteredPods} of ${wu().podCount} pods`
+                  : `summed across ${wu().podCount} ${wu().podCount === 1 ? 'pod' : 'pods'}`
+              }
+              controls={
+                // Only when there is a split to regroup — a 1-pod, 1-container rollup has one share
+                // either way, and a dead toggle would just invite a no-op click.
+                <Show when={wu().pods.length > 1 || (wu().usage.containers?.length ?? 0) > 1}>
+                  <div class="gauge-groupby" role="group" aria-label="Split the usage fill by">
+                    {groupBtn('pod', 'by pod', 'One colour per replica — an uneven pod stands out')}
+                    {groupBtn('container', 'by container', 'One colour per container name, summed across replicas — sidecar overhead stands out')}
+                  </div>
+                </Show>
+              }
+            />
+          )
+        }}
       </Show>
       {/* A Service's reachable address and port mappings — the network view's core question
           ("what routes here, on which port?"), otherwise buried in the manifest. The address

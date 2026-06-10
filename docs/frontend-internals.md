@@ -197,23 +197,26 @@ edges.
 
 ## Drawer resource gauges (`resourceBars.ts` + `UsageGauges`)
 
-Per resource (CPU/Mem), one bar per bound — a container's Lim+Req, a Node's Cap+Alloc, a workload's
-summed Lim+Req — all on ONE shared linear scale (`scaleBars`): the fill is live usage (identical
+Per resource (CPU/Mem), one bar per bound — a container's Lim+Req, a Node's Cap+Alloc, a Pod's or
+workload's summed Lim+Req — all on ONE shared linear scale (`scaleBars`): the fill is live usage (identical
 length on every bar in the group), each bar's TRACK length encodes its bound, and usage past a bound
 extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key invariants:
 
-- **A pod's gauges live on its container cards.** Each container card carries its OWN bars — that
-  container's usage against ITS req/lim — because a pod-summed gauge can't say which container is
-  near the ceiling (user-directed). A pod renders a top-level gauge only when it has no cards
-  (no `containerStatuses` yet, e.g. Pending); finished containers get no bars; a container with a
-  reading but no bounds gets the dashed "ungauged" track. Memory ≥90% of the container's OWN limit
-  additionally alarms in words on the card (imminent OOM).
-- **Per-container stacks are workload-only.** The rollup gauge's fill is a stack of per-container
-  segments (`UsageSegment`), widths proportional to each share, colours from `CONTAINER_PALETTE`
-  (`ContainerCards.tsx` — leads with the accent so a stack's first segment matches the single-fill
-  colour; deliberately no green/red/amber, a segment colour must never read as a status). The stack's
-  total width equals the plain fill: it changes WHO, never HOW MUCH. No cards follow the rollup, so
-  a `metric-legend` row names the colours.
+- **A pod shows the summed gauge AND per-card bars.** The top gauge is the pod total against its
+  summed req/lim, as a plain fill (user-requested); each container card below carries its OWN bars —
+  that container's usage against ITS req/lim — because the summed gauge can't say which container is
+  near the ceiling. Finished containers get no bars; a container with a reading but no bounds gauges
+  against the host node's capacity (the "Node" bar) or, when that's unknown too, a dashed "ungauged"
+  track. Memory ≥90% of the container's OWN limit additionally alarms in words on the card.
+- **Workload stacks split by pod or by container.** The rollup gauge's fill is a stack of segments
+  (`UsageSegment`) — one per POD by default (replicas should pull even weight; an outlier segment is
+  the finding; names use the topology's "…-suffix" relative form) — with a persisted caption-row
+  toggle (`kd:workloadGaugeBy`) to per-container-NAME summed fleet-wide (sidecar overhead). Widths
+  are proportional to each share, colours from `CONTAINER_PALETTE` (`ContainerCards.tsx` — leads
+  with the accent so a stack's first segment matches the single-fill colour; deliberately no
+  green/red/amber, a segment colour must never read as a status). The stack's total width equals the
+  plain fill: it changes WHO, never HOW MUCH. No cards follow the rollup, so a `metric-legend` row
+  names the colours.
 - **Workload remainder.** The rollup sums per-pod breakdowns by name (`aggregateWorkloadUsage`); a
   pod mid-report carries no breakdown but still counts in the total, so any shortfall past 2%
   renders as an explicit dim "not yet attributed" segment — partial shares never stretch to fill.

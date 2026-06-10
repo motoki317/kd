@@ -9,6 +9,10 @@ export interface WorkloadUsage {
   limits?: Resources
   podCount: number // descendant pods in the graph
   meteredPods: number // how many had a usage reading (metrics-server can lag a freshly-created pod)
+  // Each metered pod's own total — the "group by pod" segment source (one share per replica). Reuses
+  // the ContainerUsage shape (a named cpu/mem share); name-sorted so segment order is stable across
+  // ticks. Sums exactly to `usage` by construction: unmetered pods are excluded from both.
+  pods: ContainerUsage[]
 }
 
 // aggregateWorkloadUsage sums descendant-pod usage and requests/limits. Usage comes from the capacity
@@ -38,12 +42,14 @@ export function aggregateWorkloadUsage(
   // Per-container sums across the fleet ("is the sidecar overhead material workload-wide?") — the
   // same names recur on every replica, so summing by name keeps the pod-level segment vocabulary.
   const byName = new Map<string, { cpuMilli: number; memBytes: number }>()
+  const podShares: ContainerUsage[] = []
   for (const p of pods) {
     const u = usage[p.id]
     if (!u) continue // unmetered pod: excluded from BOTH sides so the ratio stays like-for-like
     metered++
     cpuMilli += u.cpuMilli ?? 0
     memBytes += u.memBytes ?? 0
+    podShares.push({ name: p.name, cpuMilli: u.cpuMilli ?? 0, memBytes: u.memBytes ?? 0 })
     for (const c of u.containers ?? []) {
       const acc = byName.get(c.name) ?? { cpuMilli: 0, memBytes: 0 }
       acc.cpuMilli += c.cpuMilli ?? 0
@@ -79,5 +85,6 @@ export function aggregateWorkloadUsage(
     limits: hasLimCpu || hasLimMem ? { cpuMilli: hasLimCpu ? limCpu : undefined, memBytes: hasLimMem ? limMem : undefined } : undefined,
     podCount: pods.length,
     meteredPods: metered,
+    pods: podShares.sort((a, b) => a.name.localeCompare(b.name)),
   }
 }

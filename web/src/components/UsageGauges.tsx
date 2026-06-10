@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js'
+import { For, Show, type JSX } from 'solid-js'
 import { formatPair, formatQuantity } from '../capacityLayout'
 import type { ResGroupModel } from '../resourceBars'
 
@@ -26,6 +26,12 @@ export default function UsageGauges(props: {
   caption?: string
   segments?: UsageSegment[]
   legend?: boolean
+  // What one segment IS ("per pod" / "per container") — the screen-reader prefix for the stack.
+  // Defaults to the container split, the original (and pod-gauge-era) meaning.
+  segmentsLabel?: string
+  // Extra gauge-scoped controls (the workload rollup's group-by toggle), rendered on the caption row
+  // so the control sits next to the text describing what it regroups (Proximity).
+  controls?: JSX.Element
 }) {
   const segsFor = (res: 'cpu' | 'memory') =>
     (props.segments ?? [])
@@ -75,7 +81,7 @@ export default function UsageGauges(props: {
                                 classList={{ over: b.over }}
                                 style={{ width: pct(b.fillFrac) }}
                                 role="img"
-                                aria-label={`per container: ${segsFor(g.res)
+                                aria-label={`${props.segmentsLabel ?? 'per container'}: ${segsFor(g.res)
                                   .map((s) => `${s.name} ${formatQuantity(s.value, g.res)}`)
                                   .join(', ')}`}
                               >
@@ -128,9 +134,15 @@ export default function UsageGauges(props: {
           </div>
         </Show>
         {/* For a rolled-up workload gauge: name what the bars sum so the operator doesn't read a
-            Deployment's "3 cores" as one pod's (explicit over implicit). */}
-        <Show when={props.caption}>
-          <div class="metric-caption">{props.caption}</div>
+            Deployment's "3 cores" as one pod's (explicit over implicit), with any gauge-scoped
+            controls on the same row. */}
+        <Show when={props.caption || props.controls}>
+          <div class="metric-caption-row">
+            <Show when={props.caption}>
+              <div class="metric-caption">{props.caption}</div>
+            </Show>
+            {props.controls}
+          </div>
         </Show>
       </div>
     </Show>

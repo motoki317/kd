@@ -2626,6 +2626,21 @@ button.conn.conn-retry:focus-visible {
   text-align: right;
   margin-top: 1px;
 }
+/* Caption + gauge-scoped controls on one row: the group-by toggle sits left, the caption keeps its
+   right-aligned home under the value column. */
+.metric-caption-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.metric-caption-row .metric-caption {
+  flex: 1;
+  min-width: 0;
+}
+.gauge-groupby {
+  display: flex;
+  gap: 4px;
+}
 /* Cycle 146: each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
    the row reads as a strip of discrete facts instead of a dot-separated run-on. */
 .drawer-meta > span,
@@ -3581,7 +3596,8 @@ button.event-source:focus-visible {
 .logs-ts,
 .logs-case,
 .logs-maximize,
-.logs-wrap {
+.logs-wrap,
+.gauge-group-btn {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
@@ -3599,11 +3615,17 @@ button.event-source:focus-visible {
   align-items: center;
   gap: 4px;
 }
+/* The gauge's group-by pills sit on the 10px caption row, so they shrink a step from the logs size. */
+.gauge-group-btn {
+  padding: 1px 7px;
+  font-size: 10px;
+}
 .logs-prev:hover,
 .logs-ts:hover,
 .logs-case:hover,
 .logs-maximize:hover,
-.logs-wrap:hover {
+.logs-wrap:hover,
+.gauge-group-btn:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }
@@ -3611,7 +3633,8 @@ button.event-source:focus-visible {
 .logs-ts.active,
 .logs-case.active,
 .logs-maximize.active,
-.logs-wrap.active {
+.logs-wrap.active,
+.gauge-group-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
@@ -3620,7 +3643,8 @@ button.event-source:focus-visible {
 .logs-ts:focus-visible,
 .logs-case:focus-visible,
 .logs-maximize:focus-visible,
-.logs-wrap:focus-visible {
+.logs-wrap:focus-visible,
+.gauge-group-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -3628,7 +3652,8 @@ button.event-source:focus-visible {
 .logs-ts.active:hover,
 .logs-case.active:hover,
 .logs-maximize.active:hover,
-.logs-wrap.active:hover {
+.logs-wrap.active:hover,
+.gauge-group-btn.active:hover {
   color: var(--on-accent);
   background: color-mix(in srgb, var(--accent) 90%, white);
   border-color: color-mix(in srgb, var(--accent) 90%, white);

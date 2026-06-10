@@ -23,7 +23,17 @@ describe('aggregateWorkloadUsage', () => {
       limits: { cpuMilli: 500, memBytes: 1000 },
       podCount: 2,
       meteredPods: 2,
+      // per-pod shares (the "group by pod" segment source), name-sorted, summing to the total
+      pods: [
+        { name: 'a', cpuMilli: 80, memBytes: 150 },
+        { name: 'b', cpuMilli: 120, memBytes: 250 },
+      ],
     })
+  })
+
+  it('emits one share per metered pod only — an unmetered pod has no segment', () => {
+    const agg = aggregateWorkloadUsage([pod('b'), pod('a')], { b: { cpuMilli: 70, memBytes: 10 } })
+    expect(agg?.pods).toEqual([{ name: 'b', cpuMilli: 70, memBytes: 10 }])
   })
 
   it('sums usage AND its bound over only the metered pods, so the ratio is like-for-like', () => {
