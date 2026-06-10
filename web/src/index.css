@@ -1297,6 +1297,10 @@ button.conn.conn-retry:focus-visible {
   display: block;
   cursor: grab;
   touch-action: none;
+  /* Drag-pan must not paint native text selection across card labels (pointerdown deliberately
+     skips preventDefault so clicks reach nodes). Copyable values live in the drawer, not here. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .topology-svg:active {
   cursor: grabbing;
