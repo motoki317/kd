@@ -47,9 +47,12 @@ The `nodes` group-by is a **length-encoded bullet visualization**, not a card la
 refinement). What an agent editing it must keep in mind:
 
 **Invariants (don't regress these):**
-- **One global linear px-per-unit `scale`** keyed on max capacity, so node *and* pod bars compare
-  across the canvas and a pod bar reads directly against its node track. `CAP_TRACK_MAX` (1080px) keeps
-  a node a few× smaller than the biggest still readable.
+- **One global linear px-per-unit `scale`** keyed on the larger of max node capacity and max row
+  demand, so node *and* pod bars compare across the canvas and a pod bar reads directly against its
+  node track. `CAP_TRACK_MAX` (1080px) keeps a node a few× smaller than the biggest still readable.
+  Demand participates because the Unscheduled bucket has no capacity: a pending pod requesting more
+  than the biggest node otherwise drew its track kilopixels off-canvas and poisoned the auto-fit
+  (the node rows shrinking in proportion IS the honest picture).
 - **Two ceilings ⇒ two track lengths** on that one scale: **Req** fills to allocatable
   (`row.cap`/`trackW`), **Use** fills to total physical capacity (`row.useCap`/`useTrackW`, ≥ allocatable
   — usage can spill into the system-reserved region; requests can't). Capacity from structured
