@@ -35,6 +35,17 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b30 (2026-06-11, dogfooding D101–D106)** — the capacity & "needs attention" trouble-finding flow,
+  dogfooded against a real cluster. The Nodes view showed a bare "N pods" — now "N / cap pods" (a real
+  node reported a 1000 pod-cap, so "89 pods" had falsely read as near the 110 default; the denominator
+  inverts the headroom read), ambered near the ceiling. A Degraded no-endpoints Service had folded into
+  a neutral "+ show N more" pill — exactly where the "needs attention" jump lands you — so a collapse
+  pill now surfaces the worst health it hides ("● 1 degraded", red), no filter required. Verified clean:
+  pod-cap persists across the CPU/Memory toggle; the Ownership lens hides a relationship-less Degraded
+  resource but the legend advertises its count over ALL nodes and clicking it surfaces the resource
+  across lenses; the sidebar flags the troubled namespace with a red ns-dot + a glossed title + a global
+  jump button; the degraded Service drawer shows status + selector + empty Events (prose would bloat).
+  Also scrubbed a leaked context name from the b29 note (caught by leakcheck).
 - **b29 (2026-06-11, dogfooding D91–D96 + refactor)** — a cert-manager + Ingress legibility cluster
   (mostly off a real cluster's cert-manager/Argo shapes): CronWorkflow now offers aggregated logs of its
   scheduled runs (the grandchild CronWorkflow→Workflow→pods chain; "did last night's backup succeed?"
