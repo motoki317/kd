@@ -26,6 +26,21 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b11 (segment vocabulary completed; ops-docs accuracy; stuck rollout)** — the workload
+  gauge stacks fleet-summed per-container segments with an explicit dim "not yet attributed"
+  remainder (6a70c7a) and a swatch+name legend, since no cards follow it to key the colours
+  (f44d452); stacks carry a per-container aria-label (shares were hover-only — a11y regression of
+  the redesign, 253296b); rendered sha256 digests truncate to 8 hex chars (a config-reloader ref
+  wrapped 3 lines, 4b895c2). Chart docs: the narrow-RBAC example silently killed every usage gauge
+  (no metrics.k8s.io rule — added) and the eagerKinds example claimed events could be cache-fed
+  (they can't, always live; README + values.yaml, 2 commits). Stuck-rollout shape (induced
+  progressDeadlineSeconds + failing probe): the Available tautology beat "ReplicaSet … has timed
+  out progressing" on array order — ranking now explicit, Available last (405ae6b). Delegated
+  re-survey of every changed drawer/log file: 4 candidates, 3 refuted on read (swatch flex:none IS
+  0 0 auto; drawer-status sits inside the hero's padding; gone-signal reset is pre-paint and a
+  closed EventSource delivers no late events), 1 folded as a one-line wrap-defence on legend items
+  — the ~94% refutation rate holds even on freshly-changed code.
+
 - **2026-06-10 b10 (per-container display matures user-directed; container-card module)** — the pod
   gauge's fill now stacks one coloured segment per container (hover names the share; total width
   unchanged), keyed to each card by a square swatch, and cards show declared bounds with every
