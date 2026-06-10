@@ -19,6 +19,23 @@ EKS context's FIRST informer sync. JS for `eval --stdin` MUST be an IIFE `(() =>
 always wrap. Dispatch real events on the element (`el.dispatchEvent(new MouseEvent('click',{bubbles:true}))`);
 `elementFromPoint(x,y)` returns null when the point is off-viewport or over the toolbar.
 
+Session repair + regime switches (each cost real time to rediscover):
+
+- **`screenshot` wedging on "Resource temporarily unavailable … daemon may be busy" while `eval`
+  keeps working** → the screenshot pipe is stuck, not the page: `agent-browser close` then a fresh
+  `open` fixes it for the rest of the session. The page may come back as `about:blank` after a
+  wedge — check `location.href` before blaming your last click.
+- **Phone-regime testing**: `agent-browser set viewport 375 667` (a `set` subcommand — there is no
+  `--viewport` flag on `open`), then `location.reload()`. Reverse with `set viewport 1280 800`.
+- **Touch gestures**: synthetic `new PointerEvent('pointerdown', {pointerId, pointerType: 'touch',
+  clientX, clientY, bubbles: true})` drives kd's pointer handlers in the live page — measurable
+  because the pan/pinch paths set tx/ty/scale signals synchronously (no rAF, unlike animateTo
+  fits; see pitfall 5). Verifies handler logic only — browser-native gesture interception is
+  covered by `touch-action: none`, not testable headless.
+- **`kd:*` localStorage prefs persist across opens and poison "default state" tests** — a pref
+  written by an earlier toggle (e.g. `kd:sidebarHidden`) masks the no-pref default you're trying
+  to verify. `localStorage.removeItem('kd:…')` + reload before asserting defaults.
+
 ## Dogfood against real scale
 
 `docker-desktop` (1 node, ~58 pods) exercises the many-pods-on-one-node path; a real EKS context
