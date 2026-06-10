@@ -26,6 +26,23 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b6 (correctness under induced shapes + refactor/survey wave)** — biggest catch: a
+  typo'd NAMED targetPort showed a false "1/1 ready" (readiness derives from selector matches since
+  Endpoints objects are deliberately uncached) — pods now count Ready only when a port resolves, and
+  the service says `targetPort "http" matches no container port name…` (f209067; regression-scanned
+  39 staging namespaces: zero false flags). A pending pod requesting more than the biggest node drew
+  its Unscheduled track kilopixels off-canvas and poisoned auto-fit — the scale now keys on
+  max(capacity, demand), node rows shrink proportionally, which IS the honest 1:4 picture (839d392).
+  A cordoned node row says "· cordoned" in amber with a gloss — bar-wise it looked identical to a
+  healthy node (b611788). Failed-Job/finalizer/tautology slices continued b5. Event "×N" gets a
+  plain-words hover (59bb2a2, the Manifest+Events survey's sole survivor — that surface verified
+  mature otherwise). Refactor survey (narrow lens, last 30 commits): one real seam — the quota chip
+  had copied the data-keys " · " split renderer; extracted KeyValRow (7c5f861); status.go per-kind
+  condition scans judged genuinely different (no helper), theme tokens mirrored, server/client
+  defaultLogContainer in lockstep. Induced-failure recipes catalogued in the dogfooding skill doc
+  (b0ff111). Verified already-handled: unschedulable pod headline (full scheduler message survives
+  the ContainersNotReady filter); PVC/OOM shapes (b5).
+
 - **2026-06-10 b5 (induced-failure shapes + drawer width)** — drove the failure states a beginner
   actually hits, against live induced resources. Quota-blocked Deployment: headline now shows the
   ReplicaFailure cause ("exceeded quota: …") instead of the Available tautology ("does not have
