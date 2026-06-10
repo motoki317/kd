@@ -194,6 +194,11 @@ Recent batches (newest first; `git log` has the commits):
   z-order map + no-spotlight rule, AGENTS.md gains the flex-wrap zero-basis collapse trap. Rejected
   from that survey: viewport-getter dedup (4 LoC, explicit-over-DRY), pinch-gesture extraction
   (single consumer — rule of three), drawer reset-logic comment (no third reset site yet).
+  Churn-watch verified-mature (live scale 2→6→2 with the viewport panned away): transform preserved
+  BIT-IDENTICAL across both churns (the one observed "jump" was the measurer's own pan edge-glide
+  racing the first read — settle before baselining), count honest (8 resources), 6 pods folded to
+  3+pill and refolded back. Measurement note for the dogfooding skill: after a synthetic pan,
+  re-read the transform until stable before treating it as the baseline.
   Then shipped (phone regime, continued): **drawer becomes a full-width overlay ≤640px** (b2cb445) —
   side-by-side left the topology column ~110px and the toolbar's absolute chips (unclipped, can't
   shrink) bled straight across the drawer hero/tabs; overlay also upgrades reading width 263→375px;

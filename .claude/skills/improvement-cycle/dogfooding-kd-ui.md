@@ -35,6 +35,11 @@ Session repair + regime switches (each cost real time to rediscover):
 - **`kd:*` localStorage prefs persist across opens and poison "default state" tests** — a pref
   written by an earlier toggle (e.g. `kd:sidebarHidden`) masks the no-pref default you're trying
   to verify. `localStorage.removeItem('kd:…')` + reload before asserting defaults.
+- **A synthetic pan's edge-glide races your baseline read** — pointerup past the clamp bounds runs
+  a ~200ms glide-back (and a fast release coasts), so a transform read right after the pan is NOT
+  the resting position; a later legitimate-looking "viewport moved on churn" diff is your own
+  gesture settling. Re-read the transform until two reads match before baselining (cost a false
+  churn-yank finding in the scale-up watch).
 
 ## Dogfood against real scale
 
