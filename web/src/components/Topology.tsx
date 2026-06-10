@@ -2181,7 +2181,7 @@ export default function Topology(props: Props) {
                                   x={n.width / 2}
                                   y="46"
                                   text-anchor="middle"
-                                  style={{ fill: healthColor(t().worst) }}
+                                  style={{ fill: healthTextColor(t().worst) }}
                                 >
                                   <title>
                                     {t().count} hidden {t().count === 1 ? 'resource needs' : 'resources need'} attention — {healthHint[t().worst]}

@@ -969,21 +969,25 @@ button.conn.conn-retry:focus-visible {
   stroke: var(--accent);
   stroke-width: 2;
 }
+/* These three are health-coloured TEXT on the canvas surface, so they take the darker *-text inks (not
+   the vivid --health-* graphics values), which clear the 4.5:1 text bar on the light theme's near-white
+   surface — the vivid amber/red measured 1.86/3.41 there. Same rule the node-status text follows
+   (healthTextColor); the dark theme maps the inks back to vivid. */
 .cap-warn {
-  fill: var(--health-degraded);
+  fill: var(--degraded-text);
   font-weight: 600;
 }
 /* Cordoned marker on a node row — amber like the Suspended health it reflects (an intentional
    pause, not damage), where .cap-warn's red means actual trouble. */
 .cap-cordoned {
-  fill: var(--health-suspended);
+  fill: var(--caution-text);
   font-weight: 600;
 }
 /* A node nearing its pod-count ceiling (~110): CPU/mem bars can read near-empty while pod SLOTS are the
    binding constraint, so amber the count — caution (scheduling will start to fail), not damage, the same
    semantic as cordoned. Two-class selector out-specifies the base .cap-row-meta dim fill. */
 .cap-row-meta.near-cap {
-  fill: var(--health-suspended);
+  fill: var(--caution-text);
   font-weight: 600;
 }
 /* "Req" / "Use" axis labels in the left gutter, right-aligned against the bars so each bar reads

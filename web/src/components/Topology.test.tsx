@@ -1030,7 +1030,7 @@ describe('Topology', () => {
     const trouble = r1.container.querySelector('.collapse-pill-trouble')!
     expect(trouble).toBeTruthy()
     expect(trouble.textContent).toMatch(/1 degraded/)
-    expect((trouble as SVGElement).style.fill).toContain('health-degraded') // coloured by worst hidden
+    expect((trouble as SVGElement).style.fill).toContain('degraded-text') // worst hidden health, AA-legible text ink
     expect(pill.getAttribute('aria-label')).toMatch(/1 needs attention/)
     cleanup()
 
