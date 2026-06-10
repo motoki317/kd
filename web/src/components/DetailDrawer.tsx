@@ -42,6 +42,11 @@ interface Props {
   // custom workload controller) the kind list can't enumerate still offers the aggregated Logs tab.
   // A predicate (not a boolean) so the check follows displayNode through the drawer's exit animation.
   hasPods?: (nodeId: string) => boolean
+  // The inspected resource vanished from the live graph (deleted/replaced mid-investigation). The
+  // drawer stays open on its last-known data with an explicit banner instead of silently closing —
+  // see App's drawerNode. Tabs keep their normal empty/error states; owner chips remain the path
+  // to the replacement.
+  deleted?: boolean
 }
 
 type Tab = 'logs' | 'events' | 'manifest'
@@ -313,6 +318,18 @@ export default function DetailDrawer(props: Props) {
           // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
           aria-label={`${node().kind} ${node().name} details`}
         >
+          <Show when={props.deleted}>
+            {/* Terminal state, spelled out: the resource is gone but the operator keeps their
+                context (name, last-known facts, owner chips to find the replacement). aria-live
+                so the transition is announced — visually the banner appears where the eye already
+                is, but a screen reader would otherwise never hear the resource died. A sibling of
+                the header, NOT a child: in the header's flex row the zero-basis summary "fits" on
+                the banner's 100%-width line and collapses to 0px. */}
+            <div class="drawer-deleted" role="status" aria-live="polite">
+              No longer in the cluster — deleted or replaced while you were inspecting it. Facts
+              below are the last known state{props.owners.length ? '; the owner chip below leads to any replacement' : ''}.
+            </div>
+          </Show>
           <header class="drawer-header">
             <ResourceSummary
               node={node()}

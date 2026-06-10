@@ -474,9 +474,27 @@ export default function App() {
   // selection — and the detail behind it — changes. Mirrors the card tooltip: kind+name, then the
   // status and failure reason, so stepping through a degraded wall speaks each "why" aloud.
   const selectionAnnouncement = createMemo(() => selectionLabel(selectedNode()))
-  // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
-  const ownerNodes = createMemo<KNode[]>(() => {
+  // Last RESOLVED selection, kept so the drawer can show an explicit "deleted" terminal state
+  // instead of silently closing when the inspected resource vanishes mid-investigation — a rollout
+  // replaces the pod, a crashlooper is reaped, a finished job is cleaned up. The churn happens
+  // exactly when the operator is watching closest. Stands in only while selectedId still points at
+  // the vanished id; a new selection, an explicit deselect, or a namespace switch clears it.
+  let lastResolved: KNode | null = null
+  const drawerNode = createMemo(() => {
     const n = selectedNode()
+    if (n) {
+      lastResolved = n
+      return n
+    }
+    const id = selectedId()
+    return id && lastResolved && lastResolved.id === id ? lastResolved : null
+  })
+  const selectionDeleted = createMemo(() => !!drawerNode() && !selectedNode())
+  // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
+  // Derived from drawerNode (not selectedNode) so a DELETED pod's owner chips keep working — the
+  // ReplicaSet/Job chip is the one-click path to its replacement.
+  const ownerNodes = createMemo<KNode[]>(() => {
+    const n = drawerNode()
     return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
   })
 
@@ -734,7 +752,8 @@ export default function App() {
           />
           <DetailDrawer
             ctx={ctx() ?? ''}
-            node={selectedNode()}
+            node={drawerNode()}
+            deleted={selectionDeleted()}
             owners={ownerNodes()}
             usage={selectedUsage()}
             workloadUsage={selectedWorkloadUsage()}
