@@ -962,6 +962,12 @@ button.conn.conn-retry:focus-visible {
   fill: var(--health-degraded);
   font-weight: 600;
 }
+/* Cordoned marker on a node row — amber like the Suspended health it reflects (an intentional
+   pause, not damage), where .cap-warn's red means actual trouble. */
+.cap-cordoned {
+  fill: var(--health-suspended);
+  font-weight: 600;
+}
 /* "Req" / "Use" axis labels in the left gutter, right-aligned against the bars so each bar reads
    with an explicit name rather than the operator having to infer which stripe is which. */
 .cap-axis-label {

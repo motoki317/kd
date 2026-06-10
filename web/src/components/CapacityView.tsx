@@ -151,6 +151,15 @@ export default function CapacityView(props: {
                 <Show when={row.overcommit}>
                   <tspan class="cap-warn"> · overcommit</tspan>
                 </Show>
+                {/* A cordoned node looks identical to a healthy one bar-wise (existing pods keep
+                    running) — say it in words on the row, the same idiom as "· overcommit", so
+                    "which node is the Suspended 1?" needs no hunting. */}
+                <Show when={row.node?.status?.includes('SchedulingDisabled')}>
+                  <tspan class="cap-cordoned">
+                    {' · cordoned'}
+                    <title>Scheduling disabled — new pods will not land on this node</title>
+                  </tspan>
+                </Show>
               </text>
 
               {/* Requested bar: this namespace's pods sized by request, then the single folded

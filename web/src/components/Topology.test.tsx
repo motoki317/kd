@@ -450,6 +450,21 @@ describe('Topology', () => {
     expect(container.querySelectorAll('g.edges > g').length).toBe(0)
   })
 
+  it('Nodes view marks a cordoned node row in words', () => {
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Suspended', status: 'Ready,SchedulingDisabled', allocatable: { cpuMilli: 4000 } },
+      { id: 'node-b', kind: 'Node', name: 'host-2', health: 'Healthy', status: 'Ready', allocatable: { cpuMilli: 4000 } },
+    ]
+    const capacity = { nodes: nodesV, usage: { items: {} } }
+    const { container } = render(() => (
+      <Topology nodes={nodesV} edges={[]} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" />
+    ))
+    const marks = [...container.querySelectorAll('.cap-cordoned')]
+    expect(marks).toHaveLength(1) // only the cordoned node carries it
+    expect(marks[0].textContent).toContain('cordoned')
+    expect(marks[0].querySelector('title')?.textContent).toContain('Scheduling disabled')
+  })
+
   it('Nodes view hover-spotlight recedes the WHOLE other node row, not just its segments', () => {
     const nodesV: KNode[] = [
       { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
