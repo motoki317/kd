@@ -26,6 +26,22 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b7 (HPA, STS chain, logs-gone, API survey)** — a broken HPA explains itself: its
+  fault lives in ScalingActive/AbleToScale, neither of which the generic CR condition reader scans,
+  so a non-functioning autoscaler was a red card with no words; also "1 → 0" (desiredReplicas=0 =
+  "couldn't compute") no longer renders as an impossible scale-to-zero (5fa839c). Logs viewer says
+  when the tailed resource was deleted — supervisor signals `gone` once per transition (zero-pod
+  mid-rollout gaps stay silent by design), viewer renders a terminal notice or an end-of-stream
+  marker at the tail; verified live with a delete-while-tailing round (e5a5a7b; the lines-on-screen
+  case was caught live — a final kubelet noise line had defeated the empty-state-only first cut).
+  Delegated API error-path survey: graph-SSE stale-out judged a deliberate trade-off (selection/
+  filter preservation beats disconnecting); events 502 wording left as-is (8s repoll masks
+  transients); 403 naming, context-unreachable, deleted-manifest, empty-slice contracts all verified
+  handled. Verified already-handled shapes: broken sidecar (right container red, "not ready" named),
+  STS + unbindable PVC chain (pod points at the PVC, PVC events name the missing class), event ×N
+  gloss live (coalesced BackOff ×5). Docs drift fixed: frontend-internals capacity scale rule
+  (7ec575e); induced-failure recipes catalogued in the dogfooding skill (b0ff111, b6).
+
 - **2026-06-10 b6 (correctness under induced shapes + refactor/survey wave)** — biggest catch: a
   typo'd NAMED targetPort showed a false "1/1 ready" (readiness derives from selector matches since
   Endpoints objects are deliberately uncached) — pods now count Ready only when a port resolves, and
