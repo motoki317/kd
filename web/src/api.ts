@@ -169,8 +169,11 @@ export function streamLogs(
   if (opts.tailLines != null) params.set('tailLines', String(opts.tailLines))
   if (opts.previous) params.set('previous', 'true')
   if (opts.timestamps) params.set('timestamps', 'true')
+  // A cluster-scoped resource (a Node aggregating its static pods' logs) has an empty namespace;
+  // interpolating it raw yields `namespaces//…` which the server 307→404s. Substitute the scope
+  // sentinel the server unmaps — same rule as the manifest/events fetches.
   const es = new EventSource(
-    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
+    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns || CLUSTER_SCOPE)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )
   es.addEventListener('log', (e) => onLine(JSON.parse((e as MessageEvent).data) as LogEntry))
   // The one-shot (previous-logs) dump emits `done` when it has streamed everything; the live follow

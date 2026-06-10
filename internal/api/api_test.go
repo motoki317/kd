@@ -316,6 +316,46 @@ func TestLogStream(t *testing.T) {
 	}
 }
 
+// TestClusterScopedLogStream verifies a cluster-scoped resource's logs resolve through the cluster
+// sentinel: a control-plane Node owns its static pods (mirror-pod ownerReferences), and those pods
+// are namespaced — absent from the cluster-scope snapshot — so the handler must merge cluster-wide
+// pods in or the Node's Logs tab waits on "no pods" forever.
+func TestClusterScopedLogStream(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "cp-1", UID: "node-uid"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "kube-system", Name: "etcd-cp-1", UID: "etcd-uid",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Node", Name: "cp-1", UID: "node-uid", Controller: ptr(true)}},
+		}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+	}
+	srv := newServer(t, "", objs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	url := srv.URL + ctxPath + "/namespaces/" + api.ClusterScopeNamespace + "/resources/Node/cp-1/log/stream?follow=false"
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("log stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	sc := bufio.NewScanner(resp.Body)
+	sawLog := false
+	for sc.Scan() {
+		if strings.HasPrefix(sc.Text(), "event: log") {
+			sawLog = true
+			break
+		}
+	}
+	if !sawLog {
+		t.Error("expected a 'log' event for the Node's static pod via the cluster scope")
+	}
+}
+
 // TestAggregatedLogStream verifies a workload's log stream merges its descendant pods, tagging
 // each line with the source pod so the client can label them.
 func TestAggregatedLogStream(t *testing.T) {

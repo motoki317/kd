@@ -82,7 +82,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		go superviseLogStreams(r.Context(), store, ns, kind, name, container, timestamps, tail, lines, gone)
 	} else {
 		// One-shot: resolve the descendant pods once, dump each, and close when all are done.
-		pods, _ := podsForResource(store.SnapshotNamespace(ns), kind, name)
+		pods, _ := podsForResource(logSnapshot(store, ns), kind, name)
 		var wg sync.WaitGroup
 		for _, pod := range pods {
 			wg.Add(1)
@@ -155,7 +155,7 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 
 	wasGone := false
 	resolve := func() {
-		pods, rootExists := podsForResource(store.SnapshotNamespace(ns), kind, name)
+		pods, rootExists := podsForResource(logSnapshot(store, ns), kind, name)
 		if !rootExists {
 			if !wasGone && gone != nil {
 				wasGone = true
@@ -195,6 +195,24 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 			resolve()
 		}
 	}
+}
+
+// logSnapshot returns the objects pod resolution runs over. For a namespace that is the namespace's
+// own snapshot; for the cluster scope it merges in every pod cluster-wide, because a cluster-scoped
+// root's descendant pods (a control-plane Node's static pods, whose ownerReferences point at the
+// Node) are namespaced and therefore absent from the cluster-scope snapshot — without them the Node's
+// Logs tab waited on "no pods" forever even though the displayed graph promised them.
+func logSnapshot(store Store, ns string) []runtime.Object {
+	snap := store.SnapshotNamespace(ns)
+	if ns != ClusterScopeNamespace {
+		return snap
+	}
+	for _, obj := range graph.AsTypedSlice(store.SnapshotNodesAndPods()) {
+		if _, ok := obj.(*corev1.Pod); ok {
+			snap = append(snap, obj)
+		}
+	}
+	return snap
 }
 
 // podsForResource returns the pods whose logs represent the given resource: the pod itself if kind is
