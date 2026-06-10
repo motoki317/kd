@@ -47,7 +47,8 @@ config:
   # controllerrevisions, ephemeralreports).
   skipKinds: "" # @schema type:string
   # -- Comma-separated resource names to force-include in eager startup, overriding both
-  # skipKinds and the built-in defaults (e.g. "events" to feed the events view from cache).
+  # skipKinds and the built-in defaults. (Not useful for "events": the Events tab always
+  # queries the API live — short-lived, high-cardinality events are deliberately never cached.)
   eagerKinds: "" # @schema type:string
   # -- Extra raw CLI arguments appended to the kd command.
   extraArgs: [] # @schema type:array; item:string
