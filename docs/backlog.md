@@ -36,13 +36,22 @@ Recent batches (newest first; one line per slice — `git log` carries the full 
   container failing its probe says "Running · not ready" in words + a probe hover, where only the dot
   hue changed before (b74e348). **User-reported fix:** drawer header action icons (expand/share/close)
   overlay on a surface pill instead of flexing beside the summary — every summary row (bars, chips,
-  container cards) regains ~100px; only the hero reserves clearance (239864d). Delegated
+  container cards) regains ~100px; only the hero reserves clearance (239864d); regression-passed on
+  production shapes (long names, init containers, scrolled summary, both themes). Delegated
   first-load/sidebar survey: [cluster] row hover now explains "Resources outside any namespace —
   Nodes, PersistentVolumes, ClusterRoles" (69c1e46); refuted: breadcrumb placeholder during connect
   (low-value — conn pill + canvas already say "connecting…", crumb appears on the fast namespace-list
   fetch); empty-ns ServiceAccount wording expansion (current text already names it as Kubernetes-added);
   offline selection-loss warning (selection IS preserved when the resource survives); "(default)"
   context-switcher gloss (self-evident to its multi-context audience).
+  Second wave (same induced-shape method): failed Job headline says it has given up — the Failed
+  condition message ("reached the specified backoff limit") replaces ambiguity about retrying
+  (67d416e); a pod stuck Terminating names the finalizer holding it, the "kubectl delete hangs"
+  dead end (ab9a375); the ContainersNotReady tautology ("containers with unready status: [main]")
+  is suppressed from pod headlines — status summary + container cards say it better (70eea09).
+  Verified already-handled: Pending PVC (drawer opens on Events showing "storageclass not found" +
+  class chip); OOMKilled (CrashLoopBackOff status + "last exit: OOMKilled (exit 137)" chip + restart
+  badge, one click from the canvas).
 - **2026-06-10 b4 (beginner first-run dogfooding)** — fresh namespace says "this namespace is empty"
   plainly instead of the unconnected-orphan riddle (4af7105); drawer gauge rows stop printing their
   bound name twice ("Req — / 25m req" → bare value/bound, capacity-view repetition) (d869e92); Nodes
