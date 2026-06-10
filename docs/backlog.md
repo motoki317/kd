@@ -26,6 +26,19 @@ robustness (354-node namespace, 57 Degraded).
 
 Recent batches (newest first; one line per slice — `git log` carries the full WHY per commit):
 
+- **2026-06-10 b12 (saturation legibility; evicted pods; gauge internals doc)** — a saturated HPA's
+  replicas chip reads "2 · at max" caution-tinted (ScalingLimited stays no health signal — only the
+  TooManyReplicas reason marks it; TooFewReplicas idling at the floor stays unmarked; induced-verified
+  live with a CPU-spin under maxReplicas:2, 3eca308). An evicted pod surfaces kubelet's status.message
+  cause ("The node was low on resource: memory…") instead of a bare red "Evicted" (24b912f). Drawer
+  gauge invariants (shared scale, segment stacks, workload remainder, spec-on-cards/usage-in-bars)
+  documented in frontend-internals (one read for the next contributor). Saturated-HPA + stuck-rollout
+  recipes added to the dogfooding catalogue. Flow-verified seamless: the right-sizing review — one
+  click per workload shows summed usage vs req/lim ("2m / 20m" = over-provisioned at a glance), no
+  fake bars for undeclared bounds. Refuted as already-handled: suspended CronWorkflow (Suspended
+  health + status), paused Deployment ("Paused"/Suspended), pod-level scale chips on cards (drawer
+  is the right home).
+
 - **2026-06-10 b11 (segment vocabulary completed; ops-docs accuracy; stuck rollout)** — the workload
   gauge stacks fleet-summed per-container segments with an explicit dim "not yet attributed"
   remainder (6a70c7a) and a swatch+name legend, since no cards follow it to key the colours
