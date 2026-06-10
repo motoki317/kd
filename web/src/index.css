@@ -28,6 +28,11 @@
      11–13px sizes statuses/reasons render at. Darker inks for text only; dots stay vivid. */
   --degraded-text: #c73e36;
   --progressing-text: #1a66c2;
+  /* Background for white-text badges (the sidebar trouble count, the warning-events tab count).
+     White on the vivid --health-degraded measures 3.7:1 — under the 4.5:1 bar at badge sizes — so
+     badges sit their text on this darker ink of the same family (5.0:1). One value for both themes:
+     the contrast that matters is against the badge's own white text, not the surface behind it. */
+  --degraded-badge: #c73e36;
 
   /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
@@ -687,7 +692,7 @@ button.conn.conn-retry:focus-visible {
   margin-bottom: 2px;
 }
 .ns-trouble {
-  background: var(--health-degraded);
+  background: var(--degraded-badge);
   color: #fff;
   border-radius: 999px;
   padding: 1px 7px;
@@ -3135,9 +3140,9 @@ button.drawer-host:hover {
   font-variant-numeric: tabular-nums;
 }
 .tab-badge.warn {
-  background: var(--health-degraded);
+  background: var(--degraded-badge);
   color: #fff;
-  border-color: var(--health-degraded);
+  border-color: var(--degraded-badge);
   /* Soft red glow so a Warning-events tab announces trouble at a glance — same vocabulary as
      the non-healthy card halo (cycle 136). */
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 22%, transparent);
