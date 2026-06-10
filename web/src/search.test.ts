@@ -123,5 +123,24 @@ describe('nodeMatches', () => {
       const labeled: KNode = { id: 'l1', kind: 'Pod', name: 'x', health: 'Healthy', labels: { path: 'a/b/c' } }
       expect(nodeMatches(labeled, 'a/b/c')).toBe(true)
     })
+
+    it('a single-slash query that is not a kind still matches label keys and images', () => {
+      // "app.kubernetes.io/managed-by" has exactly one slash, so the structured reading kicks in,
+      // fails (no kind is named "app.kubernetes.io…"), and must FALL THROUGH to plain substring —
+      // returning false here made the dominant label-key form silently unsearchable.
+      const labeled: KNode = {
+        id: 'l2', kind: 'Pod', name: 'x', health: 'Healthy',
+        labels: { 'app.kubernetes.io/managed-by': 'Helm' },
+      }
+      expect(nodeMatches(labeled, 'app.kubernetes.io/managed-by')).toBe(true)
+      const imaged: KNode = {
+        id: 'i1', kind: 'Pod', name: 'y', health: 'Healthy',
+        images: ['registry.example.com/team-a/api:v2'],
+      }
+      expect(nodeMatches(imaged, 'team-a/api')).toBe(true)
+      // The fallback is additive only: a node without the literal string stays unmatched, so the
+      // structured strictness ("Pod/web" must not light every Pod) is preserved.
+      expect(nodeMatches(imaged, 'Pod/zzz')).toBe(false)
+    })
   })
 })

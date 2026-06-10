@@ -40,7 +40,11 @@ export function nodeMatches(n: KNode, query: string): boolean {
       kindAliases(n.kind).some((a) => a.startsWith(kindQ))
     const nameOk = !nameQ || n.name.toLowerCase().includes(nameQ)
     if (kindOk && nameOk) return true
-    return false
+    // The structured reading failing must not swallow the query: a single-slash string is just as
+    // likely a label KEY ("app.kubernetes.io/managed-by" — the dominant label form) or an image
+    // fragment ("team/app"), which the plain substring path below matches. Falling through is
+    // strictly additive — a node must contain the LITERAL query (slash included), so "Pod/web-abc"
+    // still cannot light every Pod the way a bare substring split would.
   }
   if (n.name.toLowerCase().includes(q)) return true
   if (n.kind.toLowerCase().includes(q)) return true
