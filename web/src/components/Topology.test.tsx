@@ -1311,6 +1311,20 @@ describe('Topology', () => {
       expect(overlay?.querySelector('button')?.textContent).toMatch(/show orphaned/i)
     })
 
+    it('a freshly-created namespace says "empty" plainly instead of the unconnected riddle', () => {
+      // A new namespace holds exactly the auto-created default ServiceAccount; a beginner reading
+      // "1 unconnected resource is hidden" can't tell that means "nothing here yet".
+      const fresh: KNode[] = [{ id: 'sa', kind: 'ServiceAccount', name: 'default', health: 'Healthy' }]
+      const { container } = render(() => (
+        <Topology nodes={fresh} edges={[]} search="" {...hiddenBase} onShowOrphaned={() => {}} />
+      ))
+      const overlay = container.querySelector('.topology-filtered-out')
+      expect(overlay?.textContent).toMatch(/namespace is empty/)
+      expect(overlay?.textContent).not.toMatch(/unconnected/)
+      // The reveal stays available — the SA is still inspectable.
+      expect(overlay?.querySelector('button')?.textContent).toMatch(/show orphaned/i)
+    })
+
     // The orphan section renders Kind-view style: per-kind boxes with label bands + a section caption,
     // separate from (and below) the relationship tree.
     const sectionNodes: KNode[] = [

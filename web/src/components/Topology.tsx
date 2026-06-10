@@ -1411,7 +1411,23 @@ export default function Topology(props: Props) {
       >
         <div class="topology-empty topology-filtered-out">
           <div class="topology-empty-text">
-            {orphanIds().size} unconnected {orphanIds().size === 1 ? 'resource is' : 'resources are'} hidden — none have a relationship in view.
+            {/* A freshly-created namespace holds exactly the default ServiceAccount Kubernetes adds
+                automatically — for a beginner, "1 unconnected resource is hidden" reads as a riddle
+                where "this namespace is empty" is the honest answer. */}
+            <Show
+              when={
+                props.nodes.length === 1 &&
+                props.nodes[0].kind === 'ServiceAccount' &&
+                props.nodes[0].name === 'default'
+              }
+              fallback={
+                <>
+                  {orphanIds().size} unconnected {orphanIds().size === 1 ? 'resource is' : 'resources are'} hidden — none are connected to anything in this view.
+                </>
+              }
+            >
+              This namespace is empty — only the <code>default</code> ServiceAccount that Kubernetes adds to every namespace.
+            </Show>
           </div>
           <Show when={props.onShowOrphaned}>
             <button class="topology-clear" onClick={() => props.onShowOrphaned?.(true)}>
