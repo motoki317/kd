@@ -682,6 +682,10 @@ func TestContainerStateString(t *testing.T) {
 		// A reason is the actionable bit (CrashLoopBackOff, ImagePullBackOff) — surface it with the state.
 		{"waiting with reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}, "Waiting: CrashLoopBackOff"},
 		{"waiting no reason", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}}, "Waiting"},
+		// A waiting message is the root cause (the missing image/configmap) — appended after the reason…
+		{"waiting with reason and message", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ErrImagePull", Message: "nginx:9.9.9: not found"}}, "Waiting: ErrImagePull — nginx:9.9.9: not found"},
+		// …except CrashLoopBackOff's, which is mechanical backoff state (delay + pod UID), not a cause.
+		{"crashloop message suppressed", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff", Message: "back-off 5m0s restarting failed container=main pod=api-1_shop(uid)"}}, "Waiting: CrashLoopBackOff"},
 		{"terminated with reason (clean exit, no code)", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}, "Terminated: Error"},
 		// A non-zero exit code is appended — exit 1 vs 137 (OOM/SIGKILL) is the actionable difference.
 		{"terminated with reason and exit code", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}}, "Terminated: Error (exit 1)"},

@@ -123,12 +123,18 @@ func lastTerminatedString(s corev1.ContainerState) string {
 // containerStateString renders a container's current state as "Running", "Waiting: <reason>", or
 // "Terminated: <reason> (exit <code>)" — the reason + exit code are the actionable part
 // (CrashLoopBackOff, OOMKilled, a non-zero exit). A clean "Terminated: Completed" omits the exit code.
+// A waiting state's MESSAGE is the root cause an operator otherwise digs out of Events ("image not
+// found", "configmap 'x' not found") — append it, except for CrashLoopBackOff, whose message is
+// mechanical backoff state (delay + pod UID) while the real cause is the last exit, shown separately.
 func containerStateString(s corev1.ContainerState) string {
 	switch {
 	case s.Running != nil:
 		return "Running"
 	case s.Waiting != nil:
 		if s.Waiting.Reason != "" {
+			if s.Waiting.Message != "" && s.Waiting.Reason != "CrashLoopBackOff" {
+				return "Waiting: " + s.Waiting.Reason + " — " + truncateRunes(s.Waiting.Message, 200)
+			}
 			return "Waiting: " + s.Waiting.Reason
 		}
 		return "Waiting"
