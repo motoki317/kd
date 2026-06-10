@@ -38,6 +38,12 @@ Recent batches (newest first; one line per slice — `git log` carries the full 
   Also: a waiting container's state now carries its root-cause message — "Waiting: ErrImagePull —
   …not found" instead of the bare reason; CrashLoopBackOff keeps reason-only (its message is backoff
   mechanics, the cause lives in the last-exit chip) (dbb5822, induced ImagePullBackOff flow).
+  Delegated refactor survey: **0 qualifying candidates — internal organization verified healthy.**
+  The per-kind accretion in spec.go/ResourceSummary.tsx is intentional (5 small places per kind, the
+  build.go inventory stays at-a-glance; a registry would obscure it); selector/CR-essence logic
+  already centralized (selectorSummary, asUnstructuredKind, MetaChip); Topology.tsx is large because
+  it IS the orchestrator — no seam extracts without prop-drilling (CapacityView was the clean one,
+  done). Source future refactors from a concrete blocked change, not re-surveys.
 - **2026-06-10 b3 (beginner-first structural sweep)** — three delegated audits (UI text, docs, feature
   surface) + first-run dogfooding. Shipped: backlog condensed 718→366 lines (519210e); 40+ tooltips/
   hints/help entries rewritten to beginner-plain English, jargon dropped ("solo", "yank", "SSE")
