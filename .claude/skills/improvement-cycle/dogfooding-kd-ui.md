@@ -41,6 +41,23 @@ Session repair + regime switches (each cost real time to rediscover):
   gesture settling. Re-read the transform until two reads match before baselining (cost a false
   churn-yank finding in the scale-up watch).
 
+## Theme audits (light mode)
+
+Most work happens in dark mode, so light theme rots silently. Auditing it is mostly static, not
+visual: kd's CSS is token-driven (`--surface`/`--border`/`--health-*` flip per theme), so anything
+token-only verifies by construction. The audit is therefore:
+
+1. `grep` `index.css` for hardcoded colors (`#hex` / `rgb(a)`) **outside** the `:root` /
+   `[data-theme]` token blocks, skipping `var(--…)` and `color-mix(...)` lines. Black box-shadows and
+   `#000` inside `mask-image` are alpha/neutral — fine.
+2. For each hit, check it's either scoped under the right `[data-theme=…]` selector (the dark-mode
+   white node glow) or deliberately theme-invariant (the dark log pane — severity palette is tuned
+   for that ground; dark text on an amber chip).
+3. Then ONE live pass: switch via the theme button (`while (!light) btn.click()`), measure contrast
+   with computed styles (`getComputedStyle` + relative-luminance), not the eye — segments need ≥3:1
+   vs the panel; a 1px `--border` hairline (~1.3:1) is the theme's standard edge, not a bug.
+4. Reset `kd:theme` after (the pref-bleed bullet above).
+
 ## Dogfood against real scale
 
 `docker-desktop` (1 node, ~58 pods) exercises the many-pods-on-one-node path; a real EKS context
