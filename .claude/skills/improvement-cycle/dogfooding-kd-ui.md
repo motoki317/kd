@@ -295,8 +295,13 @@ surfaced them. Look for these shapes on any view:
    value forever (cost a false "keyboard toggle is broken" in cycle 45). Always re-`querySelector` the
    element AFTER the action and read attributes off the fresh node. Holding a ref across a toggle is
    only safe for elements Solid mutates in place, not ones it reconciles.
-5. **`requestAnimationFrame` callbacks NEVER fire in the headless agent-browser session — so no
-   pan/zoom/fit/animation can be verified by a viewport measurement.** Proven directly:
+5. **`requestAnimationFrame` callbacks may never fire in the headless agent-browser session — so no
+   pan/zoom/fit/animation can be trusted from a viewport measurement without probing rAF first.**
+   This is VERSION-DEPENDENT: one session proved rAF frozen (details below); a later session's
+   agent-browser advanced rAF normally (an `animateTo` Fit landed and was measurable, which is how
+   the capacity-view Fit bug was caught live). **Probe before trusting either way**:
+   `requestAnimationFrame(() => { window.__r = 1 })` then read `__r` after a sleep — if set, you can
+   measure transforms; if unset, everything below applies. The frozen-session evidence:
    `requestAnimationFrame(() => { window.__r = 1 })` leaves `__r` unset after 3s, while
    `document.visibilityState === 'visible'`, `document.hidden === false`, and `setTimeout` fires
    normally. kd routes EVERY non-initial viewport move through rAF — `animateTo`'s tick loop is rAF, and

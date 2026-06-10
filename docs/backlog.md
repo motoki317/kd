@@ -168,6 +168,13 @@ Recent batches (newest first; `git log` has the commits):
   test pins the ratio/handoff contract; live-verified with synthetic touch pointers (ratio exactly 2.0).
   Phone-regime survey: drawer at 375px already fits in-bounds (263px, expand affordance available) —
   no change needed.
+  Then shipped: **Fit frames the capacity view's drawn layout, not its hit-boxes** (14b4db3) — the
+  no-filter Fit framed `layout().nodes`, which in the Nodes view are small hit-targets (pod segments,
+  label regions), not the full-width tracks; fitNodeSet hit the 1.4x ceiling and left the track ~1600px
+  wide (clipped even at 1280 desktop; 4 viewports on a phone, Fit couldn't recover). Now frames the
+  layout box per the comment's stated intent. Found via phone-width Nodes-view dogfooding. NOTE for the
+  dogfooding skill's pitfall 5: the current agent-browser session DOES advance rAF (animateTo fits land
+  and are measurable) — re-probe rAF before distrusting a transform measurement.
   Verified-mature this discovery pass (projections + shell, staging): Network view (IngressRoute drawer
   carries host→service·middlewares; Service drawer answers "backed by ready pods?" with the n/n ready
   chip + copyable selector; edge `<title>` names each relationship type), Volumes view (Pod→PVC "Bound
