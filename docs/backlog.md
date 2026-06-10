@@ -35,6 +35,21 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b31 (2026-06-11, dogfooding D107–D120)** — breadth pass across two real clusters (k3s + an EKS
+  cluster), mostly confirming maturity. Shipped: the expanded-node fit comment said "largest-usage-first"
+  but the sort is max(reserved, used) — corrected; a node reporting 0 pod-capacity now falls back to the
+  bare count (was "N / 0 pods", ambered on a N/0=∞ ratio — adversarial self-review of D101). Strong
+  validation: pod-cap (D101) on 8 real EKS nodes rendered correct ENI-based caps AND correctly ambered a
+  node at its ceiling ("1 / 1 pods") — the binding-constraint case the 1000-cap k3s node couldn't show.
+  Verified clean & mature: Network lens IngressRoute→Service→Pod chain on real Traefik; Volumes lens
+  accurately shows no phantom PVCs (DB StatefulSets mount only Secrets here); chrome copy concise/
+  beginner-appropriate (no bloat); memory capacity view reads Use≫Req under-requesting at a glance; URL
+  round-trip (rels/capRes/group/sel) with URL>pref>default precedence; search matches name/kind/label/IP/
+  multi-word status (cluster scope holds only cluster-scoped kinds, so namespaced statuses are correctly
+  absent there — not a bug). IngressRoute essence (Host rule → service · via middleware chain) and ArgoCD
+  Application essence (status-line "· OutOfSync" pairing + dest + synced-rev chips, health rule maps
+  Missing→Degraded) both confirmed comprehensive — the verify-first rule caught that the sync-status chip
+  I was about to add already exists.
 - **b30 (2026-06-11, dogfooding D101–D106)** — the capacity & "needs attention" trouble-finding flow,
   dogfooded against a real cluster. The Nodes view showed a bare "N pods" — now "N / cap pods" (a real
   node reported a 1000 pod-cap, so "89 pods" had falsely read as near the 110 default; the denominator
