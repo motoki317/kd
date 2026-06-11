@@ -35,6 +35,15 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b34 (2026-06-11, whole-codebase structure pass)** — pure file-structure refactor, zero behavior
+  change per slice: split `graph/spec.go` (1230 lines) and `health_cr.go` (702) into domain/family
+  siblings; `index.css` (3972) into `styles/<area>.css` behind an @import barrel (rebuilt bundle
+  byte-identical, proving no visual change); `layout.ts` (1308) into `layout/` modules behind a
+  re-export index (zero importer edits); App.tsx (1008→658) wiring into flat factory modules
+  (keyboard/url/subscription/session/selection/sidebar-health); Topology.tsx (2309→1712) seams into
+  `components/topology/` (toolbar/spotlight/collapse/hover/exit/empty). Each extracted surface
+  re-verified live (Esc ladder, deep-link `?sel=`, spotlight fade counts, fold pills, cap tooltip);
+  docs references updated (AGENTS.md nav + recipe subsection, frontend-internals key files).
 - **b33 (2026-06-11, dogfooding D130–D150)** — light-theme a11y + operator-flow pass. Shipped: the
   collapse-pill trouble badge, the cap-view warn/cordon/near-cap labels (D131), and the sidebar ns-count
   attention badge (D132) all colored small TEXT with the vivid graphics health values, which measure

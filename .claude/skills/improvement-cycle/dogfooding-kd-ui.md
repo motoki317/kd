@@ -47,7 +47,7 @@ Most work happens in dark mode, so light theme rots silently. Auditing it is mos
 visual: kd's CSS is token-driven (`--surface`/`--border`/`--health-*` flip per theme), so anything
 token-only verifies by construction. The audit is therefore:
 
-1. `grep` `index.css` for hardcoded colors (`#hex` / `rgb(a)`) **outside** the `:root` /
+1. `grep` `web/src/styles/` for hardcoded colors (`#hex` / `rgb(a)`) **outside** the `:root` /
    `[data-theme]` token blocks, skipping `var(--…)` and `color-mix(...)` lines. Black box-shadows and
    `#000` inside `mask-image` are alpha/neutral — fine.
 2. For each hit, check it's either scoped under the right `[data-theme=…]` selector (the dark-mode

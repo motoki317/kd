@@ -15,23 +15,45 @@ push detail to those.
 - Auth: `internal/auth` (proxy header) + `internal/rbac` (Casbin-style policy.csv, hot-reloaded).
 - Multi-context: `internal/kube/registry` (lazy per-context cache) + `internal/kube/kubeconfig`
   (merged kubeconfig snapshot at startup).
-- Client: `web/src/` Solid + Vite. Entry `index.tsx` → `App.tsx`; shared state via signals/stores.
-  Canvas internals: [docs/frontend-internals.md](docs/frontend-internals.md).
+- Client: `web/src/` Solid + Vite. Entry `index.tsx` → `App.tsx` (bootstrap + JSX; its wiring lives
+  in flat factory modules: `appKeyboard.ts`, `urlState.ts`, `graphSubscription.ts`, `clusterSession.ts`,
+  `selection.ts`, `sidebarHealth.ts`). Canvas: `components/Topology.tsx` (viewport + SVG core) with its
+  seams in `components/topology/`; layout engines in `layout/`; styles in `styles/<area>.css` behind the
+  `index.css` @import barrel. Canvas internals: [docs/frontend-internals.md](docs/frontend-internals.md).
 
 ## Where things live
 
 | Concern | File |
 | --- | --- |
-| Add a grouping layout | `web/src/layout.ts` (relationship/kind) or `web/src/capacityLayout.ts` (the Nodes capacity view) + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
+| Add a grouping layout | `web/src/layout/` (relationship/kind; barrel `index.ts` re-exports the public surface) or `web/src/capacityLayout.ts` (the Nodes capacity view) + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
 | Add a kind icon | `web/src/icons.tsx` + extend `icons.test.ts` coverage |
 | Add a short kind label | `web/src/names.ts` (`KIND_SHORT_LABELS`) + alias if not substring |
 | Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + a `web/src/relationships.ts` category |
-| Surface a kind's "declarative essence" in the drawer | extractor in `internal/kube/graph/spec.go` (routing tables in `spec_routing.go`; typed kinds type-assert, CRs like HPA navigate `*unstructured`) → field on `Node` in `model.go` → wire in `build.go` → add to the `nodesEqual` repaint check in `diff.go` → render a labelled chip in `web/src/components/KindFacts.tsx` (+ `web/src/types.ts` field). The pattern (routes/rules → ports → DataKeys/SecretType → access/class → batch → HPA → PDB → node taints → NetworkPolicy → Certificate → Issuer): show the spec fact the status line buries, as a chip reusing the address-row idiom. NEVER emit secret values (key names + sizes only). Use a string field, not `omitempty` int, when `0` is meaningful (PDB disruptions). **If the extractor type-asserts a kind NOT already converted, register it in `unstructured.go` `typedFactories`** — the dynamic-informer store yields `*unstructured`, so an unregistered kind leaves the assertion failing and the field silently empty on real data, while typed-fixture unit tests still pass (cost a live-verify round on NetworkPolicy). |
-| Add a CR/CRD health rule | `internal/kube/graph/health_cr.go` (group/kind dispatch) + `health_cr_test.go` |
+| Surface a kind's "declarative essence" in the drawer | extractor in the matching `internal/kube/graph/spec_<domain>.go` (shared helpers in `spec.go`) — full recipe below the table |
+| Add a CR/CRD health rule | dispatch in `internal/kube/graph/health_cr.go`, family rules in `health_cr_<family>.go` + `health_cr_test.go` |
+| Touch styles | `web/src/styles/<area>.css`; `index.css` is the @import barrel and documents the order-dependent cascade chains |
 | Touch drawer usage gauges | `web/src/resourceBars.ts` (shared-scale bar model) → `web/src/components/UsageGauges.tsx` (render: tracks/fills/segments/legend/caption) — used by `ResourceSummary.tsx` (pod/Node top gauge + workload rollup with by-pod/by-container split) and `ContainerCards.tsx` (per-container bars); rollup math in `web/src/usageAggregate.ts`. Invariants in docs/frontend-internals.md "Drawer resource gauges" |
 | Add an SSE event | `internal/api/sse.go` (server) + `web/src/api.ts` (client handler) |
 | Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `charts/kd/values.yaml` (`policy.csv`) |
 | ADR for a decision | `docs/ADR/YYYYMMDD-title.md` (template at `_template.md`) |
+
+### Recipe: surface a kind's "declarative essence" in the drawer
+
+The pattern (routes/rules → ports → DataKeys/SecretType → access/class → batch → HPA → PDB → node
+taints → NetworkPolicy → Certificate → Issuer): show the spec fact the status line buries, as a chip
+reusing the address-row idiom.
+
+1. Extractor in the matching `internal/kube/graph/spec_<domain>.go` (routing tables in
+   `spec_routing.go`). Typed kinds type-assert; CRs like HPA navigate `*unstructured`.
+2. Field on `Node` in `model.go` → wire in `build.go` → add to the `nodesEqual` repaint check in
+   `diff.go`.
+3. Render a labelled chip in `web/src/components/KindFacts.tsx` (+ `web/src/types.ts` field).
+4. **If the extractor type-asserts a kind NOT already converted, register it in `unstructured.go`
+   `typedFactories`** — the dynamic-informer store yields `*unstructured`, so an unregistered kind
+   leaves the assertion failing and the field silently empty on real data, while typed-fixture unit
+   tests still pass (cost a live-verify round on NetworkPolicy).
+5. NEVER emit secret values (key names + sizes only). Use a string field, not `omitempty` int, when
+   `0` is meaningful (PDB disruptions).
 
 ## Build / test
 
@@ -222,18 +244,19 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
   aren't there, and the Events tab silently goes empty (the f80bab1→42ee8a2 regression). The handler
   test must run WITHOUT `EagerKinds:["events"]` — eager-loading events is a config real deploys never
   use, and it masks exactly this bug.
-- **`Build` drops completed pods; log/pod resolution needs `BuildForLogs`**: `graph.Build` runs
-  `isHistorical`, which deletes finished controller-pods (`Succeeded` phase under a controller — Job/
-  CronJob/Workflow leftovers) and zero-replica ReplicaSets, because they dominate real namespaces and
-  never reflect current state. Great for the displayed topology; **wrong for log aggregation** — a
-  finished Job/CronJob/Workflow has nothing BUT completed pods, so `podsForResource` resolving through
-  `Build` aggregated zero pods and the Logs tab was silently empty (e5c190c). Use `graph.BuildForLogs`
-  (keeps completed pods, still drops superseded ReplicaSets so a Deployment's old revisions don't leak)
-  for anything that resolves pods to read their logs. Two twists that compound it: (1) an Argo step
-  pod's phase is `Succeeded` even when the step container exits non-zero (the `wait` sidecar completes
-  the pod), so a FAILED workflow's failure logs live in a pod `isHistorical` would drop; (2) the client
-  can't see these pods at all (they're absent from the SSE display graph), so `hasDescendantPod` returns
-  false — a finished Workflow needs `Workflow` in `LOGGABLE_KINDS` to show the tab.
+- **`Build` vs `BuildForLogs` — pick by purpose**:
+  - `graph.Build` is for the **displayed topology**. It runs `isHistorical`, which drops finished
+    controller-pods (`Succeeded` under a Job/CronJob/Workflow) and zero-replica ReplicaSets — they
+    dominate real namespaces and never reflect current state.
+  - `graph.BuildForLogs` is for **anything that resolves pods to read their logs**. It keeps completed
+    pods (still drops superseded ReplicaSets). A finished Job/CronJob/Workflow has nothing BUT
+    completed pods, so resolving through `Build` aggregated zero pods and the Logs tab was silently
+    empty (e5c190c).
+  - Two twists that compound it: (1) an Argo step pod's phase is `Succeeded` even when the step
+    container exits non-zero (the `wait` sidecar completes the pod), so a FAILED workflow's failure
+    logs live in a pod `isHistorical` would drop; (2) these pods are absent from the SSE display
+    graph, so `hasDescendantPod` returns false — a finished Workflow needs `Workflow` in
+    `LOGGABLE_KINDS` to show the tab.
 - **Pod log container defaults to `main`, not the first container**: an Argo pod lists its `wait`
   executor sidecar (and `init`) BEFORE `main`, so defaulting to `pod.Spec.Containers[0]` streamed pure
   executor noise. Both server (`defaultLogContainer` in `logstream.go`) and client (`defaultLogContainer`
@@ -242,15 +265,15 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
 - **SSE `summary` event**: the server emits a per-stream `summary` computed on the UNFILTERED graph; the
   client overrides the sidebar entry with it. Never roll up filtered nodes on the client — that bug is
   the whole reason `rollupHealth` was deleted.
-- **Cluster-scope sentinel**: namespace `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`) is
-  treated everywhere as a real namespace by route shape but expands to the cluster's cluster-scoped
-  snapshot server-side. Cluster-scoped objects also ride along into namespace views when referenced AND
-  drawable there — currently just a PVC's PV (via the `mounts` edge). A Pod's Node deliberately does NOT
-  ride along: no relationship category draws the `scheduledOn` edge (the pod↔node story is the Nodes
-  group-by view), so a rode-along Node only ever appeared as a permanently-orphaned card. The sidebar
-  pins `__cluster__` above the namespace list. A cluster-scoped resource's
-  drawer must substitute the sentinel for its empty `{ns}` (an empty path segment → `namespaces//…` →
-  307→404).
+- **Cluster-scope sentinel** `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`):
+  - Treated everywhere as a real namespace by route shape, but expands to the cluster's
+    cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.
+  - Cluster-scoped objects ride along into namespace views when referenced AND drawable there —
+    currently just a PVC's PV (via the `mounts` edge). A Pod's Node deliberately does NOT ride along:
+    no relationship category draws the `scheduledOn` edge (the pod↔node story is the Nodes group-by
+    view), so a rode-along Node only ever appeared as a permanently-orphaned card.
+  - A cluster-scoped resource's drawer must substitute the sentinel for its empty `{ns}` (an empty
+    path segment → `namespaces//…` → 307→404).
 - **PVC → PV edge**: emitted as `EdgeMounts` (not a new edge type) so the existing volumes view picks it
   up automatically. The "Pod → PVC → PV" chain is complete.
 - **Force empty slices to `[]` server-side**: a nil Go slice marshals as `null`, and a client reducer

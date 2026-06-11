@@ -9,9 +9,11 @@ the big surfaces lives in ADRs — this file is the "how it works / what will bi
 - Group-by + relationship filter → [`ADR 20260603-unified-view-relationship-filter-grouping`](ADR/20260603-unified-view-relationship-filter-grouping.md)
 - Viewport fit math vs headless animation → [`ADR 20260605-testing-view-math-vs-headless-animation`](ADR/20260605-testing-view-math-vs-headless-animation.md)
 
-Key files: `layout.ts` (relationship/kind layouts + shared geometry), `capacityLayout.ts` (the Nodes
-view — imports only `byName`/`Layout`/`PositionedNode` from `layout.ts`, no cycle),
-`relationships.ts` (RelCategory → EdgeTypes), `Topology.tsx` (dispatch + render + fit).
+Key files: `layout/` (relationship/kind layouts + shared geometry — `core`/`collapse`/`hubs`/`kind`/
+`relationship`, re-exported by `index.ts`), `capacityLayout.ts` (the Nodes view — imports only
+`byName`/`Layout`/`PositionedNode` from `layout/`, no cycle), `relationships.ts` (RelCategory →
+EdgeTypes), `Topology.tsx` (dispatch + viewport/fit + SVG core; its toolbar, spotlight,
+collapse-state, capacity-hover, exit-animation, and empty-state seams live in `components/topology/`).
 
 ## Group-by + relationship filter
 
@@ -21,8 +23,8 @@ Two orthogonal, composable client controls replaced the old fixed server-side vi
 - **Group-by** (`GroupBy = relationship | nodes | kind`, default `relationship`) selects the layout:
   `relationship` → `layoutGraph` (LR depth-column tree), `nodes` → `layoutGraphByCapacity`,
   `kind` → `layoutGraphByKind`. Add a grouping = new `GroupBy` value + a `layout()` case in
-  `Topology.tsx`. `GROUP_OPTIONS` is exported from `Topology.tsx` so App's number-key shortcuts (1–3)
-  + help overlay share one source of truth with the segmented control.
+  `Topology.tsx`. `GROUP_OPTIONS` is defined in `topology/Toolbar.tsx` (re-exported by
+  `Topology.tsx`) so App's number-key shortcuts (1–3) + help overlay share one source of truth with the segmented control.
 - **Relationship filter** chips (`RelCategory = ownership/network/volumes/rbac/scheduling`,
   `relationships.ts` maps each → EdgeTypes) re-project which edges are drawn. Add a dimension = a new
   `relationships.ts` category. The `scheduling` id is labelled **"Disruption"** and maps to `guards`
@@ -141,7 +143,7 @@ replaced).
 
 The cluster unit is the kind box (kind view) or a hub's degree-1 same-kind siblings (connectivity views,
 where hidden leaves' hub edges aggregate into one bundled hub→pill edge). Expansion is an ephemeral
-per-cluster signal in `Topology.tsx` keyed `kind:`/`host:`/`sib:`. The pill is a **two-way toggle**:
+per-cluster signal (`topology/collapseState.ts`) keyed `kind:`/`host:`/`sib:`. The pill is a **two-way toggle**:
 collapsed "+ show N more", expanded "− show N fewer" (bundled edge suppressed), driven by
 `CollapseMeta.expanded` which `splitForFold` populates by keeping the would-fold set even when expanded.
 Pills are excluded from search/nav and folded back into `kindStats` **only while collapsed** (expanded,
@@ -260,7 +262,7 @@ zero-basis flex item "fits" on a 100%-width sibling's wrapped line and collapses
 ## Phone-width overlay layers (≤640px)
 
 Desktop is three side-by-side flex columns (sidebar · canvas · drawer). At the phone breakpoint
-(`NARROW_SCREEN_QUERY` in App.tsx; matching tagged `@media` blocks in index.css) the panels become
+(`NARROW_SCREEN_QUERY` in App.tsx; matching tagged `@media` blocks in `styles/layout.css` and the area files) the panels become
 full-width overlays instead of squeezing the canvas. The z order, bottom-up:
 
 | z | layer | note |
@@ -306,7 +308,7 @@ topmost cards land hidden behind the bar. The `MIN_FIT_SCALE` overflow branch ap
 
 ## Adding a new layout
 
-Add a `layoutGraphBy<Whatever>` to `layout.ts` (or its own file for a large geometry-heavy view, like
+Add a `layoutGraphBy<Whatever>` module under `layout/` (or its own top-level file for a large geometry-heavy view, like
 `capacityLayout.ts`), dispatch on `groupBy` in `Topology.tsx`, and add a `<View>Groups()` memo if the
 layout has named containers (kind groups, host groups). Test against fixture node sets in
 `layout.test.ts`.
