@@ -1,0 +1,973 @@
+/* Main + topology */
+.main {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  position: relative;
+  /* Clip the health stripe's over-extension (see .stripe-over-drawer) to the main edge. */
+  overflow: hidden;
+}
+.topology {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  background-color: var(--bg);
+  /* Two stacked layers (cycle 130): the dot grid for spatial reference, plus a faint elliptical
+     sheen centered slightly above center — gives the canvas a quiet "stage" feel so the resource
+     cards read as elements arranged on a surface, not floating in fog. The sheen is intentionally
+     subtle (~7% of the surface color) so it does not compete with the cards themselves. */
+  background-image:
+    radial-gradient(var(--border) 1px, transparent 1px),
+    radial-gradient(ellipse 75% 55% at 50% 35%, color-mix(in srgb, var(--surface) 50%, transparent), transparent 75%);
+  background-size: 22px 22px, 100% 100%;
+}
+.topology-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  /* Drag-pan must not paint native text selection across card labels (pointerdown deliberately
+     skips preventDefault so clicks reach nodes). Copyable values live in the drawer, not here. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.topology-svg:active {
+  cursor: grabbing;
+}
+.topology-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.topology-empty-illo .empty-card {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+.topology-empty-illo .empty-card-icon {
+  fill: var(--text-dim);
+  opacity: 0.5;
+}
+.topology-empty-text {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* Lets the offline diagnosis line below wrap onto its own full-width row. */
+  flex-wrap: wrap;
+}
+/* The server-reported reason behind an offline context (a Go error chain) — dim diagnosis under the
+   headline, clamped to a few lines (the tail names the root cause; the full chain is in the title). */
+.topology-empty-reason {
+  flex-basis: 100%;
+  margin: 6px auto 0;
+  max-width: 560px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Small ring spinner for the "connecting" empty state: borders the dim text color, with the top
+   border tinted accent so the rotation is visible. Hidden under prefers-reduced-motion since the
+   "Connecting…" copy already conveys the state. */
+.topology-empty-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text-dim) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: topology-empty-spin 0.9s linear infinite;
+}
+@keyframes topology-empty-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topology-empty-spinner { animation: none; border-color: var(--text-dim); }
+}
+/* Variant of .topology-empty used when a filter (not absence of data) emptied the canvas. The
+   pointer-events override lets the clear button inside actually be clickable. */
+.topology-filtered-out {
+  pointer-events: none;
+}
+.topology-filtered-out .topology-clear {
+  pointer-events: auto;
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+}
+.topology-filtered-out .topology-clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.topology-empty-hint {
+  font-size: 12px;
+  font-style: italic;
+  /* Pull-quote treatment so the hint reads as supporting context, not a redundant restatement
+     of the "nothing to show" message. */
+  color: color-mix(in srgb, var(--text-dim) 80%, transparent);
+  max-width: 320px;
+  text-align: center;
+}
+/* Bottom-center toast for the relationship grouping's "all relationships off" state. Non-blocking
+   (pointer-events only on its button) so the cards underneath stay interactive — distinct from
+   .topology-empty, which centers and implies absence of data. Sits at the bottom edge, clear of the
+   bottom-right Fit button. */
+.topology-rels-hidden {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+}
+.topology-rels-hidden .topology-clear {
+  pointer-events: auto;
+}
+/* The canvas control panel: a translucent surface at top-left that unifies the search, grouping,
+   relationship, health, and kind controls into one block (proximity) rather than scattered floating
+   chips. The blur lets the topology faintly show through so it doesn't feel like it blankets the
+   namespace. Capped in both axes so a kind-dense namespace scrolls within the panel instead of
+   running it off the canvas. */
+/* Full-width control bar pinned across the top of the canvas. Edge-to-edge (no side margins or
+   rounded corners) with just a bottom border separating it from the topology — so the Kinds row
+   below gets the whole width before it needs to scroll. Translucent + blurred so the canvas reads
+   faintly through it rather than being walled off. */
+.topology-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 10px color-mix(in srgb, #000 7%, transparent);
+}
+/* A toolbar row holds one or two facets side by side (search+group, relationships+health, kinds),
+   so the panel is a few short rows instead of one per facet. Wraps internally on a narrow canvas. */
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  width: 100%;
+}
+.topology-search {
+  /* The search field anchors row 1; it shouldn't stretch, so the Group control sits right beside
+     it rather than being shoved to the far edge of a wide panel. */
+  justify-content: flex-start;
+}
+/* Each facet is an inline label hugging its control group (proximity), so several can share a row. */
+.toolbar-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.toolbar-label {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+/* Show-orphaned checkbox: a plain labelled toggle (not a chip — it's a display switch, not a filter
+   value), so it reads distinct from the togglable pills/chips beside it. The trailing count badge
+   reuses the pills' tabular-num count styling so "5 hidden" reads at a glance. */
+.toolbar-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.toolbar-checkbox:hover {
+  color: var(--text);
+}
+.toolbar-checkbox input {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.toolbar-checkbox-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* Orphan section divider (relationship view): the caption + rule that separate the kind-grouped
+   unconnected resources from the relationship trees above. The label reuses the dim, upper-cased
+   toolbar-label idiom so the section reads as a quiet structural heading, not a card. */
+.orphan-section-label {
+  fill: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.orphan-section-rule {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+/* Health-filter pills: the controls column of the Health facet — fill the row beside the label and
+   wrap internally. */
+.topology-health-pills {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* On the canvas overlay the pills need a solid backing to read against the topology (the topbar
+   gave them one for free); match the kind chips' surface + border so the two filter rows read as
+   siblings (repetition). The active inline tint still wins (two-class < inline). */
+.topology-health-pills .legend-item {
+  background: var(--surface);
+  border-color: var(--border);
+}
+/* Fixed full-width health-distribution stripe pinned to the top edge of the main view — a status
+   bar like the old topbar stripe, but for the current namespace's resources. Width is the canvas,
+   not the pills, so it never varies as filter states come and go. Sits on top of the canvas's top
+   border so the colored bar reads as the divider. */
+.topology-stripe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  display: flex;
+  pointer-events: none;
+  z-index: 3;
+}
+.topology-stripe > span {
+  height: 100%;
+  /* A floor so a present-but-tiny state never renders sub-pixel and vanishes: the stripe is the
+     at-a-glance health read, and pure flex made a lone Degraded resource in a large namespace
+     (1/2000 → <1px) invisible — the stripe would falsely read "all healthy" while trouble exists.
+     Mirrors the capacity bars' min-segment width. Only present states are rendered, so this can't
+     invent a colour that isn't there; the large Healthy segment absorbs the few px. */
+  min-width: 4px;
+  transition: flex 0.3s ease;
+}
+/* When the drawer is open .topology shrinks by the drawer width, which would shrink the stripe with
+   it. Extend the stripe right by the max drawer width so it spans the full main view again (the
+   drawer is a static sibling, so .topology's positioned stripe paints over its top edge); .main's
+   overflow:hidden trims any surplus to the main edge. */
+.topology-stripe.stripe-over-drawer {
+  right: calc(-1 * var(--drawer-w));
+}
+/* Relationship facet — composable toggles for which relationship categories are drawn. Same row
+   rhythm + chip surface as the kind/health filters so the toolbar reads as one block of sibling
+   facets (repetition). Labels are proper-case ("Ownership"), so unlike kind chips they are NOT
+   upper-cased. */
+.topology-rels {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
+.rel-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.rel-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.rel-chip:active {
+  transform: translateY(0);
+}
+.rel-chip.active {
+  /* Active relationships borrow the accent tint like the kind chips, so the drawn relationships
+     read at a glance against the inactive grey row. */
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.rel-chip-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* The "+N more" disclosure is a control, not a filter — a dashed, fill-less chip so it reads as
+   distinct from the togglable relationship chips beside it (contrast: different function, different
+   look) and never looks "active". */
+.rel-more {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+.rel-more:hover {
+  color: var(--text);
+}
+.topology-kinds {
+  /* Each chip is a button; the row reads as a horizontal scan of "what's in this view". A strict
+     single line that scrolls horizontally when the kinds overflow — keeps the bar exactly one row
+     tall regardless of how many kinds a namespace has (the user's slim-bar requirement). */
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 4px;
+  scrollbar-width: thin;
+  padding-bottom: 2px; /* room for the scrollbar track so it doesn't clip the chips */
+}
+.topology-kinds::-webkit-scrollbar {
+  height: 6px;
+}
+.topology-kinds::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+/* Edge fades cue the horizontal overflow: a hard truncation reads as "that's all there is"; a fade at
+   an edge reads as "more chips continue this way". JS (scrollEdges) toggles .scroll-l/.scroll-r so a
+   non-overflowing row stays crisp and each fade only appears when there's real content past that edge.
+   The 28px ramp matches a chip's width so a partly-clipped chip dissolves rather than getting sliced. */
+.topology-kinds.scroll-r {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.topology-kinds.scroll-l {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+.topology-kinds.scroll-l.scroll-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+/* The Kinds facet fills the bar so its chip row has the full width before scrolling. */
+.toolbar-facet-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.kind-chip {
+  /* Soft transition so hover/active changes don't snap, matching the legend pills' rhythm. */
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+}
+.kind-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  /* Subtle lift on hover so the chip reads as a clickable affordance, not a static label. */
+  transform: translateY(-1px);
+}
+.kind-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.kind-chip:active {
+  transform: translateY(0);
+}
+.kind-chip.active {
+  /* Active chips borrow the same accent treatment as the legend pills: a tinted background plus
+     coloured border, so the spotlighted kinds read at a glance against the inactive grey row. */
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.kind-chip-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.kind-chip-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* Cap an unabbreviated kind (a CRD with no API short name) so a long label ellipsis-truncates
+   rather than stretching the chip row off-screen. Chips can afford more width than a card's icon
+   column, so the cap is generous; the full kind is in the chip's title tooltip. */
+.kind-chip-label {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Severity dot (cycle 289): small colored pip on chips whose kind carries any non-Healthy
+   resource. Sits between the label and the count so it reads as "this kind has trouble of THIS
+   color" — the inline color is set by JS to match the worst-health hue. */
+.kind-chip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: -2px;
+  flex: 0 0 auto;
+}
+.kind-chip.troubled {
+  border-color: color-mix(in srgb, var(--border-strong) 60%, transparent);
+}
+.kind-chip.active .kind-chip-count {
+  color: var(--text);
+}
+/* Pod chip echoes the card accent so the Pod kind reads with the same visual identity in the
+   filter row as it does on the canvas. */
+.kind-chip.kind-pod {
+  color: var(--pod-accent);
+}
+.kind-chip.kind-pod.active {
+  border-color: var(--pod-accent);
+  background: color-mix(in srgb, var(--pod-accent) 14%, transparent);
+}
+.topology-search-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.topology-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--text-dim);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.topology-search input {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 7px;
+  /* Left padding leaves room for the icon; right padding leaves room for the clear button (which
+     overlays the field instead of pushing it). */
+  padding: 6px 28px 6px 30px;
+  font-size: 13px;
+  width: 220px;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.topology-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.topology-search-clear {
+  position: absolute;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.topology-search-clear:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.topology-search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.topology-matches {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.topology-matches:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.topology-matches:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.topology-matches.none {
+  color: var(--degraded-text);
+  cursor: default;
+}
+/* Clear-all button: stays inline with the search row but reads as a quiet text link rather than
+   a CTA — primary action is the search, this is the "undo" affordance next to it. */
+.topology-clear {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.topology-clear:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.topology-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.topology-fit {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 7px;
+  padding: 5px 11px;
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.topology-fit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.topology-fit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.topology-fit svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.topology-count {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* The filtered "M of N" doubles as the frame-the-matches button (same idiom as .topology-matches).
+   Negative margins make the button fill the pill, so the whole pill is the click target while the
+   pill chrome stays on the parent (which also carries the aria-live region). */
+.topology-count-frame {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  margin: -2px -10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.topology-count-frame:hover:not(:disabled) {
+  color: var(--text);
+}
+.topology-count:has(.topology-count-frame:hover:not(:disabled)) {
+  border-color: var(--text-dim);
+}
+.topology-count-frame:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.topology-count-frame:disabled {
+  cursor: default;
+}
+/* Visually-hidden but kept in the accessibility tree — for screen-reader-only context strings
+   (e.g. the word "resources" appended to the bare "M of N" count so the live announcement reads). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Interactive kind groups: when onKindFilter is wired, the All-view group bg becomes hoverable
+   so the operator gets a "click here to solo this kind" affordance. Pointer-events on bg only
+   so the cards above keep their own click handlers. */
+.kind-group-interactive .kind-group-bg {
+  cursor: pointer;
+  transition: stroke 120ms, fill 120ms;
+}
+.kind-group-interactive:hover .kind-group-bg {
+  stroke: var(--accent);
+  fill: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+/* Nodes & edges */
+.node {
+  cursor: pointer;
+  /* Resting elevation: a tiny drop-shadow lifts every card slightly off the dotted canvas, so cards
+     read as physical "tiles" rather than flat fills (cycle 127). Hover deepens it; transitions
+     here so the lift fades in/out instead of jumping.
+     Cycle 159: also transition transform, so SSE-patched layout shifts glide instead of teleport. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+  transition: opacity 0.12s, filter 0.15s, transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Brief fade on first mount — eases the "connecting → graph" snap and also gentles in SSE-added
+     nodes (a new pod showing up mid-rollout). Runs once per element, doesn't compete with the
+     opacity transition above (which fires on class change, not creation). */
+  animation: node-enter 0.32s ease-out;
+}
+.edges path {
+  animation: node-enter 0.28s ease-out;
+}
+@keyframes node-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* prefers-reduced-motion: skip the entrance animation so the canvas appears immediately for users
+   who've asked the OS to minimize motion. */
+@media (prefers-reduced-motion: reduce) {
+  .node, .edges path { animation: none; }
+}
+.node:hover {
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
+}
+.node.selected {
+  /* Selection is a stronger lift than hover, so picking a card in a dense graph reads as a positive
+     "I'm focused" cue rather than just an outline change. */
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.14));
+}
+/* In dark mode, a black drop-shadow on a dark surface is invisible — drop it for the resting state
+   (the colored border carries the card edge already) and switch hover/selected to a faint white
+   glow so the lift still reads. */
+[data-theme='dark'] .node {
+  filter: none;
+}
+[data-theme='dark'] .node:hover {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
+}
+[data-theme='dark'] .node.selected {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
+}
+/* Selection focus: fade everything not connected to the selected node, and light up the edges
+   that are, so a resource's relationships pop out of a dense graph. */
+.node,
+.edges path {
+  transition: opacity 0.12s;
+}
+.node.faded {
+  opacity: 0.2;
+}
+/* "+N older" collapse pill: a ghost card that stands in for the folded older same-kind resources.
+   A dashed, muted outline reads as "more behind here, click to reveal" — distinct from a real card
+   (solid fill + health tint) so it never looks like a resource. Shares the .node transform glide. */
+.collapse-pill {
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.collapse-pill-bg {
+  fill: var(--surface-2, transparent);
+  stroke: var(--border-strong);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+}
+.collapse-pill:hover .collapse-pill-bg,
+.collapse-pill:focus-visible .collapse-pill-bg {
+  stroke: var(--accent);
+}
+/* Keyboard focus ring: the pill is a real button now, so a focused pill must be visibly distinct.
+   A solid accent stroke + slightly thicker line reads as "focused here" without the default SVG
+   outline (which clips oddly on a transparent <g>). Mouse focus stays quiet via :focus-visible. */
+.collapse-pill:focus {
+  outline: none;
+}
+.collapse-pill:focus-visible .collapse-pill-bg {
+  stroke-width: 2.4;
+  stroke-dasharray: none;
+}
+.collapse-pill-label {
+  fill: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.collapse-pill:hover .collapse-pill-label {
+  fill: var(--accent);
+}
+/* The "● N match" badge borrows the accent so a hidden search/health hit reads as actionable. */
+.collapse-pill-match {
+  fill: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* A collapsed fold hiding a non-healthy resource: the badge colour is set inline (style.fill) per the
+   worst hidden health, so the fold reads as troubled even with no filter active. A presentation `fill`
+   attribute loses to .collapse-pill-match's CSS fill, so this badge carries no accent class and takes
+   its colour from the inline style (which outranks any class). */
+.collapse-pill-trouble {
+  font-size: 11px;
+  font-weight: 700;
+}
+.collapse-pill.faded {
+  opacity: 0.2;
+}
+/* Expanded ("− show fewer") pill: a filled accent-tinted chip rather than a dashed ghost, so the
+   re-collapse toggle reads as an active control distinct from the "+N older" reveal affordance. */
+.collapse-pill.expanded .collapse-pill-bg {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+  stroke-dasharray: none;
+  stroke-width: 1.2;
+}
+.collapse-pill.expanded .collapse-pill-label {
+  fill: var(--accent);
+}
+
+/* Connectivity-view grouping frame (ownership/network/volumes/rbac): a dashed rounded border around
+   a fold's visible siblings + its pill, the only "these belong together" cue those views have (no
+   kind/host container). Underlay, non-interactive — the pill inside owns the click. */
+.conn-frame {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  opacity: 0.85;
+  pointer-events: none;
+}
+/* Expanded fold: a brighter accent frame makes the unfolded block obvious at a glance. */
+.conn-frame.expanded {
+  stroke: var(--accent);
+  stroke-dasharray: 5 4;
+  opacity: 0.9;
+}
+/* Cycle 160: a removed node renders briefly at its last position with this class so the layout
+   diff is visible as a fade-out instead of an instant vanish. pointer-events: none keeps it from
+   competing for clicks; the transition is on the .node opacity rule above. */
+.node.exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+.edges path.faded {
+  opacity: 0.08;
+}
+.edges path.adjacent {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+}
+/* Non-owner edges (selects, mounts, routes, …) sit at 65% opacity so the parent-child backbone
+   stays visually dominant; dashed already says "not ownership", opacity adds another quiet
+   subordination cue for cluttered services-heavy graphs. */
+.edges path:not(.owner) {
+  opacity: 0.65;
+}
+.edges path:not(.owner).faded {
+  opacity: 0.06;
+}
+/* Card background carries health: every state gets a colored border + matching pastel tint so the
+   whole card body reads as the status indicator. Cycle 126 dropped the inset stripe in favor of
+   this (frees the left padding for the larger icon, and the colored body is far more visible at
+   zoom-out than a 5px line was). Healthy uses the gentlest tint so a single degraded card still
+   pops out of a wall of green; selection overrides with the accent border. */
+.node-bg {
+  fill: color-mix(in srgb, var(--health-healthy) 5%, var(--surface));
+  stroke: color-mix(in srgb, var(--health-healthy) 55%, var(--border-strong));
+  stroke-width: 1.5;
+  transition: stroke 0.1s, stroke-width 0.1s, fill 0.1s;
+}
+.node:hover .node-bg {
+  stroke: var(--accent);
+}
+.node.h-degraded .node-bg {
+  stroke: var(--health-degraded);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-degraded) 9%, var(--surface));
+  /* Soft health-tinted halo (cycle 136): only non-healthy states wear it, so trouble cards
+     announce themselves from across a packed canvas before the eye reads the border color. The
+     glow lives on .node-bg (not .node) so it doesn't replace the hover/selected lift filter on
+     the parent group. */
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--health-degraded) 38%, transparent));
+}
+.node.h-progressing .node-bg {
+  stroke: var(--health-progressing);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-progressing) 8%, var(--surface));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-progressing) 28%, transparent));
+}
+.node.h-suspended .node-bg {
+  stroke: var(--health-suspended);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--health-suspended) 9%, var(--surface));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-suspended) 28%, transparent));
+}
+.node.h-unknown .node-bg {
+  stroke: var(--health-unknown);
+  stroke-width: 1.5;
+  fill: color-mix(in srgb, var(--health-unknown) 6%, var(--surface));
+}
+.node.selected .node-bg {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+/* Edge-hover endpoint halo (cycle 330/R4): an accent ring + glow distinct from the resting health
+   tint, so hovering an edge makes "these two cards" pop even when they're far apart. Transient, so it
+   sits below .selected in the cascade and a selected endpoint keeps its selection look. */
+.node.target .node-bg {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 50%, transparent));
+}
+/* The wide transparent companion path is the hover target; the visible line stays thin. pointer-events
+   on the stroke band only — the fill is none, so this never blocks clicks inside the (empty) loop. */
+.edge-hit {
+  pointer-events: stroke;
+}
+/* Top-of-card glaze (cycle 163): a faint linear-fade rect that mimics a soft inset highlight on
+   the upper edge — gives cards a tactile "tile" feel. Strong-but-faint over the surface; transparent
+   on the bottom so it only reads at the top. SVG can't do linear-gradient via attribute, but we can
+   use the rounded rect with a gradient fill defined in <defs> globally. Falling back to an opacity
+   trick via fill: white at low alpha + only the top — by limiting height to ~⅓ of the card the
+   highlight naturally fades off at the bottom edge of its own rect. */
+.node-glaze {
+  fill: white;
+  opacity: 0.16;
+  pointer-events: none;
+}
+[data-theme='dark'] .node-glaze {
+  opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
+}
+/* Kind icon: monochrome outline that picks up the dim text color so it never competes with the
+   health-tinted body (the body carries status; the icon carries type). The .large variant hosts a
+   scale(2) transform, so its base stroke is halved to render at the same 1.5px visual thickness. */
+.node-icon {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-dim);
+}
+.node-icon-large {
+  stroke-width: 0.75;
+}
+/* Pod kind accent (cycle 202): pod cards are the fundamental workload, so the icon and the kind
+   label pick up --pod-accent. The card body + border still carry health, and the accent stays
+   visually quiet against a degraded red / progressing amber border so status never gets lost. */
+.node.kind-pod .node-icon {
+  stroke: var(--pod-accent);
+  color: var(--pod-accent);
+}
+.node.kind-pod .node-kind {
+  fill: var(--pod-accent);
+}
+.node-kind {
+  font-size: 10px;
+  fill: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.node-name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text);
+}
+.node-status {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.node-restarts {
+  font-size: 10px;
+  fill: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* Card text fades out when zoomed far out (cycle 325): at that scale it's a few unreadable pixels,
+   so the overview reads cleaner as icon + health-color only. The icon stays. */
+.node-kind,
+.node-name,
+.node-status,
+.node-restarts {
+  transition: opacity 0.15s;
+}
+.labels-hidden .node-kind,
+.labels-hidden .node-name,
+.labels-hidden .node-status,
+.labels-hidden .node-restarts {
+  opacity: 0;
+}
+

@@ -1,0 +1,465 @@
+/* Logs */
+.logs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto; /* logs are the developer's primary need: fill the drawer */
+  position: relative; /* anchor the "↓ Latest" button */
+}
+.logs-jump {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: background-color 0.12s, box-shadow 0.12s;
+}
+.logs-jump:hover {
+  background: color-mix(in srgb, var(--accent) 90%, white);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.logs-jump:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+/* Backlog badge: number of new lines arrived while scrolled up. Inset pill in the button so the
+   eye reads "↓ Latest 42" as a single CTA. Tabular-nums to keep digit widths consistent as the
+   counter ticks up. */
+.logs-jump-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.22);
+}
+.logs-header {
+  display: flex;
+  align-items: center;
+  /* Wrap so a narrow (compact) drawer never pushes the Copy button off the right edge — the toolbar
+     carries a lot now (stream toggles + filter + per-level segmented control). row-gap keeps wrapped
+     rows legible (cycle 337, fixes the cycle-328 overflow). */
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 8px;
+  padding: 10px 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+.logs-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.logs-error {
+  color: var(--degraded-text);
+  text-transform: none;
+}
+.logs-error.notice {
+  color: var(--text-dim); /* a not-yet-started container has no logs — informational, not alarming */
+}
+/* Shared compact action button (copy manifest / logs). */
+.copy-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+.copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Confirmation flash: green border + tint for 1.2s after copy (the check glyph rides on this). */
+.copy-btn.copied {
+  border-color: var(--health-healthy);
+  color: var(--health-healthy);
+  background: color-mix(in srgb, var(--health-healthy) 8%, var(--surface));
+}
+.copy-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.logs-container {
+  margin-left: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.logs-prev,
+.logs-ts,
+.logs-case,
+.logs-maximize,
+.logs-wrap,
+.gauge-group-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+/* Maximize carries an icon + word, so lay them out in a row (the text-only chips don't need this). */
+.logs-maximize {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* The gauge's group-by pills sit on the 10px caption row, so they shrink a step from the logs size. */
+.gauge-group-btn {
+  padding: 1px 7px;
+  font-size: 10px;
+}
+.logs-prev:hover,
+.logs-ts:hover,
+.logs-case:hover,
+.logs-maximize:hover,
+.logs-wrap:hover,
+.gauge-group-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.logs-prev.active,
+.logs-ts.active,
+.logs-case.active,
+.logs-maximize.active,
+.logs-wrap.active,
+.gauge-group-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.logs-prev:focus-visible,
+.logs-ts:focus-visible,
+.logs-case:focus-visible,
+.logs-maximize:focus-visible,
+.logs-wrap:focus-visible,
+.gauge-group-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.logs-prev.active:hover,
+.logs-ts.active:hover,
+.logs-case.active:hover,
+.logs-maximize.active:hover,
+.logs-wrap.active:hover,
+.gauge-group-btn.active:hover {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--accent) 90%, white);
+  border-color: color-mix(in srgb, var(--accent) 90%, white);
+}
+.logs-filter {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  width: 140px;
+}
+.logs-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.logs-count {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.logs-count.none {
+  color: var(--degraded-text);
+}
+/* Per-pod filter chips for aggregated streams (cycle 328/R2): a wrapping row between the toolbar and
+   the log body. Each chip carries the pod's signature hue dot so it ties to the inline pod labels. */
+.logs-pods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logs-pod-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 1px 7px 1px 5px;
+  font-size: 11px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.logs-pod-chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.logs-pod-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Hidden pod: drain it so the lit chips clearly read as "what's showing". The hue dot dims too. */
+.logs-pod-chip.off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.logs-pod-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+/* Jump-to-error button (cycle 332/R6): error-tinted so it reads as "there are errors here, click to
+   find them". Only rendered when the buffer holds error lines. */
+.logs-errjump {
+  border: 1px solid color-mix(in srgb, var(--health-degraded) 45%, var(--border));
+  background: color-mix(in srgb, var(--health-degraded) 14%, transparent);
+  color: var(--degraded-text);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.logs-errjump:hover {
+  background: color-mix(in srgb, var(--health-degraded) 24%, transparent);
+  border-color: var(--health-degraded);
+}
+.logs-errjump:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* One-shot highlight on the line we jumped to, so the eye lands on it among its neighbors. */
+@keyframes log-line-flash {
+  0% {
+    background: color-mix(in srgb, var(--health-degraded) 40%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.log-line.log-line-flash {
+  animation: log-line-flash 1.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .log-line.log-line-flash {
+    animation: none;
+  }
+}
+/* Logs keep a dark terminal ground in BOTH themes (the CI-log idiom) — deliberately NOT theme
+   tokens: the severity badges, level washes, and the white hover wash below are all tuned for this
+   ground, and a light variant would need a parallel palette for marginal value. */
+.logs-body {
+  margin: 0;
+  padding: 8px 16px 12px;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: #0e131b;
+  color: #d6deea;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 3px;
+  transition: background-color 0.12s;
+}
+/* Extend a line's severity signal across the whole row, not just the 3-char level badge in the left
+   gutter: when an operator's eye is on the message text, ERROR/WARN lines otherwise blend into the
+   INFO stream. A faint left-edge accent (the badge's own hue) makes them pop while scanning — the
+   contrast affordance mature log viewers (Grafana/Kibana/Datadog) provide. inset box-shadow, not a
+   border, so the dense pre-wrap lines don't shift; only error/warn get it (info/debug stay plain so
+   the accent means "look here", not "everywhere"). */
+.log-line:has(> .log-level-error) {
+  box-shadow: inset 2px 0 0 #ff9b95;
+}
+.log-line:has(> .log-level-warn) {
+  box-shadow: inset 2px 0 0 #f6c768;
+}
+/* No-wrap mode (cycle 327): each entry stays on one line and the body scrolls horizontally. width
+   max-content lets the line box (and its hover wash) extend to the full content width; min-width 100%
+   keeps short lines full-width so the hover target isn't a stub. The body already has overflow:auto. */
+.logs-body.no-wrap .log-line {
+  white-space: pre;
+  word-break: normal;
+  width: max-content;
+  min-width: 100%;
+}
+/* Faint hover wash hints the line is interactive (Alt-click to copy); a brighter flash confirms
+   the copy landed (cycle 323). */
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.log-line.copied {
+  background: color-mix(in srgb, var(--health-healthy) 30%, transparent);
+}
+/* Per-line severity badge (cycle 322): a compact, fixed-width colored chip so an operator can scan
+   a busy stream for ERR/WRN at a glance. Only rendered for lines whose level was detected. */
+.log-level {
+  display: inline-block;
+  min-width: 3ch;
+  margin-right: 8px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.03em;
+  user-select: none;
+  vertical-align: baseline;
+  /* The log line uses word-break: break-all, which would otherwise stack the 3 badge letters
+     vertically; keep the short label on one line. */
+  white-space: nowrap;
+  word-break: keep-all;
+}
+.log-level-error {
+  color: #ff9b95;
+  background: color-mix(in srgb, var(--health-degraded) 30%, transparent);
+}
+.log-level-warn {
+  color: #f6c768;
+  background: color-mix(in srgb, var(--health-suspended) 26%, transparent);
+}
+.log-level-info {
+  color: #8fb6f0;
+  background: color-mix(in srgb, var(--health-progressing) 24%, transparent);
+}
+.log-level-debug {
+  color: #97a2b0;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* JSON-log rendering: the parsed `message` keeps the body's normal foreground (it's what you read),
+   while the trailing structured fields are dimmed to the timestamp grey — present for grep/context but
+   visually subordinate, so the eye lands on the message first (contrast + proximity). */
+.log-json-extra {
+  /* #6b7888 measured 4.14:1 on the #0e131b log pane — under the 4.5:1 text bar. This step lighter
+     clears it (5.2:1) while staying well below the body's #d6deea so the fields stay subordinate. */
+  color: #7d8997;
+}
+/* Per-level filter chips (cycle 328): same colors as the inline badges so the toolbar control reads
+   as "these are the levels showing". color/background are inherited from the shared .log-level-<lvl>
+   rules above; this only adds the button chrome. A dimmed (.off) chip means that level is hidden —
+   the two-class .logs-level.off out-specifies .log-level-<lvl>, so it overrides without !important. */
+/* Segmented control (cycle 337): the four levels share one bordered pill with hairline dividers
+   instead of four separate gapped chips — noticeably narrower, so the toolbar stops overflowing, and
+   it reads as one "show these levels" control rather than four loose buttons. */
+.logs-levels {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.logs-level {
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.12s, filter 0.12s;
+}
+.logs-level:last-child {
+  border-right: 0;
+}
+.logs-level:hover {
+  filter: brightness(1.15);
+}
+.logs-level:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px; /* inside the clipped pill so the ring isn't cropped */
+}
+.logs-level.off {
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0.5;
+}
+/* Source-pod label for aggregated workload logs: a fixed-width column so the log text aligns. */
+.log-pod {
+  display: inline-block;
+  width: 20ch;
+  margin-right: 10px;
+  white-space: nowrap;
+  user-select: none;
+}
+.log-time {
+  color: #6b7888;
+  margin-right: 8px;
+  user-select: none;
+  white-space: nowrap;
+}
+.logs-waiting {
+  color: #6b7888;
+}
+/* One-click reset shown beside the "all N lines hidden" empty-state — mirrors the topology
+   clear-filters affordance so the same "your filter emptied this, undo it" gesture reads alike. */
+.logs-clear-filters {
+  margin-left: 8px;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.logs-clear-filters:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+/* Filter-match highlight: a soft amber wash + inherited text color so the hit reads as
+   "this is what your query matched" without losing legibility on the dark logs background. */
+.log-match {
+  background: color-mix(in srgb, #f0a92a 38%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}

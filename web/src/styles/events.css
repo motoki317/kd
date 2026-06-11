@@ -1,0 +1,147 @@
+/* Events: kubectl-describe's "why is this degraded" list. Warnings get a red rail + tinted row. */
+.events-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.events-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 18px 16px;
+  font-style: italic;
+}
+/* The TTL caveat sits under the "No recent events" line, dimmer and smaller (contrast) so it reads as
+   a subordinate explanation, not a second status. */
+.events-empty-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-style: normal;
+  opacity: 0.7;
+}
+.events-filter {
+  /* Sticky so the chip stays visible while the operator scrolls through a long event list —
+     "Warnings only" remains one click away even after paging through Normal events. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.events-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, color 120ms, transform 120ms;
+}
+.events-filter-chip:hover {
+  border-color: color-mix(in srgb, var(--health-degraded) 50%, var(--border));
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.events-filter-chip.active {
+  background: color-mix(in srgb, var(--health-degraded) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--health-degraded) 65%, var(--border));
+  color: var(--degraded-text);
+}
+.events-filter-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--health-degraded) 55%, transparent);
+  outline-offset: 1px;
+}
+.events-filter-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--health-degraded) 20%, transparent);
+  color: var(--degraded-text);
+}
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.event-item {
+  padding: 9px 16px;
+  border-left: 3px solid transparent;
+}
+.event-item + .event-item {
+  border-top: 1px solid var(--border);
+}
+.event-item.warning {
+  border-left-color: var(--health-degraded);
+  background: color-mix(in srgb, var(--health-degraded) 4%, transparent);
+}
+/* Alt-click copy feedback — the same green flash as a copied log line (one idiom per meaning). */
+.event-item.copied {
+  background: color-mix(in srgb, var(--health-healthy) 30%, transparent);
+}
+.event-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.event-reason {
+  font-weight: 600;
+  font-size: 13px;
+}
+.event-item.warning .event-reason {
+  color: var(--degraded-text);
+}
+.event-count,
+.event-age {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.event-age {
+  margin-left: auto;
+}
+/* Source pill on an aggregated event: kind icon + descendant short name, dim so the reason still
+   reads as the primary signal. Rendered as a button when the source still exists in the current
+   graph, so a click navigates to it; reset the default <button> chrome to match the span variant. */
+.event-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+button.event-source:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+button.event-source:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.event-message {
+  font-size: 12px;
+  margin-top: 2px;
+  word-break: break-word;
+}

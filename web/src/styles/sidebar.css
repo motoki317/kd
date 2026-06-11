@@ -1,0 +1,246 @@
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  flex: 0 0 auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 8px;
+  overflow: hidden;
+}
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.ns-trouble {
+  background: var(--degraded-badge);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 20%, transparent);
+}
+/* The trouble badge as an actionable button: reset the native button chrome, keep the .ns-trouble
+   pill look, and add a hover/focus affordance so it reads as "click to jump to the trouble". */
+.ns-trouble-btn {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.ns-trouble-btn:hover {
+  background: color-mix(in srgb, var(--health-degraded) 82%, #000);
+}
+.ns-trouble-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ns-total {
+  /* Quiet "total namespaces" stat: same shape language as .ns-trouble (rounded pill, tabular
+     nums) but stripped of color so the eye doesn't read it as an alarm. */
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.sidebar-filter-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sidebar-filter {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 26px 6px 28px;
+  font-size: 13px;
+  outline: none;
+}
+.sidebar-filter:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.ns-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  /* Take the slack between the filter and the pinned legend so the list scrolls and the legend
+     stays glued to the sidebar's bottom edge. min-height:0 lets a flex item shrink below content. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Always-visible health legend pinned at the bottom of the sidebar (replaces hover-only native
+   tooltips): every dot color with its meaning, plus what the trailing per-row number counts. Dim so
+   it recedes once learned. The color↔state names also appear in the toolbar pills; here they teach
+   the sidebar's own dots and the count. */
+.ns-legend {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ns-legend-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.ns-legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ns-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ns-legend-num {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ns-legend-num-badge {
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.ns-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 7px 9px 7px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  position: relative;
+  transition: background-color 0.1s, color 0.1s;
+}
+.ns-list button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Active-row left accent (cycle 134): a 3px vertical bar at the left edge so the active namespace
+   reads at a peripheral glance without needing to track the row tint. Tied to ::before so it
+   layers under the button content cleanly. */
+.ns-list button.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.ns-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The cluster pseudo-namespace gets a quieter, italicized label so it reads as scope rather
+   than as a regular namespace — same row geometry though, so the dot+count layout matches. */
+.ns-name-cluster {
+  font-style: italic;
+  color: var(--text-dim);
+}
+/* Topbar crumb: when cluster scope is active, render the text slightly dim to match the
+   sidebar's treatment (brackets + italic = scope indicator, not a real namespace name). */
+.crumb-ns-cluster {
+  font-style: italic;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.ns-list button.ns-cluster {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.ns-cluster-icon {
+  flex: none;
+  color: var(--text-dim);
+  stroke: currentColor;
+  stroke-width: 1.3;
+  fill: none;
+}
+/* All view: faint kind label sitting above each kind group. Underlay only, no pointer
+   events — operators still click the cards inside normally. */
+.kind-groups text.kind-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-dim);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.kind-group-icon {
+  color: var(--text-dim);
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.kind-group-bg {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1;
+  pointer-events: none;
+}
+/* All view: the Pod kind group's header picks up the same accent as Pod cards. The bg rect
+   stays neutral so the contained pod cards keep their tinted-by-health appearance. */
+.kind-group.kind-pod .kind-group-label {
+  fill: var(--pod-accent);
+}
+.kind-group.kind-pod .kind-group-icon {
+  color: var(--pod-accent);
+  stroke: var(--pod-accent);
+}
+/* A faded kind-group sinks the whole group (bg + label + cards inside) — kind-filter active
+   and this kind isn't in it (cycle 234). */
+.kind-group.faded {
+  opacity: 0.2;
+  transition: opacity 0.12s;
+}
+
+/* Host group (Nodes view, cycle 205). Mirrors .kind-group but distinct enough that the two
+   grouped views don't visually conflate — a slightly warmer fill, no surface-2 shadow. */
+.kind-groups .kind-group-count {
+  font-weight: 400;
+  font-size: 11px;
+  fill: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+

@@ -1,0 +1,414 @@
+/* Top bar */
+.topbar {
+  height: var(--topbar-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
+  position: relative;
+}
+.brand {
+  /* Now a <button> (cycle 290) so clicking the logo resets the view. Strip button chrome so it
+     reads identical to the prior <div> presentation, only with cursor + focus affordance. */
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.brand:hover .brand-mark rect { opacity: 1; }
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* The brand mark gets a soft gradient fill so the tiers read as a small physical object (not
+   three flat rects). Accent-tinted so it picks up the app's primary color, but quiet enough to
+   not steal attention from the breadcrumb that follows. */
+.brand-mark rect {
+  fill: var(--accent);
+  opacity: 0.92;
+}
+.brand-mark rect:nth-child(1) { opacity: 0.55; }
+.brand-mark rect:nth-child(2) { opacity: 0.78; }
+.brand-text {
+  line-height: 1;
+}
+.topbar-spacer {
+  flex: 1;
+}
+/* Context switcher pill — sits beside the brand when kd is in kubeconfig mode and the user has
+   more than one context. Sized to match .conn / .crumb so it doesn't shout for attention. */
+.ctx-switcher {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 22px 3px 10px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.ctx-switcher:hover {
+  border-color: var(--border-strong);
+}
+/* Phone-width topbar: the row's intrinsic widths total ~480px, pushing the conn pill (the
+   offline-retry control!) and the theme/help buttons off a 375px screen. Tighten gaps, drop the
+   decorative brand text (the glyph + title keep the reset affordance), and let the switcher and
+   crumb truncate — the right-side utilities must always stay reachable.
+   NARROW_SCREEN_QUERY: keep this query in sync with the constant in App.tsx. */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .brand-text {
+    display: none;
+  }
+  .ctx-switcher {
+    max-width: 38vw;
+  }
+  .crumb {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* Breadcrumb beside the brand: dim separator, slightly heavier namespace name so the eye lands on
+   the ns first (the brand is the constant; the ns is the context). */
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  max-width: 320px;
+  overflow: hidden;
+}
+.crumb-sep {
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+}
+.crumb-cluster-icon {
+  flex: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.3;
+  fill: none;
+  margin-right: 3px;
+}
+.crumb-ns {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Group-by segmented control (the Group facet in the topology toolbar). Single-select, so connected
+   buttons in a pill — the contrast against the toggle chips signals "pick one mode". */
+.group-seg {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.group-seg button {
+  border: 0;
+  background: transparent;
+  padding: 4px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
+}
+.group-seg button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+.group-seg button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  /* Soft lift on the active segment so it reads as "the one you picked" instead of just a flat
+     fill — pairs with hover so the control feels tactile. */
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.group-seg button.active:hover {
+  background: color-mix(in srgb, var(--accent) 92%, white);
+}
+.group-seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.legend {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+.legend-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.legend-item.active {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.legend-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.legend-item.dim {
+  opacity: 0.4;
+}
+.legend-count {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.conn {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+/* Offline variant (no .live / .connecting): match the degraded color vocabulary so a hung stream
+   reads as trouble at a glance — same red as a Degraded card border. */
+.conn:not(.live):not(.connecting) {
+  color: var(--degraded-text);
+  border-color: color-mix(in srgb, var(--health-degraded) 60%, var(--border-strong));
+}
+.conn:not(.live):not(.connecting)::before {
+  background: var(--health-degraded);
+}
+/* Pulsing leading dot (cycle 129): a slow heartbeat on the live pill makes the dashboard read as
+   alive at a glance — the SSE stream's actual liveness mirrored in pixels. Connecting amber
+   doesn't pulse the dot (the whole pill already pulses); offline shows a static dim dot. */
+.conn::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.conn.live {
+  color: var(--health-healthy);
+  border-color: var(--health-healthy);
+}
+.conn.live::before {
+  background: var(--health-healthy);
+  animation: heartbeat 2.4s ease-in-out infinite;
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.7); opacity: 0.55; }
+}
+/* "connecting…" is a transient state; a slow opacity pulse signals "working on it" instead of
+   the alarming bare "offline" look. Progressing amber so it reads neutral-positive (waiting). */
+.conn.connecting {
+  color: var(--progressing-text);
+  border-color: var(--progressing-text);
+  animation: conn-pulse 1.2s ease-in-out infinite;
+}
+.conn.connecting::before {
+  background: var(--health-progressing);
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+/* Reduced-motion: keep the color signal but skip the heartbeat scale/opacity — the bordered pill
+   still says "live" without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .conn.live::before,
+  .conn.connecting { animation: none; }
+}
+/* Offline-as-button (cycle 291): when offline, the pill becomes a clickable retry. Inherit the
+   .conn shape but add hover/focus affordance so the operator can tell it's actionable. */
+button.conn.conn-retry {
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+button.conn.conn-retry:hover {
+  background: color-mix(in srgb, var(--health-degraded) 12%, transparent);
+}
+button.conn.conn-retry:focus-visible {
+  outline: 2px solid var(--health-degraded);
+  outline-offset: 2px;
+}
+.help-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.help-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.help-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Sidebar toggle: same round utility chrome as .theme-btn/.help-btn so the topbar buttons read
+   as one set (repetition), but it sits at the far LEFT — directly above the sidebar it controls. */
+.sidebar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.sidebar-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.sidebar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sidebar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Theme toggle (cycle 301): shares the round bordered chrome of .help-btn so the two topbar
+   utility buttons read as a set. The icon strokes pick up the dim text color (filled accents like
+   the moon/auto disc use currentColor) so the glyph sits at the same visual weight as the ? mark. */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.theme-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.theme-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Yank confirmation toast (cycle 288): bottom-center overlay, briefly shown after 'y' yanks the
+   selected resource's Kind/name to the clipboard. Non-interactive (pointer-events: none) so it
+   never gets in the way of a follow-up click. Fade-in/out keeps it from punching the eye. */
+.copy-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  z-index: 25;
+  pointer-events: none;
+  animation: copy-toast-in 0.16s ease-out, copy-toast-out 0.3s ease-in 1.2s forwards;
+}
+.copy-toast code {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+.copy-toast svg {
+  color: var(--health-healthy);
+}
+@keyframes copy-toast-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes copy-toast-out {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-toast { animation: none; }
+}
+
