@@ -1,38 +1,34 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { createStore, reconcile } from 'solid-js/store'
 import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
 import { layoutGraphByCapacity, type CapResource, type CapRow, type CapacityLayout } from '../capacityLayout'
 import { useNow } from '../clock'
-import { edgeKey, spotlightSubtree } from '../graphState'
 import { DASHED, edgePath, edgeTitle } from '../edgeRender'
-import { nextRovingIndex } from '../rovingFocus'
-import { type CapTipData } from '../capacityTooltips'
 import CapacityView from './CapacityView'
+import CanvasEmpty from './topology/CanvasEmpty'
+import Toolbar from './topology/Toolbar'
+import { createCapacityHover } from './topology/capacityHover'
+import { autoExpandSelection, createExpandedClusters } from './topology/collapseState'
+import { createExitAnimation } from './topology/exitAnimation'
+import { createSpotlight } from './topology/spotlight'
 import { HEALTH_ORDER, healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
 import { kindStats as computeKindStats } from '../kindStats'
 import { orderedForNav } from '../nav'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, pluralizeKind, prefixParentNames } from '../names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, pluralizeKind, prefixParentNames } from '../names'
 import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
 import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
-import { isNodeFaded } from '../fade'
-import { readRawPref, writePref } from '../prefs'
 import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
-import type { Capacity, GroupBy, Health, KEdge, KNode, RelCategory } from '../types'
+import type { Capacity, Health, KEdge, KNode, RelCategory } from '../types'
 
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
 const EMPTY_IDS: ReadonlySet<string> = new Set()
 
-// The group-by options, exported so App's keyboard shortcuts (1–3) and help overlay stay in sync
-// with the segmented control rendered in the toolbar. Order = number-key order.
-export const GROUP_OPTIONS: { id: GroupBy; label: string; hint: string }[] = [
-  { id: 'relationship', label: 'Relationship', hint: 'Lay resources out along the relationships you enable' },
-  { id: 'nodes', label: 'Nodes', hint: 'Group pods into the node they run on' },
-  { id: 'kind', label: 'Kind', hint: 'Group every resource into per-kind boxes' },
-]
+// The group-by options live with the toolbar's segmented control (topology/Toolbar.tsx); re-exported
+// here so App's keyboard shortcuts (1–3), urlState, and the help overlay keep one import path.
+export { GROUP_OPTIONS } from './topology/Toolbar'
 
 interface Props {
   nodes: KNode[]
@@ -123,16 +119,8 @@ interface Props {
 const MIN_FIT_SCALE = 0.55
 
 export default function Topology(props: Props) {
-  // Per-cluster expansion state for the "+N older" collapse (ephemeral: a Set of expanded keys,
-  // empty = everything collapsed, resets on reload). Keyed by the layout's stable collapse key
-  // ("kind:Pod", "host:<node>", …) so toggling one cluster never disturbs another.
-  const [expandedClusters, setExpandedClusters] = createSignal<ReadonlySet<string>>(new Set())
-  const toggleCluster = (key: string) =>
-    setExpandedClusters((s) => {
-      const next = new Set(s)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
+  // Per-cluster "+N more" collapse expansion state (see topology/collapseState.ts for the key scheme).
+  const { expandedClusters, setExpandedClusters, toggleCluster } = createExpandedClusters()
 
   // Capacity view (Nodes group-by) control: which single resource sizes the bars. App owns the
   // signal (so it round-trips through the URL + localStorage like group-by/relationships, making the
@@ -140,30 +128,6 @@ export default function Topology(props: Props) {
   // explicit Req + Use stacked form (the overlay/Use-only mode was retired after live review).
   const capResource = (): CapResource => props.capResource ?? 'cpu'
   const setCapResource = (r: CapResource) => props.onCapResource?.(r)
-  // Radio refs for the two single-select segmented controls, so arrow-key navigation can move DOM
-  // focus to follow the roving tabindex (see the radiogroup onKeyDown handlers in the toolbar).
-  const groupSegRefs: Partial<Record<GroupBy, HTMLButtonElement>> = {}
-  const capResRefs: Partial<Record<CapResource, HTMLButtonElement>> = {}
-  // Roving keyboard model for the filter-chip toolbars (role=toolbar): the first chip is the single
-  // Tab stop and arrows/Home/End move focus among the rest, so Tab doesn't have to step through all
-  // 11+ kind chips to pass the row. Derives the chip list + current focus from the DOM, so it works
-  // unchanged for the dynamic kind row whose chip count changes per namespace.
-  const onToolbarKey = (e: KeyboardEvent) => {
-    const chips = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button')]
-    const next = nextRovingIndex(e.key, chips.indexOf(document.activeElement as HTMLButtonElement), chips.length)
-    if (next === null) return
-    e.preventDefault()
-    chips[next].focus()
-  }
-  // Rich hover tooltip for the capacity bars (item: Grafana-style panels). Holds normalized tooltip
-  // data + the pointer position; an HTML overlay (not an SVG <title>) follows the cursor so the bar's
-  // name/usage/request/limit read instantly instead of after the browser's ~700ms title delay. The
-  // bullets/segments no longer print these numbers inline (too cluttered) — the tooltip carries them.
-  const [capTip, setCapTip] = createSignal<{ d: CapTipData; x: number; y: number } | null>(null)
-  // The tooltip payload builders (tipFromSeg / tipFromAgg / tipFromNodeUse) are pure and live in
-  // capacityTooltips.ts; here we just thread the active resource and pointer position through. A
-  // segment's contributed metric (use vs req) depends on which bar it sits on, so the caller passes it.
-  const showTip = (d: CapTipData, e: PointerEvent) => setCapTip({ d, x: e.clientX, y: e.clientY })
 
   // Project the full streamed edge set onto the active relationship categories (reversing the
   // referenced-as-parent ones) — the client-side replacement for the old server per-view Filter.
@@ -231,26 +195,9 @@ export default function Topology(props: Props) {
     const hf = props.healthFilter
     return layoutGraphWithOrphans(connected, orphans, edges, expandedClusters(), hf ? (n) => n.health === hf : undefined)
   })
-  // Auto-expand the fold hiding a navigated-to selection. Enter-cycle, j/k stepping, and deep-links
-  // all walk the FULL node set (troubled-first), so a target is often a node folded behind a "+N more"
-  // pill: the drawer opens but the node isn't rendered, so there's no on-canvas .selected marker and
-  // the operator can't see where it lives. When the selection isn't currently visible, find the single
-  // pill whose fold covers it and expand just that one — revealing the node with its marker. Scoped to
-  // the EXACT selected node (not its related() subtree) so selecting a hub never unfolds every sibling.
-  createEffect(() => {
-    const id = props.selectedId
-    if (!id) return
-    const nodes = layout().nodes
-    if (nodes.some((n) => n.id === id && !n.collapse)) return // already on canvas
-    for (const n of nodes) {
-      const meta = n.collapse
-      if (!meta) continue
-      if (meta.hidden.some((h) => h.id === id) || meta.hiddenDescendants?.some((h) => h.id === id)) {
-        setExpandedClusters((s) => (s.has(meta.key) ? s : new Set(s).add(meta.key)))
-        break
-      }
-    }
-  })
+  // Auto-expand the single fold hiding a navigated-to selection (Enter-cycle / j-k / deep-link
+  // targets are often folded behind a "+N more" pill) — see topology/collapseState.ts.
+  autoExpandSelection({ selectedId: () => props.selectedId, layoutNodes: () => layout().nodes, setExpandedClusters })
   // Kind grouping draws a faint kind-label band above each kind box so the operator can scan
   // "this section is all Pods, that's all Services" without inferring it from card kinds.
   // Kind label bands. The Kind grouping bands every box; the relationship grouping bands ONLY its
@@ -367,63 +314,8 @@ export default function Topology(props: Props) {
       return { ...c, count: props.edges.filter((e) => types.has(e.type)).length }
     })
   })
-  // Fold the specialized (secondary) relationship lenses behind a "+N more" disclosure so the row stays
-  // scannable — the user's "collapse the minor ones" ask. An ACTIVE secondary always shows inline (so
-  // the operator never loses sight of what's drawn); only inactive ones hide. Persisted like the other
-  // display habits so the choice sticks across reloads.
-  const [relsExpanded, setRelsExpanded] = createSignal(readRawPref('kd:relsExpanded') === '1')
-  const toggleRelsExpanded = () =>
-    setRelsExpanded((v) => {
-      writePref('kd:relsExpanded', v ? '0' : '1')
-      return !v
-    })
-  const relActive = (id: RelCategory) => props.relFilter?.has(id) ?? false
-  const visibleRelChips = createMemo(() =>
-    relChips().filter((c) => !c.secondary || relActive(c.id) || relsExpanded()),
-  )
-  // Inactive secondary lenses present in this graph — the ones the disclosure folds away. The toggle
-  // appears only when there is at least one (else the row already shows everything).
-  const foldableRelCount = createMemo(() => relChips().filter((c) => c.secondary && !relActive(c.id)).length)
-  // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
-  // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
-  // We snapshot the prior layout each time createEffect runs and diff against the new one.
-  const [exiting, setExiting] = createSignal<import('../layout').PositionedNode[]>([])
-  let prevPositioned: import('../layout').PositionedNode[] = []
-  const exitTimers = new Map<string, number>()
-  createEffect(() => {
-    const cur = layout().nodes
-    const curIds = new Set(cur.map((n) => n.id))
-    // Collapse pills are synthetic — never play an exit animation when one folds away on expand.
-    const removed = prevPositioned.filter((n) => !curIds.has(n.id) && !exitTimers.has(n.id) && !n.collapse)
-    if (removed.length > 0) {
-      setExiting((prev) => [...prev, ...removed])
-      for (const n of removed) {
-        const t = window.setTimeout(() => {
-          setExiting((prev) => prev.filter((p) => p.id !== n.id))
-          exitTimers.delete(n.id)
-        }, 320)
-        exitTimers.set(n.id, t)
-      }
-    }
-    prevPositioned = cur
-  })
-  onCleanup(() => {
-    for (const t of exitTimers.values()) clearTimeout(t)
-  })
-  const exitingIds = createMemo(() => new Set(exiting().map((n) => n.id)))
-
-  // Render the cards from a RECONCILED store keyed by id, NOT straight off layout(). layout() is a pure
-  // recompute that rebuilds every PositionedNode object each run, so a <For each={layout().nodes}> keyed
-  // by object reference tore down and recreated EVERY card on any structural (add/remove) patch — the
-  // canvas "flicker" the operator saw (measured: a single pod scaling rebuilt all 45 cards). reconcile
-  // with key:'id' preserves each surviving card's object identity across recomputes, so <For> keeps its
-  // DOM and Solid surgically patches only the changed fields (x/y/health/…) on the cards that actually
-  // moved. Empty in the Nodes group-by — its own bar renderer draws there, not these cards.
-  const [renderNodes, setRenderNodes] = createStore<import('../layout').PositionedNode[]>([])
-  createEffect(() => {
-    const next = props.groupBy === 'nodes' ? [] : [...layout().nodes, ...exiting()]
-    setRenderNodes(reconcile(next, { key: 'id' }))
-  })
+  // Departing-node fade-out + the id-keyed reconciled card store (see topology/exitAnimation.ts).
+  const { exitingIds, renderNodes } = createExitAnimation({ layoutNodes: () => layout().nodes, groupBy: () => props.groupBy })
 
   // Map each node to the longest PREFIX-PARENT name (prefixParentNames), so a child renders relative to
   // its parent in the tree. Walks the full edge set — see names.ts for the prefix/longest-match rules.
@@ -448,72 +340,20 @@ export default function Topology(props: Props) {
   // name hides exactly the part that tells them apart; show the (middle-truncated) full name there.
   const label = (n: KNode) => cardName(n.name, props.groupBy === 'relationship' ? ownerName().get(n.id) : undefined)
 
-  // When a node is selected, walk its connected component (edges treated as undirected) so the
-  // entire relationship tree containing the selection stays lit while everything else fades out —
-  // ArgoCD-style focus on "this resource and what relates to it". Cycle 157 promoted this from
-  // immediate-neighbors to full-component because the auto-fit (below) targets the same set:
-  // clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
-  // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full edge
-  // set. Following relationships the operator hasn't enabled lit (and framed) nodes they can't even
-  // see — e.g. a Pod dragging in its mounted ConfigMaps when Volumes is off, so the selection-fit
-  // zoomed way out. The spotlight now matches what's on screen. (BFS in spotlightSubtree, graphState.ts.)
-  const related = createMemo(() => {
-    const id = props.selectedId
-    if (!id) return null
-    // A ghost selection (the inspected resource was deleted; the drawer shows its terminal banner)
-    // has no card on canvas — a spotlight with no subject would just fade EVERYTHING. No spotlight.
-    if (!props.nodes.some((n) => n.id === id)) return null
-    return spotlightSubtree(id, displayEdges())
-  })
-
-  // Search dims everything that doesn't match the query (by name, kind, label, or image), so a
-  // resource is findable in a dense namespace without losing its place in the tree. Null when the
-  // box is empty. The query is owned by the parent so it resets on namespace/view change.
+  // Search query accessors: the query is owned by the parent so it resets on namespace/view change.
   const query = () => props.search
   const setQuery = (q: string) => props.onSearch(q)
-  const matches = createMemo(() => {
-    const q = query().trim()
-    if (!q) return null
-    // Count over the FULL node set, not layout().nodes — a folded collapse pill removes matching
-    // nodes from the layout, so counting only what's on canvas undercounts (search "workflow" on a
-    // namespace whose 144 Workflows are mostly folded read "38" while the honest total is 158). The
-    // matchOrdered Enter-cycle steps through this full set and auto-expands the fold hiding each
-    // target (see the selection auto-expand effect), so every counted match is actually reachable;
-    // and this readout now agrees with the bottom-overlay filterMatchCount. Intersect with the kind
-    // filter so faded-out kinds don't count. Read props.kindFilter directly (not activeKinds(),
-    // declared later → TDZ).
-    const kf = props.kindFilter
-    const kindOk = (kind: string) => !kf || kf.size === 0 || kf.has(kind)
-    const m = new Set<string>()
-    // Over visibleNodes (not props.nodes): a hidden orphan isn't on the canvas, so search must not
-    // count or Enter-cycle to it — "what you see is what you search". Still the full set minus orphans,
-    // so folded-but-present matches keep counting (the folded-undercount fix holds).
-    for (const n of visibleNodes()) {
-      if (kindOk(n.kind) && nodeMatches(n, q)) m.add(n.id)
-    }
-    return m
-  })
-  // Ordered list of matches in the same severity-first order used for Enter cycling (cycle 284).
-  // Memoized so the "X of N" indicator and the Enter handler agree on positions.
-  const matchOrdered = createMemo(() => {
-    const m = matches()
-    if (!m || m.size === 0) return []
-    return orderedForNav(props.nodes.filter((n) => m.has(n.id)))
-  })
-  // 1-based position of the current selection within matchOrdered, or 0 if the selection is not a
-  // match. Drives the "3 of 7 matches" indicator that complements Enter-cycling (cycle 285).
-  const matchPos = createMemo(() => {
-    const ordered = matchOrdered()
-    if (ordered.length === 0) return 0
-    const idx = ordered.findIndex((n) => n.id === props.selectedId)
-    return idx < 0 ? 0 : idx + 1
-  })
-
-  // Active kind filter (cycle 203): an empty/null set means "show all kinds"; otherwise only the
-  // listed kinds stay lit. Re-derived so an empty set still reads as "no filter active".
-  const activeKinds = createMemo(() => {
-    const s = props.kindFilter
-    return s && s.size > 0 ? s : null
+  // Selection spotlight + search/kind-filter fade composition (see topology/spotlight.ts — the
+  // fade precedence order lives there and is load-bearing).
+  const { related, matches, matchOrdered, matchPos, activeKinds, nodeKindOk, nodeFaded, nodeById, edgeFaded, edgeAdjacent } = createSpotlight({
+    nodes: () => props.nodes,
+    visibleNodes,
+    displayEdges,
+    layoutNodes: () => layout().nodes,
+    selectedId: () => props.selectedId,
+    query,
+    kindFilter: () => props.kindFilter,
+    healthFilter: () => props.healthFilter,
   })
   // The Nodes (capacity) view draws ONLY cluster Nodes + this namespace's Pods, sourced from the
   // cluster-wide capacity feed (props.capacity), NOT props.nodes' full per-kind inventory. Every count
@@ -584,65 +424,14 @@ export default function Topology(props: Props) {
   // Only surface states actually present (stable HEALTH_ORDER), so the row reads as a quiet "all
   // healthy" when nothing's wrong rather than a line of zeros.
   const shownHealth = createMemo(() => HEALTH_ORDER.filter((h) => healthStats()[h]))
-  // Nodes that pass the kind filter — used both for fading and to short-circuit the related/search
-  // intersection. Kinds compose with search and healthFilter (intersection: a node must match all).
-  const nodeKindOk = (kind: string) => {
-    const a = activeKinds()
-    return !a || a.has(kind)
-  }
-
-  // Fade precedence: search query > legend health filter > kind filter > selection neighbors;
-  // only a bare selection lights its edges accent. When a kind filter is active alongside another
-  // filter, both must accept the node — so kinds compose rather than overriding. The selected
-  // node never fades, even if a filter would exclude it: the operator's focus stays visible
-  // instead of ghosting out behind the spotlight (cycle 224).
-  const nodeFaded = (n: { id: string; health: string; kind: string }) =>
-    isNodeFaded(n, {
-      selectedId: props.selectedId,
-      kindOk: nodeKindOk,
-      matchIds: matches(),
-      healthFilter: props.healthFilter,
-      relatedIds: related()?.nodes ?? null,
-    })
-  // Capacity-view spotlight: hovering a pod segment/bullet (not just clicking it) spotlights it and
-  // fades the rest, like a Grafana panel — faster than click-to-select for reading the bars. capHover
-  // holds the hovered element's key: a pod id, a `small:<host>` / `other:<host>` aggregate marker, or
-  // `overhead:<host>` for the node-usage backdrop (no segment matches it, so everything else fades).
-  // When something is hovered it wins; with nothing hovered we fall back to the standard
-  // selection/search/filter fade (nodeFaded), so a selected pod stays spotlit after the cursor leaves.
-  const [capHover, setCapHover] = createSignal<string | null>(null)
-  // The spotlight originally dimmed only the pod SEGMENTS, leaving every node row's frame, tracks, value
-  // labels and name fully bright — a half-applied "fades the rest" that left a dozen bright frames and a
-  // column of bright totals competing with the one hovered pod. capRowFaded recedes a WHOLE row's chrome
-  // when the hover belongs to a DIFFERENT node, so only the spotlit pod's node stays lit (Contrast).
-  const capHoverHost = createMemo<string | null>(() => {
-    const h = capHover()
-    if (!h) return null
-    const colon = h.indexOf(':') // small:/other:/overhead:<host> markers carry the host
-    if (colon >= 0) return h.slice(colon + 1)
-    for (const n of props.capacity?.nodes ?? []) if (n.id === h) return n.host ?? null // pod id → its node
-    return null
+  // Capacity-view hover spotlight + cursor-following tooltip (see topology/capacityHover.ts).
+  const { capTip, setCapTip, showTip, setCapHover, capRowFaded, capSegFaded, capAggFaded } = createCapacityHover({
+    capacityNodes: () => props.capacity?.nodes ?? [],
+    nodeFaded,
+    selectedId: () => props.selectedId,
+    matches,
+    healthFilter: () => props.healthFilter,
   })
-  const capRowFaded = (host: string) => {
-    const hh = capHoverHost()
-    return hh !== null && hh !== host
-  }
-  const capSegFaded = (n: { id: string; health: string; kind: string; host?: string }) => {
-    const h = capHover()
-    // A segment on a fully-dimmed OTHER row is recessed by capRowFaded already — don't double-fade it
-    // (it would compound to near-invisible and read dimmer than its own row frame). Only the hovered
-    // row's own siblings fade individually here.
-    if (h) return capRowFaded(n.host ?? '') ? false : n.id !== h
-    return nodeFaded(n)
-  }
-  // An aggregate block stands for many pods and is never the single spotlighted pod, so it fades
-  // whenever a specific element is in focus — a hovered sibling, or a selected/searched/filtered pod.
-  // (Fixes the bug where the bright accent block stayed lit while every individual segment faded.)
-  const capAggFaded = (marker: string) => {
-    const h = capHover()
-    if (h) return capRowFaded(marker.slice(marker.indexOf(':') + 1)) ? false : marker !== h
-    return !!props.selectedId || !!matches() || !!props.healthFilter
-  }
   // A collapsed pill counts how many of its hidden nodes the operator is currently searching/filtering
   // for, so the badge ("● N match") signals a fold is hiding a result without revealing it (FR-006/D7).
   // Only an EXPLICIT query counts — a live search or the health legend filter. Selection is navigation,
@@ -686,28 +475,6 @@ export default function Topology(props: Props) {
     if (!meta.expanded && (query().trim() || props.healthFilter) && collapseMatchCount(meta) === 0) return true
     return false
   }
-  // One id→node map per layout, so the per-edge lookups below (the kind-fade test and each edge's
-  // hover title) are O(1) instead of a linear find apiece — they run for every edge on every render,
-  // so the old finds were O(edges×nodes) on each SSE patch / selection change.
-  const nodeById = createMemo(() => {
-    const m = new Map<string, import('../layout').PositionedNode>()
-    for (const n of layout().nodes) m.set(n.id, n)
-    return m
-  })
-  const edgeFaded = (e: KEdge) => {
-    const m = matches()
-    if (m) return !(m.has(e.from) && m.has(e.to))
-    if (props.healthFilter) return true
-    if (activeKinds()) {
-      // Light the edge only when both endpoints pass the kind filter — keeps the active subset's
-      // connectivity readable instead of leaving dangling lines that go nowhere.
-      const a = nodeById().get(e.from)
-      const b = nodeById().get(e.to)
-      return !(a && b && nodeKindOk(a.kind) && nodeKindOk(b.kind))
-    }
-    const r = related()
-    return r ? !r.edges.has(edgeKey(e)) : false
-  }
   // Kind grouping draws NO arrows at all: the cross-kind backbone fans across the whole matrix with
   // no meaningful routing (cards sit in per-kind boxes, not along their links), so the lines are pure
   // noise — even on selection, where they tangled across boxes rather than tracing a path. The
@@ -715,16 +482,6 @@ export default function Topology(props: Props) {
   // "what connects to THIS" answer without the clutter. Every other view keeps its edges (their
   // layouts route them meaningfully along the backbone).
   const renderedEdges = createMemo(() => (props.groupBy === 'kind' ? [] : layout().edges))
-  // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
-  // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
-  // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
-  // "what connects straight to the thing I clicked", so a Pod selection highlights only its own
-  // owner→pod link rather than lighting up the Deployment→RS→all-siblings backbone too.
-  const edgeAdjacent = (e: KEdge) => {
-    if (matches() || props.healthFilter || activeKinds()) return false
-    const id = props.selectedId
-    return !!id && (e.from === id || e.to === id)
-  }
 
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
@@ -1464,406 +1221,52 @@ export default function Topology(props: Props) {
         </div>
       </Show>
       <Show when={props.nodes.length === 0}>
-        <div class="topology-empty">
-          {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a
-              tiny icon-circle hint at the top-left echoing the cycle-126 icon-forward card. */}
-          <svg class="topology-empty-illo" viewBox="0 0 140 64" width="140" height="64" aria-hidden="true">
-            <g>
-              <rect x="6" y="22" width="36" height="22" rx="5" class="empty-card" />
-              <circle cx="14" cy="32" r="2.6" class="empty-card-icon" />
-            </g>
-            <g>
-              <rect x="50" y="12" width="36" height="22" rx="5" class="empty-card" />
-              <circle cx="58" cy="22" r="2.6" class="empty-card-icon" />
-            </g>
-            <g>
-              <rect x="94" y="26" width="36" height="22" rx="5" class="empty-card" />
-              <circle cx="102" cy="36" r="2.6" class="empty-card-icon" />
-            </g>
-          </svg>
-          {/* role=status: the connecting→offline/no-access/not-signed-in transitions must be
-              announced — the conn pill (the other live region) HIDES in the identity states, so
-              without this a screen reader hears nothing when the canvas reaches its terminal
-              answer. */}
-          <div class="topology-empty-text" role="status">
-            <Show when={props.connected} fallback={
-              // Rung order: auth > no-access > offline > connecting. Identity failures outrank
-              // connectivity ones — with zero visible namespaces or no identity at all, "can't
-              // reach the cluster" misdiagnoses what is actually a permissions answer.
-              <Show when={props.authFailed} fallback={
-              <Show when={props.noAccess} fallback={
-                <Show when={props.offline} fallback={
-                  <>
-                    {/* Small inline spinner so "Connecting…" reads as "actively working on it" rather
-                        than a frozen text state. CSS animation; respects prefers-reduced-motion. */}
-                    <span class="topology-empty-spinner" aria-hidden="true" />
-                    Connecting…
-                  </>
-                }>
-                  {/* Offline with no data (e.g. an unreachable context): a static message, NOT the
-                      spinner — the connection failed, so point at the retry control rather than
-                      implying progress. */}
-                  Can't reach the cluster — use “offline · retry” above to reconnect.
-                  {/* The server-reported reason (when the context's cache failed to build): a Go error
-                      chain whose TAIL names the root cause ("getting credentials: exec: …"), telling
-                      an expired-SSO operator the fix is a login, not another retry. Dim and clamped —
-                      diagnosis, not the headline; the full chain stays in the title. */}
-                  <Show when={props.offlineReason}>
-                    <div class="topology-empty-reason" title={props.offlineReason}>{props.offlineReason}</div>
-                  </Show>
-                </Show>
-              }>
-                No namespaces are visible to this account — ask whoever runs kd to grant access.
-              </Show>
-              }>
-                Not signed in — kd received no identity from its auth proxy, or access is denied.
-              </Show>
-            }>
-              Nothing to show in this namespace.
-            </Show>
-          </div>
-          {/* When the canvas is empty but the stream is live, surface a hint describing the current
-              grouping / relationship selection, so the operator understands the lens they're
-              looking through. Hidden while connecting (the line above carries the message). */}
-          <Show when={props.connected}>
-            <div class="topology-empty-hint">{emptyHint()}</div>
-          </Show>
-        </div>
+        <CanvasEmpty
+          connected={props.connected}
+          offline={props.offline}
+          noAccess={props.noAccess}
+          authFailed={props.authFailed}
+          offlineReason={props.offlineReason}
+          hint={emptyHint()}
+        />
       </Show>
-      {/* The canvas control bar: a full-width strip across the top of the canvas, three short rows
-          — search + Group, Relationships + Health, then Kinds — instead of one facet per line, so
-          it stays shallow. Each facet is an inline label hugging its controls (proximity). The
-          Kinds row is a strict single line that scrolls horizontally on overflow, so the bar height
-          never grows with the number of kinds. */}
-      <div class="topology-toolbar" ref={toolbarEl}>
-      {/* Row 1 — search + group: the resource search plus the layout selector. */}
-      <div class="toolbar-row topology-search">
-        {/* Wraps the input so the magnifier glyph (positional, decorative) and the clear-X button
-            sit inside the field's frame instead of beside it. */}
-        <div class="topology-search-field">
-          <svg class="topology-search-icon" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-            <circle cx="6" cy="6" r="3.5" />
-            <line x1="8.6" y1="8.6" x2="12" y2="12" />
-          </svg>
-          <input
-            ref={props.searchRef}
-            placeholder="Search resources…  ( ⌘K )"
-            aria-label="Search resources in current view"
-            // Surface the structured-form (cycle 295) on hover so an operator who pasted a
-            // Kind/name and got a single hit can intuit why — also discoverable for those who
-            // haven't read the help overlay.
-            title="Search by name, kind, status, IP, image, or label. Enter steps through matches; po/web finds one kind."
-            value={query()}
-            onInput={(e) => setQuery(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                if (query()) setQuery('')
-                else (e.currentTarget as HTMLInputElement).blur()
-              }
-              else if (e.key === 'Enter') {
-                // Cycle through matches: first Enter picks the most-troubled (orderedForNav).
-                // Subsequent Enters step to the next match in that order; Shift+Enter steps back.
-                // Wraps at both ends. With nothing matched it's a no-op.
-                const ordered = matchOrdered()
-                if (ordered.length === 0) return
-                const cur = ordered.findIndex((n) => n.id === props.selectedId)
-                const dir = e.shiftKey ? -1 : 1
-                const next = cur < 0
-                  ? (dir > 0 ? 0 : ordered.length - 1)
-                  : (cur + dir + ordered.length) % ordered.length
-                props.onSelect(ordered[next].id)
-              }
-            }}
-          />
-          <Show when={query()}>
-            <button class="topology-search-clear" onClick={() => setQuery('')} title="Clear (Esc)" aria-label="Clear search">
-              ×
-            </button>
-          </Show>
-        </div>
-        <Show when={matches()}>
-          {/* The count is also the affordance: clicking it flies to the matches (frameMatches),
-              so a mouse operator who typed a query and sees only faded cards has a discoverable way
-              to reach the results — complementing Enter-cycling for the keyboard. Disabled (a true
-              no-op) when nothing matches. */}
-          <button
-            type="button"
-            class="topology-matches"
-            classList={{ none: matches()!.size === 0 }}
-            disabled={matches()!.size === 0}
-            onClick={frameMatches}
-            // When the current selection is itself a match, prefix the count with its 1-based
-            // position in the cycle order — so an operator pressing Enter knows "I'm at 3 of 7"
-            // and can predict when the cycle wraps. Falls back to the bare count if the selection
-            // is outside the match set (or no selection).
-            title={
-              matchPos() > 0
-                ? `Match ${matchPos()} of ${matches()!.size} — click to frame all`
-                : matches()!.size === 0
-                  ? 'Nothing matches this search'
-                  : `Click to frame the ${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`
-            }
-          >
-            <Show
-              when={matches()!.size === 0}
-              fallback={matchPos() > 0
-                ? `${matchPos()} of ${matches()!.size}`
-                : `${matches()!.size} match${matches()!.size === 1 ? '' : 'es'}`}
-            >
-              no matches
-            </Show>
-          </button>
-        </Show>
-        {/* Clear-all: surfaces the same operation as Escape, but discoverable without knowing
-            the shortcut. Visible only when at least one filter is on, so the toolbar stays
-            quiet when there's nothing to clear (cycle 216). */}
-        <Show when={(matches() || props.healthFilter || activeKinds()) && props.onClearFilters}>
-          <button class="topology-clear" onClick={() => props.onClearFilters?.()} title="Clear all filters (Esc)">
-            clear
-          </button>
-        </Show>
-        {/* Group facet — the layout selector. Single-select, so a connected segmented control (the
-            contrast against the toggle chips signals "pick one mode"). Shares row 1 with the search
-            field to keep the panel short. */}
-        <Show when={props.onGroupBy}>
-          <div class="toolbar-facet">
-            <span class="toolbar-label">Group</span>
-            {/* Single-select → a radiogroup (not aria-pressed toggle buttons): a screen reader hears
-                "radio group, Relationship selected, 1 of 3" and arrow keys move between options, the
-                expected segmented-control model. */}
-            <div
-              class="group-seg"
-              role="radiogroup"
-              aria-label="Group resources by"
-              onKeyDown={(e) => {
-                const ids = GROUP_OPTIONS.map((g) => g.id)
-                const i = nextRovingIndex(e.key, ids.indexOf(props.groupBy ?? 'relationship'), ids.length)
-                if (i === null) return
-                e.preventDefault()
-                props.onGroupBy?.(ids[i])
-                groupSegRefs[ids[i]]?.focus()
-              }}
-            >
-              <For each={GROUP_OPTIONS}>
-                {(g) => (
-                  <button
-                    ref={(el) => (groupSegRefs[g.id] = el)}
-                    role="radio"
-                    aria-checked={(props.groupBy ?? 'relationship') === g.id}
-                    tabindex={(props.groupBy ?? 'relationship') === g.id ? 0 : -1}
-                    classList={{ active: (props.groupBy ?? 'relationship') === g.id }}
-                    onClick={() => props.onGroupBy?.(g.id)}
-                    title={g.hint}
-                  >
-                    {g.label}
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-        {/* Capacity-view facet — only in the Nodes group-by. Resource picks which single metric
-            sizes the bars (CPU/memory never share one length channel). The bars are the explicit
-            Req + Use stacked form; this namespace's pods render individually and the rest fold into
-            one labelled "other namespaces" block, so no separate legend is needed. */}
-        <Show when={props.groupBy === 'nodes'}>
-          <div class="toolbar-facet">
-            <span class="toolbar-label">Resource</span>
-            <div
-              class="group-seg"
-              role="radiogroup"
-              aria-label="Size bars by resource"
-              onKeyDown={(e) => {
-                const ids: CapResource[] = ['cpu', 'memory']
-                const i = nextRovingIndex(e.key, ids.indexOf(capResource()), ids.length)
-                if (i === null) return
-                e.preventDefault()
-                setCapResource(ids[i])
-                capResRefs[ids[i]]?.focus()
-              }}
-            >
-              <For each={[{ id: 'cpu', label: 'CPU' }, { id: 'memory', label: 'Memory' }] as const}>
-                {(r) => (
-                  <button
-                    ref={(el) => (capResRefs[r.id] = el)}
-                    role="radio"
-                    aria-checked={capResource() === r.id}
-                    tabindex={capResource() === r.id ? 0 : -1}
-                    classList={{ active: capResource() === r.id }}
-                    onClick={() => setCapResource(r.id)}
-                    title={`Size the bars by ${r.label}`}
-                  >
-                    {r.label}
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-      </div>
-        {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. The
-            Relationships facet only appears in the relationship grouping: it's the one view whose
-            layout AND arrows the relationship filter drives. The Nodes view draws no edges (it groups
-            pods by host) and the Kind view draws no edges either (the cross-kind backbone is pure
-            noise in a per-kind matrix), so the facet would be inert there — suppress it and let the
-            row carry the health pills alone. */}
-        <Show when={(props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter) || (isRelGrouping() && props.onShowOrphaned)}>
-          <div class="toolbar-row">
-        {/* Relationships facet — which relationship categories are drawn (and so drive
-            connectivity). Composable toggles: several can be active at once. One chip per category
-            present in the graph; Shift+click solos. */}
-        <Show when={props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter}>
-          <div class="toolbar-facet">
-            <span class="toolbar-label">Relationships</span>
-            <div class="topology-rels" role="toolbar" aria-label="Relationship filter" onKeyDown={onToolbarKey}>
-            <For each={visibleRelChips()}>
-              {(c, i) => (
-                <button
-                  class="rel-chip"
-                  tabindex={i() === 0 ? 0 : -1}
-                  classList={{ active: props.relFilter?.has(c.id) ?? false }}
-                  aria-pressed={props.relFilter?.has(c.id) ?? false}
-                  onClick={(e) => props.onRelFilter?.(c.id, e.shiftKey)}
-                  title={`${c.hint} · Shift+click to show only this`}
-                >
-                  {c.label}
-                  <span class="rel-chip-count">{c.count}</span>
-                </button>
-              )}
-            </For>
-            {/* Disclosure for the folded secondary lenses (RBAC/Disruption/Monitoring). Shown only when
-                at least one is foldable; "+N more" reveals them inline, "less" folds them back. */}
-            <Show when={foldableRelCount() > 0 || relsExpanded()}>
-              <button
-                class="rel-chip rel-more"
-                tabindex={-1}
-                aria-expanded={relsExpanded()}
-                onClick={toggleRelsExpanded}
-                title={relsExpanded() ? 'Show fewer relationship types' : 'Show RBAC, Disruption, Monitoring'}
-              >
-                {relsExpanded() ? 'less' : `+${foldableRelCount()} more`}
-              </button>
-            </Show>
-            </div>
-          </div>
-        </Show>
-        {/* Health facet — spotlight a health state. Shares row 2 with Relationships. The
-            at-a-glance proportion lives in the fixed-width stripe pinned to the top of the canvas
-            (rendered below), not here — so this row never changes the stripe's width. */}
-        <Show when={shownHealth().length > 0 && props.onHealthFilter}>
-          <div class="toolbar-facet">
-            <span class="toolbar-label">Health</span>
-            <div class="topology-health-pills" role="toolbar" aria-label="Health filter" onKeyDown={onToolbarKey}>
-            <For each={shownHealth()}>
-              {(h, i) => (
-                <button
-                  class="legend-item"
-                  tabindex={i() === 0 ? 0 : -1}
-                  aria-pressed={props.healthFilter === h}
-                  classList={{ active: props.healthFilter === h }}
-                  // Active pill borrows the health hue for its border + tint, so the link to
-                  // "spotlighting THIS color" stays explicit (matches the kind chips' accent).
-                  style={
-                    props.healthFilter === h
-                      ? {
-                          'border-color': healthColor(h),
-                          background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
-                          color: 'var(--text)',
-                        }
-                      : undefined
-                  }
-                  onClick={() => props.onHealthFilter?.(props.healthFilter === h ? null : h)}
-                  title={`Spotlight ${h} resources`}
-                >
-                  <span class="dot" style={{ background: healthColor(h) }} />
-                  {h}
-                  <span class="legend-count">{healthStats()[h]}</span>
-                </button>
-              )}
-            </For>
-            </div>
-          </div>
-        </Show>
-        {/* Show-orphaned toggle — relationship grouping only. Orphans (no displayed relationship) hide by
-            default so the canvas reads as the tree; the count advertises how many are tucked away so the
-            operator knows the toggle is worth flipping (explicit over implicit). Degraded orphans still
-            surface under the Degraded filter regardless, so this never buries broken resources. */}
-        <Show when={isRelGrouping() && props.onShowOrphaned}>
-          <div class="toolbar-facet">
-            <label
-              class="toolbar-checkbox"
-              title="Also show resources with no connection in this view"
-            >
-              <input
-                type="checkbox"
-                checked={!!props.showOrphaned}
-                onChange={(e) => props.onShowOrphaned?.(e.currentTarget.checked)}
-              />
-              Show orphaned
-              <Show when={orphanIds().size > 0}>
-                <span class="toolbar-checkbox-count">{orphanIds().size}</span>
-              </Show>
-            </label>
-          </div>
-        </Show>
-          </div>
-        </Show>
-        {/* Row 3 — Kinds: the kind filter, usually the widest row, on its own line. Click toggles a
-            kind in/out of the active set (multi-select, composes with search + health); Shift+click
-            solos. Hidden when only one kind is present. Each chip carries the same monochrome
-            silhouette as its cards, so the row reads as a legend of "what kinds are here". */}
-        <Show when={kindChips().length > 1 && props.onKindFilter}>
-          <div class="toolbar-row">
-          <div class="toolbar-facet toolbar-facet-grow">
-            <span class="toolbar-label">Kinds</span>
-            <div
-              class="topology-kinds"
-              classList={{ 'scroll-l': kindsEdges().l, 'scroll-r': kindsEdges().r }}
-              ref={kindsRowEl}
-              onScroll={updateKindsEdges}
-              role="toolbar"
-              aria-label="Kind filter"
-              onKeyDown={onToolbarKey}
-            >
-            <For each={kindChips()}>
-              {(c, i) => (
-                <button
-                  class="kind-chip"
-                  tabindex={i() === 0 ? 0 : -1}
-                  classList={{ active: activeKinds()?.has(c.kind) ?? false, 'kind-pod': c.kind === 'Pod', troubled: c.worst != null }}
-                  onClick={(e) => props.onKindFilter?.(c.kind, e.shiftKey)}
-                  title={
-                    c.worst
-                      ? `${c.kind} · Shift+click to show only this — some are ${c.worst}`
-                      : `${c.kind} · Shift+click to show only this`
-                  }
-                  // The visible chip is a compact abbreviation + count ("SA42"), which a screen reader
-                  // would announce as a cryptic string. Give it a real accessible NAME (the full kind +
-                  // count + any trouble) so AT reads "ServiceAccount, 42" — the title stays as the
-                  // interaction-hint description, and aria-pressed conveys the toggle state.
-                  aria-label={`${c.kind}, ${c.count}${c.worst ? `, some ${c.worst}` : ''}`}
-                  aria-pressed={activeKinds()?.has(c.kind) ?? false}
-                >
-                  <svg class="kind-chip-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
-                    {kindIcon(c.kind)}
-                  </svg>
-                  <span class="kind-chip-label">{kindShortLabel(c.kind)}</span>
-                  {/* Tiny severity dot (cycle 289): kinds with any non-Healthy resource get a
-                      colored pip in their bottom-right. Preserves the count-based chip order so
-                      muscle memory survives, while still surfacing "which kinds carry trouble" at
-                      a glance — answer the operator's "where do I look?" without scanning cards. */}
-                  <Show when={c.worst}>
-                    <span class="kind-chip-dot" style={{ background: healthColor(c.worst!) }} aria-hidden="true" />
-                  </Show>
-                  <span class="kind-chip-count">{c.count}</span>
-                </button>
-              )}
-            </For>
-            </div>
-          </div>
-          </div>
-        </Show>
-      </div>
+      {/* The canvas control bar (search / Group / Relationships / Health / Kinds) — see
+          topology/Toolbar.tsx. Topology keeps the toolbar element ref (the viewport fit reads its
+          live height) and the kinds-row scroll-edge state (the svg ResizeObserver re-measures it). */}
+      <Toolbar
+        toolbarRef={(el) => (toolbarEl = el)}
+        searchRef={props.searchRef}
+        query={query}
+        setQuery={setQuery}
+        matches={matches}
+        matchOrdered={matchOrdered}
+        matchPos={matchPos}
+        frameMatches={frameMatches}
+        activeKinds={activeKinds}
+        capResource={capResource}
+        setCapResource={setCapResource}
+        relChips={relChips}
+        shownHealth={shownHealth}
+        healthStats={healthStats}
+        isRelGrouping={isRelGrouping}
+        orphanIds={orphanIds}
+        kindChips={kindChips}
+        kindsEdges={kindsEdges}
+        kindsRowRef={(el) => (kindsRowEl = el)}
+        updateKindsEdges={updateKindsEdges}
+        selectedId={props.selectedId}
+        onSelect={props.onSelect}
+        healthFilter={props.healthFilter}
+        onHealthFilter={props.onHealthFilter}
+        onClearFilters={props.onClearFilters}
+        groupBy={props.groupBy}
+        onGroupBy={props.onGroupBy}
+        relFilter={props.relFilter}
+        onRelFilter={props.onRelFilter}
+        showOrphaned={props.showOrphaned}
+        onShowOrphaned={props.onShowOrphaned}
+        onKindFilter={props.onKindFilter}
+      />
       <svg
         ref={svg}
         class="topology-svg"
