@@ -1,84 +1,69 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, onMount, Show, Switch, untrack } from 'solid-js'
-import { createStore, reconcile } from 'solid-js/store'
-import { ApiError, CLUSTER_SCOPE, fetchContexts, fetchKinds, fetchNamespaces, streamGraph, type NamespaceInfo, type NamespaceSummary } from './api'
-import { descendantPods, hasDescendantPod } from './loggable'
-import { aggregateWorkloadUsage } from './usageAggregate'
-import { hostNodeCapacity } from './resourceBars'
-import { selectionLabel, setServerShortNames } from './names'
-import { applyPatch, emptyState, fromSnapshot, type GraphState } from './graphState'
-import { faviconDataUrl, worstHealth } from './favicon'
-import { matchSel, navCandidates, nextSelection, resolveSelectionOnSnapshot } from './nav'
-import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
-import type { Capacity, GroupBy, Health, KNode, RelCategory } from './types'
-import { parseRels, REL_CATEGORIES } from './relationships'
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createStore } from 'solid-js/store'
+import { CLUSTER_SCOPE, type NamespaceSummary } from './api'
+import { hasDescendantPod } from './loggable'
+import { emptyState, type GraphState } from './graphState'
+import { matchSel } from './nav'
+import { namespaceLabel } from './ns'
+import type { Capacity, Health } from './types'
+import { REL_CATEGORIES } from './relationships'
 import { nonOwnershipEdgeLabels } from './edgeRender'
-import { readPref, readRawPref, writePref } from './prefs'
-import { toggleInSet } from './filterToggle'
+import { readRawPref, writePref } from './prefs'
 import Sidebar from './components/Sidebar'
 import Topology, { GROUP_OPTIONS } from './components/Topology'
-import type { CapResource } from './capacityLayout'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
 import { isNarrowScreen, NARROW_SCREEN_QUERY } from './screen'
-
-// Group-by is the layout strategy — how resources are arranged on the canvas. It replaced the old
-// fixed view tabs: grouping is now orthogonal to *which relationships are drawn* (the composable
-// relationship filter, see relationships.ts). The segmented control that sets it lives in the
-// Topology toolbar (GROUP_OPTIONS is shared from there); App keeps the signal, the URL/localStorage
-// persistence, the number-key shortcuts (1..3), and the help overlay listing.
-const GROUP_IDS = GROUP_OPTIONS.map((g) => g.id)
-const DEFAULT_RELS = (): Set<RelCategory> => new Set<RelCategory>(['ownership'])
+import { createAppKeyboard } from './appKeyboard'
+import { createClusterSession } from './clusterSession'
+import { createGraphSubscription } from './graphSubscription'
+import { createSelectionDetails } from './selection'
+import { createSidebarHealth } from './sidebarHealth'
+import { createUrlState, createUrlSync, DEFAULT_RELS } from './urlState'
 
 export default function App() {
-  // The contexts list drives the topbar switcher (FR-005) and the default context the URL falls back
-  // to (FR-004). It loads once on mount — the kubeconfig is snapshot at server start so the SET
-  // never changes — but the per-context STATUS/error do change (a context is "pending" until first
-  // touched; its cache-build failure lands after this initial fetch), so the stream-error path
-  // refetches to pick up the diagnosis the offline empty-state shows.
-  const [contextsRes, { refetch: refetchContexts }] = createResource(fetchContexts)
-  const contextsInfo = createMemo(() => (contextsRes.error ? null : contextsRes() ?? null))
-  // The contexts list is kd's bootstrap: when IT fails, nothing downstream (ctx → namespaces →
-  // subscribe) ever fires and the canvas would spin "connecting…" forever. A 401/403 is an
-  // identity answer — kd's auth proxy sent no identity, or policy denies it — not an outage, so
-  // it gets its own terminal state instead of the offline ("can't reach") misdiagnosis.
-  const authFailed = createMemo(
-    () =>
-      contextsRes.error instanceof ApiError &&
-      (contextsRes.error.status === 401 || contextsRes.error.status === 403),
-  )
-  // Seed namespace/ctx/grouping/relationships from the URL so a link or reload restores the same
-  // place. Grouping + relationship filter also fall back to localStorage (then their defaults), so
-  // a plain reload of an un-shared URL still remembers how the operator last arranged the canvas.
-  const params = new URLSearchParams(location.search)
-  const [ctx, setCtx] = createSignal<string | null>(params.get('ctx'))
-  const [namespace, setNamespace] = createSignal<string | null>(params.get('ns'))
-  const urlGroup = params.get('group') as GroupBy
-  const [groupBy, setGroupBy] = createSignal<GroupBy>(
-    GROUP_IDS.includes(urlGroup) ? urlGroup : readPref('kd:groupBy', 'relationship', GROUP_IDS),
-  )
-  createEffect(() => writePref('kd:groupBy', groupBy()))
-  const [relFilter, setRelFilter] = createSignal<Set<RelCategory>>(
-    parseRels(params.get('rels')) ?? parseRels(readRawPref('kd:rels')) ?? DEFAULT_RELS(),
-  )
-  createEffect(() => writePref('kd:rels', [...relFilter()].sort().join(',')))
-  // Capacity-view resource (cpu|memory) — owned here, not in Topology, so it round-trips through the
-  // URL like group/rels (the share button must capture "I'm looking at MEMORY pressure", or a shared
-  // capacity-view link silently reverts the recipient to CPU). Falls back to localStorage then 'cpu'.
-  const urlCapRes = params.get('capRes')
-  const [capResource, setCapResource] = createSignal<CapResource>(
-    urlCapRes === 'cpu' || urlCapRes === 'memory' ? urlCapRes : readPref('kd:capRes', 'cpu', ['cpu', 'memory']),
-  )
-  createEffect(() => writePref('kd:capRes', capResource()))
-  // Show-orphaned (relationship view): unconnected resources hide by default so the canvas reads as the
-  // relationship tree. Owned here so it round-trips through the URL + localStorage like group/rels — a
-  // shared "?orphans=1" link restores the choice. Default off; the URL flag wins, then localStorage.
-  const [showOrphaned, setShowOrphaned] = createSignal(
-    params.get('orphans') === '1' || (params.get('orphans') === null && readRawPref('kd:orphans') === '1'),
-  )
-  createEffect(() => writePref('kd:orphans', showOrphaned() ? '1' : '0'))
-  // Relationship + kind chips share one toggle/solo semantics — see toggleInSet.
-  const toggleRel = (c: RelCategory, solo = false) => setRelFilter(toggleInSet(relFilter(), c, solo))
+  // Where the operator is (ctx/ns) + how the canvas is arranged (group/rels/capRes/orphans/kinds),
+  // seeded from the URL with localStorage fallbacks — see urlState.ts.
+  const {
+    ctx,
+    setCtx,
+    namespace,
+    setNamespace,
+    groupBy,
+    setGroupBy,
+    relFilter,
+    setRelFilter,
+    toggleRel,
+    capResource,
+    setCapResource,
+    showOrphaned,
+    setShowOrphaned,
+    kindFilter,
+    setKindFilter,
+    toggleKind,
+    initialSel,
+  } = createUrlState()
+
+  // Contexts/namespaces/kinds bootstrap + the connecting/live/offline ladder — see clusterSession.ts.
+  const {
+    contextsRes,
+    refetchContexts,
+    contextsInfo,
+    authFailed,
+    namespaces,
+    refetchNamespaces,
+    namespaceList,
+    noNamespaces,
+    connState,
+    setConnState,
+    connected,
+    nsFlash,
+    jumpToTrouble,
+    nsNotice,
+    setNsNotice,
+  } = createClusterSession({ ctx, setCtx, namespace, setNamespace })
+
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
 
   // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
@@ -103,69 +88,8 @@ export default function App() {
     return true
   }
 
-  // Resolve ?ctx= once the contexts list arrives: keep a known URL-supplied context, otherwise fall
-  // back to the server-reported default (kubeconfig current-context, or the in-cluster sentinel).
-  createEffect(() => {
-    const info = contextsInfo()
-    if (!info) return
-    const known = info.contexts.some((c) => c.name === ctx())
-    if (!known) setCtx(info.default)
-  })
-
-  // Namespace list is keyed on ctx so a context switch refetches against the new cluster. Wait for
-  // ctx to resolve so the first fetch hits the right URL (avoids a doomed call to /contexts/null/).
-  const [namespaces, { refetch: refetchNamespaces }] = createResource(ctx, (c) => fetchNamespaces(c))
-  // namespaces() rethrows if the fetch errored (Solid resources throw on read in an error state), which
-  // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
-  // read the list through this guard, which yields [] on error/while loading.
-  const namespaceList = createMemo(() => (namespaces.error ? [] : namespaces() ?? []))
-  // Kind → API short-name map (cycle 302): fetched once per context so cards label kinds with the
-  // cluster's own abbreviations (cm, pdb, CRD-defined shorts) instead of a hardcoded guess. Keyed
-  // on ctx because CRDs — hence short names — differ per cluster. Feeds names.ts via a setter
-  // rather than props so every kindShortLabel() call site picks it up without threading the map
-  // through the whole topology tree; an error leaves the hardcoded fallback in place.
-  const [kindShortNames] = createResource(ctx, (c) => fetchKinds(c))
-  createEffect(() => setServerShortNames(kindShortNames.error ? {} : kindShortNames() ?? {}))
-  // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
-  // stable across reloads, so we key the link on the stable identity).
-  let pendingSel = params.get('sel')
-  // 'connecting' on initial subscribe, 'live' once a snapshot arrives, 'offline' on stream error.
-  // Distinguishing connecting from offline avoids the alarming "offline" pill flashing on every
-  // first load / namespace switch when nothing is wrong — the stream just hasn't yielded yet.
-  const [connState, setConnState] = createSignal<'connecting' | 'live' | 'offline'>('connecting')
-  const connected = () => connState() === 'live'
-  // A failed namespace-list fetch is a cluster-level failure (unreachable or forbidden context),
-  // not just a sidebar problem: with no namespace ever picked the subscribe effect never runs, so
-  // nothing else would move connState off its initial 'connecting' — the pill and the canvas would
-  // promise progress forever (caught live against a dead kubeconfig context). Treat it like a
-  // stream error: go offline, and refresh the contexts list (transition-gated, like the stream's
-  // error path) so the canvas diagnosis can name the server's reason for THIS context.
-  createEffect(() => {
-    if (!namespaces.error) return
-    if (untrack(connState) !== 'offline') void refetchContexts()
-    setConnState('offline')
-  })
-  // An empty namespace list that loaded FINE is its own terminal state, distinct from offline:
-  // the cluster answered, this account just can't see anything (lockdown policy). Without it the
-  // canvas spun "connecting…" forever — no namespace means the subscribe effect never runs, so
-  // connState never moves. Gated on 'ready' so the unresolved pre-fetch state doesn't flash it.
-  const noNamespaces = createMemo(() => namespaces.state === 'ready' && namespaceList().length === 0)
-  // A non-auth contexts failure (kd itself down/broken) reads offline, engaging the retry pill.
-  createEffect(() => {
-    if (contextsRes.error && !authFailed()) setConnState('offline')
-  })
   // Clicking a legend health spotlights those nodes (fades the rest); click again to clear.
   const [healthFilter, setHealthFilter] = createSignal<Health | null>(null)
-  // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
-  // healthFilter. Lives in App so it resets on namespace/view change alongside the others. Seed
-  // from `?kinds=` so a shared URL restores the filtered view (cycle 217).
-  const urlKinds = params.get('kinds')
-  const [kindFilter, setKindFilter] = createSignal<Set<string>>(
-    new Set(urlKinds ? urlKinds.split(',').filter(Boolean) : []),
-  )
-  // Operators reach for solo when they want "show me ONLY Pods" without first clearing the prior
-  // multi-select. Shared toggle/solo semantics — see toggleInSet.
-  const toggleKind = (k: string, solo = false) => setKindFilter(toggleInSet(kindFilter(), k, solo))
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
@@ -225,78 +149,28 @@ export default function App() {
   // namespace, so the view always shows the whole cluster and dims pods outside the selected
   // namespace. Null until the first `capacity` event; cleared on resubscribe.
   const [capacity, setCapacity] = createSignal<Capacity | null>(null)
-  // Bumped on a programmatic jump to a namespace (first-load auto-pick, Alt+T) so the sidebar can
-  // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
-  const [nsFlash, setNsFlash] = createSignal(0)
 
-  // Step to the next troubled namespace — shared by the Alt+T shortcut and the sidebar trouble badge
-  // so both land identically (with the flash pulse). Cycles from the current selection (worst first,
-  // then next-worst, wrapping) so repeated presses triage every troubled namespace rather than
-  // re-landing on the single worst. No-op when nothing is troubled; returns whether it acted so the
-  // keyboard handler only swallows the key when it actually jumped.
-  const jumpToTrouble = (): boolean => {
-    const next = nextTroubled(namespaceList(), namespace())
-    if (next) {
-      setNamespace(next.name)
-      setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
-      return true
-    }
-    return false
-  }
+  const nodes = createMemo(() => Object.values(graph.nodes))
+  const edges = createMemo(() => graph.edges)
+  // Selection-derived state for the drawer (capacity-feed fallback, live usage, the "deleted"
+  // terminal state, owner chips) — see selection.ts.
+  const {
+    capById,
+    selectedUsage,
+    selectedWorkloadUsage,
+    selectedHostCapacity,
+    selectionAnnouncement,
+    drawerNode,
+    selectionDeleted,
+    ownerNodes,
+  } = createSelectionDetails({ selectedId, graph, capacity, nodes })
 
-  // A URL-seeded namespace that can't be opened (RBAC-denied, deleted, or absent from a newly
-  // switched context) gets silently replaced by the fallback below — say so, or a shared link
-  // lands the operator on someone else's view with zero explanation. Auto-clears; dismissible.
-  const [nsNotice, setNsNotice] = createSignal<string | null>(null)
-  let nsNoticeTimer: ReturnType<typeof setTimeout> | undefined
-  const noteNsFallback = (wanted: string) => {
-    setNsNotice(`Couldn't open namespace "${namespaceLabel(wanted)}" — no access, or it no longer exists.`)
-    clearTimeout(nsNoticeTimer)
-    nsNoticeTimer = setTimeout(() => setNsNotice(null), 10_000)
-  }
+  // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
+  // stable across reloads, so we key the link on the stable identity).
+  let pendingSel = initialSel
 
-  // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
-  // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
-  // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
-  createEffect(() => {
-    const list = namespaceList()
-    if (list.length === 0) return
-    if (!list.some((n) => n.name === namespace())) {
-      const wanted = namespace()
-      if (wanted) noteNsFallback(wanted) // null = no target was asked for; nothing to explain
-      setNamespace(mostTroubled(list)!.name)
-      setNsFlash((t) => t + 1)
-    }
-  })
-
-  // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
-  // ctx is included only when the switcher is enabled (kubeconfig mode); in-cluster keeps URLs clean.
-  // Kind filter (cycle 217) is included so a filtered view ("pods only") is shareable via URL.
-  // Search and healthFilter are kept ephemeral — those are mid-investigation state, not view config.
-  createEffect(() => {
-    const p = new URLSearchParams()
-    if (ctx() && contextsInfo()?.enabled) p.set('ctx', ctx()!)
-    if (namespace()) p.set('ns', namespace()!)
-    // Grouping + relationships are view config worth sharing; omit when at the defaults to keep
-    // URLs clean. The relationship list round-trips even when empty (an explicit `?rels=`) so a
-    // shared "all relationships off" link restores faithfully.
-    if (groupBy() !== 'relationship') p.set('group', groupBy())
-    const rels = [...relFilter()].sort().join(',')
-    if (rels !== 'ownership') p.set('rels', rels)
-    // capRes only changes the Nodes view, but mirror group/rels: write it whenever non-default so a
-    // shared capacity-view link restores the resource. Omitted at the 'cpu' default to keep URLs clean.
-    if (capResource() !== 'cpu') p.set('capRes', capResource())
-    if (showOrphaned()) p.set('orphans', '1')
-    // Resolve the selection from the SAME fallback the drawer uses (graph, then the cluster-wide
-    // capacity feed) so a Nodes-view pod from another namespace — present only in capById — still
-    // writes a `sel`, instead of the Share link silently dropping it. Carry the namespace when it
-    // differs from the viewed scope (the cluster-scope Nodes case) so the ref round-trips unambiguously.
-    const id = selectedId()
-    const n = id ? (graph.nodes[id] ?? capById().get(id)) : null
-    if (n) p.set('sel', n.namespace && n.namespace !== namespace() ? `${n.kind}/${n.namespace}/${n.name}` : `${n.kind}/${n.name}`)
-    if (kindFilter().size > 0) p.set('kinds', [...kindFilter()].sort().join(','))
-    history.replaceState(null, '', `${location.pathname}?${p}`)
-  })
+  // Mirror the view state back into the URL (replace, not push) — see urlState.ts.
+  createUrlSync({ ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedId, graph, capById })
 
   // Reflect ctx + ns + view in the tab title so operators with multiple cluster tabs can tell
   // them apart from the OS chrome (and re-find one in a tab-switcher). Format: "ns · ctx · kd"
@@ -323,276 +197,52 @@ export default function App() {
     }
   })
 
-  // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
-  const interval = setInterval(() => refetchNamespaces(), 15000)
-  onCleanup(() => clearInterval(interval))
-
-  // Global keys: "/" jumps to the namespace filter, Cmd/Ctrl+K to the resource search, Escape
-  // backs out (blur a field, else close the drawer) — the muscle-memory shortcuts operators
-  // expect, with no on-screen chrome.
-  let filterEl: HTMLInputElement | undefined
-  let searchEl: HTMLInputElement | undefined
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null
-      const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
-      const num = Number(e.key)
-      // Cmd/Ctrl+K focuses the topology search (GitHub-style "find any resource"). Works even
-      // when typing in another field — the operator's intent is "switch to search".
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault()
-        searchEl?.focus()
-        searchEl?.select()
-        return
-      }
-      // Cmd/Ctrl+B toggles the namespace sidebar (cycle 299). VS Code uses the same shortcut for
-      // its sidebar, so the muscle memory carries over for most operators.
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
-        e.preventDefault()
-        setSidebarHidden((v) => !v)
-        return
-      }
-      // Alt+Left walks the navigation history back (cycle 300). Browser-back semantics inside the
-      // drawer — chase an owner chip or event-source pill, then step back without re-clicking.
-      // Alt+Left is the universal "back" gesture on Windows/Linux and isn't claimed by browser
-      // history on the SPA route.
-      if (e.altKey && e.key === 'ArrowLeft') {
-        if (goBackSelection()) e.preventDefault()
-        return
-      }
-      // Alt+T steps to the next troubled namespace — "take me to the problem", and again for the next
-      // one (cycles worst-first, wrapping). No-op when the whole cluster is Healthy (nothing to jump
-      // to) so the key never yanks you to an arbitrary ns. First landing matches the first-load
-      // default selection (cycle 320); repeats walk the rest of the troubled set.
-      // e.code too: macOS composes Option+T into key '†', so a key-only match never fires for Mac
-      // operators — code is the physical key, immune to the composition (kept alongside key so
-      // non-QWERTY layouts where 'T' sits elsewhere still match on what's printed).
-      if (e.altKey && (e.key === 't' || e.key === 'T' || e.code === 'KeyT') && !typing) {
-        if (jumpToTrouble()) e.preventDefault()
-        return
-      }
-      if (e.key === '?' && !typing) {
-        setShowHelp((s) => !s)
-      } else if (e.key === '/' && !typing) {
-        e.preventDefault()
-        filterEl?.focus()
-      } else if (!typing && num >= 1 && num <= GROUP_OPTIONS.length) {
-        setGroupBy(GROUP_OPTIONS[num - 1].id) // 1-3: Relationship / Nodes / Kind grouping
-      } else if (!typing && (e.key === 'j' || e.key === 'ArrowDown')) {
-        // Walk selection through the graph, troubled-first, so stepping surfaces problems before
-        // healthy nodes. Scoped to the active search/health filter so stepping visits only what's
-        // spotlighted. The selection drives the drawer and the topology's pan-to-selection.
-        e.preventDefault()
-        const cand = navCandidates(nodes(), search(), healthFilter(), kindFilter())
-        setSelectedId((cur) => nextSelection(cand, cur, 1) ?? cur)
-      } else if (!typing && (e.key === 'k' || e.key === 'ArrowUp')) {
-        e.preventDefault()
-        const cand = navCandidates(nodes(), search(), healthFilter(), kindFilter())
-        setSelectedId((cur) => nextSelection(cand, cur, -1) ?? cur)
-      } else if (!typing && e.key === 'y' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        // 'y' yanks the current selection's "Kind/name" to the clipboard — same string Shift+click
-        // on the drawer copy button produces (cycle 287), but without opening the drawer first.
-        // Mirrors the vim yank verb, so muscle memory carries over. Brief toast via help overlay-
-        // adjacent state would be overkill; the standard browser clipboard pulse is the feedback.
-        const sel = graph.nodes[selectedId() ?? '']
-        if (sel) {
-          const ref = `${sel.kind}/${sel.name}`
-          // Optional-chain the WHOLE promise chain, not just `clipboard` — in a non-secure context
-          // (plain http://<lan-ip>, a real kd access path) `navigator.clipboard` is undefined, so the
-          // bare `?.writeText(ref).then(…)` threw an uncaught TypeError on `.then` of undefined.
-          // Confirm only on a real success (matches CopyButton's silent-no-op-when-unavailable).
-          navigator.clipboard?.writeText(ref)?.then(() => setCopiedRef(ref))?.catch(() => {})
-        }
-      } else if (e.key === 'Escape') {
-        // Progressive back-out: help overlay, blur a field, close the drawer, then clear filters.
-        if (showHelp()) setShowHelp(false)
-        else if (typing) (el as HTMLElement).blur()
-        else if (selectedId()) setSelectedId(null)
-        else if (search() || healthFilter() || kindFilter().size > 0) {
-          setSearch('')
-          setHealthFilter(null)
-          setKindFilter(new Set<string>())
-        }
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    onCleanup(() => window.removeEventListener('keydown', onKey))
+  // The SSE graph feed: (re)subscribes on ctx/ns change and applies snapshot/patch/summary/capacity
+  // events — see graphSubscription.ts.
+  const { setReconnectTick } = createGraphSubscription({
+    ctx,
+    namespace,
+    selectedId,
+    setSelectedId,
+    setSearch,
+    setHealthFilter,
+    setKindFilter,
+    setSelectionHistory,
+    graph,
+    setGraph,
+    setLiveSummary,
+    setCapacity,
+    connState,
+    setConnState,
+    refetchContexts,
+    pendingSel: () => pendingSel,
+    clearPendingSel: () => {
+      pendingSel = null
+    },
   })
 
-  // Manual reconnect signal (cycle 291): clicking the offline conn pill bumps this counter,
-  // which the SSE subscription effect tracks — incrementing tears down the stale EventSource and
-  // opens a fresh one. EventSource auto-reconnects with backoff, but the operator sometimes knows
-  // the server just came back and doesn't want to wait the rest of the backoff window.
-  const [reconnectTick, setReconnectTick] = createSignal(0)
+  // Sidebar rows kept live from the SSE summary + the favicon attention badge — see sidebarHealth.ts.
+  const { sidebarNs } = createSidebarHealth({ namespaceList, namespace, liveSummary, connected })
 
-  // (Re)subscribe to the graph feed whenever the context or namespace changes. A context switch
-  // closes the old SSE stream and opens a fresh one against the new cluster's cache. Grouping and
-  // relationship-filter changes do NOT resubscribe — the server streams the full graph and the
-  // client re-projects it locally, so they're pure client-side relayouts.
-  // The first run keeps URL-seeded filters (?kinds=) — only an actual change resets them.
-  let firstSubscribe = true
-  let lastSubscribedCtx: string | null = null
-  createEffect(() => {
-    const c = ctx()
-    const ns = namespace()
-    reconnectTick() // tracked: a manual reconnect (cycle 291) re-fires the effect
-    if (!c || !ns) return
-    // Preserve the selection across a resubscribe when the same resource still exists (UIDs are
-    // stable), so a manual reconnect keeps the selection. A namespace change naturally clears it:
-    // the old UID won't be in the new namespace's graph. untrack so reading the current selection
-    // doesn't make this effect re-subscribe on selection.
-    // A CONTEXT change clears it immediately instead of waiting for the new snapshot to resolve
-    // it away: if the new cluster never answers (dead credentials), the stale selection ghosted
-    // into the drawer with a false "Deleted from the cluster" banner — the resource is fine, the
-    // cluster is unreachable (D79).
-    const ctxChanged = lastSubscribedCtx !== null && lastSubscribedCtx !== c
-    lastSubscribedCtx = c
-    if (ctxChanged) setSelectedId(null)
-    const keepSel = ctxChanged ? null : untrack(selectedId)
-    if (!firstSubscribe) {
-      // A stale search/health/kind filter would fade the whole new graph. Cleared only on
-      // real transitions — initial mount keeps URL-seeded filters.
-      setSearch('')
-      setHealthFilter(null)
-      setKindFilter(new Set<string>())
-      setSelectionHistory([]) // history points at IDs that no longer exist in the new graph
-    }
-    firstSubscribe = false
-    setGraph(reconcile(emptyState()))
-    setLiveSummary(null) // previous stream's summary belongs to the previous namespace — clear it
-    setCapacity(null) // same: the previous stream's capacity feed belongs to the previous scope
-    setConnState('connecting')
-    const close = streamGraph(c, ns, {
-      snapshot: (g) => {
-        // Decide the selection from the snapshot's own nodes BEFORE mutating the store, so this set
-        // is authoritative over the reactive deep-link restore below (which would otherwise race and
-        // get clobbered): keep the current selection if still present, else adopt a URL deep-link.
-        const sel = resolveSelectionOnSnapshot(g.nodes, keepSel, pendingSel)
-        if (sel.consumedPending) pendingSel = null
-        setGraph(reconcile(fromSnapshot(g)))
-        setConnState('live')
-        setSelectedId(sel.id)
-      },
-      patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
-      summary: (s) => setLiveSummary(s),
-      capacity: (c) => setCapacity(c),
-      error: () => {
-        // On the TRANSITION into offline, refetch the contexts list: the failure that just broke
-        // the stream also populated the context's status/error server-side (it was "pending" at
-        // the initial fetch), and the empty-state diagnosis reads from it. Transition-gated so
-        // EventSource's auto-retry storm doesn't hammer /contexts.
-        if (connState() !== 'offline') void refetchContexts()
-        setConnState('offline')
-      },
-    })
-    onCleanup(close)
-  })
-
-  const nodes = createMemo(() => Object.values(graph.nodes))
-  const edges = createMemo(() => graph.edges)
-  // The Nodes view can select a pod that lives only in the cluster-wide capacity feed (another
-  // namespace's pod, or any pod while in cluster scope — the namespace graph holds neither). Fall
-  // back to the capacity feed so the drawer still opens with the pod's details (its YAML/logs are
-  // fetched by namespace/name, which works cross-namespace).
-  const capById = createMemo(() => new Map((capacity()?.nodes ?? []).map((n) => [n.id, n])))
-  const selectedNode = createMemo(() => {
-    const id = selectedId()
-    if (!id) return null
-    return graph.nodes[id] ?? capById().get(id) ?? null
-  })
-  // Live usage for the selected resource — the capacity feed keys it by UID (== node.id). Drives the
-  // drawer's CPU/memory gauges for a Pod; undefined when metrics-server is absent.
-  const selectedUsage = createMemo(() => {
-    const n = selectedNode()
-    return n ? capacity()?.usage?.items[n.id] : undefined
-  })
-  // A workload controller has no usage of its own, but the client already holds every descendant pod's
-  // usage (capacity feed, keyed by UID) and the ownership edges — so its rolled-up gauge is a pure
-  // client-side sum. Skip Pods/Nodes (they gauge their own `usage`); returns undefined when the kind
-  // owns no pods or none have a reading yet, so the drawer shows nothing rather than an empty gauge.
-  const selectedWorkloadUsage = createMemo(() => {
-    const n = selectedNode()
-    if (!n || n.kind === 'Pod' || n.kind === 'Node') return undefined
-    return aggregateWorkloadUsage(descendantPods(n.id, nodes()), capacity()?.usage?.items) ?? undefined
-  })
-  // A selected Pod's host-node capacity, the ceiling its bar falls back to when the pod sets no
-  // limit/request (so an unconstrained pod reads as a fraction of its node, not a bare value).
-  const selectedHostCapacity = createMemo(() => {
-    const n = selectedNode()
-    if (!n || n.kind !== 'Pod') return undefined
-    return hostNodeCapacity(n.host, capacity()?.nodes ?? [])
-  })
-  // Announce the current selection for assistive tech. j/k stepping deliberately keeps focus on the
-  // body (so repeated presses work — see the keydown handler), and the drawer is a complementary
-  // landmark, not a live region, so without this a screen-reader operator hears nothing as the
-  // selection — and the detail behind it — changes. Mirrors the card tooltip: kind+name, then the
-  // status and failure reason, so stepping through a degraded wall speaks each "why" aloud.
-  const selectionAnnouncement = createMemo(() => selectionLabel(selectedNode()))
-  // Last RESOLVED selection, kept so the drawer can show an explicit "deleted" terminal state
-  // instead of silently closing when the inspected resource vanishes mid-investigation — a rollout
-  // replaces the pod, a crashlooper is reaped, a finished job is cleaned up. The churn happens
-  // exactly when the operator is watching closest. Stands in only while selectedId still points at
-  // the vanished id; a new selection, an explicit deselect, or a namespace switch clears it.
-  let lastResolved: KNode | null = null
-  const drawerNode = createMemo(() => {
-    const n = selectedNode()
-    if (n) {
-      lastResolved = n
-      return n
-    }
-    const id = selectedId()
-    return id && lastResolved && lastResolved.id === id ? lastResolved : null
-  })
-  const selectionDeleted = createMemo(() => !!drawerNode() && !selectedNode())
-  // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
-  // Derived from drawerNode (not selectedNode) so a DELETED pod's owner chips keep working — the
-  // ReplicaSet/Job chip is the one-click path to its replacement.
-  const ownerNodes = createMemo<KNode[]>(() => {
-    const n = drawerNode()
-    return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
-  })
-
-  // Keep the sidebar entry for the namespace being viewed live from the SSE `summary` event,
-  // instead of letting it lag up to 15s behind the /namespaces poll. The server computes summary
-  // from the UNFILTERED graph (same as /namespaces), so it never disagrees with the polled
-  // value — fixes the old bug where opening a degraded namespace in ownership view "healed" it
-  // because the filtered topology omitted the actually-degraded resource (e.g. an endpointless
-  // Service that lives in network view).
-  // Held in a RECONCILED store (keyed by name) rather than a plain memo: the memo rebuilt the selected
-  // namespace as a fresh object on every `summary` event, so the Sidebar's <For> tore down and recreated
-  // that row each tick (the namespace-list "flicker"). reconcile patches only the changed row's health
-  // in place, so <For> keeps the DOM and the dot recolours surgically — the same fix the canvas cards got.
-  const [sidebarNs, setSidebarNs] = createStore<NamespaceInfo[]>([])
-  createEffect(() => {
-    const list = namespaceList()
-    const ns = namespace()
-    const live = liveSummary()
-    const next =
-      !connected() || !ns || !live ? list : list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
-    setSidebarNs(reconcile(next, { key: 'name' }))
-  })
-
-  // Per-namespace health across the WHOLE cluster, for the favicon attention badge. Counts over
-  // sidebarNs — the /namespaces poll with the open namespace kept live from the SSE summary — the SAME
-  // source the sidebar trouble badge reads, so favicon and badge never disagree. Excludes the
-  // cluster-scope sentinel to match the badge (troubledNamespaces). NOT the open namespace's node set:
-  // a tab-per-cluster operator parked on a healthy namespace must still see the favicon flag trouble in
-  // ANOTHER namespace — the feature's whole premise (favicon.ts docstring), which the old view-scoped
-  // count silently broke (clean favicon while three other namespaces were Degraded).
-  const counts = createMemo(() => {
-    const c: Record<string, number> = {}
-    for (const n of sidebarNs) if (n.name !== CLUSTER_SCOPE) c[n.health] = (c[n.health] ?? 0) + 1
-    return c
-  })
-
-  // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the cluster as a
-  // colored dot on the brand mark, so multi-tab operators spot trouble without clicking into each tab.
-  // Healthy/empty restores the plain mark. Updated via the existing <link rel="icon"> element rather
-  // than injecting a new one, so the DOM stays clean across HMR reloads in dev.
-  createEffect(() => {
-    const worst = worstHealth(counts())
-    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
-    if (link) link.href = worst ? faviconDataUrl(worst) : '/favicon.svg'
+  // Global keyboard shortcuts (returns the ref-setters for the inputs they focus) — see appKeyboard.ts.
+  const { filterRef, searchRef } = createAppKeyboard({
+    nodes,
+    search,
+    setSearch,
+    healthFilter,
+    setHealthFilter,
+    kindFilter,
+    setKindFilter,
+    selectedId,
+    setSelectedId,
+    graph,
+    setGroupBy,
+    setSidebarHidden,
+    showHelp,
+    setShowHelp,
+    setCopiedRef,
+    goBackSelection,
+    jumpToTrouble,
   })
 
   return (
@@ -784,7 +434,7 @@ export default function App() {
           }}
           loading={namespaces.loading}
           failed={!!namespaces.error}
-          filterRef={(el) => (filterEl = el)}
+          filterRef={filterRef}
           onRetry={() => refetchNamespaces()}
           flash={nsFlash()}
           onJumpToTrouble={jumpToTrouble}
@@ -830,7 +480,7 @@ export default function App() {
             capacity={capacity()}
             search={search()}
             onSearch={setSearch}
-            searchRef={(el) => (searchEl = el)}
+            searchRef={searchRef}
             onSelect={setSelectedId}
             onDeselect={() => setSelectedId(null)}
           />
