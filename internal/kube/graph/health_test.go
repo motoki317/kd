@@ -119,6 +119,39 @@ func TestPodHealthFailingInitContainer(t *testing.T) {
 	}
 }
 
+// A crash-looping container oscillates between Waiting:CrashLoopBackOff and Terminated:Error
+// (the window between the crash and the next backoff restart). Both windows are the same failure;
+// without the Terminated check the pod read blue every other SSE patch — and once workload counts
+// stopped producing Degraded, nothing was red at all during the Error window.
+func TestPodHealthTerminatedError(t *testing.T) {
+	crashed := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:             corev1.PodRunning,
+		ContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}}}},
+	}}
+	if got := health(crashed); got != HealthDegraded {
+		t.Errorf("health(Terminated:Error container) = %q, want Degraded", got)
+	}
+
+	initCrashed := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:                 corev1.PodPending,
+		InitContainerStatuses: []corev1.ContainerStatus{{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}}}},
+	}}
+	if got := health(initCrashed); got != HealthDegraded {
+		t.Errorf("health(init Terminated:Error) = %q, want Degraded", got)
+	}
+
+	// A Succeeded pod stays Healthy even with a non-zero container exit: an Argo Workflow step
+	// pod reports phase Succeeded when its main container failed (the wait sidecar completes the
+	// pod) — the Workflow's own health carries that failure, not the finished pod.
+	argoStep := &corev1.Pod{Status: corev1.PodStatus{
+		Phase:             corev1.PodSucceeded,
+		ContainerStatuses: []corev1.ContainerStatus{{Name: "main", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}}}},
+	}}
+	if got := health(argoStep); got != HealthHealthy {
+		t.Errorf("health(Succeeded pod, failed main) = %q, want Healthy", got)
+	}
+}
+
 // isFailureReason is a curated allowlist of terminal container-waiting reasons. The contract that
 // matters: TRANSIENT reasons (a pod still pulling/creating/initializing) must NOT be treated as a
 // failure, or every starting pod would flash Degraded. Pin both the recognized failures and the
@@ -596,6 +629,66 @@ func TestDeploymentHealth(t *testing.T) {
 	if got := statusSummary(ready); got != "3/3" {
 		t.Errorf("statusSummary(ready Deployment) = %q, want 3/3", got)
 	}
+
+	// Zero ready is still Progressing, not Degraded: counts can't tell a fresh deploy (pods
+	// pulling images) from a total outage, and the controller declares the real failures —
+	// ProgressDeadlineExceeded above — while crash-looping pods carry their own red.
+	allDown := &appsv1.Deployment{
+		Spec:   appsv1.DeploymentSpec{Replicas: &three},
+		Status: appsv1.DeploymentStatus{Replicas: 3, ReadyReplicas: 0, UpdatedReplicas: 3},
+	}
+	if got := health(allDown); got != HealthProgressing {
+		t.Errorf("health(zero-ready Deployment) = %q, want Progressing", got)
+	}
+}
+
+// The user-visible bug behind this rule: a StatefulSet creates pods one at a time (OrderedReady),
+// so during a normal first rollout it sits at ready=0 with the pod merely Progressing — and the
+// card read Degraded red. Startup and outage are count-indistinguishable; only the pods know.
+func TestStatefulSetStartupIsProgressing(t *testing.T) {
+	three := int32(3)
+	starting := &appsv1.StatefulSet{
+		Spec:   appsv1.StatefulSetSpec{Replicas: &three},
+		Status: appsv1.StatefulSetStatus{Replicas: 1, ReadyReplicas: 0, UpdatedReplicas: 1},
+	}
+	if got := health(starting); got != HealthProgressing {
+		t.Errorf("health(starting StatefulSet) = %q, want Progressing", got)
+	}
+	// Scale-up from zero hits the same shape: desired jumped, nothing ready yet.
+	scaling := &appsv1.StatefulSet{
+		Spec:   appsv1.StatefulSetSpec{Replicas: &three},
+		Status: appsv1.StatefulSetStatus{Replicas: 0, ReadyReplicas: 0, UpdatedReplicas: 0},
+	}
+	if got := health(scaling); got != HealthProgressing {
+		t.Errorf("health(scaling-from-zero StatefulSet) = %q, want Progressing", got)
+	}
+}
+
+// A ReplicaSet that cannot create its pods at all (quota, missing ServiceAccount, admission
+// denial) reports the ReplicaFailure condition — the one genuinely-stuck state the API declares
+// for an RS, and the Degraded path that remains after count-based red was dropped. Without it a
+// quota-blocked RS would read Progressing forever with no pods to carry the alarm.
+func TestReplicaSetFailureIsDegraded(t *testing.T) {
+	three := int32(3)
+	blocked := &appsv1.ReplicaSet{
+		Spec: appsv1.ReplicaSetSpec{Replicas: &three},
+		Status: appsv1.ReplicaSetStatus{
+			Conditions: []appsv1.ReplicaSetCondition{{
+				Type: appsv1.ReplicaSetReplicaFailure, Status: corev1.ConditionTrue, Reason: "FailedCreate",
+			}},
+		},
+	}
+	if got := health(blocked); got != HealthDegraded {
+		t.Errorf("health(ReplicaFailure RS) = %q, want Degraded", got)
+	}
+	// The ordinary not-all-ready RS stays Progressing (same replicaHealth rule as above).
+	waiting := &appsv1.ReplicaSet{
+		Spec:   appsv1.ReplicaSetSpec{Replicas: &three},
+		Status: appsv1.ReplicaSetStatus{Replicas: 3, ReadyReplicas: 0},
+	}
+	if got := health(waiting); got != HealthProgressing {
+		t.Errorf("health(zero-ready RS) = %q, want Progressing", got)
+	}
 }
 
 func TestDaemonSetHealth(t *testing.T) {
@@ -614,13 +707,15 @@ func TestDaemonSetHealth(t *testing.T) {
 		t.Errorf("health(ready DaemonSet) = %q, want Healthy", got)
 	}
 
-	// Pods wanted but NONE ready (e.g. a crash-looping agent on every node) is Degraded, not merely
-	// Progressing — there is no partial service.
+	// Pods wanted but none ready yet is Progressing, not Degraded: a freshly-created DaemonSet
+	// (agents still pulling images on every node) has identical counts to a total outage, so
+	// red here false-alarmed every rollout-from-zero. When the agents are genuinely failing,
+	// the pods themselves report Degraded (CrashLoopBackOff & co) and carry the red.
 	down := &appsv1.DaemonSet{Status: appsv1.DaemonSetStatus{
 		DesiredNumberScheduled: 3, NumberReady: 0, UpdatedNumberScheduled: 0,
 	}}
-	if got := health(down); got != HealthDegraded {
-		t.Errorf("health(all-down DaemonSet) = %q, want Degraded", got)
+	if got := health(down); got != HealthProgressing {
+		t.Errorf("health(none-ready DaemonSet) = %q, want Progressing", got)
 	}
 
 	// A rollout in flight — all old pods ready but not all on the new revision — is Progressing.

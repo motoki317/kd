@@ -19,7 +19,7 @@ func health(obj runtime.Object) Health {
 	case *appsv1.Deployment:
 		return deploymentHealth(o)
 	case *appsv1.ReplicaSet:
-		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.ReadyReplicas, desiredReplicas(o.Spec.Replicas))
+		return replicaSetHealth(o)
 	case *appsv1.StatefulSet:
 		return replicaHealth(o.Status.Replicas, o.Status.ReadyReplicas, o.Status.UpdatedReplicas, desiredReplicas(o.Spec.Replicas))
 	case *appsv1.DaemonSet:
@@ -146,21 +146,24 @@ func nodeHealth(n *corev1.Node) Health {
 }
 
 func podHealth(p *corev1.Pod) Health {
+	// Succeeded wins before any container inspection: an Argo Workflow step pod reports phase
+	// Succeeded even when its main container exited non-zero (the wait sidecar completes the
+	// pod) — that failure belongs to the Workflow's health, not the finished pod.
+	if p.Status.Phase == corev1.PodSucceeded {
+		return HealthHealthy
+	}
 	// A failing init container blocks the pod from ever starting, so it's degraded too.
 	for _, cs := range p.Status.InitContainerStatuses {
-		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+		if containerFailing(cs) {
 			return HealthDegraded
 		}
 	}
-	// A container stuck waiting (CrashLoopBackOff, ImagePullBackOff, ...) is degraded.
 	for _, cs := range p.Status.ContainerStatuses {
-		if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+		if containerFailing(cs) {
 			return HealthDegraded
 		}
 	}
 	switch p.Status.Phase {
-	case corev1.PodSucceeded:
-		return HealthHealthy
 	case corev1.PodFailed:
 		return HealthDegraded
 	case corev1.PodRunning:
@@ -173,6 +176,20 @@ func podHealth(p *corev1.Pod) Health {
 	default:
 		return HealthUnknown
 	}
+}
+
+// containerFailing covers both windows of a crash loop: stuck waiting (CrashLoopBackOff,
+// ImagePullBackOff, ...) AND sitting in Terminated with a non-zero exit between the crash and
+// the next backoff restart. Without the second check a crash-looping pod read blue on every
+// other status patch (kubectl shows the same window as "Error").
+func containerFailing(cs corev1.ContainerStatus) bool {
+	if w := cs.State.Waiting; w != nil && isFailureReason(w.Reason) {
+		return true
+	}
+	if t := cs.State.Terminated; t != nil && t.ExitCode != 0 {
+		return true
+	}
+	return false
 }
 
 func podReady(p *corev1.Pod) bool {
@@ -210,6 +227,24 @@ func deploymentHealth(d *appsv1.Deployment) Health {
 	return replicaHealth(d.Status.Replicas, d.Status.ReadyReplicas, d.Status.UpdatedReplicas, desiredReplicas(d.Spec.Replicas))
 }
 
+// replicaSetHealth is replicaHealth plus ReplicaFailure: an RS that cannot create its pods at
+// all (quota exhausted, missing ServiceAccount, admission denial) declares it via this condition,
+// and with no pods to carry their own red it would otherwise read Progressing forever.
+func replicaSetHealth(rs *appsv1.ReplicaSet) Health {
+	for _, c := range rs.Status.Conditions {
+		if c.Type == appsv1.ReplicaSetReplicaFailure && c.Status == corev1.ConditionTrue {
+			return HealthDegraded
+		}
+	}
+	return replicaHealth(rs.Status.Replicas, rs.Status.ReadyReplicas, rs.Status.ReadyReplicas, desiredReplicas(rs.Spec.Replicas))
+}
+
+// replicaHealth never reports Degraded: a fresh rollout (pods pulling images, a StatefulSet
+// booting pod-0 under OrderedReady) is count-indistinguishable from a total outage, so red on
+// ready==0 false-alarmed every deploy-from-zero. The genuine failures are declared elsewhere and
+// keep their red — failing pods themselves (CrashLoopBackOff & co), a Deployment's
+// ProgressDeadlineExceeded, an RS's ReplicaFailure — matching ArgoCD, which never derives
+// Degraded from workload counts.
 func replicaHealth(current, ready, updated, desired int32) Health {
 	if desired == 0 {
 		return HealthHealthy
@@ -217,12 +252,11 @@ func replicaHealth(current, ready, updated, desired int32) Health {
 	if ready >= desired && updated >= desired && current == desired {
 		return HealthHealthy
 	}
-	if ready == 0 {
-		return HealthDegraded
-	}
 	return HealthProgressing
 }
 
+// daemonSetHealth follows the same rule as replicaHealth: counts make Progressing, never
+// Degraded — only the agent pods know whether "0 ready" is a node-wide image pull or a crash.
 func daemonSetHealth(d *appsv1.DaemonSet) Health {
 	desired := d.Status.DesiredNumberScheduled
 	if desired == 0 {
@@ -230,9 +264,6 @@ func daemonSetHealth(d *appsv1.DaemonSet) Health {
 	}
 	if d.Status.NumberReady >= desired && d.Status.UpdatedNumberScheduled >= desired {
 		return HealthHealthy
-	}
-	if d.Status.NumberReady == 0 {
-		return HealthDegraded
 	}
 	return HealthProgressing
 }
