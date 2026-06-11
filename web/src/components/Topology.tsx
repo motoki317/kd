@@ -1359,9 +1359,10 @@ export default function Topology(props: Props) {
                       height={g.height + 16}
                       rx="8"
                     />
-                    {/* A 12px kind icon at the label's y-baseline (icon is 14×14 in viewBox space;
-                        translate so it centers vertically on the text baseline). */}
-                    <g class="kind-group-icon" transform={`translate(${g.x}, ${g.y + 1}) scale(0.86)`}>
+                    {/* A 12px kind icon centered on the label's optical center: the 12px uppercase
+                        label's baseline sits at y+14, so its cap-height midpoint is ~y+9.7; the
+                        scaled icon's content center is 0.86*7 ≈ 6 below its translate origin. */}
+                    <g class="kind-group-icon" transform={`translate(${g.x}, ${g.y + 3.7}) scale(0.86)`}>
                       {kindIcon(g.kind)}
                     </g>
                     <text class="kind-group-label" x={g.x + 16} y={g.y + 14}>
