@@ -656,6 +656,86 @@ describe('layoutGraph', () => {
     // Exactly three distinct columns for three depths.
     expect(new Set(l.nodes.map((n) => Math.round(n.x))).size).toBe(3)
   })
+
+  it('centres a multi-referenced group on the mean of ALL its referrers (Ownership + Network)', () => {
+    // The combined-relationships case: a Pod group fed by BOTH its ReplicaSet (ownerReference) and a
+    // Service (selects). The pods must sit midway between the two referrers — not snap to whichever
+    // one happened to win the primary-parent pick — so every tree reads the same.
+    const ns: KNode[] = [
+      { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' },
+      { id: 'rs1', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' },
+      { id: 'ing', kind: 'Ingress', name: 'web', health: 'Healthy' },
+      { id: 'a-svc', kind: 'Service', name: 'web', health: 'Healthy' },
+      { id: 'p1', kind: 'Pod', name: 'web-x-1', health: 'Healthy' },
+      { id: 'p2', kind: 'Pod', name: 'web-x-2', health: 'Healthy' },
+    ]
+    const e: KEdge[] = [
+      { from: 'dep', to: 'rs1', type: 'ownerReference' },
+      { from: 'rs1', to: 'p1', type: 'ownerReference' },
+      { from: 'rs1', to: 'p2', type: 'ownerReference' },
+      { from: 'ing', to: 'a-svc', type: 'routes' },
+      { from: 'a-svc', to: 'p1', type: 'selects' },
+      { from: 'a-svc', to: 'p2', type: 'selects' },
+    ]
+    const l = layoutGraph(ns, e, 'LR')
+    const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
+    // The ReplicaSet and Service share a depth but sit on different rows, so "midway" is a real
+    // discriminator: the old single-parent centring put the pods exactly on one referrer's row.
+    expect(Math.abs(y('rs1') - y('a-svc'))).toBeGreaterThan(NODE_HEIGHT)
+    const podMid = (y('p1') + y('p2')) / 2
+    expect(Math.abs(podMid - (y('rs1') + y('a-svc')) / 2)).toBeLessThan(NODE_HEIGHT / 2)
+  })
+
+  it('groups pods under their owner, not a tied referrer with a smaller id', () => {
+    // ReplicaSet and Service land on the same rank (an Ingress feeds the Service), so the old
+    // shallowest-source rule fell through to the id tie-break — a random UID in real data. The
+    // Service id here sorts BEFORE the ReplicaSet id; the pods must still form one contiguous
+    // name-ordered run (one sibling group under the owner), whatever the UID order.
+    const ns: KNode[] = [
+      { id: 'dep', kind: 'Deployment', name: 'web', health: 'Healthy' },
+      { id: 'z-rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' },
+      { id: 'ing', kind: 'Ingress', name: 'web', health: 'Healthy' },
+      { id: 'a-svc', kind: 'Service', name: 'web', health: 'Healthy' },
+      { id: 'p1', kind: 'Pod', name: 'web-x-1', health: 'Healthy' },
+      { id: 'p2', kind: 'Pod', name: 'web-x-2', health: 'Healthy' },
+      { id: 'p3', kind: 'Pod', name: 'web-x-3', health: 'Healthy' },
+    ]
+    const e: KEdge[] = [
+      { from: 'dep', to: 'z-rs', type: 'ownerReference' },
+      { from: 'ing', to: 'a-svc', type: 'routes' },
+      ...['p1', 'p2', 'p3'].flatMap((p): KEdge[] => [
+        { from: 'z-rs', to: p, type: 'ownerReference' },
+        { from: 'a-svc', to: p, type: 'selects' },
+      ]),
+    ]
+    const l = layoutGraph(ns, e, 'LR')
+    const pods = l.nodes.filter((n) => n.kind === 'Pod').sort((a, b) => a.y - b.y)
+    expect(pods.map((p) => p.name)).toEqual(['web-x-1', 'web-x-2', 'web-x-3'])
+    // Contiguous tight run: sibling gaps, no other group interleaved between them.
+    for (let i = 1; i < pods.length; i++) {
+      expect(pods[i].y - pods[i - 1].y).toBeLessThanOrEqual(NODE_HEIGHT + 18 + 0.5) // COL_V_GAP
+    }
+  })
+
+  it('centres a shared fan-in target on the mean of the nodes referencing it (Volumes)', () => {
+    // Three pods all mount one shared Secret. The Secret should sit at the vertical middle of the
+    // three pods — "in the middle of every reference" — not on whichever single pod won a tie-break.
+    const ns: KNode[] = [
+      { id: 'pa', kind: 'Pod', name: 'pod-a', health: 'Healthy' },
+      { id: 'pb', kind: 'Pod', name: 'pod-b', health: 'Healthy' },
+      { id: 'pc', kind: 'Pod', name: 'pod-c', health: 'Healthy' },
+      { id: 'se', kind: 'Secret', name: 'shared', health: 'Healthy' },
+    ]
+    const e: KEdge[] = [
+      { from: 'pa', to: 'se', type: 'mounts' },
+      { from: 'pb', to: 'se', type: 'mounts' },
+      { from: 'pc', to: 'se', type: 'mounts' },
+    ]
+    const l = layoutGraph(ns, e, 'LR')
+    const y = (id: string) => l.nodes.find((n) => n.id === id)!.y
+    const mean = (y('pa') + y('pb') + y('pc')) / 3
+    expect(Math.abs(y('se') - mean)).toBeLessThan(NODE_HEIGHT / 2)
+  })
 })
 
 describe('layoutGraphByKind', () => {

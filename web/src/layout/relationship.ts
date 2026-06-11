@@ -277,9 +277,11 @@ function dagreSeedY(skeleton: KNode[], edges: KEdge[], wrapped: ReadonlySet<stri
 // wider BLOCK_GAP so each kind reads as its own group (the user's "little spacing between kinds").
 // `group` identifies a set of same-parent same-kind siblings (a StatefulSet's pods): siblings are
 // ordered among THEMSELVES by natural name (so they read web-0,1,2), and the group as a whole is
-// centred on `parent`'s placed position. `name` is the natural-sort key within a group ('' for leaf
-// blocks). `id` (skeleton card only) lets a child column read this card's placed centre; `parent` is
-// the shallowest source feeding this unit (a hub id for its leaf blocks) so the group centres on it.
+// centred on the mean of its referrers' placed positions. `name` is the natural-sort key within a
+// group ('' for leaf blocks). `id` (skeleton card only) lets a child column read this card's placed
+// centre; `parent` is the PRIMARY parent (the grouping key — see parentOf); `parents` is EVERY
+// shallower referrer (a hub id for its leaf blocks), so a multi-referenced group can centre on all
+// of them rather than snapping to one.
 interface ColUnit {
   rank: number
   kind: string
@@ -290,6 +292,7 @@ interface ColUnit {
   seedY: number
   id?: string
   parent?: string
+  parents?: string[]
   // Set on a foldSiblingSubtrees pill: its target row among the visible siblings of its group, so the
   // pill slots between head and tail (collapsed) / at the bottom (expanded) instead of sorting by name.
   pillSlot?: number
@@ -314,19 +317,37 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   const out: PositionedNode[] = []
   const units: ColUnit[] = []
 
-  // Each skeleton node's primary parent = the shallowest source of an edge into it (ties broken by id),
-  // so a node's same-kind siblings under one parent share a `group` and get ordered by name below. A
-  // node with no shallower neighbour (a root / fan-in source) is its own group, left in Dagre's order.
-  const parentOf = new Map<string, string>()
+  // Every shallower source of an edge into a node is a "referrer" — with several relationship
+  // categories active a Pod collects more than one (its ReplicaSet via ownerReference, a Service
+  // via selects). The PRIMARY parent defines sibling grouping (same parent + same kind ⇒ one
+  // name-ordered, tightly-packed group): an ownerReference wins over the looser reference edges,
+  // then the shallower source, then the smaller id. Picking by rank alone let a rank tie fall
+  // through to the id comparison — a random UID — so whether a tree's pods grouped under their
+  // ReplicaSet or their Service was a per-tree coin flip that read as non-deterministic placement.
+  // ALL referrers stay on the unit: the group's vertical position reconciles them (`desired` below).
+  // A node with no shallower neighbour (a root / fan-in source) is its own group, left in Dagre's
+  // order.
+  const ownerPrio = (e: KEdge) => (e.type === 'ownerReference' ? 0 : 1)
+  const referrersOf = new Map<string, KEdge[]>()
   for (const e of edges) {
     if (wrapped.has(e.from) || wrapped.has(e.to)) continue
     const rf = rank.get(e.from) ?? 0
     const rt = rank.get(e.to) ?? 0
-    if (rf >= rt) continue // e.from must be shallower to be a parent of e.to
-    const cur = parentOf.get(e.to)
-    if (cur === undefined || rf < (rank.get(cur) ?? 0) || (rf === (rank.get(cur) ?? 0) && e.from < cur)) {
-      parentOf.set(e.to, e.from)
-    }
+    if (rf >= rt) continue // only a shallower source reads as a parent of e.to
+    const list = referrersOf.get(e.to)
+    if (list) list.push(e)
+    else referrersOf.set(e.to, [e])
+  }
+  const parentOf = new Map<string, string>()
+  for (const [id, refs] of referrersOf) {
+    const best = refs.reduce((b, e) => {
+      if (ownerPrio(e) !== ownerPrio(b)) return ownerPrio(e) < ownerPrio(b) ? e : b
+      const re = rank.get(e.from) ?? 0
+      const rb = rank.get(b.from) ?? 0
+      if (re !== rb) return re < rb ? e : b
+      return e.from < b.from ? e : b
+    })
+    parentOf.set(id, best.from)
   }
 
   for (const n of skeleton) {
@@ -346,6 +367,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
     units.push({
       rank: r, kind: groupKind, group, name: n.name,
       w: NODE_WIDTH, h: NODE_HEIGHT, seedY: seedY.get(n.id) ?? 0, id: n.id, parent: par,
+      parents: referrersOf.get(n.id)?.map((e) => e.from),
       pillSlot: isPill ? meta._pillSlot : undefined,
       place: (left, top) => out.push(placeSkeletonNode(n, left + NODE_WIDTH / 2, top + NODE_HEIGHT / 2)),
     })
@@ -359,7 +381,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
       const block = b
       units.push({
         rank: r, kind: block.kind, group: `block:${hub.id}:${block.kind}`, name: '',
-        w: block.w, h: block.h, seedY: top + block.h / 2, parent: hub.id,
+        w: block.w, h: block.h, seedY: top + block.h / 2, parent: hub.id, parents: [hub.id],
         place: (left, t) => placeBlockCells(block, left, t, out),
       })
       top += block.h + BLOCK_GAP
@@ -374,15 +396,17 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   let cx = 0
   for (const r of ranks) { colLeft.set(r, cx); cx += colWidth.get(r)! + COLUMN_GAP }
 
-  // Within each column we place one GROUP (same parent + same kind) at a time, vertically CENTRED on its
-  // parent's already-placed centre — columns are processed left→right (ranks ascending), so by the time a
-  // child column is laid out every parent in a shallower column has a real position recorded in
-  // `placedCenter`. This is what keeps children "right next to" their parent: re-packing a parent column
-  // moves a card off its raw Dagre seed, and a child centred on the seed (the old behaviour) drifted away
-  // — es-default's pods and a WorkflowTemplate's Workflows both sank below their parent. Centring on the
-  // placed parent makes the child follow. A group with no placed parent (a root / fan-in source) falls
-  // back to its own seed. Units INSIDE a group are ordered by natural name (so a StatefulSet's pods read
-  // web-0,1,2) and packed tight (COL_V_GAP).
+  // Within each column we place one GROUP (same parent + same kind) at a time, vertically CENTRED on
+  // the MEAN of its referrers' already-placed centres — columns are processed left→right (ranks
+  // ascending), so by the time a child column is laid out every referrer in a shallower column has a
+  // real position recorded in `placedCenter`. With one referrer (the ownership view) that mean IS the
+  // parent's centre: this is what keeps children "right next to" their parent — re-packing a parent
+  // column moves a card off its raw Dagre seed, and a child centred on the seed (the old behaviour)
+  // drifted away. With several referrers (Ownership + Network: a Pod fed by both its ReplicaSet and a
+  // Service) the group sits midway between them, so every tree reads the same instead of each pod
+  // snapping to whichever single referrer happened to win the primary-parent pick. A group with no
+  // placed referrer (a root / fan-in source) falls back to its own seed. Units INSIDE a group are
+  // ordered by natural name (so a StatefulSet's pods read web-0,1,2) and packed tight (COL_V_GAP).
   //
   // Overlapping groups are de-overlapped by a standard 1-D cluster merge rather than a one-directional
   // push-down: when a group would collide with the one above it the two merge into a CLUSTER laid out
@@ -405,8 +429,11 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
       const gus = reals
       const h = gus.reduce((s, u) => s + u.h, 0) + Math.max(0, gus.length - 1) * COL_V_GAP
       const parent = gus[0].parent
-      const desired = parent !== undefined && placedCenter.has(parent)
-        ? placedCenter.get(parent)!
+      // Barycenter over the group's DISTINCT placed referrers: one shared Service selecting all of a
+      // ReplicaSet's pods pulls once, not once per pod.
+      const refs = [...new Set(gus.flatMap((u) => u.parents ?? []))].filter((p) => placedCenter.has(p))
+      const desired = refs.length
+        ? refs.reduce((s, p) => s + placedCenter.get(p)!, 0) / refs.length
         : gus.reduce((s, u) => s + u.seedY, 0) / gus.length
       return { key, gus, h, kind: gus[0].kind, parent, desired }
     })
