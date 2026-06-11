@@ -35,6 +35,24 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b33 (2026-06-11, dogfooding D130–D150)** — light-theme a11y + operator-flow pass. Shipped: the
+  collapse-pill trouble badge, the cap-view warn/cordon/near-cap labels (D131), and the sidebar ns-count
+  attention badge (D132) all colored small TEXT with the vivid graphics health values, which measure
+  ~2.2–3.4:1 on the light theme (3.06 on the selected-row tint) — switched to the darker `healthTextColor`
+  inks (4.5–5.2:1, AA; dark theme resolves the same vars back to vivid, verified 4.73 live); resource
+  names in the drawer hero and capacity tooltip wrapped `word-break: break-all` mid-word ("…-defa /
+  ult-…") — switched to `overflow-wrap: anywhere` so k8s names break at their hyphens, splitting only an
+  oversize hash segment (D138, measured live at 390px). Verified clean & mature: end-to-end light-theme
+  triage flow (attention badge → troubled ns → troubled card → drawer hero/events, zero vivid-text
+  offenders in the drawer); event-source pill jumps to the involved pod; failed-Workflow logs stream via
+  BuildForLogs on real EKS data; logs container picker in lockstep with the stream, init-container logs
+  load; search Enter-cycle steps matches with the "X of N" indicator (an apparent no-op was "no matches",
+  stated explicitly); kinds row edge-fade scroll affordance at 390px; Kind view folds at 112 resources;
+  capacity own-pods-first node order confirmed live on EKS (refuted my own "fold zero-pod rows" idea —
+  designed Contrast/Proximity); RBAC lens hover verbs at 200 objects; [cluster] inventory behind the
+  counted "Show orphaned" checkbox; Esc deliberately clears spotlights but not the persisted relationship
+  arrangement; help overlay compact (~1.8k chars, visual edge legend). Native-select gotcha: the context
+  switcher needs a real change event, not option clicks (operator mice are fine).
 - **b32 (2026-06-11, dogfooding D121–D129)** — EKS-shape pass. Shipped: an EKS Fargate node reports
   allocatable.pods=1 (one pod per micro-VM by design), so the D101 pod-cap label rendered a red "1 / 1
   pods" that falsely read as pressure on every Fargate pod — raised the guard to cap > 1 so a dedicated
