@@ -1182,7 +1182,9 @@ button.conn.conn-retry:focus-visible {
 .cap-tooltip-name {
   font-size: 14px;
   font-weight: 600;
-  word-break: break-all;
+  /* anywhere (not break-all): wrap k8s names at their hyphens, splitting mid-word
+     only when a single segment (a pod-template hash) exceeds the line. */
+  overflow-wrap: anywhere;
 }
 .cap-tooltip-sub {
   margin-top: 2px;
@@ -2428,7 +2430,9 @@ button.conn.conn-retry:focus-visible {
 .drawer-name {
   font-size: 16px;
   font-weight: 700;
-  word-break: break-all;
+  /* anywhere (not break-all): wrap k8s names at their hyphens, splitting mid-word only
+     when a single segment exceeds the line; also shrinks min-content inside this flex row. */
+  overflow-wrap: anywhere;
   display: flex;
   align-items: baseline;
   gap: 8px;
