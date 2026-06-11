@@ -19,6 +19,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^24.12.3",
     "jsdom": "^29.1.1",
+    "svgpath": "^2.6.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-solid": "^2.11.12",

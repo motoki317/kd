@@ -26,7 +26,7 @@ push detail to those.
 | Concern | File |
 | --- | --- |
 | Add a grouping layout | `web/src/layout/` (relationship/kind; barrel `index.ts` re-exports the public surface) or `web/src/capacityLayout.ts` (the Nodes capacity view) + dispatch on `groupBy` in `web/src/components/Topology.tsx` |
-| Add a kind icon | `web/src/icons.tsx` + extend `icons.test.ts` coverage |
+| Add a kind icon | official glyph (Argo CD's set): add the kind in `web/scripts/import-k8s-icons.mjs` and regenerate `web/src/k8sIconPaths.ts`; no upstream glyph: kd-drawn stroke fragment in `web/src/icons.tsx`. Either way extend `icons.test.ts` coverage (attribution: `NOTICE`) |
 | Add a short kind label | `web/src/names.ts` (`KIND_SHORT_LABELS`) + alias if not substring |
 | Add a graph edge kind | `internal/kube/graph/edges.go` + `EdgeType` in `model.go` + a `web/src/relationships.ts` category |
 | Surface a kind's "declarative essence" in the drawer | extractor in the matching `internal/kube/graph/spec_<domain>.go` (shared helpers in `spec.go`) — full recipe below the table |

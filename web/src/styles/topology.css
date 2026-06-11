@@ -910,9 +910,11 @@
 [data-theme='dark'] .node-glaze {
   opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
 }
-/* Kind icon: monochrome outline that picks up the dim text color so it never competes with the
-   health-tinted body (the body carries status; the icon carries type). The .large variant hosts a
-   scale(2) transform, so its base stroke is halved to render at the same 1.5px visual thickness. */
+/* Kind icon: monochrome in the dim text color so it never competes with the health-tinted body
+   (the body carries status; the icon carries type). Official glyphs (icons.tsx) self-declare
+   fill/stroke per path and read `color` via currentColor; kd-drawn glyphs inherit the stroke
+   rules. The .large variant hosts a scale(2) transform, so its base stroke is halved to render
+   at the same 1.5px visual thickness. */
 .node-icon {
   fill: none;
   stroke: var(--text-dim);
