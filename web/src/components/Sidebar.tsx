@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
-import { HEALTH_ORDER, healthColor, healthHint, healthSeverity } from '../health'
+import { HEALTH_ORDER, healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -238,7 +238,7 @@ export default function Sidebar(props: Props) {
                     <Show when={(c().nonReady ?? 0) > 0}>
                       <span
                         class="ns-count"
-                        style={{ color: healthColor(c().health) }}
+                        style={{ color: healthTextColor(c().health) }}
                         title={`${c().nonReady} non-ready · ${c().health}`}
                       >
                         {(c().nonReady ?? 0) > 99 ? '99+' : c().nonReady}
@@ -260,14 +260,15 @@ export default function Sidebar(props: Props) {
                     <span class="ns-dot" style={{ background: healthColor(ns.health) }} title={healthHint[ns.health]} />
                     <span class="ns-name">{ns.name}</span>
                     <Show when={(ns.nonReady ?? 0) > 0}>
-                      {/* Inline color matches the dot (and the topology health-stroke), so the
-                          count reads as "this many of THAT color need a look", not as a neutral
-                          stat. Healthy ns never carries a count, so falling back to text-dim is
-                          only for the (rare) Unknown case. Clamp at "99+" so a runaway namespace
-                          (rare, but possible after a node-loss cascade) doesn't widen the row. */}
+                      {/* Inline color shares the dot's hue (healthTextColor = the legible-on-light
+                          ink of that hue, not the vivid graphics value the dot uses), so the count
+                          reads as "this many of THAT color need a look" while still clearing AA 4.5:1
+                          as small text. Healthy ns never carries a count; Unknown (rare) keeps the
+                          vivid value. Clamp at "99+" so a runaway namespace (rare, but possible after
+                          a node-loss cascade) doesn't widen the row. */}
                       <span
                         class="ns-count"
-                        style={{ color: healthColor(ns.health) }}
+                        style={{ color: healthTextColor(ns.health) }}
                         title={`${ns.nonReady} non-ready · ${ns.health}`}
                       >
                         {(ns.nonReady ?? 0) > 99 ? '99+' : ns.nonReady}

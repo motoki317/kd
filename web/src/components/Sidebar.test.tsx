@@ -176,6 +176,17 @@ describe('Sidebar', () => {
     expect(titles).toEqual(['1 non-ready · Progressing', '3 non-ready · Degraded'])
   })
 
+  it('colors the ns-count with the legible ink, not the vivid dot value (cycle 132)', () => {
+    // The dot stays vivid (graphics, 3:1) but the count is small text and must clear AA 4.5:1 on the
+    // light theme — healthTextColor returns the darker *-text ink for the trouble states the badge
+    // actually shows. Alpha order: mmm (Progressing) then zzz-broken (Degraded).
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
+    ))
+    const colors = [...container.querySelectorAll('.ns-list .ns-count')].map((e) => (e as HTMLElement).style.color)
+    expect(colors).toEqual(['var(--progressing-text)', 'var(--degraded-text)'])
+  })
+
   it('filters the list by name', async () => {
     const { container, getByPlaceholderText } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
