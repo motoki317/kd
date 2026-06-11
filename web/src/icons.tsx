@@ -140,14 +140,45 @@ const icons: Record<string, () => JSX.Element> = {
   ),
 }
 
-// Fallback for kinds without a dedicated icon (CRDs, future additions): a generic squared outline
-// so the card layout stays consistent rather than printing kind text at a different x-offset.
-const fallback = () => <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" />
+// kindInitials derives a short badge text for kinds without any icon: the first two capitals of
+// a CamelCase kind ("IngressRoute" → "IR"), one capital when that's all there is ("Certificate"
+// → "C"), else the upcased first letter. Two letters max — more turns to mush at card size.
+export function kindInitials(kind: string): string {
+  const caps = kind.match(/[A-Z]/g) ?? []
+  if (caps.length > 0) return caps.slice(0, 2).join('')
+  return (kind[0] ?? '?').toUpperCase()
+}
 
-// kindIcon renders the SVG fragment for the given kind, or the fallback shape. The caller is
-// expected to wrap it in a <g> with the desired stroke/fill/transform.
+// Fallback for kinds without a dedicated icon (arbitrary CRs, future additions): an Argo CD-style
+// generated badge — the kind's initials in a circle — so an unknown kind still shows something
+// identifying rather than an anonymous empty square. The circle inherits the container's stroke
+// like the kd-drawn glyphs; the text paints explicitly (containers set fill: none, and an
+// inherited stroke would fuzz letterforms this small).
+const fallback = (kind: string) => () => {
+  const initials = kindInitials(kind)
+  return (
+    <>
+      <circle cx="7" cy="7" r="5.5" />
+      <text
+        x="7"
+        y="7"
+        text-anchor="middle"
+        dominant-baseline="central"
+        font-size={initials.length > 1 ? '5' : '6'}
+        font-weight="600"
+        fill="currentColor"
+        stroke="none"
+      >
+        {initials}
+      </text>
+    </>
+  )
+}
+
+// kindIcon renders the SVG fragment for the given kind, or the generated fallback badge. The
+// caller is expected to wrap it in a <g> with the desired stroke/fill/transform.
 export function kindIcon(kind: string): JSX.Element {
-  return (icons[kind] ?? fallback)()
+  return (icons[kind] ?? fallback(kind))()
 }
 
 // hasKindIcon reports whether a kind has a dedicated icon (vs the generic fallback). Useful for

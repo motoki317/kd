@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasKindIcon, kindFromRef } from './icons'
+import { hasKindIcon, kindFromRef, kindInitials } from './icons'
 
 describe('kindIcon', () => {
   it('has an icon for every kind the server currently emits', () => {
@@ -46,6 +46,19 @@ describe('kindIcon', () => {
       'PriorityClass',
     ]
     for (const k of kinds) expect(hasKindIcon(k), `missing icon for ${k}`).toBe(true)
+  })
+})
+
+describe('kindInitials', () => {
+  it('takes the first two capitals of a CamelCase kind', () => {
+    expect(kindInitials('IngressRoute')).toBe('IR')
+    expect(kindInitials('ValidatingAdmissionPolicyBinding')).toBe('VA')
+  })
+  it('uses the single capital of a one-word kind', () => {
+    expect(kindInitials('Certificate')).toBe('C')
+  })
+  it('upcases the first letter when the kind has no capitals', () => {
+    expect(kindInitials('foo')).toBe('F')
   })
 })
 
