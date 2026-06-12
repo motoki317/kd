@@ -8,17 +8,16 @@ interface Props {
   onSelect: (ns: string) => void
   loading: boolean
   failed: boolean
-  // Lets the app focus the filter from a global key ("/").
-  filterRef?: (el: HTMLInputElement) => void
   // Lets the failure state offer a retry button — optional so a caller that hides the
   // namespaces list outright (or has no refresh handler) still works.
   onRetry?: () => void
-  // Monotonic tick bumped by the app on a programmatic "jump to namespace" (Alt+T, first-load
-  // auto-select). Each change flashes the now-selected row so the eye finds where the jump landed —
-  // a plain selection (a click the operator made themselves) doesn't pulse, since they know where it is.
+  // Monotonic tick bumped by the app on a programmatic "jump to namespace" (the trouble badge,
+  // first-load auto-select). Each change flashes the now-selected row so the eye finds where the
+  // jump landed — a plain selection (a click the operator made themselves) doesn't pulse, since
+  // they know where it is.
   flash?: number
-  // Jump to the most-troubled namespace (same path as Alt+T). Wired to the trouble badge so the
-  // "N need attention" count is also the one-click way to GET there — not just a passive number.
+  // Jump to the most-troubled namespace. Wired to the trouble badge so the "N need attention"
+  // count is also the one-click way to GET there — not just a passive number.
   onJumpToTrouble?: () => void
 }
 
@@ -78,7 +77,7 @@ export default function Sidebar(props: Props) {
     ),
   )
   // Flash the selected row on a programmatic jump (cycle 330/R5). 'nearest' scrolling above stays
-  // silent when the row is already visible, so without this an Alt+T jump can land with no visible
+  // silent when the row is already visible, so without this a trouble-badge jump can land with no visible
   // change. Deferred to a microtask so the .active class for the new selection has been committed
   // before we look it up; remove/reflow/add restarts the CSS animation when the same row re-flashes.
   createEffect(
@@ -114,7 +113,7 @@ export default function Sidebar(props: Props) {
         </Show>
         <Show when={troubled() > 0}>
           {/* The trouble count is also the jump affordance: clicking it steps to the next troubled
-              namespace (Alt+T's path), worst-first and cycling, so the operator can triage all of them
+              namespace, worst-first and cycling, so the operator can triage all of them
               with repeated clicks without scanning the list or knowing the shortcut. Falls back to a
               plain badge when no jump handler is wired. */}
           <Show
@@ -153,9 +152,8 @@ export default function Sidebar(props: Props) {
           <line x1="8.6" y1="8.6" x2="12" y2="12" />
         </svg>
         <input
-          ref={props.filterRef}
           class="sidebar-filter"
-          placeholder="Filter…  ( / · ↑↓ )"
+          placeholder="Filter…"
           aria-label="Filter namespaces"
           value={filter()}
           onInput={(e) => setFilter(e.currentTarget.value)}

@@ -66,20 +66,6 @@ describe('DetailDrawer', () => {
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
-  it('[ and ] cycle the drawer tabs (cycle 292)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
-    // ConfigMap is not loggable: tabs = [Events, Manifest]; non-loggable resources default to
-    // Manifest (line 106 in DetailDrawer.tsx).
-    const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
-    expect(active()).toBe('Manifest')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
-    expect(active()).toBe('Events') // wraps forward
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: ']' }))
-    expect(active()).toBe('Manifest')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' }))
-    expect(active()).toBe('Events') // backward
-  })
-
   it('names the complementary landmark by the resource so it is identifiable in a landmark list', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const aside = container.querySelector('aside.drawer')!

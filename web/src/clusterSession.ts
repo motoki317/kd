@@ -84,11 +84,11 @@ export function createClusterSession(deps: {
     if (contextsRes.error && !authFailed()) setConnState('offline')
   })
 
-  // Bumped on a programmatic jump to a namespace (first-load auto-pick, Alt+T) so the sidebar can
+  // Bumped on a programmatic jump to a namespace (first-load auto-pick, the trouble badge) so the sidebar can
   // flash the destination row — see Sidebar's flash prop. A plain click doesn't bump it.
   const [nsFlash, setNsFlash] = createSignal(0)
 
-  // Step to the next troubled namespace — shared by the Alt+T shortcut and the sidebar trouble badge
+  // Step to the next troubled namespace — wired to the sidebar trouble badge
   // so both land identically (with the flash pulse). Cycles from the current selection (worst first,
   // then next-worst, wrapping) so repeated presses triage every troubled namespace rather than
   // re-landing on the single worst. No-op when nothing is troubled; returns whether it acted so the

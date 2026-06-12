@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import { CLUSTER_SCOPE, type NamespaceSummary } from './api'
 import { hasDescendantPod } from './loggable'
@@ -6,11 +6,9 @@ import { emptyState, type GraphState } from './graphState'
 import { matchSel } from './nav'
 import { namespaceLabel } from './ns'
 import type { Capacity, Health } from './types'
-import { REL_CATEGORIES } from './relationships'
-import { nonOwnershipEdgeLabels } from './edgeRender'
 import { readRawPref, writePref } from './prefs'
 import Sidebar from './components/Sidebar'
-import Topology, { GROUP_OPTIONS } from './components/Topology'
+import Topology from './components/Topology'
 import DetailDrawer from './components/DetailDrawer'
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
@@ -69,11 +67,11 @@ export default function App() {
   // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
   // controller→pod→pod-event trail. Without history, going back means remembering what they had
   // selected — error-prone after a few hops. A stack of prior selection IDs powers a "back"
-  // button and an Alt+Left shortcut. Cleared on namespace/view/ctx change so we don't restore an
+  // button in the drawer. Cleared on namespace/view/ctx change so we don't restore an
   // ID that no longer exists in the graph.
   const [selectionHistory, setSelectionHistory] = createSignal<string[]>([])
   // selectAndRemember: the path callers should use whenever a click should be reversible. Plain
-  // setSelectedId stays for cases that shouldn't push (deselection, URL restoration, j/k stepping).
+  // setSelectedId stays for cases that shouldn't push (deselection, URL restoration, arrow-key stepping).
   const selectAndRemember = (next: string) => {
     const prev = selectedId()
     if (prev && prev !== next) setSelectionHistory((h) => [...h, prev])
@@ -94,7 +92,7 @@ export default function App() {
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
   // Collapsible sidebar (cycle 299): operators with wide ownership graphs sometimes want every
-  // pixel for the canvas. Cmd/Ctrl+B or the topbar toggle; state persists in localStorage so a
+  // pixel for the canvas. Toggled from the topbar; state persists in localStorage so a
   // reload doesn't surprise them with the sidebar re-appearing. Default expanded — except on a
   // phone-width screen with no stored pref, where the 220px sidebar would leave a sliver of
   // canvas: there it starts hidden and overlays the topology when opened (see the
@@ -128,16 +126,6 @@ export default function App() {
     mq.addEventListener('change', onChange)
     onCleanup(() => mq.removeEventListener('change', onChange))
   })
-  // Last value yanked via the 'y' shortcut (cycle 288). Surfaced as a brief toast so the operator
-  // can see what hit their clipboard — otherwise a silent copy is indistinguishable from a missed
-  // keystroke. The toast auto-clears after 1.5s.
-  const [copiedRef, setCopiedRef] = createSignal<string | null>(null)
-  createEffect(() => {
-    if (!copiedRef()) return
-    const t = setTimeout(() => setCopiedRef(null), 1500)
-    onCleanup(() => clearTimeout(t))
-  })
-
   const [graph, setGraph] = createStore<GraphState>(emptyState())
   // Live namespace summary from the SSE feed, computed server-side over the UNFILTERED graph so
   // it doesn't disagree with /namespaces. When unset (no live stream yet) we fall back to the
@@ -224,8 +212,9 @@ export default function App() {
   // Sidebar rows kept live from the SSE summary + the favicon attention badge — see sidebarHealth.ts.
   const { sidebarNs } = createSidebarHealth({ namespaceList, namespace, liveSummary, connected })
 
-  // Global keyboard shortcuts (returns the ref-setters for the inputs they focus) — see appKeyboard.ts.
-  const { filterRef, searchRef } = createAppKeyboard({
+  // Global keyboard shortcuts (returns the ref-setter for the search box "/" focuses) — see
+  // appKeyboard.ts. Deliberately four bindings; everything else is click-driven.
+  const { searchRef } = createAppKeyboard({
     nodes,
     search,
     setSearch,
@@ -235,14 +224,8 @@ export default function App() {
     setKindFilter,
     selectedId,
     setSelectedId,
-    graph,
-    setGroupBy,
-    setSidebarHidden,
     showHelp,
     setShowHelp,
-    setCopiedRef,
-    goBackSelection,
-    jumpToTrouble,
   })
 
   return (
@@ -251,15 +234,14 @@ export default function App() {
         {/* Clickable home: resets grouping + relationships + filters + selection without touching
             the namespace (cycle 290). Operators land on the default "group by relationship,
             ownership only, no spotlight" stance — without hunting for the right controls. */}
-        {/* Sidebar toggle: the pointer/touch counterpart of Cmd/Ctrl+B — without it, phones and
-            mice had no way to reclaim (or restore) the namespace column. Far left, directly above
-            the panel it controls (proximity); shares the round topbar-utility chrome. */}
+        {/* Sidebar toggle: the only way to reclaim (or restore) the namespace column. Far left,
+            directly above the panel it controls (proximity); shares the topbar-utility chrome. */}
         <button
           class="sidebar-btn"
           type="button"
           aria-expanded={!sidebarHidden()}
           aria-controls="ns-sidebar"
-          title={sidebarHidden() ? 'Show the namespace sidebar (Ctrl/⌘+B)' : 'Hide the namespace sidebar (Ctrl/⌘+B)'}
+          title={sidebarHidden() ? 'Show the namespace sidebar' : 'Hide the namespace sidebar'}
           aria-label={sidebarHidden() ? 'Show the namespace sidebar' : 'Hide the namespace sidebar'}
           onClick={() => setSidebarHidden((v) => !v)}
         >
@@ -434,7 +416,6 @@ export default function App() {
           }}
           loading={namespaces.loading}
           failed={!!namespaces.error}
-          filterRef={filterRef}
           onRetry={() => refetchNamespaces()}
           flash={nsFlash()}
           onJumpToTrouble={jumpToTrouble}
@@ -492,7 +473,7 @@ export default function App() {
             usage={selectedUsage()}
             workloadUsage={selectedWorkloadUsage()}
             hostCapacity={selectedHostCapacity()}
-            // Owner-chip clicks should push history (cycle 300) so Alt+Left walks back to the
+            // Owner-chip clicks should push history (cycle 300) so the drawer back button walks back to the
             // descendant the operator came from. The cycle-300 helper pushes the prior selection
             // only when changing to a different node — so re-selecting the same node is a no-op.
             onNavigate={selectAndRemember}
@@ -518,138 +499,47 @@ export default function App() {
         {selectionAnnouncement()}
       </div>
 
-      <Show when={copiedRef()}>
-        {/* Bottom-center confirmation that the 'y' yank fired. Pure overlay, no input — clicks
-            pass through. Auto-fades via the createEffect timer above. */}
-        <div class="copy-toast" role="status" aria-live="polite">
-          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
-            <path d="M 1.5 5.5 L 4 8 L 8.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" />
-          </svg>
-          Copied <code>{copiedRef()}</code>
-        </div>
-      </Show>
-
       <Show when={showHelp()}>
         <div class="help-backdrop" onClick={() => setShowHelp(false)}>
-          <div class="help-panel" onClick={(e) => e.stopPropagation()}>
-            <h3>Keyboard shortcuts</h3>
-            {/* Grouped so the overlay reads as a reference card (Navigation / Grouping /
-                Relationships / Actions), not a flat undifferentiated list. The grouping modes are
-                enumerated with their number keys so "2 groups by node" is discoverable.
-                The sections flow into 2 columns on a wide-enough screen (help-sections) so the full
-                card fits the viewport without the operator having to discover an internal scroll —
-                the bottom sections (Relationships/Actions/Edges) were being cut off below the fold. */}
-            <div class="help-sections">
-            <section class="help-section">
-              <h4>Navigation</h4>
-              <ul>
-                <li>
-                  <kbd>/</kbd> Filter namespaces · <kbd>↑</kbd> <kbd>↓</kbd> step through them (<kbd>Enter</kbd> opens the top match)
-                </li>
-                <li>
-                  <kbd>Alt</kbd>+<kbd>T</kbd> Next troubled namespace (worst first)
-                </li>
-                <li>
-                  <kbd>⌘</kbd><kbd>K</kbd> / <kbd>Ctrl</kbd><kbd>K</kbd> Search resources in view (<kbd>Enter</kbd> next match · <kbd>Shift</kbd>+<kbd>Enter</kbd> previous)
-                  <div class="help-hint">
-                    Matches name, kind, status, IP, image, and labels. <code>po/web-abc</code> finds one kind.
-                  </div>
-                </li>
-                <li>
-                  <kbd>j</kbd> <kbd>k</kbd> · <kbd>↓</kbd> <kbd>↑</kbd> Step through resources (troubled first)
-                </li>
-                <li>
-                  <kbd>y</kbd> Copy the selection as <code>Kind/name</code> for <code>kubectl</code>
-                </li>
-                <li>
-                  <kbd>⌘</kbd><kbd>B</kbd> / <kbd>Ctrl</kbd><kbd>B</kbd> Toggle the namespace sidebar
-                </li>
-                <li>
-                  Click an owner chip to open the owner
-                </li>
-                <li>
-                  <kbd>Alt</kbd>+<kbd>←</kbd> Back to the previously viewed resource
-                </li>
-                <li>
-                  <kbd>[</kbd> <kbd>]</kbd> Cycle the drawer's tabs (Logs ↔ Events ↔ Manifest)
-                </li>
-                <li>
-                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> Find in logs / manifest · <kbd>Shift</kbd>+<kbd>E</kbd> next error line
-                </li>
-                <li>
-                  <strong>[cluster]</strong> Cluster-wide resources (Nodes, PVs, CRDs)
-                </li>
-              </ul>
-            </section>
-            <section class="help-section">
-              <h4>Grouping</h4>
-              <ul>
-                {/* Surface the grouping hint alongside the number so the overlay teaches what each
-                    layout does — same text the tab tooltip uses, visible without hovering. */}
-                <For each={GROUP_OPTIONS}>
-                  {(g, i) => (
-                    <li>
-                      <kbd>{i() + 1}</kbd> Group by {g.label} <span class="help-hint">{g.hint}</span>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </section>
-            <section class="help-section">
-              <h4>Relationships</h4>
-              <ul>
-                <li class="help-hint">
-                  Chips in the toolbar toggle each relationship; several can be on at once.
-                  <kbd>Shift</kbd>+click shows only one.
-                </li>
-                <For each={REL_CATEGORIES}>
-                  {(c) => (
-                    <li>
-                      {c.label} <span class="help-hint">{c.hint}</span>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </section>
-            <section class="help-section">
-              <h4>Actions</h4>
-              <ul>
-                <li>
-                  <kbd>Esc</kbd> Closes one layer per press: help, typing focus, drawer, then filters
-                </li>
-                <li>
-                  <kbd>?</kbd> Toggle this help
-                </li>
-                <li>Click a health pill to spotlight those resources</li>
-                <li>Click a kind chip to filter by it · <kbd>Shift</kbd>+click shows only it</li>
-                <li><kbd>f</kbd> or double-click the canvas to fit everything in view</li>
-                <li><kbd>=</kbd> <kbd>-</kbd> Zoom in / out · <kbd>0</kbd> Reset zoom to 100%</li>
-              </ul>
-            </section>
-            <section class="help-section">
-              <h4>Edges</h4>
-              {/* Compact legend matching the topology rendering — everything is grey; the only cue is
-                  shape, not colour (colour clutters a dense canvas). Solid = ownership backbone;
-                  dashed = any non-ownership relationship (refers/selects/mounts/… all read alike —
-                  hover an edge to see its kind). Helps a new operator decode the canvas at a glance. */}
-              <ul class="help-edges">
-                <li>
-                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
-                    <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="2" />
-                    <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
-                  </svg>
-                  Owns — a controller and what it manages
-                </li>
-                <li>
-                  <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
-                    <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
-                    <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
-                  </svg>
-                  Other links — {nonOwnershipEdgeLabels().join(', ')}
-                </li>
-              </ul>
-            </section>
-            </div>
+          <div class="help-panel" role="dialog" aria-label="Help" onClick={(e) => e.stopPropagation()}>
+            {/* Deliberately tiny: the four keys and the edge legend, one column, no internal
+                scroll. Everything else in kd is a visible, clickable control — if this card ever
+                needs columns or sections again, the key surface has regrown past what an operator
+                can hold in their head (see appKeyboard.ts). */}
+            <h3>Keyboard</h3>
+            <ul class="help-keys">
+              <li>
+                <span class="help-key"><kbd>/</kbd></span> Search resources
+              </li>
+              <li>
+                <span class="help-key"><kbd>↓</kbd> <kbd>↑</kbd></span> Step through resources, troubled first
+              </li>
+              <li>
+                <span class="help-key"><kbd>Esc</kbd></span> Back out — close, then clear filters
+              </li>
+              <li>
+                <span class="help-key"><kbd>?</kbd></span> This help
+              </li>
+            </ul>
+            <h3>Lines on the map</h3>
+            {/* Legend matching the topology rendering — the only cue is shape, not colour. Solid =
+                ownership backbone; dashed = any other relationship (hover an edge for its kind). */}
+            <ul class="help-edges">
+              <li>
+                <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
+                  <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="2" />
+                  <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
+                </svg>
+                Owns — a controller and what it manages
+              </li>
+              <li>
+                <svg viewBox="0 0 36 10" width="36" height="10" aria-hidden="true">
+                  <line x1="0" y1="5" x2="28" y2="5" stroke="var(--edge-color)" stroke-width="1.4" stroke-dasharray="5 4" />
+                  <path d="M 28 1.5 L 34 5 L 28 8.5 z" fill="var(--edge-color)" />
+                </svg>
+                Any other link — hover an edge to see which
+              </li>
+            </ul>
           </div>
         </div>
       </Show>

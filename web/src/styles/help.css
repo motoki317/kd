@@ -1,64 +1,33 @@
 .help-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.4);
   display: grid;
   place-items: center;
   z-index: 20;
 }
+/* One small card, one column, no internal scroll — the whole point of the minimal key surface is
+   that help fits in a glance. If this card ever needs columns or a scrollbar again, the content
+   has regrown past what an operator can hold (see appKeyboard.ts). */
 .help-panel {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 22px 14px;
-  min-width: 360px;
-  max-width: 480px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-  /* The full shortcut list (~24 keys) is taller than a laptop viewport; cap to the viewport and scroll
-     internally so the bottom rows stay reachable (place-items:center would otherwise push them off both
-     edges with no way to scroll). */
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 20px 24px 22px;
+  width: 420px;
+  max-width: calc(100vw - 2rem);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
 }
 .help-panel h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-}
-.help-section {
-  margin-top: 12px;
-}
-/* On a screen wide enough for two columns, flow the reference card into 2 columns so the whole
-   card fits the viewport height without the internal scroll the operator has to discover (the
-   Relationships/Actions/Edges sections were cut off below the fold in one tall column). Sections
-   never split across the break, so each stays a coherent group. Narrow screens keep one column
-   and the existing max-height scroll. */
-@media (min-width: 740px) {
-  .help-panel {
-    max-width: 720px;
-  }
-  .help-sections {
-    column-count: 2;
-    column-gap: 28px;
-  }
-  .help-sections .help-section {
-    break-inside: avoid;
-  }
-  /* The first section already sits under the h3; in a column flow its top margin would also push
-     the second column's first section down unevenly. Zero it — the column gap carries the spacing. */
-  .help-sections .help-section:first-child {
-    margin-top: 6px;
-  }
-}
-.help-section h4 {
-  margin: 0 0 6px;
-  font-size: 10px;
+  margin: 0 0 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-dim);
   font-weight: 600;
+  color: var(--text-dim);
+}
+.help-panel h3 + .help-keys {
+  margin-bottom: 18px;
 }
 .help-panel ul {
   list-style: none;
@@ -66,43 +35,40 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: 10px;
+  font-size: 14px;
 }
-.help-hint {
-  /* Faint trailing hint after a view label: italics + dim color reads as a subtitle, not a
-     second list item. Wraps cleanly on a narrower help panel. */
-  color: var(--text-dim);
-  font-style: italic;
-  font-size: 11.5px;
-  margin-left: 4px;
+/* Fixed-width key column so every description starts on the same left edge (alignment) — the
+   keys read as one rail, the actions as another. */
+.help-keys li {
+  display: flex;
+  align-items: baseline;
+}
+.help-key {
+  flex: 0 0 64px;
+  white-space: nowrap;
 }
 /* Edge legend rows: a small inline SVG glyph followed by the relationship type and an
    operator-friendly explanation. The svg matches the topology's stroke vocabulary. */
 .help-edges li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .help-edges svg {
   flex: 0 0 auto;
 }
 .help-panel kbd {
   display: inline-block;
-  min-width: 18px;
+  min-width: 20px;
   text-align: center;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-bottom-width: 2px;
-  border-radius: 5px;
-  padding: 1px 7px;
+  border-radius: 3px;
+  padding: 1px 6px;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
-  margin-right: 4px;
-  /* Faux key-cap depth: thicker bottom border + small inset shadow reads as a tactile key,
-     same convention as Mac help dialogs. */
-  box-shadow: 0 1px 0 var(--border-strong);
 }
-

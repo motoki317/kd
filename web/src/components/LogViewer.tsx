@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onCleanup, createEffect, For, on, onMount, Show } from 'solid-js'
+import { createMemo, createSignal, onCleanup, createEffect, For, on, Show } from 'solid-js'
 import { streamLogs, type LogEntry } from '../api'
 import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
@@ -313,32 +313,6 @@ export default function LogViewer(props: Props) {
     ),
   )
 
-  // Cmd/Ctrl+F focuses the in-viewer filter (the log "find"), overriding the browser's page find —
-  // which is useless against a virtualized/streaming buffer anyway. Scoped to when the Logs tab is
-  // actually showing so it doesn't hijack find elsewhere (cycle 321).
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (props.visible === false) return
-      const typing = (e.target as HTMLElement | null)?.tagName === 'INPUT'
-      // Cmd/Ctrl+F focuses the line filter (cycle 321).
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
-        if (!filterInput) return
-        e.preventDefault()
-        filterInput.focus()
-        filterInput.select()
-        return
-      }
-      // Shift+E steps to the next error line (cycle 332/R6); plain 'e' is left alone for typing.
-      if (e.shiftKey && (e.key === 'E' || e.key === 'e') && !e.metaKey && !e.ctrlKey && !e.altKey && !typing) {
-        if (errorIndices().length === 0) return
-        e.preventDefault()
-        jumpToNextError()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    onCleanup(() => window.removeEventListener('keydown', onKey))
-  })
-
   return (
     <div class="logs">
       <div class="logs-header">
@@ -400,7 +374,7 @@ export default function LogViewer(props: Props) {
           <input
             ref={filterInput}
             class="logs-filter"
-            placeholder="filter…  ( ⌘F )"
+            placeholder="filter…"
             aria-label="Filter log lines"
             value={filter()}
             onInput={(e) => setFilter(e.currentTarget.value)}
@@ -453,7 +427,7 @@ export default function LogViewer(props: Props) {
           <Show when={errorIndices().length > 0}>
             <button
               class="logs-errjump"
-              title={`Jump to next error of ${errorIndices().length} (Shift+E)`}
+              title={`Jump to next error of ${errorIndices().length}`}
               aria-label={`Jump to next error of ${errorIndices().length}`}
               onClick={jumpToNextError}
             >

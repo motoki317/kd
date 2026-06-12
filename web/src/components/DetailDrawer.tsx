@@ -135,28 +135,6 @@ export default function DetailDrawer(props: Props) {
 
   const [tab, setTab] = createSignal<Tab>('logs')
 
-  // [ / ] cycle the drawer's tabs (cycle 292). Only active while the drawer is visible and the
-  // operator isn't typing into a field. Lets keyboard users flip between Logs/Events/Manifest
-  // without reaching for the mouse — common during triage ("does the log say anything? what
-  // events fired? show me the manifest").
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key !== '[' && e.key !== ']') return
-      if (!displayNode()) return
-      const el = e.target as HTMLElement | null
-      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return
-      const list = tabs()
-      const cur = list.indexOf(tab())
-      if (cur < 0) return
-      const dir = e.key === ']' ? 1 : -1
-      e.preventDefault()
-      setTab(list[(cur + dir + list.length) % list.length])
-    }
-    window.addEventListener('keydown', onKey)
-    onCleanup(() => window.removeEventListener('keydown', onKey))
-  })
-
   // Tab element refs, so the tablist's arrow keys can move DOM focus to follow the roving tabindex.
   const tabRefs: Partial<Record<Tab, HTMLButtonElement>> = {}
   // WAI-ARIA tabs keyboard model (scoped to focus inside the tablist, unlike the global [ / ]):
@@ -301,7 +279,7 @@ export default function DetailDrawer(props: Props) {
                 <button
                   class="drawer-back"
                   type="button"
-                  title="Back to previous resource (Alt+←)"
+                  title="Back to previous resource"
                   aria-label="Back to previous resource"
                   onClick={() => props.onBack!()}
                 >

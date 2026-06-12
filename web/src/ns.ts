@@ -42,7 +42,7 @@ export function troubledNamespaces(list: NamespaceInfo[]): NamespaceInfo[] {
 
 // nextTroubled steps through the troubled set from the current selection: the first jump (current
 // isn't troubled, or isn't selected) lands on the worst, and each repeat advances to the next-worst,
-// wrapping at the end. This makes the trouble badge / Alt+T a triage CYCLE — reach all N troubled
+// wrapping at the end. This makes the trouble badge a triage CYCLE — reach all N troubled
 // namespaces with repeated presses — instead of re-landing on the single worst every time (which left
 // the other N−1 to be hunted by eye in the A→Z list). Returns undefined when nothing is troubled.
 export function nextTroubled(list: NamespaceInfo[], currentName: string | null): NamespaceInfo | undefined {

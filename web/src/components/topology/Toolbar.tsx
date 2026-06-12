@@ -137,7 +137,7 @@ export default function Toolbar(props: Props) {
             // a forwarded getter-only prop. The original sat on Topology's own (plain) props object,
             // where that dead-end assignment was silently absorbed.
             ref={(el) => props.searchRef?.(el)}
-            placeholder="Search resources…  ( ⌘K )"
+            placeholder="Search resources…  ( / )"
             aria-label="Search resources in current view"
             // Surface the structured-form (cycle 295) on hover so an operator who pasted a
             // Kind/name and got a single hit can intuit why — also discoverable for those who
