@@ -47,9 +47,12 @@ kd reads your kubeconfig and serves the dashboard on http://localhost:9123/.
 ## Deploy to a cluster
 
 ```bash
-docker build -t <ref> .                                      # one static image, web embedded
-helm install kd ./charts/kd --namespace kd --create-namespace  # read-only Deployment behind a forward-auth proxy
+helm install kd oci://ghcr.io/motoki317/charts/kd --namespace kd --create-namespace
 ```
+
+The chart runs the official multi-arch image `ghcr.io/motoki317/kd` as a read-only Deployment
+behind a forward-auth proxy. To build your own image instead: `docker build -t <ref> .` (one
+static image, web embedded), then set `image.repository`.
 
 kd has no login of its own. It trusts a user header (`X-Forwarded-User`) from your proxy and checks
 access with a `policy.yaml` file — roles bundle allow/deny rules, users and groups are assigned

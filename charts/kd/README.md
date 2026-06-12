@@ -3,9 +3,13 @@
 Runs [kd](https://github.com/motoki317/kd) — a read-only, ArgoCD-style Kubernetes topology
 dashboard — as a single Deployment behind a forward-auth proxy.
 
+The chart is published as an OCI artifact:
+
 ```bash
-helm install kd ./charts/kd --namespace kd --create-namespace
+helm install kd oci://ghcr.io/motoki317/charts/kd --namespace kd --create-namespace
 ```
+
+(From a checkout, `helm install kd ./charts/kd …` works the same.)
 
 ## What it creates
 
@@ -25,8 +29,9 @@ All values are documented inline in [`values.yaml`](values.yaml) and validated a
 
 ### Image
 
-Set `image.repository` / `image.tag` to your built reference. The tag defaults to the chart's
-`appVersion` when left empty.
+The chart deploys the official image `ghcr.io/motoki317/kd` at the chart's `appVersion` — a
+released, immutable tag. Set `image.tag` to pin a different kd version, or `image.repository`
+to use your own build.
 
 ### Authorization (policy.yaml)
 

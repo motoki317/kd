@@ -1,0 +1,37 @@
+# Chart release: pushing a chart-vX.Y.Z tag publishes the Helm chart as an OCI artifact
+# at ghcr.io/motoki317/charts/kd. Independent of app releases (vX.Y.Z → release.yaml);
+# bump Chart.yaml `version` (and `appVersion` when pinning a new kd image) before tagging.
+name: Release chart
+
+on:
+  push:
+    tags: ["chart-v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify tag matches Chart.yaml version
+        run: |
+          tag_version="${GITHUB_REF_NAME#chart-v}"
+          chart_version="$(yq .version charts/kd/Chart.yaml)"
+          if [ "$tag_version" != "$chart_version" ]; then
+            echo "Tag chart-v$tag_version does not match Chart.yaml version $chart_version." >&2
+            echo "Bump charts/kd/Chart.yaml before tagging a chart release." >&2
+            exit 1
+          fi
+      - name: Helm lint
+        run: helm lint charts/kd
+      - name: Log in to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Package and push
+        run: |
+          helm package charts/kd
+          helm push "kd-${GITHUB_REF_NAME#chart-v}.tgz" oci://ghcr.io/motoki317/charts

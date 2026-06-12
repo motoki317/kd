@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: Build (placeholder server, no embedded client)
+        run: go build ./...
+      - name: Go tests
+        run: go test ./...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+      - name: Build web client (tsc + vite, emits the go:embed dir)
+        run: npm run build
+        working-directory: web
+      - name: Web tests
+        run: npm test
+        working-directory: web
+      # Hand the built client to the embed job so the embed_web compile gate
+      # doesn't repeat the npm work.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: webdist
+          path: internal/server/webdist
+          retention-days: 1
+
+  # The embed_web-tagged source is excluded from the plain go build above; compile it
+  # against the real client output so the release path can't rot unnoticed.
+  embed:
+    runs-on: ubuntu-latest
+    needs: web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          name: webdist
+          path: internal/server/webdist
+      - name: Build kd (embedded client)
+        run: go build -tags embed_web ./...
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Helm lint
+        run: helm lint charts/kd

@@ -1,0 +1,9 @@
+# Release image assembled by GoReleaser (dockers_v2 in .goreleaser.yaml): it COPYs the
+# pre-built per-platform binary instead of rebuilding — the root Dockerfile is the
+# from-source path. GoReleaser lays binaries out under $TARGETPLATFORM/ in the context.
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/kd /kd
+EXPOSE 9123
+USER nonroot:nonroot
+ENTRYPOINT ["/kd"]

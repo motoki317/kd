@@ -80,6 +80,14 @@ Three traps, each cost a debugging session — heed them:
 - **CWD matters.** Web tooling must run from `web/`; a compound `cd web && …` shifts the parent shell's
   cwd and breaks the next call. `cd <repo>/web` before web tooling; git ops from the repo root.
 
+## Releases (two independent semver tracks)
+
+- **App** — tag `vX.Y.Z` → GoReleaser (`.goreleaser.yaml`): GitHub Release (linux/darwin
+  binaries + changelog) and multi-arch image `ghcr.io/motoki317/kd:vX.Y.Z` + `latest`.
+- **Chart** — tag `chart-vX.Y.Z` → `helm push` to `oci://ghcr.io/motoki317/charts` (lands at
+  `ghcr.io/motoki317/charts/kd`). Bump `charts/kd/Chart.yaml` `version` first (CI fails on
+  mismatch); bump `appVersion` to pin a new kd image. Rationale: ADR 20260612-release-pipeline.
+
 ## Conventions
 
 - Conventional Commits, **English**. Commit per coherent slice. Git ops ONLY when explicitly asked, or

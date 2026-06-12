@@ -1,0 +1,88 @@
+# GoReleaser config for kd app releases (tag vX.Y.Z → GitHub Release + ghcr.io image).
+# Chart releases are independent (tag chart-vX.Y.Z → .github/workflows/release-chart.yaml).
+version: 2
+
+project_name: kd
+
+before:
+  hooks:
+    # The binary embeds the web client (embed_web tag), so the client must be built first.
+    # Hooks don't run in a shell — `npm --prefix` instead of `cd web && …`.
+    - npm --prefix web ci
+    - npm --prefix web run build
+
+builds:
+  - main: ./cmd/kd
+    binary: kd
+    env:
+      - CGO_ENABLED=0
+    tags:
+      - embed_web
+    flags:
+      - -trimpath
+    # Plain -s -w: the GoReleaser default ldflags stamp main.version/commit vars
+    # that kd doesn't declare.
+    ldflags:
+      - -s -w
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+
+dockers_v2:
+  - images:
+      - ghcr.io/motoki317/kd
+    tags:
+      - "v{{ .Version }}"
+      - latest
+    dockerfile: Dockerfile.goreleaser
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    # ghcr.io reads the source label to link the package to this repository.
+    labels:
+      "org.opencontainers.image.title": "{{ .ProjectName }}"
+      "org.opencontainers.image.description": "A human-friendly, read-only, live Kubernetes dashboard"
+      "org.opencontainers.image.source": "{{ .GitURL }}"
+      "org.opencontainers.image.version": "v{{ .Version }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "org.opencontainers.image.licenses": "MIT"
+    annotations:
+      "org.opencontainers.image.title": "{{ .ProjectName }}"
+      "org.opencontainers.image.description": "A human-friendly, read-only, live Kubernetes dashboard"
+      "org.opencontainers.image.source": "{{ .GitURL }}"
+      "org.opencontainers.image.version": "v{{ .Version }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "org.opencontainers.image.licenses": "MIT"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat(\(.*\))?!?:'
+      order: 0
+    - title: Bug fixes
+      regexp: '^fix(\(.*\))?!?:'
+      order: 1
+    - title: Performance
+      regexp: '^perf(\(.*\))?!?:'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^docs(\(.*\))?:'
+      - '^test(\(.*\))?:'
+      - '^chore(\(.*\))?:'
+      - '^style(\(.*\))?:'
+      - '^ci(\(.*\))?:'
+
+release:
+  footer: |
+    **Docker image**: `ghcr.io/motoki317/kd:{{ .Tag }}` (linux amd64/arm64)
