@@ -92,7 +92,16 @@
             pname = "kd";
             inherit version;
             src = ./.;
-            vendorHash = "sha256-BEDej9URMynyirV1Bm0xoIxZhU5+9llcBCHmtpMnUpg=";
+            # proxyVendor makes the vendor derivation a `go mod download` module
+            # cache — a pure function of go.mod/go.sum. The default (`go mod
+            # vendor`) also depends on which packages the *source* imports, so a
+            # new import of an already-required module silently stales
+            # vendorHash without touching go.mod — invisible to the kd-nix-build
+            # hook below, which fires only on dependency/flake files.
+            # proxyVendor is what makes that file gate sound. (npmDepsHash has
+            # no such hole: fetchNpmDeps reads only package-lock.json.)
+            proxyVendor = true;
+            vendorHash = "sha256-DF+xnVskF0VgBzzblID85+1iHFd1F8Bc/pO+Uirzy2s=";
             subPackages = [ "cmd/kd" ];
             tags = [ "embed_web" ];
             ldflags = [ "-s" "-w" ];

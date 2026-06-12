@@ -56,7 +56,9 @@ pre-commit: build
 # Verify the Nix flake build. Wired as a git pre-commit hook that runs ONLY when a
 # commit touches dependency/flake files (see the `files` filter in flake.nix) — the
 # only changes that break the Nix path (stale vendorHash / npmDepsHash or a flake
-# error). ~60–95s, so it is kept off the per-commit hot path.
+# error). That file gate is only sound because the flake sets proxyVendor, which
+# pins vendorHash to go.mod/go.sum alone (see the comment in flake.nix).
+# ~60–95s, so it is kept off the per-commit hot path.
 nix-build:
     nix build .#kd --no-link --print-build-logs
 
