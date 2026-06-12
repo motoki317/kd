@@ -14,8 +14,8 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(nil) error: %v", err)
 	}
-	if c.Addr != ":9123" || c.UserHeader != DefaultUserHeader || c.DefaultRole != "role:readonly" {
-		t.Errorf("defaults = addr %q, user-header %q, default-role %q", c.Addr, c.UserHeader, c.DefaultRole)
+	if c.Addr != ":9123" || c.UserHeader != DefaultUserHeader || c.PolicyPath != "" {
+		t.Errorf("defaults = addr %q, user-header %q, policy %q", c.Addr, c.UserHeader, c.PolicyPath)
 	}
 	if c.PolicyReloadInterval != 10*time.Second || c.Resync != 10*time.Minute {
 		t.Errorf("default durations = reload %v, resync %v", c.PolicyReloadInterval, c.Resync)
@@ -33,7 +33,7 @@ func TestLoadHelpReturnsErrHelp(t *testing.T) {
 func TestLoadFlagsOverrideEnv(t *testing.T) {
 	// Env sets a default; an explicit flag must win over it.
 	t.Setenv("KD_ADDR", ":7000")
-	t.Setenv("KD_DEFAULT_ROLE", "role:admin")
+	t.Setenv("KD_POLICY", "/etc/kd/policy.yaml")
 	c, err := Load([]string{"-addr", ":8080", "-dev-user", "alice", "-skip-kinds", "leases, jobs", "-eager-kinds", "pods"})
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
@@ -41,8 +41,8 @@ func TestLoadFlagsOverrideEnv(t *testing.T) {
 	if c.Addr != ":8080" {
 		t.Errorf("addr = %q, want :8080 (flag overrides KD_ADDR)", c.Addr)
 	}
-	if c.DefaultRole != "role:admin" {
-		t.Errorf("default-role = %q, want role:admin (from env, no flag given)", c.DefaultRole)
+	if c.PolicyPath != "/etc/kd/policy.yaml" {
+		t.Errorf("policy = %q, want /etc/kd/policy.yaml (from env, no flag given)", c.PolicyPath)
 	}
 	if c.DevUser != "alice" {
 		t.Errorf("dev-user = %q, want alice", c.DevUser)

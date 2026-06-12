@@ -20,11 +20,12 @@ Then open http://localhost:8080
 
 Authorization:
 {{- if .Values.policy.enabled }}
-  policy.csv is mounted from ConfigMap {{ include "kd.fullname" . }}-policy and hot-reloaded —
-  edit it and re-apply (no restart). Every authenticated user implicitly has role "{{ .Values.config.defaultRole | default "(none — locked down)" }}".
+  policy.yaml is mounted from ConfigMap {{ include "kd.fullname" . }}-policy and hot-reloaded —
+  edit it and re-apply (no restart). Every authenticated user automatically has the role(s):
+  {{ .Values.policy.defaultRoles | default list | join ", " | default "(none — locked down; only policy.users / policy.groups assignments grant access)" }}.
 {{- else }}
-  Running on built-in defaults only (policy.enabled=false). Every authenticated user has role
-  "{{ .Values.config.defaultRole | default "(none — locked down)" }}".
+  Running on the built-in default (policy.enabled=false): every authenticated user is a
+  viewer (read-only access to everything).
 {{- end }}
 
 kd trusts the "{{ .Values.config.userHeader }}" request header for identity. Make sure a

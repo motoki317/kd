@@ -2,13 +2,14 @@ package rbac
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
-// mustParse builds an Enforcer from policy text with the given default role.
-func mustEnforcer(t *testing.T, policyCSV, defaultRole string) *Enforcer {
+// mustEnforcer builds an Enforcer from a policy.yaml document.
+func mustEnforcer(t *testing.T, policyYAML string) *Enforcer {
 	t.Helper()
-	p, err := Parse(policyCSV, defaultRole)
+	p, err := Parse([]byte(policyYAML))
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}
@@ -17,124 +18,267 @@ func mustEnforcer(t *testing.T, policyCSV, defaultRole string) *Enforcer {
 
 func TestEnforce(t *testing.T) {
 	tests := []struct {
-		name        string
-		policy      string
-		defaultRole string
-		user        string
-		groups      []string
-		ns          string
-		resource    string
-		action      string
-		want        bool
+		name   string
+		policy string
+		user   string
+		groups []string
+		ns     string
+		// resource/action default to pods/get for brevity.
+		resource string
+		action   string
+		want     bool
 	}{
 		{
-			name:        "default readonly lets any user read pods",
-			defaultRole: "role:readonly",
-			user:        "anyone",
-			ns:          "default", resource: "pods", action: "list",
+			name: "default viewer lets any user read pods",
+			user: "anyone", ns: "default", action: "list",
 			want: true,
 		},
 		{
-			name:        "readonly does not grant write actions",
-			defaultRole: "role:readonly",
-			user:        "anyone",
-			ns:          "default", resource: "pods", action: "delete",
+			name: "viewer does not grant write actions",
+			user: "anyone", ns: "default", action: "delete",
 			want: false,
 		},
 		{
-			name:        "admin granted to a user permits any action",
-			policy:      "g, alice, role:admin",
-			defaultRole: "role:readonly",
-			user:        "alice",
-			ns:          "kube-system", resource: "secrets", action: "delete",
+			name:   "admin assigned to a user permits any action",
+			policy: "users:\n  alice: [admin]",
+			user:   "alice", ns: "kube-system", resource: "secrets", action: "delete",
 			want: true,
 		},
 		{
-			name:        "admin granted via group membership",
-			policy:      "g, team-ops, role:admin",
-			defaultRole: "role:readonly",
-			user:        "bob", groups: []string{"team-ops"},
+			name:   "admin assigned via group membership",
+			policy: "groups:\n  team-ops: [admin]",
+			user:   "bob", groups: []string{"team-ops"},
 			ns: "prod", resource: "nodes", action: "delete",
 			want: true,
 		},
 		{
-			name: "explicit deny overrides the readonly default in one namespace",
+			name: "a deny role overrides the viewer default in one namespace",
 			policy: `
-p, charlie, secret-ns, *, *, deny
+roles:
+  no-secret-ns:
+    deny:
+      - namespaces: [secret-ns]
+users:
+  charlie: [no-secret-ns]
 `,
-			defaultRole: "role:readonly",
-			user:        "charlie",
-			ns:          "secret-ns", resource: "pods", action: "get",
+			user: "charlie", ns: "secret-ns",
 			want: false,
 		},
 		{
-			name:        "deny in one namespace does not affect others",
-			policy:      "p, charlie, secret-ns, *, *, deny",
-			defaultRole: "role:readonly",
-			user:        "charlie",
-			ns:          "default", resource: "pods", action: "get",
+			name: "deny in one namespace does not affect others",
+			policy: `
+roles:
+  no-secret-ns:
+    deny:
+      - namespaces: [secret-ns]
+users:
+  charlie: [no-secret-ns]
+`,
+			user: "charlie", ns: "default",
 			want: true,
 		},
 		{
-			name:        "deny overrides an allow from a group grant (global deny-override)",
-			policy:      "g, team-ops, role:admin\np, dana, prod, *, *, deny",
-			defaultRole: "role:readonly",
-			user:        "dana", groups: []string{"team-ops"},
-			ns: "prod", resource: "pods", action: "delete",
+			name: "deny from one role overrides an allow from another (deny always wins)",
+			policy: `
+roles:
+  no-prod:
+    deny:
+      - namespaces: [prod]
+users:
+  dana: [no-prod]
+groups:
+  team-ops: [admin]
+`,
+			user: "dana", groups: []string{"team-ops"},
+			ns: "prod", action: "delete",
 			want: false,
 		},
 		{
-			name:        "lockdown: no default role denies unknown users",
-			defaultRole: "",
-			user:        "stranger",
-			ns:          "default", resource: "pods", action: "list",
+			name: "global deny block binds even an admin",
+			policy: `
+deny:
+  - namespaces: [secure]
+    resources: [logs]
+users:
+  alice: [admin]
+`,
+			user: "alice", ns: "secure", resource: "logs",
 			want: false,
 		},
 		{
-			name:        "namespace glob scopes an explicit grant",
-			policy:      "p, dev, team-a-*, pods, get, allow",
-			defaultRole: "",
-			user:        "dev",
-			ns:          "team-a-web", resource: "pods", action: "get",
-			want: true,
-		},
-		{
-			name:        "namespace glob does not match a different prefix",
-			policy:      "p, dev, team-a-*, pods, get, allow",
-			defaultRole: "",
-			user:        "dev",
-			ns:          "team-b-web", resource: "pods", action: "get",
+			name:   "lockdown: empty defaultRoles denies unassigned users",
+			policy: "defaultRoles: []",
+			user:   "stranger", ns: "default", action: "list",
 			want: false,
 		},
 		{
-			name:        "custom role via g inheritance under lockdown",
-			policy:      "g, eve, role:viewer\np, role:viewer, *, pods, get, allow",
-			defaultRole: "",
-			user:        "eve",
-			ns:          "default", resource: "pods", action: "get",
+			name: "namespace glob scopes an explicit grant",
+			policy: `
+defaultRoles: []
+roles:
+  team-a:
+    allow:
+      - namespaces: [team-a-*]
+        resources: [pods]
+        actions: [get]
+users:
+  dev: [team-a]
+`,
+			user: "dev", ns: "team-a-web",
 			want: true,
 		},
 		{
-			name:        "empty effect defaults to allow",
-			policy:      "p, frank, default, pods, get",
-			defaultRole: "",
-			user:        "frank",
-			ns:          "default", resource: "pods", action: "get",
+			name: "namespace glob does not match a different prefix",
+			policy: `
+defaultRoles: []
+roles:
+  team-a:
+    allow:
+      - namespaces: [team-a-*]
+users:
+  dev: [team-a]
+`,
+			user: "dev", ns: "team-b-web",
+			want: false,
+		},
+		{
+			name: "omitted rule fields match everything",
+			policy: `
+defaultRoles: []
+roles:
+  everything:
+    allow:
+      - {}
+users:
+  eve: [everything]
+`,
+			user: "eve", ns: "default", resource: "secrets", action: "delete",
 			want: true,
 		},
 		{
-			name:        "cluster-scoped resources match under the cluster namespace token",
-			policy:      "p, ops, cluster, nodes, get, allow",
-			defaultRole: "",
-			user:        "ops",
-			ns:          "cluster", resource: "nodes", action: "get",
+			name: "multiple values in one rule field",
+			policy: `
+defaultRoles: []
+roles:
+  two-teams:
+    allow:
+      - namespaces: [team-a-*, team-b-*]
+users:
+  dev: [two-teams]
+`,
+			user: "dev", ns: "team-b-api",
 			want: true,
+		},
+		{
+			name: "clusterScoped rule matches cluster-scoped requests",
+			policy: `
+defaultRoles: []
+roles:
+  node-viewer:
+    allow:
+      - clusterScoped: true
+        resources: [nodes]
+users:
+  ops: [node-viewer]
+`,
+			user: "ops", ns: ClusterScope, resource: "nodes",
+			want: true,
+		},
+		{
+			name: "clusterScoped rule does not match namespaced requests",
+			policy: `
+defaultRoles: []
+roles:
+  node-viewer:
+    allow:
+      - clusterScoped: true
+users:
+  ops: [node-viewer]
+`,
+			user: "ops", ns: "default",
+			want: false,
+		},
+		{
+			name: "namespace globs never match the cluster scope, not even *",
+			policy: `
+defaultRoles: []
+roles:
+  all-namespaces:
+    allow:
+      - namespaces: ["*"]
+users:
+  dev: [all-namespaces]
+`,
+			user: "dev", ns: ClusterScope, resource: "nodes",
+			want: false,
+		},
+		{
+			name: "a rule with no scope field covers the cluster scope (viewer default)",
+			user: "anyone", ns: ClusterScope, resource: "nodes", action: "list",
+			want: true,
+		},
+		{
+			name: "clusterScoped: false keeps an otherwise-unconstrained rule namespaced",
+			policy: `
+defaultRoles: []
+roles:
+  namespaced-only:
+    allow:
+      - clusterScoped: false
+users:
+  dev: [namespaced-only]
+`,
+			user: "dev", ns: ClusterScope, resource: "nodes",
+			want: false,
+		},
+		{
+			name: "clusterScoped: false still matches every namespace",
+			policy: `
+defaultRoles: []
+roles:
+  namespaced-only:
+    allow:
+      - clusterScoped: false
+users:
+  dev: [namespaced-only]
+`,
+			user: "dev", ns: "anything",
+			want: true,
+		},
+		{
+			name: "a user's roles do not leak to a group of the same name",
+			policy: `
+defaultRoles: []
+users:
+  team-ops: [admin]
+`,
+			user: "someone", groups: []string{"team-ops"},
+			ns:   "default",
+			want: false,
+		},
+		{
+			name: "non-default roles grant nothing unless assigned",
+			policy: `
+defaultRoles: []
+roles:
+  team-a:
+    allow:
+      - namespaces: [team-a-*]
+`,
+			user: "dev", ns: "team-a-web",
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := mustEnforcer(t, tt.policy, tt.defaultRole)
+			if tt.resource == "" {
+				tt.resource = "pods"
+			}
+			if tt.action == "" {
+				tt.action = "get"
+			}
+			e := mustEnforcer(t, tt.policy)
 			got := e.Enforce(tt.user, tt.groups, tt.ns, tt.resource, tt.action)
 			if got != tt.want {
 				t.Errorf("Enforce(%q, %v, %q, %q, %q) = %v, want %v",
@@ -145,49 +289,56 @@ p, charlie, secret-ns, *, *, deny
 }
 
 // TestEnforceAny locks the dual-class contract: a request authorized against multiple
-// resource strings (legacy class + GVR group) allows when ANY class is allowed and no
+// resource strings (coarse class + API group) allows when ANY class is allowed and no
 // class is denied. Used by api.authorizeAny to dispatch CR + cluster-scoped kind URLs.
 func TestEnforceAny(t *testing.T) {
+	policy := func(allowRes, denyRes string) string {
+		var b strings.Builder
+		b.WriteString("defaultRoles: []\nroles:\n  test:\n")
+		if allowRes != "" {
+			b.WriteString("    allow:\n      - resources: [" + allowRes + "]\n")
+		}
+		if denyRes != "" {
+			b.WriteString("    deny:\n      - resources: [" + denyRes + "]\n")
+		}
+		b.WriteString("users:\n  alice: [test]\n")
+		return b.String()
+	}
 	tests := []struct {
 		name      string
 		policy    string
-		user      string
 		resources []string
 		want      bool
 	}{
 		{
-			name:      "allow via legacy class while group has no rule",
-			policy:    "p, alice, *, workloads, *, allow",
-			user:      "alice",
+			name:      "allow via coarse class while group has no rule",
+			policy:    policy("workloads", ""),
 			resources: []string{"workloads", "argoproj.io"},
 			want:      true,
 		},
 		{
-			name:      "allow via group class while legacy has no rule",
-			policy:    "p, alice, *, argoproj.io, *, allow",
-			user:      "alice",
+			name:      "allow via API group while coarse class has no rule",
+			policy:    policy("argoproj.io", ""),
 			resources: []string{"workloads", "argoproj.io"},
 			want:      true,
 		},
 		{
-			name:      "deny on EITHER class wins (global deny-override across classes)",
-			policy:    "p, alice, *, workloads, *, allow\np, alice, *, argoproj.io, *, deny",
-			user:      "alice",
+			name:      "deny on EITHER class wins (deny-override across classes)",
+			policy:    policy("workloads", "argoproj.io"),
 			resources: []string{"workloads", "argoproj.io"},
 			want:      false,
 		},
 		{
-			name:      "no matching rule on either class → forbid",
-			policy:    "p, alice, *, pods, *, allow",
-			user:      "alice",
+			name:      "no matching rule on either class forbids",
+			policy:    policy("pods", ""),
 			resources: []string{"workloads", "argoproj.io"},
 			want:      false,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			e := mustEnforcer(t, tc.policy, "")
-			got := e.EnforceAny(tc.user, nil, "shop", tc.resources, "get")
+			e := mustEnforcer(t, tc.policy)
+			got := e.EnforceAny("alice", nil, "shop", tc.resources, "get")
 			if got != tc.want {
 				t.Errorf("EnforceAny = %v, want %v", got, tc.want)
 			}
@@ -198,8 +349,8 @@ func TestEnforceAny(t *testing.T) {
 func TestVisibleNamespaces(t *testing.T) {
 	all := []string{"default", "prod", "secret-ns", "team-a-web"}
 
-	t.Run("readonly default makes all namespaces visible", func(t *testing.T) {
-		e := mustEnforcer(t, "", "role:readonly")
+	t.Run("viewer default makes all namespaces visible", func(t *testing.T) {
+		e := mustEnforcer(t, "")
 		got := e.VisibleNamespaces("alice", nil, all)
 		if !slices.Equal(got, all) {
 			t.Errorf("got %v, want %v", got, all)
@@ -207,7 +358,14 @@ func TestVisibleNamespaces(t *testing.T) {
 	})
 
 	t.Run("denied namespace is hidden from the picker", func(t *testing.T) {
-		e := mustEnforcer(t, "p, alice, secret-ns, *, *, deny", "role:readonly")
+		e := mustEnforcer(t, `
+roles:
+  no-secret-ns:
+    deny:
+      - namespaces: [secret-ns]
+users:
+  alice: [no-secret-ns]
+`)
 		got := e.VisibleNamespaces("alice", nil, all)
 		want := []string{"default", "prod", "team-a-web"}
 		if !slices.Equal(got, want) {
@@ -216,7 +374,17 @@ func TestVisibleNamespaces(t *testing.T) {
 	})
 
 	t.Run("lockdown shows only explicitly granted namespaces", func(t *testing.T) {
-		e := mustEnforcer(t, "p, dev, team-a-*, pods, list, allow", "")
+		e := mustEnforcer(t, `
+defaultRoles: []
+roles:
+  team-a:
+    allow:
+      - namespaces: [team-a-*]
+        resources: [pods]
+        actions: [list]
+users:
+  dev: [team-a]
+`)
 		got := e.VisibleNamespaces("dev", nil, all)
 		want := []string{"team-a-web"}
 		if !slices.Equal(got, want) {
@@ -225,36 +393,138 @@ func TestVisibleNamespaces(t *testing.T) {
 	})
 }
 
+// TestParseErrors pins the validation contract: every mistake a policy author plausibly
+// makes must fail the parse with guidance, never silently change what is granted.
 func TestParseErrors(t *testing.T) {
 	tests := []struct {
-		name   string
-		policy string
+		name    string
+		policy  string
+		wantErr string // substring the error must carry so the message stays actionable
 	}{
-		{"unknown line type", "x, a, b, c"},
-		{"permission with too few fields", "p, alice, default"},
-		{"grouping with wrong field count", "g, alice"},
-		{"invalid effect", "p, alice, default, pods, get, maybe"},
+		{
+			name:    "not yaml",
+			policy:  "p, alice, default, pods, get",
+			wantErr: "policy.yaml",
+		},
+		{
+			name:    "unknown top-level key (typo)",
+			policy:  "rules:\n  - {}",
+			wantErr: "rules",
+		},
+		{
+			name: "unknown rule field (singular typo)",
+			policy: `
+roles:
+  team-a:
+    allow:
+      - namespace: [team-a]
+`,
+			wantErr: "namespace",
+		},
+		{
+			name:    "users referencing an undefined role",
+			policy:  "users:\n  alice: [adminn]",
+			wantErr: `undefined role "adminn"`,
+		},
+		{
+			name:    "groups referencing an undefined role",
+			policy:  "groups:\n  ops: [viewers]",
+			wantErr: `undefined role "viewers"`,
+		},
+		{
+			name:    "defaultRoles referencing an undefined role",
+			policy:  "defaultRoles: [readonly]",
+			wantErr: `undefined role "readonly"`,
+		},
+		{
+			name:    "redefining a built-in role",
+			policy:  "roles:\n  viewer:\n    allow:\n      - {}",
+			wantErr: "built in",
+		},
+		{
+			name: "explicitly empty rule field",
+			policy: `
+roles:
+  team-a:
+    allow:
+      - namespaces: []
+`,
+			wantErr: "empty list",
+		},
+		{
+			name: "clusterScoped: true combined with namespaces",
+			policy: `
+roles:
+  confused:
+    allow:
+      - clusterScoped: true
+        namespaces: [team-a]
+`,
+			wantErr: "either cluster-scoped resources or namespaces",
+		},
+		{
+			name: "clusterScoped with a non-boolean value",
+			policy: `
+roles:
+  team-a:
+    allow:
+      - clusterScoped: yes please
+`,
+			wantErr: "clusterScoped",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Parse(tt.policy, "role:readonly"); err == nil {
-				t.Errorf("Parse(%q) = nil error, want error", tt.policy)
+			_, err := Parse([]byte(tt.policy))
+			if err == nil {
+				t.Fatalf("Parse(%q) = nil error, want error containing %q", tt.policy, tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Parse error %q does not contain %q", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestParseIgnoresCommentsAndBlankLines(t *testing.T) {
-	policy := `
-# this is a comment
-p, alice, default, pods, get, allow
+func TestParseDefaults(t *testing.T) {
+	t.Run("empty document yields the viewer default", func(t *testing.T) {
+		e := mustEnforcer(t, "")
+		if !e.Enforce("anyone", nil, "default", "pods", "get") {
+			t.Error("expected the empty policy to default everyone to viewer")
+		}
+		if e.Enforce("anyone", nil, "default", "pods", "delete") {
+			t.Error("expected the viewer default to stay read-only")
+		}
+	})
 
-  # indented comment
-`
-	e := mustEnforcer(t, policy, "")
-	if !e.Enforce("alice", nil, "default", "pods", "get") {
-		t.Error("expected alice to be allowed after parsing comments/blanks")
-	}
+	t.Run("comments and empty sections parse", func(t *testing.T) {
+		e := mustEnforcer(t, `
+# kd policy
+defaultRoles: [viewer]
+roles: {}
+users: {}
+groups: {}
+deny: []
+`)
+		if !e.Enforce("anyone", nil, "default", "pods", "get") {
+			t.Error("expected explicit defaults to behave like the empty policy")
+		}
+	})
+
+	t.Run("description is accepted and ignored", func(t *testing.T) {
+		e := mustEnforcer(t, `
+roles:
+  team-a:
+    description: Read access to team-a's namespaces.
+    allow:
+      - namespaces: [team-a-*]
+users:
+  dev: [team-a]
+`)
+		if !e.Enforce("dev", nil, "team-a-web", "pods", "get") {
+			t.Error("expected the described role to grant access")
+		}
+	})
 }
 
 // globMatch backs every policy wildcard (namespace/resource/action). A wrong match here silently

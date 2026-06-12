@@ -1,5 +1,5 @@
 {{- if .Values.rbac.create }}
-# kd applies its own authorization (policy.csv) on top of this; the ClusterRole only needs read
+# kd applies its own authorization (policy.yaml) on top of this; the ClusterRole only needs read
 # verbs. The default wildcard lets the dynamic-informer factory discover CRDs at runtime — narrow
 # rbac.rules for least privilege (see the chart README).
 apiVersion: rbac.authorization.k8s.io/v1

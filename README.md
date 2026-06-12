@@ -52,8 +52,9 @@ helm install kd ./charts/kd --namespace kd --create-namespace  # read-only Deplo
 ```
 
 kd has no login of its own. It trusts a user header (`X-Forwarded-User`) from your proxy and checks
-access with a `policy.csv` file (ArgoCD/Casbin style, reloaded when it changes). See
-[charts/kd/README.md](charts/kd/README.md) for the full setup and every value.
+access with a `policy.yaml` file — roles bundle allow/deny rules, users and groups are assigned
+roles, and the file is reloaded when it changes. See [charts/kd/README.md](charts/kd/README.md)
+for the format, the full setup, and every value.
 
 ## Development
 

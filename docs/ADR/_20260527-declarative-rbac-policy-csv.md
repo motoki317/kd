@@ -1,8 +1,12 @@
 ---
 date: "2026-05-27"
 author: "@motoki317"
-status: "accepted"
+status: "superseded"
 ---
+
+> Superseded by [Declarative authorization via policy.yaml](./20260612-policy-yaml-authorization.md):
+> the ArgoCD/Casbin policy.csv grammar was replaced by a human-first YAML format, and the
+> ArgoCD-compatibility requirement below no longer holds.
 
 # Context
 

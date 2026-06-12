@@ -11,9 +11,6 @@
                 "addr": {
                     "type": "string"
                 },
-                "defaultRole": {
-                    "type": "string"
-                },
                 "eagerKinds": {
                     "type": "string"
                 },
@@ -204,11 +201,29 @@
         "policy": {
             "type": "object",
             "properties": {
-                "csv": {
-                    "type": "string"
+                "defaultRoles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "deny": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
                 },
                 "enabled": {
                     "type": "boolean"
+                },
+                "groups": {
+                    "type": "object"
+                },
+                "roles": {
+                    "type": "object"
+                },
+                "users": {
+                    "type": "object"
                 }
             }
         },

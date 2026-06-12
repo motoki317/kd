@@ -35,7 +35,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             {{- if .Values.policy.enabled }}
-            - --policy=/etc/kd/policy.csv
+            - --policy=/etc/kd/policy.yaml
             {{- end }}
             {{- with .Values.config.extraArgs }}
             {{- toYaml . | nindent 12 }}
@@ -51,8 +51,6 @@ spec:
               value: {{ .Values.config.groupsDelimiter | quote }}
             - name: KD_TRUSTED_PROXIES
               value: {{ .Values.config.trustedProxies | quote }}
-            - name: KD_DEFAULT_ROLE
-              value: {{ .Values.config.defaultRole | quote }}
             - name: KD_POLICY_RELOAD_INTERVAL
               value: {{ .Values.config.policyReloadInterval | quote }}
             - name: KD_RESYNC
@@ -91,8 +89,8 @@ spec:
           configMap:
             name: {{ include "kd.fullname" . }}-policy
             items:
-              - key: policy.csv
-                path: policy.csv
+              - key: policy.yaml
+                path: policy.yaml
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

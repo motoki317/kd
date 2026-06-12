@@ -404,7 +404,7 @@ func (c *Cache) Client() kubernetes.Interface { return c.client }
 func (c *Cache) MetricsClient() metricsversioned.Interface { return c.metrics }
 
 // GroupForKind returns the API group of the registered resource whose Kind matches, so the
-// RBAC layer can authorize a kind-named URL against group-keyed policy.csv rules. Returns
+// RBAC layer can authorize a kind-named URL against group-keyed policy rules. Returns
 // ("", false) when no registered resource has that kind. Empty string is the core group,
 // which is a valid (and common) result.
 //

@@ -1,6 +1,7 @@
 // Package api serves kd's HTTP API: the RBAC-filtered namespace list, per-namespace
 // relationship graphs (snapshot + SSE patch feed), resource detail, and pod log streaming.
-// Reads are served from the informer cache; every request is authorized via policy.csv.
+// Reads are served from the informer cache; every request is authorized via the declarative
+// policy (policy.yaml, internal/rbac).
 package api
 
 import (
@@ -23,7 +24,7 @@ import (
 
 // ClusterScopeNamespace is the sentinel namespace value used in API URLs for cluster-scoped
 // resources. The client uses this exact string in `?ns=`; handlers route it into the cluster
-// snapshot and authorize it as the empty (cluster-scope) namespace.
+// snapshot and authorize it as the cluster scope (rbac.ClusterScope).
 const ClusterScopeNamespace = store.ClusterScope
 
 // Store is the read surface the API needs from a single context's informer cache.
@@ -39,7 +40,7 @@ type Store interface {
 	// metrics-server is unavailable (the usage feed then degrades to a no-op).
 	MetricsClient() metricsversioned.Interface
 	// GroupForKind returns the GVR group of the first registered resource matching kind,
-	// so the API can authorize a kind-named URL against group-keyed policy.csv rules.
+	// so the API can authorize a kind-named URL against group-keyed policy rules.
 	// Returns ("", false) when no registered resource has that kind.
 	GroupForKind(kind string) (string, bool)
 	// KindShortNames maps each registered kind to its API short name, for client-side labels.
@@ -117,9 +118,9 @@ func (a *API) resolveStore(w http.ResponseWriter, r *http.Request) (Store, bool)
 // authorize resolves the caller and checks the policy, writing 401/403 and returning false on
 // failure so handlers can `if id, ok := a.authorize(...); !ok { return }`.
 //
-// The cluster pseudo-namespace (ClusterScopeNamespace) is mapped to the empty namespace
-// string for the policy check, matching Kubernetes' convention for cluster-scoped resources
-// — so a rule like `p, alice, "", *, *, allow` authorizes the cluster scope.
+// The URL sentinel for cluster scope (ClusterScopeNamespace) is mapped to the enforcer's
+// cluster scope (rbac.ClusterScope) — policy rules opt into it with `clusterScoped: true`,
+// and rules without any scope field cover it along with every namespace.
 func (a *API) authorize(w http.ResponseWriter, r *http.Request, namespace, resource, action string) (auth.Identity, bool) {
 	return a.authorizeAny(w, r, namespace, []string{resource}, action)
 }
@@ -134,7 +135,7 @@ func (a *API) authorizeAny(w http.ResponseWriter, r *http.Request, namespace str
 		return id, false
 	}
 	if namespace == ClusterScopeNamespace {
-		namespace = ""
+		namespace = rbac.ClusterScope
 	}
 	if !a.enforcer.EnforceAny(id.User, id.Groups, namespace, resources, action) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -144,8 +145,8 @@ func (a *API) authorizeAny(w http.ResponseWriter, r *http.Request, namespace str
 }
 
 // authorizeKind authorizes a kind-named URL by resolving the GVR group from the store and
-// expanding to both the legacy resource class and the group, so policy.csv rules written
-// against either still grant access. Single call site for what was three lines of glue.
+// expanding to both the coarse resource class and the group, so policy rules written
+// against either grant access. Single call site for what was three lines of glue.
 func (a *API) authorizeKind(w http.ResponseWriter, r *http.Request, s Store, namespace, kind, action string) (auth.Identity, bool) {
 	group, _ := s.GroupForKind(kind)
 	return a.authorizeAny(w, r, namespace, resourceClasses(kind, group), action)
@@ -205,10 +206,10 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, store.ListNamespaces())
 	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible)+1)}
 	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real
-	// namespaces (FR-004). Gate on a cluster-scoped class — "nodes" is the most universal
-	// cluster-scoped read kd exposes. A viewer with only namespaced grants gets no entry,
-	// matching the fact that they have nothing cluster-scoped to drill into.
-	if a.enforcer.Enforce(id.User, id.Groups, "", "nodes", "list") {
+	// namespaces (FR-004). Gate on the exact check the cluster graph drill-in performs
+	// (pods/list — see handleGraph), so the entry appears iff opening it would succeed; a
+	// different class here (it used to be nodes) shows rows that then 403.
+	if a.enforcer.Enforce(id.User, id.Groups, rbac.ClusterScope, "pods", "list") {
 		cs := graph.SummarizeCluster(store.SnapshotNamespace(ClusterScopeNamespace))
 		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: ClusterScopeNamespace, Health: string(cs.Health), NonReady: cs.NonReady})
 	}

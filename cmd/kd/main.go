@@ -64,13 +64,13 @@ func run() error {
 		return err
 	}
 
-	policy, err := rbac.LoadFile(cfg.PolicyPath, cfg.DefaultRole)
+	policy, err := rbac.LoadFile(cfg.PolicyPath)
 	if err != nil {
 		return err
 	}
 	enforcer := rbac.NewEnforcer(policy)
 	if cfg.PolicyPath != "" {
-		go rbac.WatchFile(ctx, enforcer, cfg.PolicyPath, cfg.DefaultRole, cfg.PolicyReloadInterval, func(err error) {
+		go rbac.WatchFile(ctx, enforcer, cfg.PolicyPath, cfg.PolicyReloadInterval, func(err error) {
 			if err != nil {
 				slog.Error("policy reload failed", "err", err)
 				return

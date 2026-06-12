@@ -14,28 +14,27 @@ import (
 	"github.com/motoki317/kd/internal/kube/graph"
 )
 
-// resourceClasses maps a Kubernetes kind to the kd RBAC resource classes that authorize
-// access to it. v1 returns both the legacy class name (pods/nodes/workloads/…) AND the
-// GVR group (core="" / apps / argoproj.io / …) when the group is known: the enforcer
-// allows access if EITHER class matches. This keeps existing policy.csv files working
-// (legacy classes are still authoritative) while enabling group-targeted rules for CRs
-// — `p, alice, *, argoproj.io, *, allow` lets an operator authorize every CR in that group
-// without enumerating each kind.
+// resourceClasses maps a Kubernetes kind to the kd policy resource classes that authorize
+// access to it: both the coarse class name (pods/nodes/workloads/…) AND the GVR group
+// (core="" / apps / argoproj.io / …) when the group is known. The enforcer allows access
+// if EITHER class matches, so a policy rule targets whichever dimension is more natural —
+// a `resources: [argoproj.io]` entry authorizes every CR in that group without
+// enumerating each kind.
 func resourceClasses(kind, group string) []string {
-	classes := []string{legacyClass(kind)}
-	// "" (core group) is intentionally NOT added as a separate class: a rule like
-	// `p, alice, *, "", *` would otherwise be indistinguishable from "any resource". Core
-	// kinds rely on their legacy class; non-core groups layer on as an additional grant.
+	classes := []string{coarseClass(kind)}
+	// "" (core group) is intentionally NOT added as a separate class: a rule listing the
+	// empty string would otherwise be indistinguishable from "any resource". Core kinds
+	// rely on their coarse class; non-core groups layer on as an additional grant.
 	if group != "" {
 		classes = append(classes, group)
 	}
 	return classes
 }
 
-// legacyClass is the pre-CRD kind→class mapping kept as-is so existing policy.csv files
-// continue to work. New kinds (CRs) fall into "workloads" if they aren't matched by their
-// GVR group rule either.
-func legacyClass(kind string) string {
+// coarseClass buckets kinds into the handful of resource names a policy author can reason
+// about without knowing the API machinery. Kinds without a bucket of their own (CRs
+// included) fall into "workloads" if they aren't matched by their GVR group rule either.
+func coarseClass(kind string) string {
 	switch kind {
 	case "Pod":
 		return "pods"

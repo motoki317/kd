@@ -8,26 +8,26 @@ import (
 	"time"
 )
 
-// LoadFile reads and parses a policy.csv from path. An empty path yields a policy with only
-// the built-in roles and the given default role (no file required for the common readonly case).
-func LoadFile(path, defaultRole string) (*Policy, error) {
+// LoadFile reads and parses a policy.yaml from path. An empty path yields the built-in
+// default policy — every authenticated user is a viewer — so no file is required for the
+// common read-everything case.
+func LoadFile(path string) (*Policy, error) {
 	if path == "" {
-		return Parse("", defaultRole)
+		return Parse(nil)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: read policy file: %w", err)
 	}
-	return Parse(string(data), defaultRole)
+	return Parse(data)
 }
 
 // fileReloader reparses a policy file and swaps it into an Enforcer when its content changes.
 type fileReloader struct {
-	path        string
-	defaultRole string
-	enforcer    *Enforcer
-	lastSum     [sha256.Size]byte
-	seen        bool // whether lastSum holds the content of a prior attempt (valid or malformed)
+	path     string
+	enforcer *Enforcer
+	lastSum  [sha256.Size]byte
+	seen     bool // whether lastSum holds the content of a prior attempt (valid or malformed)
 }
 
 // reloadIfChanged reloads the policy iff the file content differs from the last content seen. It
@@ -46,7 +46,7 @@ func (fr *fileReloader) reloadIfChanged() (bool, error) {
 	}
 	fr.seen = true
 	fr.lastSum = sum
-	policy, err := Parse(string(data), fr.defaultRole)
+	policy, err := Parse(data)
 	if err != nil {
 		return false, fmt.Errorf("rbac: parse policy file: %w", err)
 	}
@@ -57,8 +57,8 @@ func (fr *fileReloader) reloadIfChanged() (bool, error) {
 // WatchFile polls path every interval and hot-reloads the enforcer's policy when the file
 // content changes. onReload, if non-nil, is called after each reload attempt that changed the
 // file or failed, so the caller can log it. It runs until ctx is cancelled.
-func WatchFile(ctx context.Context, e *Enforcer, path, defaultRole string, interval time.Duration, onReload func(error)) {
-	fr := &fileReloader{path: path, defaultRole: defaultRole, enforcer: e}
+func WatchFile(ctx context.Context, e *Enforcer, path string, interval time.Duration, onReload func(error)) {
+	fr := &fileReloader{path: path, enforcer: e}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

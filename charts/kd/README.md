@@ -12,7 +12,7 @@ helm install kd ./charts/kd --namespace kd --create-namespace
 | Resource | Purpose |
 | --- | --- |
 | `ServiceAccount` + `ClusterRole` + `ClusterRoleBinding` | The one identity kd runs as — wildcard read (`*` `*` `get/list/watch`) so the dynamic-informer factory can discover every API resource the cluster exposes, including CRDs installed at runtime; plus `pods/log`. kd does its own authorization on top. Disable with `rbac.create=false`. |
-| `ConfigMap` (`*-policy`) | The declarative `policy.csv`. Hot-reloaded — edit `policy.csv` and re-apply, no restart. Disable with `policy.enabled=false`. |
+| `ConfigMap` (`*-policy`) | The declarative `policy.yaml`. Hot-reloaded — edit the policy and re-apply, no restart. Disable with `policy.enabled=false`. |
 | `Deployment` + `Service` | The kd server (container `:9123` → Service `:80`), read-only root FS, non-root. |
 | `Ingress` *(optional)* | A standard Kubernetes Ingress (`ingress.enabled=true`). |
 | `IngressRoute` *(optional)* | A Traefik route behind a forward-auth middleware (`ingressRoute.enabled=true`). |
@@ -28,26 +28,69 @@ All values are documented inline in [`values.yaml`](values.yaml) and validated a
 Set `image.repository` / `image.tag` to your built reference. The tag defaults to the chart's
 `appVersion` when left empty.
 
-### Authorization (policy.csv)
+### Authorization (policy.yaml)
 
-`policy.csv` is mounted into the pod and hot-reloaded. ArgoCD-style grammar:
+The `policy.*` values (everything except `policy.enabled`) are rendered into a `policy.yaml`
+ConfigMap, mounted into the pod, and hot-reloaded. Three concepts:
 
+- **Roles** bundle access rules. Two are built in: `viewer` (read everything) and `admin`
+  (every action). Define your own under `roles`.
+- **Users and groups** (the names your auth proxy sends in the identity/groups headers) are
+  **assigned roles** under `users` / `groups`. `defaultRoles` is assigned to everyone.
+- **Deny beats allow** — always, across all of a caller's roles. The top-level `deny` block
+  binds every caller, even admins.
+
+```yaml
+policy:
+  enabled: true
+  # Everyone may read everything; set [] to lock down to explicit assignments.
+  defaultRoles: [viewer]
+
+  roles:
+    team-a:
+      description: Read everything in team-a's namespaces, except pod logs.
+      allow:
+        - namespaces: [team-a-*]
+      deny:
+        - namespaces: [team-a-*]
+          resources: [logs]
+    cluster-viewer:
+      description: Read cluster-scoped resources (Nodes, PVs, CRDs, ...), nothing namespaced.
+      allow:
+        - clusterScoped: true
+
+  users:
+    alice: [admin]
+  groups:
+    platform-team: [admin]
+    team-a-developers: [team-a, cluster-viewer]
+
+  # Nobody — not even admins — reads pod logs in the secure namespace.
+  deny:
+    - namespaces: [secure]
+      resources: [logs]
 ```
-p, <subject>, <namespace-glob>, <resource>, <action>, <effect>
-g, <subject>, <role>
-```
 
-Subjects are usernames/groups from the identity header, or `role:*` tokens. Resources:
-`namespaces | workloads | pods | logs | events | rbac | nodes | *`, or an API group name to scope
-every custom resource in that group (e.g. `p, alice, *, argoproj.io, *, allow` covers Workflows,
-CronWorkflows, …). Actions: `get | list | watch`.
-Effect: `allow | deny` (deny overrides). Built-in roles `role:readonly` and `role:admin` always
-exist; `config.defaultRole` is the role every authenticated user implicitly has — set it empty to
-lock the cluster down (explicit grants only).
+Each allow/deny rule scopes where it applies (`namespaces` / `clusterScoped`) and what it
+covers (`resources` / `actions`). The list fields hold `*`-glob patterns, and **omitting a
+field matches everything** (an explicitly empty list is rejected at load, since it would
+match nothing):
 
-> The `*` namespace glob also matches the cluster pseudo-namespace (Nodes, PVs, ClusterRoles, CRDs,
-> cluster-scoped CRs); narrow with explicit per-namespace rules if a user should only see
-> namespaced resources.
+- `namespaces` — namespace names, e.g. `[team-a-*]`. A rule that lists namespaces applies
+  only to namespaced resources — not even `[*]` reaches cluster scope.
+- `clusterScoped: true` — the rule instead targets cluster-scoped resources (Nodes, PVs,
+  ClusterRoles, CRDs, cluster-scoped CRs); combining it with `namespaces` is a load error —
+  write two rules. A rule with *neither* scope field covers both worlds, which is what makes
+  bare `deny` guardrails (and the built-in roles) airtight; `clusterScoped: false` restricts
+  such a rule to namespaced resources.
+- `resources` — kd's coarse classes `namespaces | workloads | pods | logs | events | rbac |
+  nodes`, or an API group name to scope every custom resource in that group (e.g.
+  `argoproj.io` covers Workflows, CronWorkflows, …).
+- `actions` — `get | list | watch` (kd is read-only; `admin` is future-proofed with `*`).
+
+A policy file that fails to parse — a typo'd key, a reference to an undefined role, an empty
+pattern list — is rejected at startup and *ignored* on hot reload (the last good policy stays
+active and the error is logged), so a bad edit cannot silently widen access.
 
 ### Identity header
 

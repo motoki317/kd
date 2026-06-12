@@ -12,7 +12,8 @@ push detail to those.
 - Graph: `internal/kube/graph` — `Build` produces nodes + edges (every relationship) from a cache
   snapshot; `Summarize`/`SummarizeBuilt` roll up to a health digest. The server streams the FULL
   graph; the client projects relationship subsets + grouping itself (no server-side view Filter).
-- Auth: `internal/auth` (proxy header) + `internal/rbac` (Casbin-style policy.csv, hot-reloaded).
+- Auth: `internal/auth` (proxy header) + `internal/rbac` (declarative policy.yaml — roles/users/
+  groups/deny, hot-reloaded).
 - Multi-context: `internal/kube/registry` (lazy per-context cache) + `internal/kube/kubeconfig`
   (merged kubeconfig snapshot at startup).
 - Client: `web/src/` Solid + Vite. Entry `index.tsx` → `App.tsx` (bootstrap + JSX; its wiring lives
@@ -34,7 +35,7 @@ push detail to those.
 | Touch styles | `web/src/styles/<area>.css`; `index.css` is the @import barrel and documents the order-dependent cascade chains |
 | Touch drawer usage gauges | `web/src/resourceBars.ts` (shared-scale bar model) → `web/src/components/UsageGauges.tsx` (render: tracks/fills/segments/legend/caption) — used by `ResourceSummary.tsx` (pod/Node top gauge + workload rollup with by-pod/by-container split) and `ContainerCards.tsx` (per-container bars); rollup math in `web/src/usageAggregate.ts`. Invariants in docs/frontend-internals.md "Drawer resource gauges" |
 | Add an SSE event | `internal/api/sse.go` (server) + `web/src/api.ts` (client handler) |
-| Touch RBAC policy | `internal/rbac/` + sample `policy.csv` in `charts/kd/values.yaml` (`policy.csv`) |
+| Touch RBAC policy | `internal/rbac/` (schema in `policy.go`, matcher in `rbac.go`) + structured `policy.*` values in `charts/kd/values.yaml`; format doc in `charts/kd/README.md` |
 | ADR for a decision | `docs/ADR/YYYYMMDD-title.md` (template at `_template.md`) |
 
 ### Recipe: surface a kind's "declarative essence" in the drawer
@@ -218,8 +219,6 @@ format + lifecycle. Stop generating when a strict re-survey yields ≈0 high-val
 - **Proxy auth:** upstream `github.com/motoki317/manifest/.common/traefik-forward-auth` emits
   `X-Forwarded-User` (the header kd trusts); Grafana consumes the same via `auth.proxy` in
   `monitor/values-grafana.yaml`.
-- **ArgoCD RBAC** (pattern kd's policy.csv mirrors): `argocd/values.yaml` → `policy.default:
-  role:readonly`, plus `g, <uuid>, role:admin` group bindings.
 - **Toolchain:** go 1.26.2, node v24.14.1 (no pnpm/bun — npm or corepack), kubectl v1.36, dev kube
   context `docker-desktop`.
 

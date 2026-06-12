@@ -1,115 +1,114 @@
-// Package rbac implements declarative, ArgoCD-style authorization for kd.
+// Package rbac implements declarative authorization for kd.
 //
-// Policy is expressed in the ArgoCD/Casbin policy.csv grammar (`p,` permission lines and
-// `g,` grouping lines) and enforced by a purpose-built matcher: a caller is the set of its
-// principals (user + groups + roles reached through `g,` + the default role), and a request
-// is allowed iff some matching rule allows it and none denies it (global deny-override).
-// See docs/ADR/20260527-declarative-rbac-policy-csv.md.
+// Policy is a single policy.yaml: named roles bundle allow/deny rules, each scoped by
+// namespace globs or `clusterScoped: true` and by (resources, actions) glob patterns;
+// users and groups are assigned roles; a top-level deny block expresses guardrails that
+// bind every caller. A request is allowed iff some allow rule of the caller's roles
+// matches it and NO deny rule — from any of the caller's roles or the global block —
+// matches it (deny always wins). See docs/ADR/20260612-policy-yaml-authorization.md.
 package rbac
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
 
-type effect int
+// ClusterScope is the scope value callers pass as Enforce's namespace argument to authorize
+// cluster-scoped resources (Nodes, PersistentVolumes, CRDs, …). The underscores make it
+// impossible as a real namespace name (not a DNS label), so it can never collide. Policy
+// authors never write it — a rule opts into cluster scope with `clusterScoped: true`.
+const ClusterScope = "__cluster__"
 
+// Built-in role names, always defined regardless of the loaded policy file.
 const (
-	effectAllow effect = iota
-	effectDeny
+	RoleViewer = "viewer" // get/list/watch on everything
+	RoleAdmin  = "admin"  // every action on everything
 )
 
-// rule is one `p,` permission line. The namespace/resource/action fields are glob patterns.
+// rule is one compiled allow/deny entry. The list fields hold glob patterns; an empty list
+// matches everything (the parser rejects explicitly-empty lists, so empty means omitted).
+// clusterScoped is tri-state: nil (unset) leaves scoping to the namespaces list, true makes
+// the rule cluster-scope-only, false makes it namespaced-only.
 type rule struct {
-	subject   string
-	namespace string
-	resource  string
-	action    string
-	effect    effect
+	namespaces    []string
+	clusterScoped *bool
+	resources     []string
+	actions       []string
 }
 
-// Policy is a parsed, immutable set of permission rules and role grants.
+// matches reports whether the rule covers a request for action on ANY of the given
+// resource classes in scope. Matching any-of-resources on both allow and deny sides
+// is what extends deny-override across kd's dual resource classes (coarse class + API
+// group): an allow on either class grants, a deny on either class blocks.
+func (r rule) matches(scope string, resources []string, action string) bool {
+	return r.matchesScope(scope) &&
+		matchAny(r.actions, action) &&
+		matchAnyValue(r.resources, resources)
+}
+
+// matchesScope decides namespace/cluster coverage. Namespace globs deliberately never see
+// the cluster scope — listing namespaces means namespaces, full stop — while a rule with no
+// scope field at all matches everything, so a bare deny guardrail (and the built-in roles)
+// cannot be sidestepped through cluster-scoped resources.
+func (r rule) matchesScope(scope string) bool {
+	if scope == ClusterScope {
+		if r.clusterScoped != nil {
+			return *r.clusterScoped
+		}
+		return len(r.namespaces) == 0
+	}
+	if r.clusterScoped != nil && *r.clusterScoped {
+		return false
+	}
+	return matchAny(r.namespaces, scope)
+}
+
+func matchAny(patterns []string, value string) bool {
+	if len(patterns) == 0 {
+		return true
+	}
+	for _, p := range patterns {
+		if globMatch(p, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchAnyValue(patterns []string, values []string) bool {
+	if len(patterns) == 0 {
+		return true
+	}
+	for _, v := range values {
+		for _, p := range patterns {
+			if globMatch(p, v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+type role struct {
+	allow []rule
+	deny  []rule
+}
+
+func builtinRoles() map[string]role {
+	return map[string]role{
+		RoleViewer: {allow: []rule{{actions: []string{"get", "list", "watch"}}}},
+		RoleAdmin:  {allow: []rule{{}}},
+	}
+}
+
+// Policy is a parsed, immutable authorization policy: role definitions (built-in +
+// file-defined), user/group role assignments, the default roles, and global deny rules.
 type Policy struct {
-	rules       []rule
-	grants      map[string][]string // subject -> roles granted via `g,`
-	defaultRole string
-}
-
-// builtinRules are always present regardless of the loaded policy: the readonly and admin
-// role definitions that operators reference via `policy.default` and `g,` grants.
-var builtinRules = []rule{
-	{subject: "role:readonly", namespace: "*", resource: "*", action: "get", effect: effectAllow},
-	{subject: "role:readonly", namespace: "*", resource: "*", action: "list", effect: effectAllow},
-	{subject: "role:readonly", namespace: "*", resource: "*", action: "watch", effect: effectAllow},
-	{subject: "role:admin", namespace: "*", resource: "*", action: "*", effect: effectAllow},
-}
-
-// Parse reads a policy.csv document. defaultRole is the role implicitly granted to every
-// caller (e.g. "role:readonly"); an empty defaultRole locks access down to explicit grants.
-func Parse(policyCSV, defaultRole string) (*Policy, error) {
-	p := &Policy{
-		rules:       append([]rule(nil), builtinRules...),
-		grants:      map[string][]string{},
-		defaultRole: defaultRole,
-	}
-
-	for n, line := range strings.Split(policyCSV, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		fields := splitTrim(line)
-		switch fields[0] {
-		case "p":
-			r, err := parseRule(fields)
-			if err != nil {
-				return nil, fmt.Errorf("policy line %d: %w", n+1, err)
-			}
-			p.rules = append(p.rules, r)
-		case "g":
-			if len(fields) != 3 {
-				return nil, fmt.Errorf("policy line %d: grouping needs 'g, subject, role', got %q", n+1, line)
-			}
-			p.grants[fields[1]] = append(p.grants[fields[1]], fields[2])
-		default:
-			return nil, fmt.Errorf("policy line %d: unknown line type %q", n+1, fields[0])
-		}
-	}
-	return p, nil
-}
-
-func parseRule(fields []string) (rule, error) {
-	// p, subject, namespace, resource, action[, effect]
-	if len(fields) < 5 || len(fields) > 6 {
-		return rule{}, fmt.Errorf("permission needs 'p, sub, ns, res, act[, eft]', got %d fields", len(fields))
-	}
-	eft := effectAllow
-	if len(fields) == 6 {
-		switch fields[5] {
-		case "allow", "":
-			eft = effectAllow
-		case "deny":
-			eft = effectDeny
-		default:
-			return rule{}, fmt.Errorf("invalid effect %q (want allow or deny)", fields[5])
-		}
-	}
-	return rule{
-		subject:   fields[1],
-		namespace: fields[2],
-		resource:  fields[3],
-		action:    fields[4],
-		effect:    eft,
-	}, nil
-}
-
-func splitTrim(line string) []string {
-	parts := strings.Split(line, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	return parts
+	defaultRoles []string
+	roles        map[string]role
+	users        map[string][]string
+	groups       map[string][]string
+	deny         []rule
 }
 
 // Enforcer evaluates requests against a Policy. It is safe for concurrent use and supports
@@ -129,7 +128,8 @@ func (e *Enforcer) Replace(p *Policy) {
 	e.policy = p
 }
 
-// Enforce reports whether the caller {user, groups} may perform action on resource in namespace.
+// Enforce reports whether the caller {user, groups} may perform action on resource in
+// namespace — a real namespace name, or ClusterScope for cluster-scoped resources.
 func (e *Enforcer) Enforce(user string, groups []string, namespace, resource, action string) bool {
 	return e.EnforceAny(user, groups, namespace, []string{resource}, action)
 }
@@ -140,41 +140,16 @@ func (e *Enforcer) Enforce(user string, groups []string, namespace, resource, ac
 //   - Allow if some rule matching some-of-resources allows AND no rule matching
 //     any-of-resources denies.
 //   - Deny if any rule matching any-of-resources denies, regardless of allows (the
-//     existing global deny-override extended across classes).
+//     global deny-override extended across classes).
 //
-// kd uses this so a kind can be authorized by EITHER its legacy class (pods/nodes/workloads/…)
-// OR its GVR group (argoproj.io/cert-manager.io/…) — operators can write rules in whichever
-// dimension is more natural without breaking back-compat.
+// kd uses this so a kind can be authorized by EITHER its coarse class (pods/nodes/workloads/…)
+// OR its API group (argoproj.io/cert-manager.io/…) — operators write rules in whichever
+// dimension is more natural.
 func (e *Enforcer) EnforceAny(user string, groups []string, namespace string, resources []string, action string) bool {
 	e.mu.RLock()
 	p := e.policy
 	e.mu.RUnlock()
-
-	principals := p.principals(user, groups)
-	allowed := false
-	for _, r := range p.rules {
-		if !principals[r.subject] {
-			continue
-		}
-		if !globMatch(r.namespace, namespace) || !globMatch(r.action, action) {
-			continue
-		}
-		matchesResource := false
-		for _, res := range resources {
-			if globMatch(r.resource, res) {
-				matchesResource = true
-				break
-			}
-		}
-		if !matchesResource {
-			continue
-		}
-		if r.effect == effectDeny {
-			return false
-		}
-		allowed = true
-	}
-	return allowed
+	return p.decide(user, groups, namespace, resources, action)
 }
 
 // VisibleNamespaces filters namespaces to those the caller may list pods in, preserving order.
@@ -188,22 +163,46 @@ func (e *Enforcer) VisibleNamespaces(user string, groups []string, namespaces []
 	return visible
 }
 
-// principals returns the set of subjects that act on the caller's behalf: the user, its
-// groups, every role reachable through `g,` grants (transitive), and the default role.
-func (p *Policy) principals(user string, groups []string) map[string]bool {
-	set := map[string]bool{}
-	queue := append([]string{user}, groups...)
-	if p.defaultRole != "" {
-		queue = append(queue, p.defaultRole)
-	}
-	for len(queue) > 0 {
-		s := queue[len(queue)-1]
-		queue = queue[:len(queue)-1]
-		if set[s] {
-			continue
+func (p *Policy) decide(user string, groups []string, scope string, resources []string, action string) bool {
+	for _, r := range p.deny {
+		if r.matches(scope, resources, action) {
+			return false
 		}
-		set[s] = true
-		queue = append(queue, p.grants[s]...)
+	}
+	names := p.roleSet(user, groups)
+	// Every role's denies are checked before any allow wins: holding an extra role can only
+	// ever narrow access, never widen past another role's deny.
+	for name := range names {
+		for _, r := range p.roles[name].deny {
+			if r.matches(scope, resources, action) {
+				return false
+			}
+		}
+	}
+	for name := range names {
+		for _, r := range p.roles[name].allow {
+			if r.matches(scope, resources, action) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// roleSet is the set of roles acting on the caller's behalf: the default roles, the
+// user's assignments, and each group's assignments. Parse validated every name, so each
+// entry resolves in p.roles.
+func (p *Policy) roleSet(user string, groups []string) map[string]bool {
+	set := map[string]bool{}
+	add := func(names []string) {
+		for _, n := range names {
+			set[n] = true
+		}
+	}
+	add(p.defaultRoles)
+	add(p.users[user])
+	for _, g := range groups {
+		add(p.groups[g])
 	}
 	return set
 }

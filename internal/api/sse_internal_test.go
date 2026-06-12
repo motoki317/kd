@@ -106,7 +106,7 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
 		t.Fatalf("prewarm registry: %v", err)
 	}
-	p, err := rbac.Parse("", "role:readonly")
+	p, err := rbac.Parse(nil)
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}

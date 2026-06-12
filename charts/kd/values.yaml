@@ -35,9 +35,6 @@ config:
   # -- Comma-separated CIDRs allowed to assert the identity header. Empty trusts all sources —
   # set this whenever kd is reachable without going through the proxy.
   trustedProxies: "" # @schema type:string
-  # -- Role implicitly granted to every authenticated user. Empty locks the cluster down
-  # (only explicit policy.csv grants apply).
-  defaultRole: "role:readonly"
   # -- How often kd polls the policy file for changes (hot reload, no restart).
   policyReloadInterval: "10s"
   # -- Informer resync period.
@@ -53,28 +50,44 @@ config:
   # -- Extra raw CLI arguments appended to the kd command.
   extraArgs: [] # @schema type:array; item:string
 
-# Declarative kd authorization (policy.csv), mounted into the pod and hot-reloaded.
+# Declarative kd authorization, rendered into a policy.yaml ConfigMap that is mounted into
+# the pod and hot-reloaded. Roles bundle allow/deny rules; users and groups are assigned
+# roles; a matching deny always beats an allow. Built-in roles: `viewer` (read everything)
+# and `admin` (every action). The full format lives in the chart README.
 policy:
-  # -- Mount a policy.csv ConfigMap and point kd at it. When false, kd runs on built-in
-  # defaults only (every user gets config.defaultRole).
+  # -- Mount the policy ConfigMap and point kd at it. When false, kd runs on the built-in
+  # default: every authenticated user is a viewer.
   enabled: true # @schema type:boolean
-  # -- The policy.csv contents. ArgoCD-style grammar:
-  #   p, <subject>, <namespace-glob>, <resource>, <action>, <effect>
-  #   g, <subject>, <role>
-  # Resources: namespaces|workloads|pods|logs|events|rbac|nodes|*, or an API group name
-  # (e.g. argoproj.io) covering every custom resource in that group.  Actions: get|list|watch
-  # Effect: allow|deny (deny overrides). Built-in roles role:readonly and role:admin always exist.
-  csv: |
-    # Cluster operators get full read access everywhere.
-    g, admin-user, role:admin
-    g, cluster-admins, role:admin
-
-    # The app-team group sees only its own namespaces; nothing else.
-    p, app-team, team-a-*, *, *, allow
-    p, app-team, team-b-*, *, *, allow
-
-    # Anyone may read workloads/pods but not pod logs in a sensitive namespace.
-    p, role:readonly, secure, logs, *, deny
+  # -- Roles every authenticated user automatically has. Set to [] to lock the cluster
+  # down, so only the users/groups assignments below grant access.
+  defaultRoles: ["viewer"] # @schema type:array; item:string
+  # -- Custom role definitions. Each allow/deny rule lists `namespaces`, `resources`, and
+  # `actions` glob patterns; omitting a field matches everything, and `clusterScoped: true`
+  # targets cluster-scoped resources (Nodes, PVs, CRDs, …) instead of namespaces. For example:
+  #   team-a:
+  #     description: Read everything in team-a's namespaces, except pod logs.
+  #     allow:
+  #       - namespaces: [team-a-*]
+  #     deny:
+  #       - namespaces: [team-a-*]
+  #         resources: [logs]
+  #   cluster-viewer:
+  #     allow:
+  #       - clusterScoped: true
+  roles: {} # @schema type:object
+  # -- Role assignments per username (the identity header value). For example:
+  #   alice: [admin]
+  #   bob: [team-a]
+  users: {} # @schema type:object
+  # -- Role assignments per group (the groups header values). For example:
+  #   platform-team: [admin]
+  #   team-a-developers: [team-a]
+  groups: {} # @schema type:object
+  # -- Guardrail rules denied to every caller, whatever their roles. For example, to hide
+  # pod logs in a sensitive namespace from everyone:
+  #   - namespaces: [secure]
+  #     resources: [logs]
+  deny: [] # @schema type:array; item:object
 
 serviceAccount:
   # -- Create a ServiceAccount for kd to run as.

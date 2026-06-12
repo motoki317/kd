@@ -34,7 +34,7 @@ func TestResourceClasses(t *testing.T) {
 	}{
 		{"Pod", "", []string{"pods"}},                                     // core group adds NO group class
 		{"Node", "", []string{"nodes"}},                                   // (a "" group rule would mean "any")
-		{"Deployment", "apps", []string{"workloads", "apps"}},             // legacy class + group
+		{"Deployment", "apps", []string{"workloads", "apps"}},             // coarse class + group
 		{"Workflow", "argoproj.io", []string{"workloads", "argoproj.io"}}, // a CR: workloads fallback + its group
 		{"Role", "rbac.authorization.k8s.io", []string{"rbac", "rbac.authorization.k8s.io"}},
 	}
@@ -45,7 +45,7 @@ func TestResourceClasses(t *testing.T) {
 	}
 }
 
-func TestLegacyClass(t *testing.T) {
+func TestCoarseClass(t *testing.T) {
 	cases := map[string]string{
 		"Pod": "pods", "Node": "nodes", "Event": "events", "Namespace": "namespaces",
 		"Role": "rbac", "RoleBinding": "rbac", "ClusterRole": "rbac",
@@ -53,8 +53,8 @@ func TestLegacyClass(t *testing.T) {
 		"Deployment": "workloads", "Secret": "workloads", "Workflow": "workloads", // default bucket
 	}
 	for kind, want := range cases {
-		if got := legacyClass(kind); got != want {
-			t.Errorf("legacyClass(%q) = %q, want %q", kind, got, want)
+		if got := coarseClass(kind); got != want {
+			t.Errorf("coarseClass(%q) = %q, want %q", kind, got, want)
 		}
 	}
 }

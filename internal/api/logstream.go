@@ -51,7 +51,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The cluster-scope log path merges pods from EVERY namespace (a Node's static pods ride along),
-	// but the request was authorized only against the cluster scope (empty namespace). Re-check each
+	// but the request was authorized only against the cluster pseudo-namespace. Re-check each
 	// rode-along pod against ITS OWN namespace so a `Pod` addressed through `__cluster__` can't read
 	// logs a namespace-scoped `logs` deny forbids. A plain namespace request already snapshots only
 	// the one authorized namespace, so this predicate passes everything there (and isn't consulted).

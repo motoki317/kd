@@ -54,14 +54,9 @@ var fixtureResources = []discovery.Resource{
 // newServer builds an in-cluster registry over a fake typed clientset (for log streaming)
 // and a fake dynamic clientset (for cached reads), then prewarms it and wires the API. The
 // static discoverer is required because the fake typed clientset's discovery returns nil
-// for ServerPreferredResources — we have to inject the GVR set explicitly.
+// for ServerPreferredResources — we have to inject the GVR set explicitly. policy is a
+// policy.yaml document; empty means the built-in default (every user is a viewer).
 func newServer(t *testing.T, policy string, objs ...runtime.Object) *httptest.Server {
-	return newServerWithDefault(t, policy, "role:readonly", objs...)
-}
-
-// newServerWithDefault is the explicit-default variant of newServer for the few tests that
-// need to assert behavior under a deny-by-default policy (e.g. cluster-scope visibility).
-func newServerWithDefault(t *testing.T, policy, defaultRole string, objs ...runtime.Object) *httptest.Server {
 	t.Helper()
 	typed := fake.NewSimpleClientset(objs...)
 	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
@@ -78,7 +73,7 @@ func newServerWithDefault(t *testing.T, policy, defaultRole string, objs ...runt
 	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
 		t.Fatalf("prewarm registry: %v", err)
 	}
-	p, err := rbac.Parse(policy, defaultRole)
+	p, err := rbac.Parse([]byte(policy))
 	if err != nil {
 		t.Fatalf("parse policy: %v", err)
 	}
@@ -125,7 +120,15 @@ var fixtureObjs = []runtime.Object{
 
 func TestListNamespacesRBAC(t *testing.T) {
 	// dev is denied secret-ns; admin sees everything.
-	srv := newServer(t, "p, dev, secret-ns, *, *, deny\ng, admin, role:admin", fixtureObjs...)
+	srv := newServer(t, `
+roles:
+  no-secret-ns:
+    deny:
+      - namespaces: [secret-ns]
+users:
+  dev: [no-secret-ns]
+  admin: [admin]
+`, fixtureObjs...)
 
 	resp, body := get(t, srv, ctxPath+"/namespaces", "dev")
 	if resp.StatusCode != http.StatusOK {
@@ -174,7 +177,14 @@ func TestGetGraph(t *testing.T) {
 }
 
 func TestGetGraphForbidden(t *testing.T) {
-	srv := newServer(t, "p, dev, secret-ns, *, *, deny", fixtureObjs...)
+	srv := newServer(t, `
+roles:
+  no-secret-ns:
+    deny:
+      - namespaces: [secret-ns]
+users:
+  dev: [no-secret-ns]
+`, fixtureObjs...)
 	resp, _ := get(t, srv, ctxPath+"/namespaces/secret-ns/graph", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
@@ -454,8 +464,20 @@ func TestAllContainersLogStream(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
+// denyShopLogsYAML denies the `logs` resource in the shop namespace to user dev, on top of
+// the viewer default — the namespace-scoped log-deny shape both log tests below need.
+const denyShopLogsYAML = `
+roles:
+  no-shop-logs:
+    deny:
+      - namespaces: [shop]
+        resources: [logs]
+users:
+  dev: [no-shop-logs]
+`
+
 func TestLogStreamForbidden(t *testing.T) {
-	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
+	srv := newServer(t, denyShopLogsYAML, fixtureObjs...)
 	resp, _ := get(t, srv, ctxPath+"/namespaces/shop/resources/Pod/web-1/log/stream", "dev")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", resp.StatusCode)
@@ -466,10 +488,10 @@ func TestLogStreamForbidden(t *testing.T) {
 // bypass: the path merges pods from every namespace (a Node's static pods ride along), but the
 // request is authorized only against the cluster scope. A pod whose namespace the caller is denied
 // `logs` on must NOT stream just because it was addressed through `__cluster__`. dev is allowed the
-// cluster scope (readonly default) but denied shop logs, so the cluster-scope request returns 200
+// cluster scope (viewer default) but denied shop logs, so the cluster-scope request returns 200
 // (cluster logs are permitted) yet yields NO log event for the shop pod web-1.
 func TestClusterScopeLogStreamRespectsNamespaceDeny(t *testing.T) {
-	srv := newServer(t, "p, dev, shop, logs, get, deny", fixtureObjs...)
+	srv := newServer(t, denyShopLogsYAML, fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	url := srv.URL + ctxPath + "/namespaces/" + api.ClusterScopeNamespace + "/resources/Pod/web-1/log/stream?follow=false"
@@ -572,10 +594,18 @@ func TestNamespacesIncludesClusterPseudoEntry(t *testing.T) {
 // TestNamespacesHidesClusterPseudoEntryWhenDenied covers the RBAC gate on the cluster
 // pseudo-namespace: a user with only namespaced grants (no cluster-scoped read like nodes)
 // gets the namespace list without a [cluster] entry, so the sidebar doesn't surface a row
-// that 403s on every drill-in. Default policy is empty; the rule grants alice every action
-// in `shop` only.
+// that 403s on every drill-in. The policy locks down the defaults and grants alice every
+// action in `shop` only.
 func TestNamespacesHidesClusterPseudoEntryWhenDenied(t *testing.T) {
-	srv := newServerWithDefault(t, "p, alice, shop, *, *, allow", "", fixtureObjs...)
+	srv := newServer(t, `
+defaultRoles: []
+roles:
+  shop-only:
+    allow:
+      - namespaces: [shop]
+users:
+  alice: [shop-only]
+`, fixtureObjs...)
 	resp, body := get(t, srv, ctxPath+"/namespaces", "alice")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
@@ -590,6 +620,37 @@ func TestNamespacesHidesClusterPseudoEntryWhenDenied(t *testing.T) {
 		if ns.Name == api.ClusterScopeNamespace {
 			t.Errorf("namespaces should NOT include %q for a user without cluster-scope read", api.ClusterScopeNamespace)
 		}
+	}
+}
+
+// TestNamespacesShowsClusterEntryForClusterScopedGrant is the positive half of the gate:
+// a `clusterScoped: true` allow rule must surface the [cluster] sidebar entry, and the
+// entry must agree with the drill-in (the cluster graph request succeeds for the same user).
+func TestNamespacesShowsClusterEntryForClusterScopedGrant(t *testing.T) {
+	srv := newServer(t, `
+defaultRoles: []
+roles:
+  cluster-viewer:
+    allow:
+      - clusterScoped: true
+users:
+  carol: [cluster-viewer]
+`, fixtureObjs...)
+	resp, body := get(t, srv, ctxPath+"/namespaces", "carol")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200\n%s", resp.StatusCode, body)
+	}
+	var out struct {
+		Namespaces []struct{ Name string } `json:"namespaces"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, body)
+	}
+	if len(out.Namespaces) != 1 || out.Namespaces[0].Name != api.ClusterScopeNamespace {
+		t.Errorf("namespaces = %v, want exactly the %q entry", out.Namespaces, api.ClusterScopeNamespace)
+	}
+	if resp, _ := get(t, srv, ctxPath+"/namespaces/"+api.ClusterScopeNamespace+"/graph", "carol"); resp.StatusCode != http.StatusOK {
+		t.Errorf("cluster graph status = %d, want 200 (sidebar entry must not 403 on drill-in)", resp.StatusCode)
 	}
 }
 

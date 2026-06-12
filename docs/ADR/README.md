@@ -28,7 +28,7 @@ authoritative timeline; the filename date is a convenience for sorting.
 | --- | --- | --- |
 | 2026-05-27 | [Architecture overview](./20260527-architecture-overview.md) | Go server + Solid.js client, single binary, informer-backed cache |
 | 2026-05-27 | [Proxy authentication](./20260527-proxy-authentication.md) | Trust an upstream identity header (`X-Forwarded-User`), no login flow |
-| 2026-05-27 | [Declarative RBAC via policy.csv](./20260527-declarative-rbac-policy-csv.md) | ArgoCD/Casbin-style policy file, app-level authorization |
+| 2026-05-27 | [Declarative RBAC via policy.csv](./_20260527-declarative-rbac-policy-csv.md) *(superseded)* | ArgoCD/Casbin-style policy file, app-level authorization — superseded by policy.yaml |
 | 2026-05-27 | [Kubernetes access model](./20260527-kubernetes-access-model.md) | Single read-only ServiceAccount, app-level authz (not impersonation) |
 | 2026-05-27 | [Resource relationship graph](./20260527-resource-relationship-graph.md) | ownerReferences + inferred edges, server-built graph model |
 | 2026-05-27 | [Real-time transport (SSE)](./20260527-realtime-transport-sse.md) | Server-Sent Events for watch updates and log streaming |
@@ -39,3 +39,5 @@ authoritative timeline; the filename date is a convenience for sorting.
 | 2026-06-03 | [Unified view: relationship filter + grouping](./20260603-unified-view-relationship-filter-grouping.md) | Replace fixed views with two composable client controls (group-by + rel-filter); server streams the full graph |
 | 2026-06-05 | [Testing view math vs headless animation](./20260605-testing-view-math-vs-headless-animation.md) | Headless agent-browser freezes rAF/animation; extract pure fit math to `viewport.ts` and unit-test the target, not the live transform |
 | 2026-06-10 | [Drawer usage gauges: attribution vs totals](./20260610-drawer-usage-gauges-attribution.md) | Per-container bars on the cards (own req/lim), plain summed gauge above, workload fill split by pod (default) or container |
+| 2026-06-11 | [Workload counts never read Degraded](./20260611-workload-counts-never-degraded.md) | Replica counts can't distinguish outage from normal startup; count-zero reads Progressing, Degraded needs pod-level evidence |
+| 2026-06-12 | [Declarative authorization via policy.yaml](./20260612-policy-yaml-authorization.md) | Human-first YAML policy (roles/users/groups/deny) replaces the ArgoCD/Casbin policy.csv; strict validating parse; first-class `clusterScoped` rule scope |

@@ -32,7 +32,6 @@ type Config struct {
 
 	// Authorization.
 	PolicyPath           string
-	DefaultRole          string
 	PolicyReloadInterval time.Duration
 
 	// Kubernetes.
@@ -63,8 +62,7 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&c.GroupsDelimiter, "groups-delimiter", envOr("KD_GROUPS_DELIMITER", ","), "delimiter splitting the groups header value")
 	fs.StringVar(&trustedProxies, "trusted-proxies", envOr("KD_TRUSTED_PROXIES", ""), "comma-separated CIDRs allowed to assert the identity header (empty = trust all)")
 	fs.StringVar(&c.DevUser, "dev-user", envOr("KD_DEV_USER", ""), "inject a fixed identity and skip header/proxy checks (local dev)")
-	fs.StringVar(&c.PolicyPath, "policy", envOr("KD_POLICY", ""), "path to the RBAC policy.csv (empty = built-in defaults only)")
-	fs.StringVar(&c.DefaultRole, "default-role", envOr("KD_DEFAULT_ROLE", "role:readonly"), "role implicitly granted to every user (empty locks down)")
+	fs.StringVar(&c.PolicyPath, "policy", envOr("KD_POLICY", ""), "path to the policy.yaml authorization file (empty = every authenticated user may read everything)")
 	fs.DurationVar(&c.PolicyReloadInterval, "policy-reload-interval", envDurationOr("KD_POLICY_RELOAD_INTERVAL", 10*time.Second), "how often to poll the policy file for changes")
 	fs.StringVar(&c.Kubeconfig, "kubeconfig", envOr("KUBECONFIG", ""), "path to kubeconfig (empty = in-cluster, then default)")
 	fs.DurationVar(&c.Resync, "resync", envDurationOr("KD_RESYNC", 10*time.Minute), "informer resync period")
