@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
-import { HEALTH_ORDER, healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
+import { healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
 
 interface Props {
   namespaces: NamespaceInfo[]
@@ -285,30 +285,10 @@ export default function Sidebar(props: Props) {
           </ul>
         </Show>
       </Show>
-      {/* Always-visible health key, pinned at the bottom. The per-row dot colors and trailing counts
-          meant nothing to a first-time visitor; a static legend spells out every state and the
-          number, with no hover or delay. Shown only once there are real namespaces to annotate —
-          not on the loading / failed / empty states. Unknown is omitted: a namespace's color and
-          count both ignore Unknown resources (non-actionable noise), so a namespace dot is never
-          gray — listing Unknown would explain a state the list can't show. */}
-      <Show when={!props.loading && !props.failed && props.namespaces.some((n) => n.name !== CLUSTER_SCOPE)}>
-        <div class="ns-legend">
-          <div class="ns-legend-title">Legend</div>
-          <div class="ns-legend-items">
-            <For each={HEALTH_ORDER.filter((h) => h !== 'Unknown')}>
-              {(h) => (
-                <span class="ns-legend-item" title={healthHint[h]}>
-                  <span class="ns-dot" style={{ background: healthColor(h) }} />
-                  {h}
-                </span>
-              )}
-            </For>
-          </div>
-          <div class="ns-legend-num">
-            <span class="ns-count ns-legend-num-badge">#</span>= resources not ready
-          </div>
-        </div>
-      </Show>
+      {/* No pinned legend: permanent chrome that explains the dots was information the operator
+          re-reads on every glance. Each row's title spells out its own state and count on hover,
+          and the toolbar's health pills pair every color with its word — the same vocabulary,
+          taught where it's used. */}
     </nav>
   )
 }

@@ -75,33 +75,13 @@ describe('Sidebar', () => {
     expect(current[0].querySelector('.ns-name')?.textContent).toBe('mmm')
   })
 
-  it('shows an always-visible health legend (every dot color + the count meaning), and no divider', () => {
+  it('renders no permanent legend chrome — each row explains itself on hover instead', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
-    const legend = container.querySelector('.ns-legend')
-    expect(legend).toBeTruthy()
-    // One swatch per *actionable* health state, so a first-time visitor can map every color a
-    // namespace dot can take — without hovering. Unknown is omitted: namespace health ignores
-    // Unknown resources, so a namespace dot is never gray and listing it would mislead.
-    expect(legend!.querySelectorAll('.ns-dot').length).toBe(4)
-    const text = legend!.textContent ?? ''
-    expect(text).toContain('Healthy')
-    expect(text).not.toContain('Unknown')
-    expect(text).toContain('not ready') // the number is spelled out too
-    // No divider anymore — the alphabetical list has no troubled/healthy boundary to mark.
+    expect(container.querySelector('.ns-legend')).toBeNull()
+    // No divider either — the alphabetical list has no troubled/healthy boundary to mark.
     expect(container.querySelectorAll('.ns-divider').length).toBe(0)
-  })
-
-  it('hides the legend on the loading, failed, and empty states (nothing to annotate)', () => {
-    const loading = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={true} failed={false} />)
-    expect(loading.container.querySelector('.ns-legend')).toBeNull()
-    cleanup()
-    const failed = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={true} />)
-    expect(failed.container.querySelector('.ns-legend')).toBeNull()
-    cleanup()
-    const empty = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={false} />)
-    expect(empty.container.querySelector('.ns-legend')).toBeNull()
   })
 
   it('puts the health tooltip on the whole row, not just the 8px dot (hovering the name shows it)', () => {

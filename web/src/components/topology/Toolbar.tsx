@@ -9,8 +9,8 @@ import { type ScrollEdges } from '../../scrollEdges'
 import type { RelCategoryDef } from '../../relationships'
 import type { GroupBy, Health, KNode, RelCategory } from '../../types'
 
-// The group-by options, exported so App's keyboard shortcuts (1–3) and help overlay stay in sync
-// with the segmented control rendered in the toolbar. Order = number-key order.
+// The group-by options, exported so urlState's group validation stays in sync with the segmented
+// control rendered in the toolbar.
 export const GROUP_OPTIONS: { id: GroupBy; label: string; hint: string }[] = [
   { id: 'relationship', label: 'Relationship', hint: 'Lay resources out along the relationships you enable' },
   { id: 'nodes', label: 'Nodes', hint: 'Group pods into the node they run on' },
@@ -115,12 +115,31 @@ export default function Toolbar(props: Props) {
   // appears only when there is at least one (else the row already shows everything).
   const foldableRelCount = createMemo(() => relChips().filter((c) => c.secondary && !relActive(c.id)).length)
 
+  // The whole filter block (Relationships + Kinds rows) folds behind one "Filters" disclosure,
+  // closed by default: the resting toolbar is a single row — search, layout, health — because most
+  // sessions never touch the per-kind/per-relationship narrowing, and three permanent rows of
+  // equal-weight chips buried the row that matters. Persisted; the active-kind count rides on the
+  // button so a collapsed block can never hide that the view is narrowed (the health spotlight and
+  // search stay visible in row 1 on their own).
+  const [filtersOpen, setFiltersOpen] = createSignal(readRawPref('kd:filtersOpen') === '1')
+  const toggleFilters = () =>
+    setFiltersOpen((v) => {
+      writePref('kd:filtersOpen', v ? '0' : '1')
+      return !v
+    })
+  const hasFoldableFacets = createMemo(
+    () =>
+      (props.groupBy === 'relationship' && relChips().length > 0 && !!props.onRelFilter) ||
+      (kindChips().length > 1 && !!props.onKindFilter) ||
+      (isRelGrouping() && !!props.onShowOrphaned),
+  )
+  const narrowedKinds = createMemo(() => activeKinds()?.size ?? 0)
+
   return (
-    /* The canvas control bar: a full-width strip across the top of the canvas, three short rows
-       — search + Group, Relationships + Health, then Kinds — instead of one facet per line, so
-       it stays shallow. Each facet is an inline label hugging its controls (proximity). The
-       Kinds row is a strict single line that scrolls horizontally on overflow, so the bar height
-       never grows with the number of kinds. */
+    /* The canvas control bar: ONE permanent row — search, layout, health, and the Filters
+       disclosure — with the relationship/kind narrowing folded behind it. Each facet is an inline
+       label hugging its controls (proximity). The Kinds row, when open, is a strict single line
+       that scrolls horizontally on overflow, so the bar height never grows with kind count. */
     <div class="topology-toolbar" ref={props.toolbarRef}>
       {/* Row 1 — search + group: the resource search plus the layout selector. */}
       <div class="toolbar-row topology-search">
@@ -214,10 +233,9 @@ export default function Toolbar(props: Props) {
         </Show>
         {/* Group facet — the layout selector. Single-select, so a connected segmented control (the
             contrast against the toggle chips signals "pick one mode"). Shares row 1 with the search
-            field to keep the panel short. */}
+            field to keep the panel short. No caps label: the three option words explain themselves. */}
         <Show when={props.onGroupBy}>
           <div class="toolbar-facet">
-            <span class="toolbar-label">Group</span>
             {/* Single-select → a radiogroup (not aria-pressed toggle buttons): a screen reader hears
                 "radio group, Relationship selected, 1 of 3" and arrow keys move between options, the
                 expected segmented-control model. */}
@@ -258,7 +276,6 @@ export default function Toolbar(props: Props) {
             one labelled "other namespaces" block, so no separate legend is needed. */}
         <Show when={props.groupBy === 'nodes'}>
           <div class="toolbar-facet">
-            <span class="toolbar-label">Resource</span>
             <div
               class="group-seg"
               role="radiogroup"
@@ -290,14 +307,67 @@ export default function Toolbar(props: Props) {
             </div>
           </div>
         </Show>
+        {/* Health pills — the cluster's vital sign AND the spotlight filter, so they live on the
+            permanent row, not behind the Filters fold. No caps label: each pill already names its
+            state in words next to its dot. The at-a-glance proportion lives in the fixed-width
+            stripe pinned to the top of the canvas (rendered by Topology). */}
+        <Show when={shownHealth().length > 0 && props.onHealthFilter}>
+          <div class="toolbar-facet">
+            <div class="topology-health-pills" role="toolbar" aria-label="Health filter" onKeyDown={onToolbarKey}>
+              <For each={shownHealth()}>
+                {(h, i) => (
+                  <button
+                    class="legend-item"
+                    tabindex={i() === 0 ? 0 : -1}
+                    aria-pressed={props.healthFilter === h}
+                    classList={{ active: props.healthFilter === h }}
+                    // Active pill borrows the health hue for its border + tint, so the link to
+                    // "spotlighting THIS color" stays explicit (matches the kind chips' accent).
+                    style={
+                      props.healthFilter === h
+                        ? {
+                            'border-color': healthColor(h),
+                            background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
+                            color: 'var(--text)',
+                          }
+                        : undefined
+                    }
+                    onClick={() => props.onHealthFilter?.(props.healthFilter === h ? null : h)}
+                    title={`Spotlight ${h} resources`}
+                  >
+                    <span class="dot" style={{ background: healthColor(h) }} />
+                    {h}
+                    <span class="legend-count">{healthStats()[h]}</span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+        {/* The Filters disclosure: the per-relationship / per-kind narrowing is power-user surface,
+            so it folds away and the resting toolbar is ONE row. The active-kind count rides on the
+            button so collapsing can't hide that the view is narrowed. */}
+        <Show when={hasFoldableFacets()}>
+          <button
+            class="toolbar-filters-btn"
+            aria-expanded={filtersOpen()}
+            onClick={toggleFilters}
+            title={filtersOpen() ? 'Hide the relationship and kind filters' : 'Filter by relationship or kind'}
+          >
+            Filters
+            <Show when={!filtersOpen() && narrowedKinds() > 0}>
+              <span class="toolbar-filters-count">{narrowedKinds()}</span>
+            </Show>
+            <svg viewBox="0 0 10 6" width="9" height="6" aria-hidden="true" style={{ transform: filtersOpen() ? 'rotate(180deg)' : undefined }}>
+              <path d="M 1 1 L 5 5 L 9 1" fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </button>
+        </Show>
       </div>
-      {/* Row 2 — Relationships + Health: which links are drawn, and the health spotlight. The
-          Relationships facet only appears in the relationship grouping: it's the one view whose
-          layout AND arrows the relationship filter drives. The Nodes view draws no edges (it groups
-          pods by host) and the Kind view draws no edges either (the cross-kind backbone is pure
-          noise in a per-kind matrix), so the facet would be inert there — suppress it and let the
-          row carry the health pills alone. */}
-      <Show when={(props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (shownHealth().length > 0 && props.onHealthFilter) || (isRelGrouping() && props.onShowOrphaned)}>
+      {/* Filter block row 1 — Relationships + orphans: which links are drawn. The Relationships
+          facet only appears in the relationship grouping: it's the one view whose layout AND arrows
+          the relationship filter drives (the Nodes and Kind views draw no edges). */}
+      <Show when={filtersOpen() && ((props.groupBy === 'relationship' && relChips().length > 0 && props.onRelFilter) || (isRelGrouping() && props.onShowOrphaned))}>
         <div class="toolbar-row">
           {/* Relationships facet — which relationship categories are drawn (and so drive
               connectivity). Composable toggles: several can be active at once. One chip per category
@@ -337,43 +407,6 @@ export default function Toolbar(props: Props) {
               </div>
             </div>
           </Show>
-          {/* Health facet — spotlight a health state. Shares row 2 with Relationships. The
-              at-a-glance proportion lives in the fixed-width stripe pinned to the top of the canvas
-              (rendered by Topology), not here — so this row never changes the stripe's width. */}
-          <Show when={shownHealth().length > 0 && props.onHealthFilter}>
-            <div class="toolbar-facet">
-              <span class="toolbar-label">Health</span>
-              <div class="topology-health-pills" role="toolbar" aria-label="Health filter" onKeyDown={onToolbarKey}>
-                <For each={shownHealth()}>
-                  {(h, i) => (
-                    <button
-                      class="legend-item"
-                      tabindex={i() === 0 ? 0 : -1}
-                      aria-pressed={props.healthFilter === h}
-                      classList={{ active: props.healthFilter === h }}
-                      // Active pill borrows the health hue for its border + tint, so the link to
-                      // "spotlighting THIS color" stays explicit (matches the kind chips' accent).
-                      style={
-                        props.healthFilter === h
-                          ? {
-                              'border-color': healthColor(h),
-                              background: `color-mix(in srgb, ${healthColor(h)} 14%, transparent)`,
-                              color: 'var(--text)',
-                            }
-                          : undefined
-                      }
-                      onClick={() => props.onHealthFilter?.(props.healthFilter === h ? null : h)}
-                      title={`Spotlight ${h} resources`}
-                    >
-                      <span class="dot" style={{ background: healthColor(h) }} />
-                      {h}
-                      <span class="legend-count">{healthStats()[h]}</span>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          </Show>
           {/* Show-orphaned toggle — relationship grouping only. Orphans (no displayed relationship) hide by
               default so the canvas reads as the tree; the count advertises how many are tucked away so the
               operator knows the toggle is worth flipping (explicit over implicit). Degraded orphans still
@@ -398,11 +431,11 @@ export default function Toolbar(props: Props) {
           </Show>
         </div>
       </Show>
-      {/* Row 3 — Kinds: the kind filter, usually the widest row, on its own line. Click toggles a
-          kind in/out of the active set (multi-select, composes with search + health); Shift+click
-          solos. Hidden when only one kind is present. Each chip carries the same monochrome
-          silhouette as its cards, so the row reads as a legend of "what kinds are here". */}
-      <Show when={kindChips().length > 1 && props.onKindFilter}>
+      {/* Filter block row 2 — Kinds: the kind filter, usually the widest row, on its own line. Click
+          toggles a kind in/out of the active set (multi-select, composes with search + health);
+          Shift+click solos. Hidden when only one kind is present. Each chip carries the same
+          monochrome silhouette as its cards, so the row reads as a legend of "what kinds are here". */}
+      <Show when={filtersOpen() && kindChips().length > 1 && props.onKindFilter}>
         <div class="toolbar-row">
           <div class="toolbar-facet toolbar-facet-grow">
             <span class="toolbar-label">Kinds</span>

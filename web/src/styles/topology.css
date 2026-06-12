@@ -482,6 +482,46 @@
   border-color: var(--pod-accent);
   background: color-mix(in srgb, var(--pod-accent) 14%, transparent);
 }
+/* The Filters disclosure: pushed to the row's right edge so the permanent controls (search,
+   layout, health) keep the left rail. Reads as a quiet utility until it carries the narrowed-kind
+   count badge. */
+.toolbar-filters-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  border-radius: var(--radius-s);
+  padding: 3px 10px;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.toolbar-filters-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.toolbar-filters-btn[aria-expanded='true'] {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.toolbar-filters-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.toolbar-filters-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caps);
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: var(--radius-s);
+  padding: 0 5px;
+}
 .topology-search-field {
   position: relative;
   display: inline-flex;

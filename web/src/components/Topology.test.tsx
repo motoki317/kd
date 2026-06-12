@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
 import type { KEdge, KNode, RelCategory } from '../types'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // openFilters persists kd:filtersOpen via the disclosure's pref write — clear it so every test
+  // starts from the production default (folded).
+  localStorage.removeItem('kd:filtersOpen')
+})
 
 const nodes: KNode[] = [
   { id: '1', kind: 'Deployment', name: 'web', health: 'Healthy' },
@@ -26,6 +31,11 @@ const base = {
   onSelect: () => {},
 }
 const faded = (c: Element) => c.querySelectorAll('g.node.faded').length
+// The relationship/kind filter facets fold behind the toolbar's Filters disclosure (closed by
+// default). Tests that assert on them open the fold first, the way an operator would.
+const openFilters = (c: Element) => {
+  ;(c.querySelector('.toolbar-filters-btn') as HTMLButtonElement | null)?.click()
+}
 
 describe('Topology', () => {
   it('renders one chip per node', () => {
@@ -118,6 +128,7 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} kindFilter={new Set<string>()} onKindFilter={() => {}} />
     ))
+    openFilters(container)
     const chips = [...container.querySelectorAll('.kind-chip')] as HTMLButtonElement[]
     expect(chips.length).toBeGreaterThanOrEqual(2)
     const labelOf = (c: HTMLButtonElement) => c.querySelector('.kind-chip-label')?.textContent ?? ''
@@ -196,10 +207,29 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
     ))
+    openFilters(container)
     const labels = [...container.querySelectorAll('.kind-chip-label')].map((e) => e.textContent)
     // Short labels: Pod -> "POD", Deployment -> "DEPLOY". Most common kind first.
     expect(labels[0]).toMatch(/POD/i)
     expect(labels.length).toBe(2)
+  })
+
+  it('folds the relationship/kind filters behind the Filters disclosure, closed by default', () => {
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="relationship" onKindFilter={() => {}} kindFilter={new Set(['Pod'])} onRelFilter={() => {}} />
+    ))
+    // Folded at rest: no chip rows. The button still advertises the active narrowing (1 kind),
+    // so collapsing can never hide that the view is filtered.
+    expect(container.querySelector('.topology-kinds')).toBeNull()
+    expect(container.querySelector('.topology-rels')).toBeNull()
+    const btn = container.querySelector('.toolbar-filters-btn') as HTMLButtonElement
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    expect(btn.querySelector('.toolbar-filters-count')?.textContent).toBe('1')
+    // Open: both facets appear; the badge folds away (the rows now show the state directly).
+    fireEvent.click(btn)
+    expect(container.querySelector('.topology-kinds')).toBeTruthy()
+    expect(container.querySelector('.topology-rels')).toBeTruthy()
+    expect(btn.querySelector('.toolbar-filters-count')).toBeNull()
   })
 
   it('fades non-matching kinds when a kind filter is active, lit ones survive (cycle 203)', () => {
@@ -267,6 +297,7 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
     ))
+    openFilters(container)
     const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
     fireEvent.click(firstChip)
     // The most common kind (Pod) sits first, so clicking the first chip dispatches 'Pod'. The
@@ -421,6 +452,7 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
     ))
+    openFilters(container)
     const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
     fireEvent.click(firstChip, { shiftKey: true })
     expect(onKindFilter).toHaveBeenCalledWith('Pod', true)
@@ -430,6 +462,7 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={vi.fn()} kindFilter={new Set<string>()} />
     ))
+    openFilters(container)
     const toolbar = container.querySelector('.topology-kinds') as HTMLElement
     const chips = [...toolbar.querySelectorAll('button')] as HTMLButtonElement[]
     expect(chips.length).toBeGreaterThan(1)
@@ -632,18 +665,21 @@ describe('Topology', () => {
     const inNodes = render(() => (
       <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="nodes" capacity={capacity} namespace="" onRelFilter={() => {}} />
     ))
+    openFilters(inNodes.container)
     expect(inNodes.container.querySelector('.topology-rels')).toBeNull()
     cleanup()
     // Kind view: per-kind matrix, draws no edges → no facet either.
     const inKind = render(() => (
       <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="kind" onRelFilter={() => {}} />
     ))
+    openFilters(inKind.container)
     expect(inKind.container.querySelector('.topology-rels')).toBeNull()
     cleanup()
     // Relationship view: the one grouping the filter drives → facet present.
     const inRel = render(() => (
       <Topology nodes={nodesV} edges={relEdges} search="" {...base} groupBy="relationship" onRelFilter={() => {}} />
     ))
+    openFilters(inRel.container)
     expect(inRel.container.querySelector('.topology-rels')).not.toBeNull()
   })
 
@@ -663,6 +699,7 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={ns} edges={es} search="" {...base} groupBy="relationship" onRelFilter={() => {}} />
     ))
+    openFilters(container)
     const labels = () => [...container.querySelectorAll('.topology-rels .rel-chip')].map((c) => c.textContent?.replace(/\d+$/, '').trim())
     // Collapsed: the primary Ownership chip shows; Monitoring is folded behind "+1 more".
     expect(labels()).toContain('Ownership')
@@ -1387,6 +1424,7 @@ describe('Topology', () => {
       const { container } = render(() => (
         <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} onShowOrphaned={onShowOrphaned} />
       ))
+      openFilters(container)
       const box = container.querySelector('.toolbar-checkbox') as HTMLLabelElement
       expect(box).toBeTruthy()
       expect(box.querySelector('.toolbar-checkbox-count')?.textContent).toBe('2') // lonely + broken
@@ -1398,9 +1436,11 @@ describe('Topology', () => {
 
     it('the checkbox appears only in the relationship grouping', () => {
       const rel = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} groupBy="relationship" onShowOrphaned={() => {}} />)
+      openFilters(rel.container)
       expect(rel.container.querySelector('.toolbar-checkbox')).toBeTruthy()
       cleanup()
       const kind = render(() => <Topology nodes={orphNodes} edges={orphEdges} search="" {...hiddenBase} groupBy="kind" onShowOrphaned={() => {}} />)
+      openFilters(kind.container)
       expect(kind.container.querySelector('.toolbar-checkbox')).toBeNull()
     })
 
