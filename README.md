@@ -39,14 +39,10 @@ Use this view to find a resource by its kind.
 
 ## Run locally
 
-Download the `kd` binary from [the latest GitHub Releases](https://github.com/motoki317/kd/releases),
-then run it:
-
-```bash
-./kd
-```
-
 kd reads your kubeconfig and serves the dashboard on http://localhost:9123/.
+
+- Download and run the `kd` binary from [the latest GitHub Releases](https://github.com/motoki317/kd/releases)
+- If you have [Nix](https://nixos.org/) (flakes enabled): `nix run github:motoki317/kd`
 
 ## Deploy to a cluster
 

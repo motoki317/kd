@@ -34,6 +34,11 @@ policy.local.csv
 result
 result-*
 .direnv/
+.envrc
+
+# git-hooks.nix: generated symlink into the nix store (machine-local; created by the
+# flake devShell's shellHook on `nix develop`).
+.pre-commit-config.yaml
 
 # OS / editor
 .DS_Store

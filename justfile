@@ -43,6 +43,22 @@ check:
     golangci-lint run ./... || true
     cd web && npx tsc -b --noEmit
 
+# Fast pre-commit gate (wired as a git pre-commit hook by the flake's git-hooks
+# integration). Skips the slow advisory golangci-lint that `check` runs, to keep
+# per-slice commits fast.
+pre-commit:
+    @u="$(gofmt -l cmd internal)"; if [ -n "$u" ]; then echo "gofmt needed:"; echo "$u"; exit 1; fi
+    go vet ./...
+    cd web && npx tsc -b --noEmit
+    go test ./...
+    cd web && npm test --if-present
+
+# Full pre-push gate (wired as a git pre-push hook): both build paths must pass
+# before anything leaves the machine — `just build` (local toolchain) and the Nix
+# flake build (which also catches a stale vendorHash / npmDepsHash).
+pre-push: build
+    nix build .#kd --no-link --print-build-logs
+
 # Regenerate the Helm chart's values.schema.json from values.yaml, then lint the chart.
 chart-schema:
     cd charts/kd && helm schema && helm lint .
