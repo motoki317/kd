@@ -19,6 +19,6 @@ RUN CGO_ENABLED=0 go build -tags embed_web -ldflags="-s -w" -o /kd ./cmd/kd
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=server /kd /kd
-EXPOSE 8080
+EXPOSE 9123
 USER nonroot:nonroot
 ENTRYPOINT ["/kd"]
