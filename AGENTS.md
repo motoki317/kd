@@ -203,6 +203,26 @@ Also: **explicit over implicit** — prefer a label/text/tooltip over making the
 colour/shape (*kd:* "other namespaces" is a *labelled* bar, not just gray). **Avoid icon-only UI** — use
 icons *with* text or a text label; if a control row overflows, compact or relocate it.
 
+### Design language (2026-06 overhaul — keep new work inside it)
+
+The user-directed de-AI-slop overhaul fixed a concrete visual language; hold every change to it:
+
+- **Typeface = role.** IBM Plex Sans for chrome/prose; IBM Plex Mono for DATA — any name, kind,
+  count, or value an operator might paste into a terminal, plus logs/manifests. (Canvas card names
+  stay sans deliberately: card widths are char-count-tuned and mono is ~20% wider.)
+- **Type scale tokens only** (`--fs-caps/meta/body/title` in tokens.css) — no ad-hoc px sizes.
+  Nothing readable sits under `--fs-meta` (12.5px); `--fs-caps` is for UPPERCASE labels only, where
+  tracking+caps carry the hierarchy, not smallness. (Zoom-coupled canvas SVG text is exempt.)
+- **Sharp corners**: `--radius-s`/`--radius-m` (2/4px). No pills, no capsules; `border-radius: 50%`
+  is reserved for real status dots.
+- **Resting density**: the permanent chrome shows only what an operator reads every glance —
+  search, layout, health, namespaces. Narrowing facets (relationship/kind chips) fold behind the
+  toolbar's Filters disclosure; no permanent legends (rows explain themselves on hover; the health
+  pills pair color+word where they're used). A folded control must badge its active state.
+- **Keyboard surface is FOUR bindings** (`/`, `↑↓`, `Esc`, `?` — appKeyboard.ts). Every action has
+  a visible, clickable control. Do not add a shortcut without removing one in trade; the help card
+  must stay a single small column.
+
 ## Where durable state lives (docs layout)
 
 Long-lived context must be **git-tracked** so it survives across agents and is visible to humans — never

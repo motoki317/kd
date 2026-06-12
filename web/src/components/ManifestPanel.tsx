@@ -123,7 +123,7 @@ export default function ManifestPanel(props: {
         <input
           class="manifest-find"
           ref={findInput}
-          placeholder="find in manifest…  (Enter ↓ · Shift+Enter ↑)"
+          placeholder="find in manifest…"
           aria-label="Find in manifest"
           value={manifestQuery()}
           onInput={(e) => setManifestQuery(e.currentTarget.value)}
