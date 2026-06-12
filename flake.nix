@@ -40,8 +40,7 @@
         # Git-hook entrypoints. They delegate to the justfile recipes (the single
         # source of truth for the project's commands) and only supply the toolchain
         # on PATH. GOTOOLCHAIN=local pins go to the nix-provided go_1_26 (which
-        # satisfies go.mod) so no toolchain is fetched at hook time. `nix build`
-        # (pre-push) uses the system nix already on PATH.
+        # satisfies go.mod) so no toolchain is fetched at hook time.
         preCommitHook = pkgs.writeShellApplication {
           name = "kd-pre-commit";
           runtimeInputs = [ pkgs.go_1_26 pkgs.nodejs_24 pkgs.just ];
@@ -50,35 +49,37 @@
             just pre-commit
           '';
         };
-        prePushHook = pkgs.writeShellApplication {
-          name = "kd-pre-push";
-          runtimeInputs = [ pkgs.go_1_26 pkgs.nodejs_24 pkgs.just ];
-          text = ''
-            export GOTOOLCHAIN=local
-            just pre-push
-          '';
+        # The flake build uses the system nix already on PATH; only `just` is supplied.
+        nixBuildHook = pkgs.writeShellApplication {
+          name = "kd-nix-build";
+          runtimeInputs = [ pkgs.just ];
+          text = "just nix-build";
         };
 
-        # Local-only git hooks. Not exposed under `checks`: the test/build hooks need
+        # Local-only git hooks. Not exposed under `checks`: the build/test hooks need
         # the working tree's go-module and node_modules caches (and nix-in-nix for the
         # flake build), none of which exist in the pure `nix flake check` sandbox.
         preCommitCheck = git-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
+            # Every commit must compile, build, embed and pass tests (~2–10s warm).
             kd-pre-commit = {
               enable = true;
-              name = "kd checks (gofmt, vet, typecheck, go+web tests)";
+              name = "kd build + checks (just build, gofmt, vet, go+web tests)";
               entry = pkgs.lib.getExe preCommitHook;
               language = "system";
               pass_filenames = false;
             };
-            kd-pre-push = {
+            # Validate the Nix path (stale vendorHash / npmDepsHash or a flake error)
+            # only when a commit touches a dependency/flake file — the only changes
+            # that can break it. ~60–95s, so it stays off the per-commit hot path.
+            kd-nix-build = {
               enable = true;
-              name = "kd build (just build + nix build .#kd)";
-              entry = pkgs.lib.getExe prePushHook;
+              name = "nix build .#kd (only on go.mod/go.sum/package-lock/vite.config/flake changes)";
+              entry = pkgs.lib.getExe nixBuildHook;
               language = "system";
               pass_filenames = false;
-              stages = [ "pre-push" ];
+              files = "(^go\\.(mod|sum)$|^web/package-lock\\.json$|^web/vite\\.config\\.ts$|^flake\\.(nix|lock)$)";
             };
           };
         };

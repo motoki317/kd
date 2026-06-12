@@ -43,20 +43,21 @@ check:
     golangci-lint run ./... || true
     cd web && npx tsc -b --noEmit
 
-# Fast pre-commit gate (wired as a git pre-commit hook by the flake's git-hooks
-# integration). Skips the slow advisory golangci-lint that `check` runs, to keep
-# per-slice commits fast.
-pre-commit:
+# Pre-commit gate (wired as a git pre-commit hook by the flake's git-hooks
+# integration): every commit must build. `build` runs `tsc -b && vite build` plus
+# the embedded go build; gofmt/vet and the test suites guard the rest. (Skips the
+# slow advisory golangci-lint that `check` runs, to keep per-slice commits fast.)
+pre-commit: build
     @u="$(gofmt -l cmd internal)"; if [ -n "$u" ]; then echo "gofmt needed:"; echo "$u"; exit 1; fi
     go vet ./...
-    cd web && npx tsc -b --noEmit
     go test ./...
     cd web && npm test --if-present
 
-# Full pre-push gate (wired as a git pre-push hook): both build paths must pass
-# before anything leaves the machine — `just build` (local toolchain) and the Nix
-# flake build (which also catches a stale vendorHash / npmDepsHash).
-pre-push: build
+# Verify the Nix flake build. Wired as a git pre-commit hook that runs ONLY when a
+# commit touches dependency/flake files (see the `files` filter in flake.nix) — the
+# only changes that break the Nix path (stale vendorHash / npmDepsHash or a flake
+# error). ~60–95s, so it is kept off the per-commit hot path.
+nix-build:
     nix build .#kd --no-link --print-build-logs
 
 # Regenerate the Helm chart's values.schema.json from values.yaml, then lint the chart.
