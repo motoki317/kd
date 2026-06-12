@@ -4,7 +4,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  font-size: 12px;
+  font-size: var(--fs-caps);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-dim);
@@ -21,9 +21,9 @@
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   font-family: inherit;
   letter-spacing: 0;
   text-transform: none;
@@ -34,7 +34,7 @@
   border-color: var(--accent);
 }
 .manifest-find-count {
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   text-transform: none;
@@ -46,7 +46,7 @@
 .manifest-match {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-s);
 }
 .manifest-match.current {
   background: color-mix(in srgb, var(--accent) 65%, transparent);
@@ -58,11 +58,11 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-m);
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
@@ -88,16 +88,16 @@
 }
 .drawer-loading {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 .manifest {
   margin: 0;
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
   line-height: 1.5;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 12px;
   white-space: pre-wrap;
   word-break: break-word;

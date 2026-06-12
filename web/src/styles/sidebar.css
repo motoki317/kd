@@ -26,10 +26,11 @@
 .ns-trouble {
   background: var(--degraded-badge);
   color: #fff;
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--fs-caps);
+  font-family: var(--font-mono);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 20%, transparent);
 }
@@ -54,10 +55,11 @@
   background: var(--surface-2);
   color: var(--text-dim);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--fs-caps);
+  font-family: var(--font-mono);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   margin-left: auto;
 }
@@ -69,9 +71,9 @@
 .sidebar-filter {
   flex: 1;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-m);
   padding: 6px 26px 6px 28px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   outline: none;
 }
 .sidebar-filter:focus {
@@ -102,7 +104,7 @@
   gap: 6px;
 }
 .ns-legend-title {
-  font-size: 10px;
+  font-size: var(--fs-caps);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
@@ -140,10 +142,11 @@
   border: 0;
   background: transparent;
   padding: 7px 9px 7px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-s);
   cursor: pointer;
   color: var(--text);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
   position: relative;
   transition: background-color 0.1s, color 0.1s;
 }
@@ -161,7 +164,7 @@
   top: 6px;
   bottom: 6px;
   width: 3px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent);
 }
 .ns-name {

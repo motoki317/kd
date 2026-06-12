@@ -1,6 +1,6 @@
 /* ---- Capacity & usage view (Nodes group-by) ---- */
 .cap-row-label {
-  font-size: 12px;
+  font-size: var(--fs-meta);
   font-weight: 600;
   fill: var(--text);
   pointer-events: none;
@@ -79,7 +79,7 @@
 /* "Req" / "Use" axis labels in the left gutter, right-aligned against the bars so each bar reads
    with an explicit name rather than the operator having to infer which stripe is which. */
 .cap-axis-label {
-  font-size: 9px;
+  font-size: var(--fs-caps);
   font-weight: 600;
   fill: var(--text-dim);
   text-anchor: end;
@@ -90,7 +90,7 @@
 /* "value / capacity" sat just past each bar (proximity): the live total reads with the bar it
    describes instead of crammed beside the node name. The current value is emphasized, capacity dim. */
 .cap-bar-value {
-  font-size: 10px;
+  font-size: var(--fs-meta);
   fill: var(--text-dim);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -124,7 +124,7 @@
   cursor: pointer;
 }
 .cap-hint {
-  font-size: 11px;
+  font-size: var(--fs-meta);
   fill: var(--health-suspended);
   font-weight: 500;
 }
@@ -237,7 +237,7 @@
 }
 /* The expanded bullet pod-name header — its own text node, left-anchored above the two gauge bars. */
 .cap-bullet-name {
-  font-size: 11px;
+  font-size: var(--fs-meta);
   fill: var(--text);
   font-weight: 600;
   pointer-events: none;
@@ -262,11 +262,11 @@
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 .cap-tooltip-name {
-  font-size: 14px;
+  font-size: var(--fs-body);
   font-weight: 600;
   /* anywhere (not break-all): wrap k8s names at their hyphens, splitting mid-word
      only when a single segment (a pod-template hash) exceeds the line. */
@@ -275,12 +275,12 @@
 .cap-tooltip-sub {
   margin-top: 2px;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-meta);
 }
 /* The single hovered amount — the headline of the minimal tooltip (the bars carry the totals). */
 .cap-tooltip-value {
   margin-top: 6px;
-  font-size: 16px;
+  font-size: var(--fs-title);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -291,12 +291,12 @@
   padding-top: 5px;
   border-top: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 /* Count of non-healthy resources, pushed to the right so the dot+name read first. */
 .ns-count {
   flex: none;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
@@ -340,7 +340,7 @@
 .ns-empty,
 .sidebar-loading {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   padding: 12px 9px;
   font-style: italic;
 }
@@ -350,12 +350,12 @@
   background: transparent;
   border: 1px solid var(--border-strong);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-caps);
   font-style: normal;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-m);
   cursor: pointer;
 }
 .sidebar-retry:hover {

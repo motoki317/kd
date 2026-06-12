@@ -28,7 +28,7 @@
           pname = "kd-web";
           inherit version;
           src = ./web;
-          npmDepsHash = "sha256-BIweJS/4FkpqgoMl16GTz95rcSlpr8REb1SBcPf9giQ=";
+          npmDepsHash = "sha256-YPZEGKDCLfmYw0WWHjy1ZnlTcJDFRlQtzB/hGw5C2l0=";
           nodejs = pkgs.nodejs_24;
           installPhase = ''
             runHook preInstall

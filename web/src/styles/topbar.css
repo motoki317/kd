@@ -20,7 +20,9 @@
   margin: 0;
   color: inherit;
   font: inherit;
-  font-weight: 700;
+  /* The wordmark is set in the data face: kd's name rendered like the names it shows. */
+  font-family: var(--font-mono);
+  font-weight: 600;
   font-size: 18px;
   letter-spacing: -0.02em;
   display: inline-flex;
@@ -52,12 +54,13 @@
 /* Context switcher pill — sits beside the brand when kd is in kubeconfig mode and the user has
    more than one context. Sized to match .conn / .crumb so it doesn't shout for attention. */
 .ctx-switcher {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--fs-meta);
+  font-family: var(--font-mono);
+  font-weight: 500;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   padding: 3px 22px 3px 10px;
   -webkit-appearance: none;
   appearance: none;
@@ -102,7 +105,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   max-width: 320px;
   overflow: hidden;
 }
@@ -119,6 +122,8 @@
   margin-right: 3px;
 }
 .crumb-ns {
+  /* The namespace is data — mono, like every name kd shows. */
+  font-family: var(--font-mono);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -130,17 +135,17 @@
   display: inline-flex;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 2px;
 }
 .group-seg button {
   border: 0;
   background: transparent;
-  padding: 4px 11px;
-  border-radius: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-s);
   cursor: pointer;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   font-weight: 500;
   transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
 }
@@ -165,7 +170,7 @@
 .legend {
   display: flex;
   gap: 12px;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 .legend-item {
@@ -174,9 +179,9 @@
   gap: 5px;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   cursor: pointer;
   transition: background-color 0.12s, color 0.12s, border-color 0.12s;
@@ -210,12 +215,12 @@
   display: inline-block;
 }
 .conn {
-  font-size: 11px;
+  font-size: var(--fs-caps);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   padding: 2px 10px 2px 8px;
   display: inline-flex;
   align-items: center;
@@ -289,9 +294,9 @@ button.conn.conn-retry:focus-visible {
   outline-offset: 2px;
 }
 .help-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-m);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text-dim);
@@ -316,9 +321,9 @@ button.conn.conn-retry:focus-visible {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-m);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text-dim);
@@ -346,9 +351,9 @@ button.conn.conn-retry:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-m);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text-dim);

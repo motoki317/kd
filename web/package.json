@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "solid-js": "^1.9.12"
   },
   "devDependencies": {

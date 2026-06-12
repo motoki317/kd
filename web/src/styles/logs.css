@@ -13,9 +13,9 @@
   border: 1px solid var(--accent);
   background: var(--accent);
   color: var(--on-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-m);
   padding: 5px 14px;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -36,9 +36,9 @@
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   padding: 0 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: rgba(255, 255, 255, 0.22);
 }
 .logs-header {
@@ -51,7 +51,7 @@
   gap: 8px;
   row-gap: 8px;
   padding: 10px 16px;
-  font-size: 12px;
+  font-size: var(--fs-caps);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-dim);
@@ -74,9 +74,9 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
-  border-radius: 5px;
+  border-radius: var(--radius-m);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   text-transform: none;
   letter-spacing: normal;
   cursor: pointer;
@@ -107,9 +107,9 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   text-transform: none;
   letter-spacing: normal;
   cursor: pointer;
@@ -123,9 +123,9 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   text-transform: none;
   letter-spacing: normal;
   cursor: pointer;
@@ -140,7 +140,7 @@
 /* The gauge's group-by pills sit on the 10px caption row, so they shrink a step from the logs size. */
 .gauge-group-btn {
   padding: 1px 7px;
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 .logs-prev:hover,
 .logs-ts:hover,
@@ -184,9 +184,9 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   text-transform: none;
   letter-spacing: normal;
   width: 140px;
@@ -222,10 +222,10 @@
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-dim);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   padding: 1px 7px 1px 5px;
-  font-size: 11px;
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: var(--fs-meta);
+  font-family: var(--font-mono);
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s, opacity 0.12s;
 }
@@ -254,9 +254,9 @@
   border: 1px solid color-mix(in srgb, var(--health-degraded) 45%, var(--border));
   background: color-mix(in srgb, var(--health-degraded) 14%, transparent);
   color: var(--degraded-text);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -298,14 +298,14 @@
   overflow: auto;
   background: #0e131b;
   color: #d6deea;
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
   line-height: 1.55;
 }
 .log-line {
   white-space: pre-wrap;
   word-break: break-all;
-  border-radius: 3px;
+  border-radius: var(--radius-s);
   transition: background-color 0.12s;
 }
 /* Extend a line's severity signal across the whole row, not just the 3-char level badge in the left
@@ -344,8 +344,8 @@
   min-width: 3ch;
   margin-right: 8px;
   padding: 0 4px;
-  border-radius: 3px;
-  font-size: 10px;
+  border-radius: var(--radius-s);
+  font-size: var(--fs-meta);
   font-weight: 700;
   text-align: center;
   letter-spacing: 0.03em;
@@ -391,7 +391,7 @@
   display: inline-flex;
   gap: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   overflow: hidden;
 }
 .logs-level {
@@ -399,7 +399,7 @@
   border-right: 1px solid var(--border);
   border-radius: 0;
   padding: 2px 6px;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   letter-spacing: 0.02em;
   font-family: inherit;
@@ -444,11 +444,11 @@
 .logs-clear-filters {
   margin-left: 8px;
   padding: 2px 9px;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-m);
   cursor: pointer;
 }
 .logs-clear-filters:hover {
@@ -460,6 +460,6 @@
 .log-match {
   background: color-mix(in srgb, #f0a92a 38%, transparent);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-s);
   padding: 0 1px;
 }
