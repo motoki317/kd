@@ -316,7 +316,8 @@ export default function LogViewer(props: Props) {
   return (
     <div class="logs">
       <div class="logs-header">
-        <span>Logs</span>
+        {/* No "Logs" caption: the active tab directly above already names the panel — the header
+            spends its one row on controls. */}
         {/* Picker appears when there's more than one container to choose across BOTH groups, so a
             single-app-container pod with an init container now also gets it. When init containers
             exist the two groups are split into labelled optgroups (init runs first) so the operator

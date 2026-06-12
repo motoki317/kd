@@ -51,9 +51,7 @@
   gap: 8px;
   row-gap: 8px;
   padding: 10px 16px;
-  font-size: var(--fs-caps);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 .logs-right {
