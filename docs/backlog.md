@@ -35,6 +35,22 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b35 (2026-06-12, user-directed de-AI-slop design overhaul)** — the user called the look "AI-slop"
+  (too-small text, info overload with no strong/weak distinction, pill-rounding everywhere, too many
+  shortcuts) and asked for a full visual overhaul. Shipped, each slice live-verified: keyboard surface
+  cut from ~17 global bindings to FOUR (`/`, `↑↓`, `Esc`, `?`; every removed key already had a clickable
+  control); help overlay rewritten from a 25-row two-column wall to one small card (4 keys + edge
+  legend); a fixed design language — IBM Plex Sans (chrome) / Plex Mono (data: names, counts, logs,
+  manifests), a four-step type scale (nothing readable under 12.5px; was 91/120 declarations ≤12px),
+  sharp 2/4px radii (pills/capsules eliminated, circles = real dots only) — all token-driven
+  (tokens.css) and codified in AGENTS.md "Design language"; toolbar folded from 4 permanent chip rows
+  (~130px) to ONE row (49px, measured) with relationship/kind facets behind a badged Filters
+  disclosure; sidebar's permanent legend + "# = not ready" key removed (hover titles + health pills
+  teach the vocabulary in place); logs panel's duplicate "Logs" caption dropped. Trouble path
+  (ImagePullBackOff card → drawer container card → warning events), light theme, and 375px phone all
+  re-verified live under the new language. Deliberately NOT changed: canvas SVG card text (zoom-coupled,
+  char-count-tuned card widths — mono there needs a card-geometry retune, see open items); capacity
+  char-width constants left conservative (Plex measures narrower: 6.08–6.2 vs 6.6 px/char, safe).
 - **b34 (2026-06-11, whole-codebase structure pass)** — pure file-structure refactor, zero behavior
   change per slice: split `graph/spec.go` (1230 lines) and `health_cr.go` (702) into domain/family
   siblings; `index.css` (3972) into `styles/<area>.css` behind an @import barrel (rebuilt bundle
@@ -211,13 +227,19 @@ spotlight — see the PVC-spotlight row in Rejected).
 
 ## Open
 
-- **Toolbar vertical bulk at phone width** — *deferred (low value/risk ratio).* At 375px the topology
-  toolbar's four facet rows consume ~250px of 667, leaving ~400px of canvas. Workable: the drawer and
-  sidebar now overlay full-width, pinch zoom covers the cramped canvas, and the chips wrap correctly
-  (no overflow). A "fold filters behind a disclosure at ≤640px, keep the search row" design would
-  reclaim ~180px but touches the toolbar's roving focus / scroll-edge fades (the same delicacy that
-  deferred the TopologyToolbar extraction). **Reopen when:** a phone operator actually reports the
-  canvas too short, or the toolbar grows another facet row.
+- ~~Toolbar vertical bulk at phone width~~ — **resolved by the b35 Filters disclosure** (2026-06-12):
+  the relationship/kind facets now fold behind a badged Filters button at EVERY width, closed by
+  default — the resting toolbar is one row (49px desktop, ~111px wrapped at 375px, both measured
+  live; was ~250px of 667 on a phone).
+
+- **Canvas card text under the b35 design language** — *deferred (geometry retune).* Card names/kinds
+  on the topology canvas keep Plex Sans and their pre-overhaul sizes (`.node-kind` 10px caps,
+  `.node-name` 13px): the sizes are zoom-coupled to fixed card geometry, and the mono data face
+  (~7.8px/char at 13px vs sans ~6.1) would overflow the char-count-tuned card widths (`names.ts`
+  CARD_* constants, layout card boxes). Moving the canvas to mono-names needs a joint retune of card
+  width + truncation counts + fold-pill width, verified at production scale. **Reopen when:** canvas
+  card geometry is being touched anyway, or the sans/mono split on cards starts reading as
+  inconsistent in practice.
 
 - **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
   kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
