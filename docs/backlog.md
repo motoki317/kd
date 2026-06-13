@@ -35,6 +35,13 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b36 (2026-06-14, process-memory pass)** — heap-profiled against a medium cluster (off-by-default
+  `--pprof-addr`, GOMAXPROCS pinned to the node core count). Shipped: a SetTransform on every informer
+  that drops CRD OpenAPI schemas + managedFields + last-applied before objects enter the cache (CRD
+  schemas alone were ~74% of live heap), drawer fetches CRDs live (`Cache.GetLive`) for the full
+  manifest; `GOGC=50` default. Result: live heap 175→39 MiB (-78%), peak RSS 368→~92 MiB (-75%). See
+  the "Process memory — remaining levers" item under Open for what was measured-and-deferred.
+
 - **b35 (2026-06-12, user-directed de-AI-slop design overhaul)** — the user called the look "AI-slop"
   (too-small text, info overload with no strong/weak distinction, pill-rounding everywhere, too many
   shortcuts) and asked for a full visual overhaul. Shipped, each slice live-verified: keyboard surface
@@ -226,6 +233,28 @@ manifest format-toggle drops the find scroll anchor; one unreproduced ghost-clea
 spotlight — see the PVC-spotlight row in Rejected).
 
 ## Open
+
+- **Process memory — remaining levers** — *measured 2026-06-14 (b36); deferred, diminishing returns.*
+  After the b36 transform + GOGC pass, idle heap is ~39 MiB (≈21 MiB legitimate cached objects + ≈14 MiB
+  client-go per-watch machinery across ~150 informers — decoder/refill/ring buffers). An alloc profile
+  shows `buildGraph` is ~76% of allocation churn, dominated by the unstructured→typed conversion
+  (`runtime.DefaultUnstructuredConverter.FromUnstructured`, reflection + DeepCopyJSONValue) run per
+  object per SSE rebuild. Levers, each measured-and-deferred:
+  - **Memoize the typed conversion** — *rejected for the memory goal:* caching typed forms retains BOTH
+    unstructured and typed, raising steady heap. Only worth it as a CPU/latency play, not memory.
+  - **Share one graph build across same-namespace SSE viewers** — turns N per-change builds into 1,
+    cutting the multi-viewer load peak (measured ~1.3 MiB/viewer; 23 viewers → 123 MiB). Deferred: a
+    concurrency change in the core SSE hot path; ROI is load-dependent and the idle peak is already low.
+  - **Elide informers for empty kinds** (lazy watch, periodic re-list) — would shed per-watch machinery
+    for the many zero-object kinds, but risks missing the first object of a kind until re-discovery; an
+    architecture change. Functional tradeoff.
+  - **Strip Secret data VALUES from the cache** (keep keys) — kd never shows values (`blankSecret` zeroes
+    them at render); caching them is ~0.4 MiB here AND keeps secret bytes resident. Small memory win,
+    real security hardening. **Reopen when:** doing a security pass, or on a secret-heavy cluster.
+  - **Workload `spec.template`** — *NOT strippable:* `fields.go` reads it to infer workload→ConfigMap/
+    Secret/PVC edges (would silently break edges). Recorded so it isn't re-proposed.
+  **Reopen when:** a cluster reports memory pressure after b36, or many concurrent viewers of one
+  namespace make the build-sharing ROI concrete.
 
 - ~~Toolbar vertical bulk at phone width~~ — **resolved by the b35 Filters disclosure** (2026-06-12):
   the relationship/kind facets now fold behind a badged Filters button at EVERY width, closed by
