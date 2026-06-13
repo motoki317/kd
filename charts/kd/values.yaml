@@ -154,13 +154,18 @@ ingressRoute:
   # -- TLS block. Empty object enables TLS with the default resolver; set to null to disable.
   tls: {} # @schema type:[object, null]
 
-# -- Compute resources for the kd container.
+# -- Compute resources for the kd container. Sized to kd's measured footprint after the
+# informer-cache trimming + GOGC tuning (~90Mi steady, ~120Mi under heavy concurrent load on a
+# medium cluster); the limit keeps ~2x headroom for larger clusters and viewer bursts. Memory
+# scales with object count — raise both for very large clusters. No CPU limit on purpose: kd is
+# latency-sensitive and a limit would throttle it and shrink GOMAXPROCS (which the GC tuning assumes
+# tracks the node's cores).
 resources:
   requests:
     cpu: 50m
-    memory: 128Mi
+    memory: 96Mi
   limits:
-    memory: 512Mi
+    memory: 256Mi
 
 # -- Pod-level security context. kd runs as non-root with a runtime-default seccomp profile.
 podSecurityContext:
