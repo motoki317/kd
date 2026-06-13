@@ -687,6 +687,25 @@ export default function Topology(props: Props) {
     })
   })
 
+  // iOS Safari ignores `touch-action: none` for PINCH: a two-finger gesture is routed to its
+  // non-standard `gesture*` events and zooms the whole PAGE, so our pointer-based pinch never gets
+  // to zoom the canvas (the reported "pinch zooms the page, not the graph" bug). Prevent those
+  // WebKit-only gesture events on the canvas so the page stops hijacking the pinch; the pointer
+  // pinch handler above then drives the canvas zoom on every platform. Scoped to the svg, NOT a
+  // viewport `user-scalable=no` — the latter would also kill accessibility zoom for the drawer/
+  // sidebar text. Delegated Solid handlers can't do this (touch/gesture listeners on document are
+  // passive, so preventDefault is a no-op); attach natively, cancelable, on the element itself.
+  onMount(() => {
+    if (!svg) return
+    const preventGesture = (e: Event) => e.preventDefault()
+    svg.addEventListener('gesturestart', preventGesture)
+    svg.addEventListener('gesturechange', preventGesture)
+    onCleanup(() => {
+      svg?.removeEventListener('gesturestart', preventGesture)
+      svg?.removeEventListener('gesturechange', preventGesture)
+    })
+  })
+
   // When the selection changes, smoothly frame the selected resource's full subtree (computed by
   // related()) — answers the user's "zoom to selected + related" without requiring a manual Fit.
   // Selection cleared → keep the current pan/zoom untouched. Clicking the canvas to close the drawer
