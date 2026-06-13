@@ -249,8 +249,10 @@ spotlight — see the PVC-spotlight row in Rejected).
     for the many zero-object kinds, but risks missing the first object of a kind until re-discovery; an
     architecture change. Functional tradeoff.
   - **Strip Secret data VALUES from the cache** (keep keys) — kd never shows values (`blankSecret` zeroes
-    them at render); caching them is ~0.4 MiB here AND keeps secret bytes resident. Small memory win,
-    real security hardening. **Reopen when:** doing a security pass, or on a secret-heavy cluster.
+    them at render); caching them is ~0.4 MiB here AND keeps secret bytes resident (heap-dump exposure).
+    BUT not free: `dataKeys` (spec_storage.go) reads `len(v)` to surface each entry's size in the drawer,
+    so a naive blank shows "0 B" — a fix must preserve per-key sizes (compute at strip time) or accept
+    losing the size display. **Reopen when:** doing a security pass, or on a secret-heavy cluster.
   - **Workload `spec.template`** — *NOT strippable:* `fields.go` reads it to infer workload→ConfigMap/
     Secret/PVC edges (would silently break edges). Recorded so it isn't re-proposed.
   **Reopen when:** a cluster reports memory pressure after b36, or many concurrent viewers of one
