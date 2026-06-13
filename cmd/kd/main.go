@@ -11,6 +11,7 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof" // registers /debug/pprof/* on http.DefaultServeMux; only served when --pprof-addr is set
 	"os"
 	"os/signal"
 	"syscall"
@@ -51,6 +52,18 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.PprofAddr != "" {
+		// Separate listener bound to the default mux (where net/http/pprof registers in init),
+		// so the profiler is never reachable from the authenticated UI port.
+		go func() {
+			slog.Warn("pprof listener enabled", "addr", cfg.PprofAddr)
+			pprofSrv := &http.Server{Addr: cfg.PprofAddr, Handler: http.DefaultServeMux, ReadHeaderTimeout: 10 * time.Second}
+			if err := pprofSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("pprof listener failed", "err", err)
+			}
+		}()
+	}
 
 	reg, inCluster, err := newRegistry(cfg.Kubeconfig, cfg.Resync, store.Options{
 		SkipKinds:  cfg.SkipKinds,

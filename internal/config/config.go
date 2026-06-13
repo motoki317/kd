@@ -45,6 +45,11 @@ type Config struct {
 	// built-in defaults and SkipKinds. Lets an operator opt back into watching e.g.
 	// "events" if they want the full picture.
 	EagerKinds []string
+
+	// PprofAddr, when non-empty, starts a net/http/pprof listener on this address (separate
+	// from the main handler, so the profiler is never exposed on the authenticated UI port).
+	// Empty (the default) disables profiling entirely. Intended for diagnosing memory/CPU.
+	PprofAddr string
 }
 
 // Load parses configuration from the given args (typically os.Args[1:]).
@@ -68,6 +73,7 @@ func Load(args []string) (Config, error) {
 	fs.DurationVar(&c.Resync, "resync", envDurationOr("KD_RESYNC", 10*time.Minute), "informer resync period")
 	fs.StringVar(&skipKinds, "skip-kinds", envOr("KD_SKIP_KINDS", ""), "comma-separated extra resource names to skip from eager informer startup, on top of the built-in defaults (events, leases, endpoints, endpointslices, controllerrevisions, ephemeralreports)")
 	fs.StringVar(&eagerKinds, "eager-kinds", envOr("KD_EAGER_KINDS", ""), "comma-separated resource names to force-include in eager startup, overriding both --skip-kinds and the built-in defaults")
+	fs.StringVar(&c.PprofAddr, "pprof-addr", envOr("KD_PPROF_ADDR", ""), "if set, serve net/http/pprof on this address for diagnostics (empty = disabled)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
