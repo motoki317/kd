@@ -125,28 +125,28 @@ describe('LogViewer', () => {
     localStorage.removeItem('kd:logsWrap')
   })
 
-  // The "maximize this panel" control (folds the drawer summary away) lives in the logs toolbar, next
-  // to the logs it grows — not in the drawer-header action cluster. It only renders when the parent
-  // wires onToggleMaximize, and its label/aria flip with the maximized prop.
-  it('offers a maximize control wired to onToggleMaximize, reflecting the maximized state', () => {
-    const [maxed, setMaxed] = createSignal(false)
+  // The full-screen control (expands the drawer to fill the canvas) lives in the logs toolbar, next to
+  // the logs it grows — driving the SAME expanded state as the drawer-header expand button. It only
+  // renders when the parent wires onToggleExpand, and its label/aria flip with the expanded prop.
+  it('offers a full-screen control wired to onToggleExpand, reflecting the expanded state', () => {
+    const [expanded, setExpanded] = createSignal(false)
     const { container } = render(() => (
-      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} maximized={maxed()} onToggleMaximize={() => setMaxed((v) => !v)} />
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} expanded={expanded()} onToggleExpand={() => setExpanded((v) => !v)} />
     ))
-    const btn = container.querySelector('.logs-maximize') as HTMLButtonElement
+    const btn = container.querySelector('.logs-fullscreen') as HTMLButtonElement
     expect(btn).toBeTruthy()
-    expect(btn.textContent).toContain('maximize')
+    expect(btn.textContent).toContain('full screen')
     expect(btn.getAttribute('aria-pressed')).toBe('false')
     btn.click()
-    // When maximized, the same control reads as "restore" (label + pressed state) — surgically, the
+    // When expanded, the same control reads as "restore" (label + pressed state) — surgically, the
     // signal drives it without remounting.
     expect(btn.textContent).toContain('restore')
     expect(btn.getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('omits the maximize control when no onToggleMaximize is wired', () => {
+  it('omits the full-screen control when no onToggleExpand is wired', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
-    expect(container.querySelector('.logs-maximize')).toBeNull()
+    expect(container.querySelector('.logs-fullscreen')).toBeNull()
   })
 
   it('hides the line filter until there are log lines', () => {

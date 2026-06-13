@@ -31,11 +31,12 @@ interface Props {
   // stream survives; flipping this back to true asks the viewer to snap to the tail (so coming
   // back to Logs from Manifest lands on the newest line, not a stale scroll position).
   visible?: boolean
-  // Whether the drawer summary is folded away so this panel takes the full drawer height. The control
-  // lives here (not in the drawer header) because it reads as a property of the logs panel it enlarges
-  // — proximity over a far-corner action cluster. Absent ⇒ no maximize control (e.g. embedded use).
-  maximized?: boolean
-  onToggleMaximize?: () => void
+  // Whether the drawer is expanded to fill the whole canvas. A full-screen control lives here (next to
+  // the logs it enlarges — proximity) and drives the SAME expanded state as the drawer-header expand
+  // button, so an operator reading logs can go full-screen without reaching for the far corner. Absent
+  // ⇒ no full-screen control (e.g. embedded use).
+  expanded?: boolean
+  onToggleExpand?: () => void
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -470,30 +471,44 @@ export default function LogViewer(props: Props) {
               title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
           </Show>
-          {/* Maximize: fold the resource summary away so this panel takes the drawer's full height.
-              Sits at the panel's top-right (the conventional maximize corner) and next to the logs it
-              grows, rather than in the drawer-header action cluster. */}
-          <Show when={props.onToggleMaximize}>
+          {/* Full screen: expand the drawer to fill the canvas so the logs get the whole width. Drives
+              the SAME expanded state as the drawer-header expand button, placed here next to the logs it
+              grows (proximity). The 4-corner glyph points outward to "expand" and inward to "restore" —
+              the same window-control idiom the header button uses, so they read as one affordance. */}
+          <Show when={props.onToggleExpand}>
             <button
-              class="logs-maximize"
-              classList={{ active: props.maximized }}
-              aria-pressed={props.maximized}
-              title={props.maximized ? 'Restore the resource summary' : 'Hide the summary to enlarge this panel'}
-              aria-label={props.maximized ? 'Restore the resource summary' : 'Hide the summary to enlarge this panel'}
-              onClick={() => props.onToggleMaximize!()}
+              class="logs-fullscreen"
+              classList={{ active: props.expanded }}
+              aria-pressed={props.expanded}
+              title={props.expanded ? 'Restore panel size' : 'Expand to fill the canvas'}
+              aria-label={props.expanded ? 'Restore panel size' : 'Expand to fill the canvas'}
+              onClick={() => props.onToggleExpand!()}
             >
               <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
-                <path
-                  d={props.maximized ? 'M3 6 L7 10 L11 6' : 'M3 8 L7 4 L11 8'}
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <line x1="3" y1={props.maximized ? 3 : 11} x2="11" y2={props.maximized ? 3 : 11} stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                <Show
+                  when={props.expanded}
+                  fallback={
+                    <path
+                      d="M2 5 L2 2 L5 2 M9 2 L12 2 L12 5 M12 9 L12 12 L9 12 M5 12 L2 12 L2 9"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  }
+                >
+                  <path
+                    d="M5 2 L5 5 L2 5 M9 2 L9 5 L12 5 M12 9 L9 9 L9 12 M2 9 L5 9 L5 12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </Show>
               </svg>
-              {props.maximized ? 'restore' : 'maximize'}
+              {props.expanded ? 'restore' : 'full screen'}
             </button>
           </Show>
         </span>

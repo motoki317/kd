@@ -115,7 +115,7 @@
 .logs-prev,
 .logs-ts,
 .logs-case,
-.logs-maximize,
+.logs-fullscreen,
 .logs-wrap,
 .gauge-group-btn {
   border: 1px solid var(--border);
@@ -129,8 +129,8 @@
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s, background-color 0.12s;
 }
-/* Maximize carries an icon + word, so lay them out in a row (the text-only chips don't need this). */
-.logs-maximize {
+/* Full-screen carries an icon + word, so lay them out in a row (the text-only chips don't need this). */
+.logs-fullscreen {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -143,7 +143,7 @@
 .logs-prev:hover,
 .logs-ts:hover,
 .logs-case:hover,
-.logs-maximize:hover,
+.logs-fullscreen:hover,
 .logs-wrap:hover,
 .gauge-group-btn:hover {
   color: var(--text);
@@ -152,7 +152,7 @@
 .logs-prev.active,
 .logs-ts.active,
 .logs-case.active,
-.logs-maximize.active,
+.logs-fullscreen.active,
 .logs-wrap.active,
 .gauge-group-btn.active {
   background: var(--accent);
@@ -162,7 +162,7 @@
 .logs-prev:focus-visible,
 .logs-ts:focus-visible,
 .logs-case:focus-visible,
-.logs-maximize:focus-visible,
+.logs-fullscreen:focus-visible,
 .logs-wrap:focus-visible,
 .gauge-group-btn:focus-visible {
   outline: 2px solid var(--accent);
@@ -171,7 +171,7 @@
 .logs-prev.active:hover,
 .logs-ts.active:hover,
 .logs-case.active:hover,
-.logs-maximize.active:hover,
+.logs-fullscreen.active:hover,
 .logs-wrap.active:hover,
 .gauge-group-btn.active:hover {
   color: var(--on-accent);

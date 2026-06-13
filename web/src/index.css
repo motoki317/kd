@@ -3,8 +3,8 @@
    imports reorders the cascade. Three known order dependencies:
    - capacity.css: `.cap-seg.use.other` must come after the `.cap-seg.use.h-*` health fills
      (equal specificity; the "other namespaces" gray wins by cascade order).
-   - drawer.css: the drawer state variants (`.drawer.expanded`, `.drawer.summary-collapsed`)
-     must come after the base `.drawer` rules.
+   - drawer.css: the drawer state variant (`.drawer.expanded`) must come after the base
+     `.drawer` rules.
    - logs.css: the dark-ground rules (`.logs-body`) must come before the `.log-level-*`
      colorization tuned for that ground. */
 @import './styles/tokens.css';

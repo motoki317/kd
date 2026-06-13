@@ -525,25 +525,24 @@ describe('DetailDrawer', () => {
     expect(navigated).toEqual(['d1'])
   })
 
-  it('maximizes the logs panel from its own toolbar (not a drawer-header button)', () => {
-    // The control lives in the logs panel (proximity), so it only exists on a loggable resource's logs
-    // tab — never in the drawer-header action cluster.
+  it('goes full screen from the logs toolbar, driving the same expanded state as the header button', () => {
+    // The full-screen control lives in the logs panel (proximity), so it only exists on a loggable
+    // resource's logs tab. Clicking it toggles the SAME `expanded` class the drawer-header expand
+    // button drives — one affordance, two reachable places.
     const pod: KNode = { ...configMap, id: 'p1', kind: 'Pod', name: 'api-0', status: 'Running' }
-    const { container, getByLabelText } = render(() => (
+    const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer')!
-    expect(drawer.classList.contains('summary-collapsed')).toBe(false)
-    expect(container.querySelector('.drawer-collapse-summary')).toBeNull() // gone from the header
-    const toggle = getByLabelText('Hide the summary to enlarge this panel')
+    expect(drawer.classList.contains('expanded')).toBe(false)
+    const toggle = container.querySelector('.logs-fullscreen') as HTMLButtonElement
     expect(toggle.closest('.logs-panel')).toBeTruthy() // it's inside the logs panel
     toggle.click()
-    // The drawer carries the class that hides the non-hero summary content (CSS), keeping the hero —
-    // the resource's kind · name stays visible for context while the tab panel takes the height.
-    expect(drawer.classList.contains('summary-collapsed')).toBe(true)
-    expect(container.querySelector('.drawer-hero')).toBeTruthy()
-    getByLabelText('Restore the resource summary').click()
-    expect(drawer.classList.contains('summary-collapsed')).toBe(false)
+    expect(drawer.classList.contains('expanded')).toBe(true)
+    // The header expand button reflects the shared state too (both now read "Restore panel size").
+    expect(container.querySelector('.drawer-expand')!.getAttribute('aria-pressed')).toBe('true')
+    toggle.click() // same control, now in restore state
+    expect(drawer.classList.contains('expanded')).toBe(false)
   })
 
   it('host meta is a click-to-jump button when onNavigateRef is provided', () => {

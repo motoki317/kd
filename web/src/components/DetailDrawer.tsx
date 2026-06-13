@@ -66,11 +66,6 @@ export default function DetailDrawer(props: Props) {
   // stay in "big" mode while walking the tree) but resets when the drawer closes, so a fresh
   // selection opens in the compact side panel again.
   const [expanded, setExpanded] = createSignal(false)
-  // Maximize the active tab section (cycle: operators reading long logs): collapse the verbose resource
-  // summary down to just its hero (kind · name · status) so the Logs/Events/Manifest panel takes the
-  // drawer's full height. Independent of `expanded` (width) — the two compose for the biggest reading
-  // area. Sticky across owner-chip navigation, reset on close like `expanded`.
-  const [summaryCollapsed, setSummaryCollapsed] = createSignal(false)
   const EXIT_MS = 220
   let exitTimer: ReturnType<typeof setTimeout> | undefined
   // Set when the drawer opens from a closed state (not when navigating between resources while
@@ -111,7 +106,6 @@ export default function DetailDrawer(props: Props) {
             setDisplayNode(null)
             setExiting(false)
             setExpanded(false)
-            setSummaryCollapsed(false)
             exitTimer = undefined
           }, EXIT_MS)
         }
@@ -242,7 +236,7 @@ export default function DetailDrawer(props: Props) {
         <aside
           ref={asideEl}
           class="drawer"
-          classList={{ exiting: exiting(), expanded: expanded(), 'summary-collapsed': summaryCollapsed() && tab() === 'logs' }}
+          classList={{ exiting: exiting(), expanded: expanded() }}
           onKeyDown={onDrawerKeyDown}
           // Name the complementary landmark by the resource it describes, so a screen reader's
           // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
@@ -411,8 +405,8 @@ export default function DetailDrawer(props: Props) {
                   (node().active ?? 0) === 0
                 }
                 visible={tab() === 'logs'}
-                maximized={summaryCollapsed()}
-                onToggleMaximize={() => setSummaryCollapsed((v) => !v)}
+                expanded={expanded()}
+                onToggleExpand={() => setExpanded((v) => !v)}
               />
             </div>
           </Show>
