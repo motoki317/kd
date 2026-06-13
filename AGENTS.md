@@ -83,10 +83,12 @@ Three traps, each cost a debugging session — heed them:
 ## Releases (two independent semver tracks)
 
 - **App** — tag `vX.Y.Z` → GoReleaser (`.goreleaser.yaml`): GitHub Release (linux/darwin
-  binaries + changelog) and multi-arch image `ghcr.io/motoki317/kd:vX.Y.Z` + `latest`.
+  binaries + changelog) and multi-arch image `ghcr.io/motoki317/kd:X.Y.Z` + `latest`. The git tag
+  keeps the `v` (the release trigger); the **image tag drops it** (`X.Y.Z`, not `vX.Y.Z`).
 - **Chart** — tag `chart-vX.Y.Z` → `helm push` to `oci://ghcr.io/motoki317/charts` (lands at
   `ghcr.io/motoki317/charts/kd`). Bump `charts/kd/Chart.yaml` `version` first (CI fails on
-  mismatch); bump `appVersion` to pin a new kd image. Rationale: ADR 20260612-release-pipeline.
+  mismatch); bump `appVersion` to `X.Y.Z` (no `v` — it must match the image tag) to pin a new kd
+  image. Rationale: ADR 20260612-release-pipeline.
 
 ## Conventions
 

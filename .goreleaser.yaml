@@ -38,8 +38,11 @@ archives:
 dockers_v2:
   - images:
       - ghcr.io/motoki317/kd
+    # Image tags carry NO 'v' prefix ({{ .Version }} is the git tag minus the leading v): the
+    # image is ghcr.io/motoki317/kd:X.Y.Z, not :vX.Y.Z. The chart's appVersion must match this
+    # (it defaults image.tag to X.Y.Z). The git tag itself stays vX.Y.Z (the release trigger).
     tags:
-      - "v{{ .Version }}"
+      - "{{ .Version }}"
       - latest
     dockerfile: Dockerfile.goreleaser
     platforms:
@@ -50,14 +53,14 @@ dockers_v2:
       "org.opencontainers.image.title": "{{ .ProjectName }}"
       "org.opencontainers.image.description": "A human-friendly, read-only, live Kubernetes dashboard"
       "org.opencontainers.image.source": "{{ .GitURL }}"
-      "org.opencontainers.image.version": "v{{ .Version }}"
+      "org.opencontainers.image.version": "{{ .Version }}"
       "org.opencontainers.image.revision": "{{ .FullCommit }}"
       "org.opencontainers.image.licenses": "MIT"
     annotations:
       "org.opencontainers.image.title": "{{ .ProjectName }}"
       "org.opencontainers.image.description": "A human-friendly, read-only, live Kubernetes dashboard"
       "org.opencontainers.image.source": "{{ .GitURL }}"
-      "org.opencontainers.image.version": "v{{ .Version }}"
+      "org.opencontainers.image.version": "{{ .Version }}"
       "org.opencontainers.image.revision": "{{ .FullCommit }}"
       "org.opencontainers.image.licenses": "MIT"
 
@@ -85,4 +88,4 @@ changelog:
 
 release:
   footer: |
-    **Docker image**: `ghcr.io/motoki317/kd:{{ .Tag }}` (linux amd64/arm64)
+    **Docker image**: `ghcr.io/motoki317/kd:{{ .Version }}` (linux amd64/arm64)

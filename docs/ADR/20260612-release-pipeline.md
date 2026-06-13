@@ -29,6 +29,13 @@ The chart's `appVersion` pins the kd image tag the chart deploys by default (no 
 `latest`), making `helm install` reproducible. Bumping the default image is a normal chart
 change: bump `appVersion` + `version`, tag `chart-v…`.
 
+> **Update (2026-06-14, shipped in 0.1.2):** the container image tag drops the leading `v` —
+> the image is `ghcr.io/motoki317/kd:X.Y.Z` (+ `latest`), not `:vX.Y.Z`. The git tag still
+> carries the `v` (it is the GoReleaser trigger and matches the GitHub Release name); GoReleaser's
+> `{{ .Version }}` is that tag minus the `v`. The chart's `appVersion` is therefore `X.Y.Z` (no
+> `v`) so `image.tag`'s `appVersion` default resolves to a tag the registry actually has. A purely
+> cosmetic preference for `v`-less Docker tags, taken before anyone depended on the old scheme.
+
 The release image (`Dockerfile.goreleaser`) COPYs the GoReleaser-built binary into distroless
 static — the binary is built once and shared between the GitHub Release and the image. The
 root `Dockerfile` stays as the from-source path for users building their own image.

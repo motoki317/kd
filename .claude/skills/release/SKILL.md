@@ -16,7 +16,7 @@ summary is AGENTS.md "Releases" and ADR `docs/ADR/20260612-release-pipeline.md` 
 
 | Track | Tag pattern | Workflow | Publishes |
 | --- | --- | --- | --- |
-| **App** | `vX.Y.Z` | `.github/workflows/release.yaml` (GoReleaser) | GitHub Release (linux/darwin binaries + changelog) and multi-arch image `ghcr.io/motoki317/kd:vX.Y.Z` + `latest` |
+| **App** | `vX.Y.Z` | `.github/workflows/release.yaml` (GoReleaser) | GitHub Release (linux/darwin binaries + changelog) and multi-arch image `ghcr.io/motoki317/kd:X.Y.Z` + `latest` (image tag has **no `v`**; the git tag keeps it) |
 | **Chart** | `chart-vX.Y.Z` | `.github/workflows/release-chart.yaml` | Helm chart OCI artifact at `oci://ghcr.io/motoki317/charts/kd` |
 
 The tracks are independent: you can release the app without the chart and vice-versa. A normal "ship
@@ -31,8 +31,10 @@ everything at version X.Y.Z" cuts **both**, usually on the same commit.
   `chart-vX.Y.Z` exactly matches `charts/kd/Chart.yaml` `version`. So a chart release is always
   *bump-commit-then-tag*, never tag-first.
 - **`appVersion` pins the image the chart deploys by default.** Bump `charts/kd/Chart.yaml`
-  `appVersion` to `vX.Y.Z` whenever the chart should ship the new app build (the usual case when
-  cutting both together). `image.tag` still overrides per-install.
+  `appVersion` to `X.Y.Z` (**no `v`** — kd image tags drop it, and `image.tag` defaults to
+  `appVersion`, so a `vX.Y.Z` here would default to a tag the registry doesn't have) whenever the
+  chart should ship the new app build (the usual case when cutting both together). `image.tag` still
+  overrides per-install.
 - **Tags are lightweight and sit on the same commit** (matches `v0.1.0` / `chart-v0.1.0`). When
   cutting both tracks together, both tags point at the chart-bump commit.
 - **Conventional-commit prefixes drive the app changelog.** `feat`/`fix`/`perf` get their own
@@ -44,9 +46,9 @@ everything at version X.Y.Z" cuts **both**, usually on the same commit.
 1. **Land all the work on `main` first.** Every change that should be in the release must be committed
    (and pushed) before any tag — the tag freezes the release contents. Confirm a clean tree:
    `git status` shows nothing to commit.
-2. **Bump the chart** in `charts/kd/Chart.yaml`: set `version: X.Y.Z` and `appVersion: "vX.Y.Z"`.
-   Commit as `chore(chart): bump kd chart to X.Y.Z, pin appVersion vX.Y.Z` (chore → excluded from the
-   app changelog, correctly).
+2. **Bump the chart** in `charts/kd/Chart.yaml`: set `version: X.Y.Z` and `appVersion: "X.Y.Z"`
+   (no `v` on appVersion — it must match the published image tag). Commit as `chore(chart): bump kd
+   chart to X.Y.Z, pin appVersion X.Y.Z` (chore → excluded from the app changelog, correctly).
 3. **Pre-flight gates** (each has bitten a release before — run them, don't assume):
    - `go test ./internal/leakcheck/` — never publish a tree leaking a real cluster/namespace/ARN name.
    - `helm lint charts/kd` — the same lint CI runs; catches a bad chart before the tag does.
