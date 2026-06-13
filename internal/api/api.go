@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -45,6 +46,10 @@ type Store interface {
 	GroupForKind(kind string) (string, bool)
 	// KindShortNames maps each registered kind to its API short name, for client-side labels.
 	KindShortNames() map[string]string
+	// GetLive fetches one object straight from the apiserver, bypassing the trimmed cache. The
+	// detail view uses it for kinds whose cached copy is intentionally stripped (CRDs lose their
+	// OpenAPI schema) so the drawer can still render the complete manifest.
+	GetLive(ctx context.Context, kind, namespace, name string) (*unstructured.Unstructured, error)
 }
 
 // Contexts is the registry surface the API depends on. *registry.Registry satisfies it;
@@ -262,6 +267,15 @@ func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
+	}
+	// CRDs are cached without their (huge) OpenAPI schema to save memory (see stripForCache);
+	// fetch the full object live so the drawer renders the complete manifest. The cache decides
+	// existence/authorization above; the live copy only enriches what's already visible, and a
+	// fetch error falls back to the trimmed cache copy.
+	if kind == "CustomResourceDefinition" {
+		if live, err := store.GetLive(r.Context(), kind, ns, name); err == nil {
+			obj = live
+		}
 	}
 	writeManifest(w, presentable(obj), r.URL.Query().Get("format"))
 }

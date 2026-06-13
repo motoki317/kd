@@ -232,6 +232,12 @@ func (c *Cache) registerEager(resources []discovery.Resource) {
 // registerLocked adds an informer for one resource. Called under c.mu.
 func (c *Cache) registerLocked(r discovery.Resource) {
 	inf := c.factory.ForResource(r.GVR).Informer()
+	// Trim cache-only-dead weight (managedFields, CRD OpenAPI schemas, …) before objects enter
+	// the shared store — the single largest lever on resident memory. Must precede factory.Start;
+	// registerLocked runs before it (initial Start) or before the reconcile's Start (CRD add).
+	if err := inf.SetTransform(stripForCache); err != nil {
+		slog.Warn("store: set transform failed", "gvr", r.GVR.String(), "err", err)
+	}
 	// Add a UID secondary index so appendRideAlong can resolve ownerReferences in O(refs)
 	// instead of scanning every cluster-scoped object. Must happen before the informer
 	// starts; registerLocked runs before factory.Start, so this is safe.
@@ -393,6 +399,37 @@ func (c *Cache) reconcile(ctx context.Context) {
 	// Start any newly-registered informers. The factory tracks startedInformers so this is
 	// a no-op for ones already running.
 	c.factory.Start(c.stopCh)
+}
+
+// GetLive fetches one object straight from the apiserver, bypassing the trimmed cache. The
+// detail view uses it for kinds whose cached copy is intentionally stripped (a CRD loses its
+// OpenAPI schema to stripForCache) so the drawer can still render the complete manifest on
+// demand. Resolves kind→GVR the same way GroupForKind does (smallest group on a collision) for
+// determinism. The ClusterScope sentinel and cluster-scoped kinds are fetched without a namespace.
+func (c *Cache) GetLive(ctx context.Context, kind, namespace, name string) (*unstructured.Unstructured, error) {
+	c.mu.Lock()
+	var (
+		chosen     schema.GroupVersionResource
+		namespaced bool
+		found      bool
+	)
+	for gvr, r := range c.resources {
+		if r.Kind != kind {
+			continue
+		}
+		if !found || gvr.Group < chosen.Group {
+			chosen, namespaced, found = gvr, r.Namespaced, true
+		}
+	}
+	c.mu.Unlock()
+	if !found {
+		return nil, fmt.Errorf("store: no registered resource for kind %q", kind)
+	}
+	ri := c.dynClient.Resource(chosen)
+	if namespaced && namespace != "" && namespace != ClusterScope {
+		return ri.Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	}
+	return ri.Get(ctx, name, metav1.GetOptions{})
 }
 
 // Client exposes the underlying typed clientset for operations that bypass the cache, e.g.
