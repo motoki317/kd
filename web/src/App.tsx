@@ -101,6 +101,32 @@ export default function App() {
     (readRawPref('kd:sidebarHidden') ?? (isNarrowScreen() ? '1' : '0')) === '1',
   )
   createEffect(() => writePref('kd:sidebarHidden', sidebarHidden() ? '1' : '0'))
+  // Tunable sidebar width: operators with long namespace names want a wider column; those who want
+  // canvas drag it narrow. Persisted (a layout habit, like sidebar-hidden), clamped so a stray drag
+  // can't strand the panel off-screen or starve the canvas. Drives the --sidebar-w token on .body
+  // (which .sidebar reads), so the existing width rule needs no change.
+  const SIDEBAR_MIN = 180
+  const SIDEBAR_MAX = 480
+  const clampSidebar = (w: number) => Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(w)))
+  const [sidebarWidth, setSidebarWidth] = createSignal(clampSidebar(Number(readRawPref('kd:sidebarWidth')) || 230))
+  createEffect(() => writePref('kd:sidebarWidth', String(sidebarWidth())))
+  // Drag the divider between the sidebar and canvas. Pointer events (not mouse) so it works under
+  // touch/pen; window-level listeners so a fast drag that outruns the 6px handle keeps tracking. The
+  // body class suppresses text selection + sets the col-resize cursor for the whole drag.
+  const startSidebarResize = (e: PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = sidebarWidth()
+    const onMove = (ev: PointerEvent) => setSidebarWidth(clampSidebar(startW + (ev.clientX - startX)))
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.classList.remove('resizing-col')
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    document.body.classList.add('resizing-col')
+  }
   // REACTIVE phone-width signal for overlay gating (isNarrowScreen is a one-shot read): while the
   // sidebar OVERLAYS the canvas, the covered surface must leave the Tab order (inert below) — a
   // keyboard user tabbing the overlay otherwise lands on invisible toolbar chips under it.
@@ -404,7 +430,7 @@ export default function App() {
         </div>
       </Show>
 
-      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }}>
+      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }} style={{ '--sidebar-w': `${sidebarWidth()}px` }}>
         <Sidebar
           namespaces={sidebarNs}
           selected={namespace()}
@@ -420,6 +446,31 @@ export default function App() {
           flash={nsFlash()}
           onJumpToTrouble={jumpToTrouble}
         />
+        {/* Drag handle to retune the sidebar width. A focusable separator (WAI-ARIA window-splitter
+            model) so the column is resizable by keyboard too — ←/→ nudge, Home/End jump to the
+            min/max — keeping the four GLOBAL shortcuts intact (these are scoped to the handle, like
+            the tablist arrows). Hidden when the sidebar is collapsed or overlaying (phone width). */}
+        <Show when={!sidebarHidden()}>
+          <div
+            class="sidebar-resizer"
+            role="separator"
+            tabindex="0"
+            aria-orientation="vertical"
+            aria-label="Resize the namespace sidebar"
+            aria-valuemin={SIDEBAR_MIN}
+            aria-valuemax={SIDEBAR_MAX}
+            aria-valuenow={sidebarWidth()}
+            onPointerDown={startSidebarResize}
+            onDblClick={() => setSidebarWidth(230)}
+            onKeyDown={(e) => {
+              const step = e.shiftKey ? 32 : 8
+              if (e.key === 'ArrowLeft') { e.preventDefault(); setSidebarWidth((w) => clampSidebar(w - step)) }
+              else if (e.key === 'ArrowRight') { e.preventDefault(); setSidebarWidth((w) => clampSidebar(w + step)) }
+              else if (e.key === 'Home') { e.preventDefault(); setSidebarWidth(SIDEBAR_MIN) }
+              else if (e.key === 'End') { e.preventDefault(); setSidebarWidth(SIDEBAR_MAX) }
+            }}
+          />
+        </Show>
         {/* While the sidebar OVERLAYS the canvas (phone width), everything under it leaves the Tab
             order — without inert, a keyboard user tabbing the overlay lands on invisible toolbar
             chips beneath it. Desktop side-by-side keeps both surfaces interactive. */}

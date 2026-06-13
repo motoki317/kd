@@ -10,6 +10,43 @@
 .body.sidebar-collapsed .sidebar {
   display: none;
 }
+/* Drag handle between the sidebar and canvas. A thin flex column whose grab affordance lives in a
+   centered hairline that brightens on hover/focus — the handle itself is a few px wider than the
+   visible line so the hit target clears the WCAG minimum. col-resize cursor advertises the gesture. */
+.sidebar-resizer {
+  flex: 0 0 auto;
+  width: 6px;
+  margin: 0 -3px; /* straddle the border so neither column loses layout width */
+  position: relative;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+}
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background-color 0.12s;
+}
+.sidebar-resizer:hover::before,
+.sidebar-resizer:focus-visible::before {
+  background: var(--accent);
+  width: 2px;
+}
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+/* While dragging, suppress selection everywhere and force the resize cursor even as the pointer
+   leaves the thin handle (the move listener is on window, so the drag continues regardless). */
+body.resizing-col {
+  cursor: col-resize;
+  user-select: none;
+}
 /* Phone-width: side-by-side would leave the topology a ~155px sliver, so an OPEN sidebar overlays
    the canvas instead of squeezing it (App also seeds the sidebar hidden at this width when no pref
    is stored). The shadow marks it as a layer over the graph, not a column beside it. z-index sits
@@ -18,6 +55,11 @@
 @media (max-width: 640px) {
   .body {
     position: relative;
+  }
+  /* The sidebar overlays the canvas here, so there's no shared edge to drag — and the absolute
+     overlay ignores the resizer's flow width anyway. Hide it to avoid a dead handle on the canvas. */
+  .sidebar-resizer {
+    display: none;
   }
   .body:not(.sidebar-collapsed) .sidebar {
     position: absolute;
