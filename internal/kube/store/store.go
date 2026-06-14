@@ -63,6 +63,26 @@ var DefaultSkipKinds = []string{
 	"endpointslices",      // discovery.k8s.io/v1; high-cardinality and we use Service selectors
 	"controllerrevisions", // apps/v1; StatefulSet/DaemonSet rollout history
 	"ephemeralreports",    // reports.kyverno.io/v1; per-admission policy reports, created/updated at request volume — high churn, no topology value
+
+	// CRD meta-informer: the LIST body easily reaches 10MB+ (OpenAPI schemas) on a cluster
+	// with heavy CRD usage (Argo, Prometheus Operator, etc.), stalling the initial fan-out
+	// by 1s or more. The meta-informer is only needed for the live CRD-change watcher, which
+	// startCRDWatcher starts separately after the main sync completes. CRD objects themselves
+	// add no edges in kd's graph and appear only as orphan cards in the cluster view, so
+	// skipping them from the eager set also reduces visual noise. Re-enable with --eager-kinds.
+	"customresourcedefinitions", // apiextensions.k8s.io/v1
+
+	// Kubernetes alpha/beta infrastructure resources with no outgoing edges in kd's graph.
+	// They appear as orphan cards in the topology without conveying actionable relationships —
+	// operators can re-enable any via --eager-kinds if they want visibility into them.
+	"podtemplates",           // core/v1; standalone templates with no referencing edges
+	"limitranges",            // core/v1; per-namespace admission policy, no pod/workload edges
+	"ipaddresses",            // networking.k8s.io/v1 (k8s ≥1.31 beta); cluster-internal IP bookkeeping
+	"servicecidrs",           // networking.k8s.io/v1 (k8s ≥1.29 alpha); cluster CIDR config
+	"deviceclasses",          // resource.k8s.io/v1 (DRA); device-plugin infrastructure, no workload edges
+	"resourceslices",         // resource.k8s.io/v1 (DRA); device inventory — high-cardinality, no topology value
+	"resourceclaims",         // resource.k8s.io/v1 (DRA); device claims — kd draws no pod→claim edges yet
+	"resourceclaimtemplates", // resource.k8s.io/v1 (DRA); claim templates with no referencing edges
 }
 
 // well-known GVRs the store handles specially.
@@ -106,6 +126,11 @@ type Cache struct {
 	// caller's context done in Start). Held so the CRD watcher can Start newly-added
 	// dynamic informers with the same lifetime as the originals.
 	stopCh chan struct{}
+
+	// crdDiscovered is true when the CRD GVR appeared in the initial discovery response,
+	// regardless of whether it was eager-loaded. startCRDWatcher uses it to distinguish
+	// "CRDs exist but were skipped from eager load" from "cluster has no CRD API".
+	crdDiscovered bool
 
 	mu        sync.Mutex
 	resources map[schema.GroupVersionResource]Resource  // by GVR; updated on CRD add/remove
@@ -230,6 +255,9 @@ func (c *Cache) registerEager(resources []discovery.Resource) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, r := range resources {
+		if r.GVR == crdsGVR {
+			c.crdDiscovered = true // record that the cluster has the CRD API, even if skipped
+		}
 		if skip[r.GVR.Resource] {
 			continue
 		}
@@ -337,7 +365,8 @@ func (c *Cache) recordWatchErr(gvr schema.GroupVersionResource, err error) {
 	slog.Warn("store: watch error", "gvr", gvr.String(), "err", err)
 }
 
-// startCRDWatcher attaches an event handler to the CRD informer (if registered). An install
+// startCRDWatcher attaches an event handler to the CRD informer (starting one on-demand if CRDs
+// were not eager-loaded) so the store can track CRD installs and removals at runtime. An install
 // triggers a fresh discovery that registers the new GVR; a removal drops the GVR from the
 // cached resource set (see removeResourcesForCRD) so snapshots stop surfacing its objects.
 //
@@ -356,10 +385,40 @@ func (c *Cache) startCRDWatcher(ctx context.Context) {
 	c.mu.Lock()
 	r, ok := c.resources[crdsGVR]
 	c.mu.Unlock()
-	if !ok {
+
+	var crdInf cache.SharedIndexInformer
+	if ok {
+		crdInf = r.Informer
+	} else if c.crdDiscovered {
+		// CRDs are excluded from the eager set by default (their LIST body easily reaches
+		// 10MB+ when clusters carry large OpenAPI schemas — Argo Workflow CRDs alone are ~1MB
+		// each), appearing as orphan cards in the topology without any edges. Starting the
+		// informer here, after the main sync, keeps that expensive download off the hot
+		// startup path. We wait for the initial sync before attaching handlers so the replay
+		// of every existing CRD doesn't fire N consecutive reconcile rounds.
+		inf := c.factory.ForResource(crdsGVR).Informer()
+		// Apply the same setup as registerLocked but without adding to c.resources — CRD
+		// objects remain invisible in topology snapshots (graph.Build never draws edges to
+		// them, so they'd appear only as orphan cards; operators can re-enable via
+		// --eager-kinds=customresourcedefinitions).
+		_ = inf.SetTransform(stripForCache)
+		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+			c.recordWatchErr(crdsGVR, err)
+		})
+		c.factory.Start(c.stopCh)
+		// Block until the CRD informer's initial LIST completes (or 30s elapses). The
+		// initial Add replay fires during this window; our handler is not attached yet, so
+		// existing CRDs don't trigger reconciles — we don't need them to, because
+		// registerEager already covered all GVRs from the startup discovery call.
+		deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cache.WaitForCacheSync(deadline.Done(), inf.HasSynced)
+		crdInf = inf
+	} else {
 		return // CRDs API not available (e.g. an older or stripped cluster)
 	}
-	_, _ = r.Informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+
+	_, _ = crdInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(any) { c.triggerReconcile(ctx) },
 		DeleteFunc: func(obj any) { c.removeResourcesForCRD(obj) },
 	})
