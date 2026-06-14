@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { boundingBox, selectionMaxScale, fitBox, clampPan } from './viewport'
+import { boundingBox, selectionMaxScale, fitBox, fitBoxFloored, clampPan } from './viewport'
 
 describe('boundingBox', () => {
   it('unions cards by their centre ± half-extent', () => {
@@ -57,6 +57,104 @@ describe('fitBox', () => {
     const t = fitBox({ minX: 50, minY: 50, maxX: 50, maxY: 50 }, view, 2)
     expect(Number.isFinite(t.scale)).toBe(true)
     expect(t.scale).toBe(2) // clamped to maxScale, not Infinity
+  })
+})
+
+describe('fitBoxFloored', () => {
+  const view = { width: 1000, height: 800, topInset: 0 }
+  const FLOOR = 0.55
+
+  it('fits to the width and centres a box that fits in both axes', () => {
+    // A 400×300 box: widthFit = (1000-120)/400 = 2.2 (cap 3). Content 300×2.2=660 ≤ 680, fits → centred.
+    const t = fitBoxFloored({ minX: 0, minY: 0, maxX: 400, maxY: 300 }, view, {
+      maxScale: 3,
+      minScale: FLOOR,
+      focus: { x: 0, y: 0 },
+    })
+    expect(t.scale).toBeCloseTo(2.2, 5)
+    expect(200 * t.scale + t.tx).toBeCloseTo(500, 5) // box centre → viewport centre
+    expect(150 * t.scale + t.ty).toBeCloseTo(400, 5)
+  })
+
+  it('width-primary: a tall tree fills the width and overflows vertically (NOT shrunk to fit height)', () => {
+    // 400 wide × 2000 tall. The height-fit would be (800-120)/2000 = 0.34 — the old min() fit would
+    // have used that, an unreadable shrink. Width-primary instead uses widthFit = 2.2 capped at the
+    // 1.4 maxScale, so the tree renders large and overflows vertically, top-anchored (focus top-left).
+    const box = { minX: 0, minY: 0, maxX: 400, maxY: 2000 }
+    const t = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus: { x: 0, y: 0 } })
+    expect(t.scale).toBe(1.4) // capped, far above the 0.34 a height-fit would give
+    const contentW = 400 * 1.4
+    expect(t.tx).toBeCloseTo((1000 - contentW) / 2, 5) // width fits → centred horizontally
+    expect(t.ty).toBeCloseTo(60, 5) // height overflows → top-anchored at padding
+  })
+
+  it('applies the breathing factor while still centring', () => {
+    const t = fitBoxFloored({ minX: 0, minY: 0, maxX: 400, maxY: 300 }, view, {
+      maxScale: 3,
+      minScale: FLOOR,
+      focus: { x: 0, y: 0 },
+      breathing: 0.92,
+    })
+    expect(t.scale).toBeCloseTo(2.2 * 0.92, 5)
+    expect(200 * t.scale + t.tx).toBeCloseTo(500, 5)
+  })
+
+  it('pins to the floor and anchors a too-large fit-all to the top-left', () => {
+    // A 5000×4000 box would fit at ~0.18 (1000-120)/5000 — far below the floor. With focus at the
+    // box's top-left corner, both axes overflow, so each anchors content to its near edge (padding).
+    const box = { minX: 0, minY: 0, maxX: 5000, maxY: 4000 }
+    const t = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus: { x: 0, y: 0 } })
+    expect(t.scale).toBe(FLOOR)
+    expect(t.tx).toBeCloseTo(60, 5) // content left edge at padding
+    expect(t.ty).toBeCloseTo(60, 5) // content top edge at padding (topInset 0)
+  })
+
+  it('floored: centres an axis whose content fits even when the other overflows', () => {
+    // 5000 wide (overflows at the floor) × 100 tall (fits). The tall axis centres; the wide axis
+    // anchors/clamps to the focus.
+    const box = { minX: 0, minY: 0, maxX: 5000, maxY: 100 }
+    const t = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus: { x: 0, y: 0 } })
+    expect(t.scale).toBe(FLOOR)
+    const contentH = 100 * FLOOR
+    expect(t.ty).toBeCloseTo((800 - contentH) / 2, 5) // vertical centred
+    expect(t.tx).toBeCloseTo(60, 5) // horizontal anchored top-left
+  })
+
+  it('floored: centres on the focus point and keeps the content covering the frame', () => {
+    // Big box, focus near the middle → the focus lands at the viewport centre (clamp does not bite,
+    // since plenty of content surrounds it on every side).
+    const box = { minX: 0, minY: 0, maxX: 5000, maxY: 4000 }
+    const focus = { x: 2500, y: 2000 }
+    const t = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus })
+    expect(t.scale).toBe(FLOOR)
+    expect(2500 * t.scale + t.tx).toBeCloseTo(500, 5) // focus x at viewport centre
+    expect(2000 * t.scale + t.ty).toBeCloseTo(400, 5) // focus y at viewport centre
+  })
+
+  it('floored: a focus near an edge clamps so no empty gutter shows past the content', () => {
+    // Focus at the box's left/top edge would centre the edge, exposing empty space to its left. The
+    // clamp pulls the content's near edge to the frame padding instead.
+    const box = { minX: 0, minY: 0, maxX: 5000, maxY: 4000 }
+    const t = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus: { x: 0, y: 0 } })
+    expect(t.tx).toBeCloseTo(60, 5)
+    expect(t.ty).toBeCloseTo(60, 5)
+    // The far-edge focus mirrors it: content's far edge sits at the frame's far padding.
+    const far = fitBoxFloored(box, view, { maxScale: 1.4, minScale: FLOOR, focus: { x: 5000, y: 4000 } })
+    expect(5000 * far.scale + far.tx).toBeCloseTo(1000 - 60, 5)
+    expect(4000 * far.scale + far.ty).toBeCloseTo(800 - 60, 5)
+  })
+
+  it('respects the toolbar inset when flooring', () => {
+    const inset = 120
+    const box = { minX: 0, minY: 0, maxX: 5000, maxY: 100 } // tall axis fits → centred below the bar
+    const t = fitBoxFloored(box, { ...view, topInset: inset }, {
+      maxScale: 1.4,
+      minScale: FLOOR,
+      focus: { x: 0, y: 0 },
+    })
+    const availH = 800 - inset
+    const contentH = 100 * FLOOR
+    expect(t.ty).toBeCloseTo(inset + (availH - contentH) / 2, 5)
   })
 })
 

@@ -18,7 +18,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import { boundingBox, clampPan, fitBox, selectionMaxScale } from '../viewport'
+import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale } from '../viewport'
 import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, Health, KEdge, KNode, RelCategory } from '../types'
@@ -581,6 +581,42 @@ export default function Topology(props: Props) {
     return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
   }
 
+  // Floored variants of the two above: like computeFitFor/fitNodeSet but they never zoom out past
+  // MIN_FIT_SCALE — instead of shrinking a huge graph to an unreadable speck they pin to the floor and
+  // frame around `focus` (the selected card for a selection, the top-left corner for a plain fit-all),
+  // keeping as much of the rest in view as legibility allows. The shared answer to the operator's "auto-
+  // fit zooms out too far, the text becomes unreadable". The pure math lives in viewport.ts (unit-tested).
+  function computeFitFloored(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    opts: { maxScale: number; focus: { x: number; y: number }; breathing?: number },
+  ) {
+    const rect = svg!.getBoundingClientRect()
+    const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
+    return fitBoxFloored(
+      { minX, minY, maxX, maxY },
+      { width: rect.width, height: rect.height, topInset },
+      { minScale: MIN_FIT_SCALE, ...opts },
+    )
+  }
+
+  // fitNodeSetFloored frames a node set with the floor applied, centring on `focus` (the selected card's
+  // centre) when the set is too big to fit legibly. focus defaults to the box centre so a caller that
+  // just wants a floored-and-centred frame can omit it.
+  function fitNodeSetFloored(
+    nodes: { x: number; y: number; width: number; height: number }[],
+    maxScale: number | ((w: number, h: number) => number),
+    focus?: { x: number; y: number },
+    breathing?: number,
+  ) {
+    const bb = boundingBox(nodes)
+    const ms = typeof maxScale === 'function' ? maxScale(bb.width, bb.height) : maxScale
+    const f = focus ?? { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 }
+    return computeFitFloored(bb.minX, bb.minY, bb.maxX, bb.maxY, { maxScale: ms, focus: f, breathing })
+  }
+
   // Fit-all on a real scope switch (context/namespace) OR a client-side restructure (grouping /
   // relationship-filter change) — but NOT on node-count churn (a collapse expand or an SSE
   // add/remove must preserve the operator's pan/zoom). `pendingFit` defers the fit until the
@@ -624,26 +660,11 @@ export default function Topology(props: Props) {
       return
     }
     pendingFit = false
-    const target = computeFitFor(0, 0, l.width, l.height, 1.4)
-    target.scale *= 0.92 // a little breathing room when the whole graph already fits comfortably
-    if (target.scale < MIN_FIT_SCALE) {
-      // Too many resources to fit readably: rather than shrink the whole graph to an unreadable
-      // speck, clamp to a legible floor (a hard minimum, applied AFTER the breathing room so it's
-      // never undercut) and open on the top-left — the first resources. Center the axis that still
-      // fits at the floor; anchor the overflowing axis to its start. The operator zooms out from
-      // there for the whole picture (the fit button / `f` still frames everything on demand).
-      const rect = svg.getBoundingClientRect()
-      const pad = 60
-      // Anchor below the control bar, not behind it: inset the top by the bar height so the first
-      // resources open just under the bar rather than hidden under it.
-      const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
-      const availH = Math.max(1, rect.height - topInset)
-      const contentW = l.width * MIN_FIT_SCALE
-      const contentH = l.height * MIN_FIT_SCALE
-      target.scale = MIN_FIT_SCALE
-      target.tx = contentW + pad * 2 <= rect.width ? (rect.width - contentW) / 2 : pad
-      target.ty = contentH + pad * 2 <= availH ? topInset + (availH - contentH) / 2 : topInset + pad
-    }
+    // Frame the whole graph driven by the canvas WIDTH (fitBoxFloored): a tall tree fills the width and
+    // overflows vertically (top-anchored, scroll down) instead of shrinking to fit the height into an
+    // unreadable speck. Still never below MIN_FIT_SCALE, never above 1.4. (The 60px padding is the only
+    // edge margin — no extra breathing factor here, so the width is used to maximise text size.)
+    const target = computeFitFloored(0, 0, l.width, l.height, { maxScale: 1.4, focus: { x: 0, y: 0 } })
     if (firstFit) {
       firstFit = false
       setScale(target.scale)
@@ -748,6 +769,12 @@ export default function Topology(props: Props) {
         if (!r) return
         const inSet = l.nodes.filter((n) => r.nodes.has(n.id))
         if (inSet.length === 0) return
+        // Frame the selected subtree, but never below the legible floor: a resource whose related
+        // subtree spans the whole namespace would otherwise zoom out to a speck (the operator's "click
+        // a large resource and it gets too small"). When floored, centre on the SELECTED card itself so
+        // it stays viewable, with as much of the surrounding subtree in view as the floor allows.
+        const sel = inSet.find((n) => n.id === id)
+        const focus = sel ? { x: sel.x, y: sel.y } : undefined
         // Defer the fit one frame so the just-opened drawer has taken its flex width and the SVG
         // has shrunk to the still-visible canvas before computeFitFor reads getBoundingClientRect.
         // The drawer is a flex sibling created after Topology, so on the *first* selection this
@@ -757,7 +784,7 @@ export default function Topology(props: Props) {
         // SVG, so the very first click frames against the visible canvas too (cycle 307).
         cancelAnimationFrame(selFitFrame)
         selFitFrame = requestAnimationFrame(() => {
-          animateTo(fitNodeSet(inSet, selectionMaxScale))
+          animateTo(fitNodeSetFloored(inSet, selectionMaxScale, focus))
         })
       },
       { defer: true },
@@ -1042,7 +1069,10 @@ export default function Topology(props: Props) {
       const r = related()
       const inSet = r ? l.nodes.filter((n) => r.nodes.has(n.id)) : []
       if (inSet.length > 0) {
-        animateTo(fitNodeSet(inSet, selectionMaxScale))
+        // Floor + centre-on-selection, mirroring the click-into-selection effect: re-framing a
+        // wide subtree must not zoom past legibility either.
+        const sel = inSet.find((n) => n.id === props.selectedId)
+        animateTo(fitNodeSetFloored(inSet, selectionMaxScale, sel ? { x: sel.x, y: sel.y } : undefined))
         return
       }
     }
@@ -1056,10 +1086,10 @@ export default function Topology(props: Props) {
       ? l.nodes.filter((n) => !nodeFaded(n))
       : null
     if (!lit || lit.length === 0) {
-      // No filter (or a filter that excluded everything): frame the whole drawn layout.
-      const target = computeFitFor(0, 0, l.width, l.height, 1.4)
-      target.scale *= 0.92
-      animateTo(target)
+      // No filter (or a filter that excluded everything): frame the whole drawn layout, width-driven so
+      // a tall tree renders large and overflows vertically (top-anchored) rather than shrinking to a
+      // speck — Fit / double-click maximise readable text against the canvas width (the operator's report).
+      animateTo(computeFitFloored(0, 0, l.width, l.height, { maxScale: 1.4, focus: { x: 0, y: 0 } }))
       return
     }
     const target = fitNodeSet(lit, 1.4)

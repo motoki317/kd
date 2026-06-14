@@ -66,6 +66,52 @@ export function fitBox(
   return { scale, tx: view.width / 2 - cx * scale, ty: view.topInset + availH / 2 - cy * scale }
 }
 
+// fitBoxFloored frames `box` driven by the canvas WIDTH, clamped to [minScale, maxScale]. Unlike
+// fitBox (which takes the smaller of the width- and height-fit, so a tall tree shrinks to fit its
+// height and the text turns to noise), this fits the WIDTH and lets a tall tree overflow vertically —
+// the operator scrolls down for the tail. Desktop canvases are wider than tall and most topology trees
+// are far taller than wide, so width-driven framing yields a much larger, readable scale on the common
+// case. The floor still guards genuinely huge/wide graphs (below it labels fade); the cap stops a small
+// tree zooming to absurdity.
+//
+// Positioning is per-axis: an axis whose content fits at the chosen scale is CENTRED; an axis that
+// overflows pans so `focus` (a point in LAYOUT coords — the selected card's centre, or the box's
+// top-left corner for a plain fit-all) sits at the viewport centre, clamped so the content keeps
+// covering the frame (no empty gutter past the first/last card). So fit-all top-anchors a tall tree
+// (start at the first resources, scroll down) while a selection keeps the selected card on-screen.
+export function fitBoxFloored(
+  box: { minX: number; minY: number; maxX: number; maxY: number },
+  view: { width: number; height: number; topInset: number },
+  opts: {
+    maxScale: number
+    minScale: number
+    focus: { x: number; y: number }
+    breathing?: number
+    padding?: number
+  },
+): FitTransform {
+  const padding = opts.padding ?? 60
+  const breathing = opts.breathing ?? 1
+  const availH = Math.max(1, view.height - view.topInset)
+  const w = Math.max(1, box.maxX - box.minX)
+  // Width-primary scale: fit the width (× breathing for a little margin), cap at maxScale, floor at
+  // minScale. Height deliberately does NOT enter the scale — a tall tree overflows instead of shrinking.
+  const scale = Math.max(Math.min((view.width - padding * 2) / w, opts.maxScale) * breathing, opts.minScale)
+  const place = (start: number, size: number, lo: number, hi: number, f: number) => {
+    const content = (hi - lo) * scale
+    if (content <= size - padding * 2) return start + (size - content) / 2 - lo * scale // fits axis → centre
+    const centred = start + size / 2 - f * scale
+    const lower = start + size - padding - hi * scale // content far edge at frame far edge
+    const upper = start + padding - lo * scale // content near edge at frame near edge
+    return Math.min(Math.max(centred, lower), upper)
+  }
+  return {
+    scale,
+    tx: place(0, view.width, box.minX, box.maxX, opts.focus.x),
+    ty: place(view.topInset, availH, box.minY, box.maxY, opts.focus.y),
+  }
+}
+
 // clampPan keeps at least `margin` px of the laid-out graph on-screen, so a pan can't fling the whole
 // graph off the canvas. `content` is the graph size ALREADY multiplied by the current scale; `view`
 // is the viewport. A graph smaller than the viewport is unaffected (the lower bound `margin - content`

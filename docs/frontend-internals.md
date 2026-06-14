@@ -302,6 +302,26 @@ Both read `capRows()` AFTER the toggle (the memo recomputes synchronously) and d
 `.topology-toolbar` height (`toolbarEl` ref) and frames the graph into the area BELOW it — otherwise the
 topmost cards land hidden behind the bar. The `MIN_FIT_SCALE` overflow branch applies the same inset.
 
+**Width-primary fit + legibility floor (`MIN_FIT_SCALE`, viewport.ts `fitBoxFloored`):** EVERY
+automatic/affordance fit — the scope/layout fit-all effect, the manual Fit button, double-click-empty,
+and `'f'` — frames through `fitBoxFloored`, which is driven by the canvas **WIDTH**, NOT `min(width,
+height)`. Topology trees are far taller than wide and desktop canvases are wider than tall, so taking
+the height-fit (as `fitBox` does) shrank a tall tree until its text was noise. `fitBoxFloored` instead
+fits the width and lets a tall tree **overflow vertically** (top-anchored — scroll down for the tail),
+clamped to `[MIN_FIT_SCALE, 1.4]`: the floor keeps a genuinely huge/wide graph legible (below it labels
+fade), the cap stops a narrow tree zooming to absurdity. The 60px padding is the only horizontal
+margin (no breathing factor — width is spent on text size). Positioning is per-axis: an axis whose
+content fits is centred; an overflowing axis pans so a `focus` point sits at the viewport centre,
+clamped so content keeps covering the frame (no empty gutter past the first/last card). **fit-all**
+focuses the box's TOP-LEFT corner (open on the first resources, scroll down); a **selection** focuses
+the SELECTED card's centre, so a resource whose subtree overspills stays on-screen and readable with as
+much of the rest around it as fits. (With the drawer open the canvas is ~half width, so a wide subtree
+floors and the focus-clamp keeps the selected card centred.) Deliberately floorless / not width-primary:
+`frameMatches` (the "N matches" pill) and the manual Fit's filtered-subset branch still use `fitBox`
+(min-fit, no floor) — both are explicit "locate my scattered matches" gestures where framing the whole
+set, speck or not, is the point; the automatic FILTER fit keeps its own floor + worst-match fallback.
+The Nodes view has its own fits (`fitCapBox`/`fitCapRowExpanded`, already width-driven + floor-aware).
+
 > The viewport-fit *math* is pure and unit-tested (`viewport.ts`); the live transform can't be verified
 > headless (rAF is frozen). See [`ADR 20260605`](ADR/20260605-testing-view-math-vs-headless-animation.md)
 > and the dogfooding playbook's "Measurement pitfalls".
