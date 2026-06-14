@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createMemo, createSignal, lazy, Match, onCleanup, onMount, Show, Suspense, Switch } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import { CLUSTER_SCOPE, type NamespaceSummary } from './api'
 import { hasDescendantPod } from './loggable'
@@ -9,7 +9,11 @@ import type { Capacity, Health } from './types'
 import { readRawPref, writePref } from './prefs'
 import Sidebar from './components/Sidebar'
 import Topology from './components/Topology'
-import DetailDrawer from './components/DetailDrawer'
+// The drawer subtree (manifest viewer, log streamer, usage gauges, kind facts) is interaction-gated:
+// it only matters once a node is selected. Splitting it into its own chunk keeps it off the
+// render-blocking initial bundle, so first paint ships less JS; it prefetches in the background and
+// is ready by the time the operator clicks a card.
+const DetailDrawer = lazy(() => import('./components/DetailDrawer'))
 import ContextSwitcher from './components/ContextSwitcher'
 import { applyTheme, loadThemePref, nextThemePref, saveThemePref, type ThemePref } from './theme'
 import { isNarrowScreen, NARROW_SCREEN_QUERY } from './screen'
@@ -178,6 +182,18 @@ export default function App() {
     selectionDeleted,
     ownerNodes,
   } = createSelectionDetails({ selectedId, graph, capacity, nodes })
+
+  // Keep the lazy drawer subtree off the render-blocking initial load: don't mount it (and thus
+  // don't fetch its chunk) until either a node is selected or the browser goes idle after first
+  // paint. The flag latches true and never flips back, so once mounted the drawer STAYS mounted —
+  // its slide-out animation depends on the node lingering through unmount, which a bare
+  // `Show when={selected}` would cut short. Idle-prefetch means it's ready before the first click.
+  const [drawerMounted, setDrawerMounted] = createSignal(false)
+  onMount(() => {
+    const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback
+    if (ric) ric(() => setDrawerMounted(true))
+    else setTimeout(() => setDrawerMounted(true), 200)
+  })
 
   // A URL-seeded "Kind/name" selection to restore once its node appears in the graph (UIDs aren't
   // stable across reloads, so we key the link on the stable identity).
@@ -516,6 +532,8 @@ export default function App() {
             onSelect={setSelectedId}
             onDeselect={() => setSelectedId(null)}
           />
+          <Show when={drawerMounted() || drawerNode()}>
+          <Suspense>
           <DetailDrawer
             ctx={ctx() ?? ''}
             node={drawerNode()}
@@ -540,6 +558,8 @@ export default function App() {
             onClose={() => setSelectedId(null)}
             hasPods={(id) => hasDescendantPod(id, nodes())}
           />
+          </Suspense>
+          </Show>
         </main>
       </div>
 
