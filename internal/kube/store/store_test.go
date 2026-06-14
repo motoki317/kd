@@ -96,6 +96,9 @@ func startTestStore(t *testing.T, objs ...runtime.Object) *Cache {
 	if err := c.Start(ctx); err != nil {
 		t.Fatalf("start store: %v", err)
 	}
+	// Start no longer blocks on the initial sync (it returns once watches are running), so wait
+	// here for a deterministic, fully-populated cache before the test snapshots it.
+	c.WaitForCacheSync(ctx)
 	// Deterministically tear the informers down at test end (factory.Shutdown waits for the
 	// goroutines) instead of leaving them to the context cancel; keeps goroutines from piling up
 	// across the package's tests. Runs before cancel (LIFO) and is idempotent, so both are safe.

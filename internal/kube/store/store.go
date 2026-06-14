@@ -160,9 +160,19 @@ func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metri
 	}
 }
 
-// Start discovers the cluster's resources, registers a dynamic informer for each non-skipped
-// kind, waits for the initial cache sync, then wires change handlers + the CRD watcher. The
-// caller's context cancellation tears every informer down.
+// Start discovers the cluster's resources, registers + wires a dynamic informer for each
+// non-skipped kind, kicks off the watches, and returns — WITHOUT blocking on the initial cache
+// sync. The caller's context cancellation tears every informer down.
+//
+// Why not wait for sync here: against a remote cluster the initial-LIST fan-out across every
+// discovered GVR (often 150+) costs ~1s on a good link, and up to the 30s deadline if a single
+// aggregated API or large resource is slow — and that wait WAS the whole of kd's startup latency
+// (and the cause of the occasional multi-second "stuck on launch"). Discovery alone validates
+// connectivity and fails fast; the per-GVR sync then proceeds in the background. Snapshots reflect
+// whatever has synced so far and fill in within ~1s — which overlaps with the human gap between
+// the ready banner and the first browser request, so a viewer effectively never sees a partial
+// graph. The background waiter logs any GVRs that never sync (RBAC-denied, gone CRD) so the gap is
+// visible rather than silent.
 func (c *Cache) Start(ctx context.Context) error {
 	resources, err := c.disc.Discover(ctx)
 	if err != nil {
@@ -183,14 +193,10 @@ func (c *Cache) Start(ctx context.Context) error {
 		}
 	}()
 
-	// Start every registered informer, then block until they're synced. A failing watch
-	// (RBAC denied, gone CRD) won't ever HasSynced; we time-bound the wait so a single bad
-	// GVR doesn't hold up the rest.
-	c.factory.Start(c.stopCh)
-	c.waitForSync(ctx)
-
-	// Wire change handlers AFTER initial sync so subscribers aren't flooded by initial
-	// population events.
+	// Wire change handlers BEFORE starting informers so a viewer who connects mid-sync watches the
+	// graph fill in progressively rather than seeing one frozen partial snapshot. Initial-population
+	// events can't flood subscribers: notify() coalesces into a depth-1 channel and the SSE layer
+	// debounces rebuilds over a fixed window, so a burst of Adds collapses to one rebuild per tick.
 	handler := cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(any) { c.notify() },
 		UpdateFunc: func(any, any) { c.notify() },
@@ -204,10 +210,15 @@ func (c *Cache) Start(ctx context.Context) error {
 	}
 	c.mu.Unlock()
 
-	// CRD watcher keeps the informer set in sync as CRDs are installed/removed at runtime.
-	// Idempotent: if discovery already covered the CustomResourceDefinitions GVR (it
-	// usually does), we just attach a handler to the existing informer.
-	c.startCRDWatcher(ctx)
+	c.factory.Start(c.stopCh)
+
+	// Background the sync wait and the CRD watcher. The CRD watcher must start AFTER the initial
+	// sync: attaching it earlier makes the CRD informer's replay of every existing CRD fire an Add
+	// apiece, each triggering a discovery reconcile — a needless storm during population.
+	go func() {
+		c.waitForSync(ctx)
+		c.startCRDWatcher(ctx)
+	}()
 
 	return nil
 }
@@ -260,7 +271,36 @@ func (c *Cache) registerLocked(r discovery.Resource) {
 func (c *Cache) waitForSync(ctx context.Context) {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	c.factory.WaitForCacheSync(deadline.Done())
+	synced := c.factory.WaitForCacheSync(deadline.Done())
+	// Surface kinds that never synced before the deadline (RBAC-denied watches, a slow or down
+	// aggregated API) — their objects are simply absent from snapshots until they catch up, which
+	// is otherwise invisible now that startup no longer blocks on the sync.
+	var unsynced []string
+	for gvr, ok := range synced {
+		if !ok {
+			unsynced = append(unsynced, gvr.String())
+		}
+	}
+	if len(unsynced) > 0 {
+		slices.Sort(unsynced)
+		slog.Warn("store: some resources did not sync before the deadline", "count", len(unsynced), "gvrs", unsynced)
+	}
+}
+
+// WaitForCacheSync blocks until every started informer has completed its initial LIST, or ctx is
+// done; it reports whether all synced. Start deliberately does NOT wait — process startup must not
+// be held hostage to the initial fan-out, which costs ~1s against a remote cluster (and can stall
+// far longer on a slow GVR). Callers that need a fully-populated cache before proceeding call this
+// explicitly: the background prewarm (so its "connected" log means data is actually complete) and
+// tests asserting on a snapshot (so they're deterministic, not racing the background sync).
+func (c *Cache) WaitForCacheSync(ctx context.Context) bool {
+	synced := c.factory.WaitForCacheSync(ctx.Done())
+	for _, ok := range synced {
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // skipSet returns the resource-name set excluded from eager startup. Defaults minus

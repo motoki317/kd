@@ -201,11 +201,18 @@ func (r *Registry) Get(ctx context.Context, name string) (*store.Cache, error) {
 	}
 }
 
-// Prewarm builds the cache for the named context synchronously, returning the build error.
-// Intended for the default context on startup so the UI lands ready-to-use.
+// Prewarm builds the cache for the named context AND waits for its initial sync to complete,
+// returning the build error. Intended for the default context on startup so the cache lands fully
+// populated. Get alone returns as soon as the cache is serving (watches started) — Prewarm adds the
+// sync wait, so it is the "ready-to-use" signal. Production runs it in the background, so the wait
+// never delays startup; tests rely on it for a deterministic, fully-synced cache.
 func (r *Registry) Prewarm(ctx context.Context, name string) error {
-	_, err := r.Get(ctx, name)
-	return err
+	c, err := r.Get(ctx, name)
+	if err != nil {
+		return err
+	}
+	c.WaitForCacheSync(ctx)
+	return nil
 }
 
 func (r *Registry) known(name string) bool {

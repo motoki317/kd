@@ -88,10 +88,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	slog.Info("loading cluster", "context", reg.Default())
-	if err := reg.Prewarm(ctx, reg.Default()); err != nil {
-		return err
-	}
 
 	policy, err := rbac.LoadFile(cfg.PolicyPath)
 	if err != nil {
@@ -146,6 +142,28 @@ func run() error {
 		slog.Info("running in local mode, authentication disabled", "user", devUser)
 	}
 	console.Ready(ln.Addr().String(), time.Since(started))
+
+	// Warm the default context's cache in the background instead of blocking the banner on it.
+	// The build's only foreground cost used to be discovery (ServerPreferredResources), which
+	// takes no context and runs against a Timeout-less client, so a momentarily-slow apiserver
+	// discovery endpoint stalled startup for seconds — the "stuck on launch" an operator hit
+	// intermittently. Decoupling makes kd reachable in well under the time a human takes to reach
+	// the browser; the cache fills in concurrently and the first request shares this in-flight
+	// build via the registry's single-flight. A genuinely unreachable cluster now surfaces in the
+	// UI (the context's error status) and the result log rather than as a terminal hang — the local
+	// fail-fast paths an operator can act on (bad kubeconfig, port in use) already ran above.
+	slog.Info("connecting to cluster", "context", reg.Default())
+	go func() {
+		connStart := time.Now()
+		if err := reg.Prewarm(ctx, reg.Default()); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				slog.Error("cluster connection failed", "context", reg.Default(), "err", err)
+			}
+			return
+		}
+		slog.Info("cluster connected", "context", reg.Default(), "took", time.Since(connStart).Round(time.Millisecond))
+	}()
+
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
