@@ -538,6 +538,27 @@ export default function Topology(props: Props) {
   // changes glide instead of jumping — easier for a human to track what just changed.
   let animFrame = 0
   let selFitFrame = 0 // rAF handle for the deferred selection-fit (cycle 307)
+  // A selection-fit waiting for the canvas to reach its post-drawer width. Opening the drawer mounts
+  // a flex sibling that shrinks the SVG, but the mount+reflow lands an unpredictable frame or two
+  // after the selectedId change (the drawer is even absent from the DOM on the first rAF) — so a
+  // fixed rAF count measured the FULL pre-drawer width and framed the selection half-under the drawer
+  // (the reported "zoom centres on the canvas incl. the hidden part"). Instead the selection-fit is
+  // run from the SVG ResizeObserver, which fires exactly when that shrink lands (width then settled),
+  // or immediately when the drawer is already open (re-selection, no resize to wait for).
+  let pendingSelFit: { inSet: { x: number; y: number; width: number; height: number }[]; focus?: { x: number; y: number } } | null = null
+  const runSelFit = () => {
+    if (!pendingSelFit || !svg) return
+    // Only fit once the canvas is actually in its drawer-open (shrunk) state. The drawer mounts a
+    // frame or two after selection, and a re-selection can briefly bounce the canvas back to full
+    // width — fitting against that full width would frame the selection half-under the drawer. So
+    // bail while the SVG still spans its whole .main column and let the ResizeObserver re-invoke this
+    // when the drawer's shrink lands. (mainW unknown → no occlusion to wait for → fit immediately.)
+    const mainW = svg.closest('.main')?.clientWidth
+    if (mainW != null && svg.getBoundingClientRect().width >= mainW - 1) return
+    const { inSet, focus } = pendingSelFit
+    pendingSelFit = null
+    animateTo(fitNodeSetFloored(inSet, selectionMaxScale, focus))
+  }
   let cardClickTimer: ReturnType<typeof setTimeout> | undefined // deferred deselect, cancelled by dblclick (cycle 315)
   function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
     cancelAnimationFrame(animFrame)
@@ -692,6 +713,14 @@ export default function Topology(props: Props) {
         rafId = 0
         updateKindsEdges() // bar width changed → re-evaluate which kind chips overflow
         if (!svg) return
+        // The drawer just opened and shrank the canvas: the width is now settled, so run the
+        // selection-fit that was waiting for it (frames the selection against the visible canvas,
+        // not the pre-drawer width). Must precede the selectedId guard below — the fit IS the
+        // selected case here.
+        if (pendingSelFit) {
+          runSelFit()
+          return
+        }
         const l = layout()
         if (l.width === 0) return
         if (props.selectedId) return // selection-fit owns this case
@@ -739,7 +768,10 @@ export default function Topology(props: Props) {
         if (!svg) return
         const l = layout()
         if (l.width === 0) return
-        if (!id) return
+        if (!id) {
+          pendingSelFit = null // deselect: drop any fit waiting on the drawer so it can't fire late
+          return
+        }
         // Nodes view: frame the node row the selection sits in (see capRowBoxFor) — UNLESS the selection
         // came from clicking an expanded pod card, in which case zoom to that card (the user's "click a
         // pod box to read its bars"). capPodFitBox is consumed once so a later keyboard/search selection
@@ -775,17 +807,16 @@ export default function Topology(props: Props) {
         // it stays viewable, with as much of the surrounding subtree in view as the floor allows.
         const sel = inSet.find((n) => n.id === id)
         const focus = sel ? { x: sel.x, y: sel.y } : undefined
-        // Defer the fit one frame so the just-opened drawer has taken its flex width and the SVG
-        // has shrunk to the still-visible canvas before computeFitFor reads getBoundingClientRect.
-        // The drawer is a flex sibling created after Topology, so on the *first* selection this
-        // effect would otherwise measure the full pre-drawer width and frame the subtree off-center,
-        // half-hidden under the drawer — while every later selection (drawer already open) measured
-        // correctly. The rAF lets Solid finish committing the drawer DOM and the browser reflow the
-        // SVG, so the very first click frames against the visible canvas too (cycle 307).
+        // Run the fit only once the canvas is at its post-drawer width (see pendingSelFit). If the
+        // drawer is ALREADY open (a re-selection: the SVG is narrower than its .main column), the
+        // width is settled — fit on the next frame. Otherwise the drawer is opening; the SVG
+        // ResizeObserver fires when it shrinks and runs the fit then, framing the visible canvas.
+        pendingSelFit = { inSet, focus }
+        // Try to fit next frame: if the drawer is already open (re-selection) the canvas is already
+        // shrunk and runSelFit fits immediately; on a first selection the canvas is still full width,
+        // so runSelFit bails and the SVG ResizeObserver re-invokes it once the drawer's shrink lands.
         cancelAnimationFrame(selFitFrame)
-        selFitFrame = requestAnimationFrame(() => {
-          animateTo(fitNodeSetFloored(inSet, selectionMaxScale, focus))
-        })
+        selFitFrame = requestAnimationFrame(runSelFit)
       },
       { defer: true },
     ),
