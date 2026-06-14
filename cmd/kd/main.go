@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	_ "net/http/pprof" // registers /debug/pprof/* on http.DefaultServeMux; only served when --pprof-addr is set
 	"os"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/motoki317/kd/internal/api"
 	"github.com/motoki317/kd/internal/auth"
+	"github.com/motoki317/kd/internal/clilog"
 	"github.com/motoki317/kd/internal/config"
 	"github.com/motoki317/kd/internal/kube/kubeconfig"
 	"github.com/motoki317/kd/internal/kube/registry"
@@ -61,6 +63,9 @@ func run() error {
 		return err
 	}
 
+	started := time.Now()
+	console := clilog.Setup(os.Stderr, os.Stderr.Fd(), cfg.LogLevel, cfg.LogFormat)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -83,7 +88,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	slog.Info("syncing informer cache", "context", reg.Default())
+	slog.Info("loading cluster", "context", reg.Default())
 	if err := reg.Prewarm(ctx, reg.Default()); err != nil {
 		return err
 	}
@@ -103,7 +108,7 @@ func run() error {
 		})
 	}
 
-	devUser, autoDev := cfg.EffectiveDevUser(inCluster)
+	devUser, _ := cfg.EffectiveDevUser(inCluster)
 	authCfg := auth.Config{
 		UserHeader:      cfg.UserHeader,
 		GroupsHeader:    cfg.GroupsHeader,
@@ -114,10 +119,16 @@ func run() error {
 	handler := server.New(authCfg, api.New(api.FromRegistry(reg), enforcer).Routes())
 
 	srv := &http.Server{
-		Addr:    cfg.Addr,
 		Handler: handler,
 		// No WriteTimeout: SSE streams are long-lived. ReadHeaderTimeout guards slow-header DoS.
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// Bind before announcing so the banner's URLs are reachable the instant they're printed (and
+	// so a port conflict fails loudly here rather than after a misleading "ready").
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return err
 	}
 
 	go func() {
@@ -127,14 +138,15 @@ func run() error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	switch {
-	case autoDev:
-		slog.Warn("dev mode auto-enabled: not running in-cluster and no proxy auth configured; injecting a fixed identity and disabling authentication (set --dev-user, --trusted-proxies, or --user-header to override)", "user", devUser)
-	case devUser != "":
-		slog.Warn("dev mode: trusting a fixed identity, authentication disabled", "user", devUser)
+	// Both auto- and explicit -dev-user collapse to the same fact for an operator: auth is off and
+	// this is a local run. Kept at INFO (not WARN) and jargon-free so a normal local startup reads
+	// as calm status, not something demanding action — auto dev mode is already gated to non-cluster,
+	// no-proxy-auth hosts (see EffectiveDevUser), so the alarming wording was misplaced there.
+	if devUser != "" {
+		slog.Info("running in local mode, authentication disabled", "user", devUser)
 	}
-	slog.Info("kd listening", "addr", cfg.Addr)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	console.Ready(ln.Addr().String(), time.Since(started))
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

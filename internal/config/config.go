@@ -5,10 +5,13 @@ package config
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/motoki317/kd/internal/clilog"
 )
 
 // DefaultUserHeader is the request header carrying the authenticated username, as emitted by the
@@ -50,6 +53,10 @@ type Config struct {
 	// from the main handler, so the profiler is never exposed on the authenticated UI port).
 	// Empty (the default) disables profiling entirely. Intended for diagnosing memory/CPU.
 	PprofAddr string
+
+	// Logging.
+	LogLevel  slog.Level    // minimum level emitted
+	LogFormat clilog.Format // console (color when stderr is a TTY), text, json, or auto
 }
 
 // Load parses configuration from the given args (typically os.Args[1:]).
@@ -60,6 +67,8 @@ func Load(args []string) (Config, error) {
 		trustedProxies string
 		skipKinds      string
 		eagerKinds     string
+		logLevel       string
+		logFormat      string
 	)
 	fs.StringVar(&c.Addr, "addr", envOr("KD_ADDR", ":9123"), "HTTP listen address")
 	fs.StringVar(&c.UserHeader, "user-header", envOr("KD_USER_HEADER", DefaultUserHeader), "request header carrying the authenticated username")
@@ -74,6 +83,8 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&skipKinds, "skip-kinds", envOr("KD_SKIP_KINDS", ""), "comma-separated extra resource names to skip from eager informer startup, on top of the built-in defaults (events, leases, endpoints, endpointslices, controllerrevisions, ephemeralreports)")
 	fs.StringVar(&eagerKinds, "eager-kinds", envOr("KD_EAGER_KINDS", ""), "comma-separated resource names to force-include in eager startup, overriding both --skip-kinds and the built-in defaults")
 	fs.StringVar(&c.PprofAddr, "pprof-addr", envOr("KD_PPROF_ADDR", ""), "if set, serve net/http/pprof on this address for diagnostics (empty = disabled)")
+	fs.StringVar(&logLevel, "log-level", envOr("KD_LOG_LEVEL", "info"), "log verbosity: debug, info, warn, or error")
+	fs.StringVar(&logFormat, "log-format", envOr("KD_LOG_FORMAT", "auto"), "log format: auto (color when stderr is a terminal, else text), console, text, or json")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -86,6 +97,12 @@ func Load(args []string) (Config, error) {
 	c.TrustedProxies = prefixes
 	c.SkipKinds = splitCSV(skipKinds)
 	c.EagerKinds = splitCSV(eagerKinds)
+	if c.LogLevel, err = clilog.ParseLevel(logLevel); err != nil {
+		return Config{}, err
+	}
+	if c.LogFormat, err = clilog.ParseFormat(logFormat); err != nil {
+		return Config{}, err
+	}
 	return c, nil
 }
 
