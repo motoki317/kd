@@ -110,3 +110,31 @@ func TestGzipFlusher(t *testing.T) {
 		t.Errorf("decoded stream missing events: %q", body)
 	}
 }
+
+// TestGzipFlushBeforeWrite covers the SSE-log regression: the log-stream handler flushes to commit
+// the response head BEFORE its first body write (so the client gets 200 + headers even with no pods
+// yet). If that early flush commits the head without negotiating gzip, the first real write then sets
+// up the gzip writer and emits compressed bytes under a plain text/event-stream header — a body the
+// browser can't decode, so the Logs tab silently never received an event. The flush must settle the
+// header (Content-Encoding: gzip) so the body encoding and the header always agree.
+func TestGzipFlushBeforeWrite(t *testing.T) {
+	h := gzipMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		f := w.(http.Flusher)
+		f.Flush() // commit head before any body write — the log handler's pattern
+		_, _ = io.WriteString(w, "event: log\ndata: hello\n\n")
+		f.Flush()
+	}))
+	req := httptest.NewRequest("GET", "/stream", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	resp := rec.Result()
+	if resp.Header.Get("Content-Encoding") != "gzip" {
+		t.Fatalf("flush-before-write did not negotiate gzip: Content-Encoding=%q", resp.Header.Get("Content-Encoding"))
+	}
+	// readBody gunzips per the header; if the header lied about the encoding this would yield garbage.
+	if body := readBody(t, resp); !strings.Contains(body, "event: log") {
+		t.Errorf("decoded stream missing event (header/body encoding mismatch?): %q", body)
+	}
+}

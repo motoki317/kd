@@ -105,6 +105,15 @@ func (g *gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (g *gzipResponseWriter) Flush() {
+	// An SSE handler flushes to commit headers BEFORE its first body write (logstream.go: "commit
+	// 200 + headers even before the first line"). Without this, that early flush would send the
+	// response head with no Content-Encoding, yet the first Write then sets up the gzip writer and
+	// emits compressed bytes — gzip body under a plain text/event-stream header, which the browser
+	// can't decode (the Logs tab silently never received an event). Settle the header here first so
+	// gzip negotiation and the body encoding always agree.
+	if !g.wroteHeader {
+		g.WriteHeader(http.StatusOK)
+	}
 	if g.gw != nil {
 		_ = g.gw.Flush()
 	}
