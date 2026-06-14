@@ -460,6 +460,9 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | Reorder relationship chips by edge count (busiest lens first) | rejected (2026-06-10 b22 D16) — stable chip order is muscle memory; a count-driven reorder makes the toolbar shuffle between namespaces and sessions for no triage gain |
 | Drawer open at a ~800px window crushes the canvas to a sliver | working-as-designed (2026-06-10 b25 D46) — deliberate priority-ordered degradation: the just-opened drawer keeps readable width (the operator's focus is the drawer), ⌘B or closing recovers the canvas, and ≤640px switches to full-width overlays. Don't add a mid-width breakpoint |
 | Dedicated icons for vendor CRD kinds (cert-manager Certificate/Order, Argo Workflow, ArgoCD Application, …) | rejected (2026-06-11 D88) — the deliberate line in `icons.tsx` is built-in kinds only; every CRD gets the fallback square + its kind label (CERT, WF, APP), which already identifies it. One vendor icon opens per-vendor sprawl with no canonical source for the glyphs, and tiny-size legibility is the constraint that killed acronym labels too |
+| Shrink the ~61 KB latin-font payload (subset glyphs / drop a weight) | rejected (2026-06-14 perf pass) — fonts are `font-display: swap`, so they never gate LCP (measured); shrinking them only trims background bandwidth. Glyph-subsetting is unsafe (mono renders arbitrary log/manifest text — needs full coverage), and dropping a weight regresses the fixed 400/500/600 design language. Switching to latin-only `@fontsource` subset CSS would trim the embedded binary + ~1 KB gz CSS but moves no runtime metric. Not worth it |
+| Brotli (vs gzip) for static assets; inline critical CSS to drop an RTT | deferred (2026-06-14 perf pass) — both are <0.1 s wins on top of the gzip middleware. Brotli needs a non-stdlib dep or build-time precompression; CSS inlining needs a Vite plugin and de-caches the stylesheet. Revisit only if the Slow4G LCP (2.2 s, RTT-bound) becomes a real ask — on a not-slow link LCP is already 0.7 s |
+| Code-split CapacityView (Nodes view) like the drawer | deferred (2026-06-14 perf pass) — `capacityLayout` is referenced synchronously in Topology's `layout` memo (not just inside the component), so the layout math can't follow the component into a lazy chunk; only the ~26 KB-src render component would split, for a smaller win than the drawer and a Suspense flash on a one-click view switch |
 
 ## Done
 
@@ -467,6 +470,15 @@ Shipped improvements, newest first. **git log is the authoritative per-change re
 Commits carry the full WHY); these one-liners are just the index — the verbose rationale that used to
 live here was redundant with the commits and is trimmed (2026-06-06 condensation). Hashes shown where a
 single commit maps cleanly; otherwise search the title in git log.
+
+### 2026-06-14 frontend + network perf pass
+- gzip middleware for text responses — the static server compressed nothing; this was the dominant
+  first-paint win (Slow4G LCP 3.5→2.5 s, total transfer 596→202 KB, SSE graph 204→43 KB) (7b1023a)
+- Code-split the drawer subtree off the entry chunk via lazy() + latching idle-mount (entry
+  84→69 KB gz, Slow4G LCP 2.5→2.2 s; few-Mbps LCP 0.7 s — meets the ~1 s target on a not-slow link) (61e794b)
+- Measured non-issues (do not chase): graph render/update (the "+N more" folding caps visible DOM —
+  ~36 cards even at cluster scope, 0 long tasks); fonts are the byte floor (~61 KB latin woff2) but
+  `font-display: swap` means they don't gate LCP. Levers deliberately NOT taken — see Rejected.
 
 ### 2026-06-06 operator-dogfooding campaign
 (Condensed 2026-06-10 — the per-item narrative was redundant with the commits; hashes are the record.)
