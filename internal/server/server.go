@@ -22,7 +22,7 @@ func New(authCfg auth.Config, apiHandler http.Handler) http.Handler {
 	})
 	mux.Handle("/api/", authCfg.Middleware(apiHandler))
 	mux.Handle("/", clientHandler())
-	return recoverer(mux)
+	return recoverer(gzipMiddleware(mux))
 }
 
 // clientHandler serves the embedded client as a single-page app, or a placeholder when the
