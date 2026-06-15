@@ -4,6 +4,7 @@ import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
 import { defaultLogContainer, filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
+import { ExpandGlyph } from '../icons'
 import CopyButton from './CopyButton'
 
 interface Props {
@@ -485,28 +486,7 @@ export default function LogViewer(props: Props) {
               onClick={() => props.onToggleExpand!()}
             >
               <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
-                <Show
-                  when={props.expanded}
-                  fallback={
-                    <path
-                      d="M2 5 L2 2 L5 2 M9 2 L12 2 L12 5 M12 9 L12 12 L9 12 M5 12 L2 12 L2 9"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  }
-                >
-                  <path
-                    d="M5 2 L5 5 L2 5 M9 2 L9 5 L12 5 M12 9 L9 9 L9 12 M2 9 L5 9 L5 12"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </Show>
+                <ExpandGlyph expanded={!!props.expanded} />
               </svg>
               {props.expanded ? 'restore' : 'full screen'}
             </button>

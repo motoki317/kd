@@ -1,4 +1,4 @@
-import { type JSX } from 'solid-js'
+import { Show, type JSX } from 'solid-js'
 import { K8S_ICONS, type K8sIconPaint } from './k8sIconPaths'
 
 // Topology cards used to identify a resource by its uppercase KIND text alone (POD, DEPLOYMENT,
@@ -185,6 +185,36 @@ export function kindIcon(kind: string): JSX.Element {
 // tests that assert coverage of currently-emitted kinds without snapshotting visuals.
 export function hasKindIcon(kind: string): boolean {
   return kind in icons
+}
+
+// ExpandGlyph is the maximize/restore corner glyph shared by the drawer and the log viewer's
+// expand buttons. Returns the inner paths only (no <svg>), so each caller keeps its own size: the
+// collapsed state shows outward-pointing corners, the expanded state inward-pointing ones.
+export function ExpandGlyph(props: { expanded: boolean }): JSX.Element {
+  return (
+    <Show
+      when={props.expanded}
+      fallback={
+        <path
+          d="M2 5 L2 2 L5 2 M9 2 L12 2 L12 5 M12 9 L12 12 L9 12 M5 12 L2 12 L2 9"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      }
+    >
+      <path
+        d="M5 2 L5 5 L2 5 M9 2 L9 5 L12 5 M12 9 L9 9 L9 12 M2 9 L5 9 L5 12"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </Show>
+  )
 }
 
 // kindFromRef extracts the leading kind from a binding's roleRef string ("Role/foo",

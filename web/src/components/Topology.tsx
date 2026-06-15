@@ -1050,35 +1050,29 @@ export default function Topology(props: Props) {
       return
     }
     // Cycle 161: a click on the topology background (not on a card and not a pan) dismisses the
-    // open drawer. Walk up from the click target — if any ancestor has the .node class, it was a
-    // card click (its own onClick will run); otherwise treat as a background click.
+    // open drawer.
     if (!props.onDeselect || !props.selectedId) return
-    let el: Element | null = e.target as Element | null
+    if (isBackgroundClick(e.target)) props.onDeselect()
+  }
+
+  // isBackgroundClick reports whether a click landed on the empty canvas — no interactive ancestor
+  // up to the svg. A card (.node) or a collapse "show more" pill (.collapse-pill) has its own
+  // onClick, so it counts as a hit, not background. Without the pill check, clicking "show more"
+  // while a resource is selected deselected it, closing the drawer out from under the operator who
+  // only meant to expand the cluster.
+  function isBackgroundClick(target: EventTarget | null): boolean {
+    let el = target as Element | null
     while (el && el !== svg) {
-      // A card (.node) OR a collapse pill (.collapse-pill) is an interactive target with its own
-      // onClick — treat it as a hit, not background. Without the pill check, clicking "show more"
-      // while a resource is selected also ran this background branch and deselected it, closing the
-      // drawer out from under the operator who only meant to expand the cluster.
-      if ((el as Element).classList?.contains('node') || (el as Element).classList?.contains('collapse-pill')) return
+      if (el.classList?.contains('node') || el.classList?.contains('collapse-pill')) return false
       el = el.parentElement
     }
-    props.onDeselect()
+    return true
   }
 
   // Double-clicking empty canvas re-fits the view. A common gesture in graph editors; cheaper to
-  // discover than the 'f' shortcut for new operators. Card hit-test walks ancestors the same way
-  // onPointerUp does, so a stray double-click on a node title runs the node's own behavior.
+  // discover than the 'f' shortcut for new operators.
   function onBackgroundDblClick(e: MouseEvent) {
-    let el: Element | null = e.target as Element | null
-    while (el && el !== svg) {
-      // A card (.node) OR a collapse pill (.collapse-pill) is an interactive target with its own
-      // onClick — treat it as a hit, not background. Without the pill check, clicking "show more"
-      // while a resource is selected also ran this background branch and deselected it, closing the
-      // drawer out from under the operator who only meant to expand the cluster.
-      if ((el as Element).classList?.contains('node') || (el as Element).classList?.contains('collapse-pill')) return
-      el = el.parentElement
-    }
-    resetView()
+    if (isBackgroundClick(e.target)) resetView()
   }
 
   function resetView() {

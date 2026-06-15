@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, startTransition, Suspense } from 'solid-js'
 import { CLUSTER_SCOPE, fetchEvents, isForbidden } from '../api'
-import { kindFromRef, kindIcon } from '../icons'
+import { ExpandGlyph, kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { relativeAge } from '../time'
 import { useNow } from '../clock'
@@ -345,28 +345,7 @@ export default function DetailDrawer(props: Props) {
                 onClick={() => setExpanded((v) => !v)}
               >
                 <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
-                  <Show
-                    when={expanded()}
-                    fallback={
-                      <path
-                        d="M2 5 L2 2 L5 2 M9 2 L12 2 L12 5 M12 9 L12 12 L9 12 M5 12 L2 12 L2 9"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    }
-                  >
-                    <path
-                      d="M5 2 L5 5 L2 5 M9 2 L9 5 L12 5 M12 9 L9 9 L9 12 M2 9 L5 9 L5 12"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </Show>
+                  <ExpandGlyph expanded={expanded()} />
                 </svg>
               </button>
               <button
@@ -523,6 +502,17 @@ export default function DetailDrawer(props: Props) {
                         // Only show the source pill when an aggregated event came from a
                         // descendant — the root's own events are obvious from the drawer header.
                         const showSource = ev.source && ev.source !== root
+                        // The icon + short name is identical in the clickable and static branches
+                        // below; one fragment, mounted by whichever branch renders. Built only when
+                        // there's a source (kindFromRef would choke on an undefined ev.source).
+                        const sourceBody = showSource ? (
+                          <>
+                            <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
+                              {kindIcon(kindFromRef(ev.source!))}
+                            </svg>
+                            {ev.source!.split('/').pop()}
+                          </>
+                        ) : null
                         return (
                           <li
                             class="event-item"
@@ -561,17 +551,11 @@ export default function DetailDrawer(props: Props) {
                                     // Alt-click belongs to the item's copy gesture — don't also navigate.
                                     onClick={(e) => { if (e.altKey) return; props.onNavigateRef!(ev.source!) }}
                                   >
-                                    <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
-                                      {kindIcon(kindFromRef(ev.source!))}
-                                    </svg>
-                                    {ev.source!.split('/').pop()}
+                                    {sourceBody}
                                   </button>
                                 ) : (
                                   <span class="event-source" title={`from ${ev.source}`}>
-                                    <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="11" height="11" aria-hidden="true">
-                                      {kindIcon(kindFromRef(ev.source!))}
-                                    </svg>
-                                    {ev.source!.split('/').pop()}
+                                    {sourceBody}
                                   </span>
                                 )}
                               </Show>
