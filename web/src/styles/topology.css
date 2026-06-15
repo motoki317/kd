@@ -4,6 +4,12 @@
   display: flex;
   min-width: 0;
   position: relative;
+  /* Floor for the canvas column so an open drawer never squeezes the topology — and its
+     absolutely-positioned toolbar — to nothing. The drawer's max-width and its resize handle both
+     subtract this from .main's width (NOT the viewport: the drawer sits right of the namespace
+     sidebar), keeping the toolbar legible and the drawer fully on-screen down to ~640px, where the
+     full-width overlay (layout.css) takes over. */
+  --canvas-min: 320px;
   /* Clip the health stripe's over-extension (see .stripe-over-drawer) to the main edge. */
   overflow: hidden;
 }

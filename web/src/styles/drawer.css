@@ -1,7 +1,11 @@
 /* Drawer */
 .drawer {
   width: var(--drawer-w);
-  max-width: 70vw;
+  /* Cap to .main's width minus the canvas floor (--canvas-min), NOT a viewport-relative 70vw: the
+     drawer sits right of the namespace sidebar, so a viewport cap ignored that offset and let the
+     drawer overflow the viewport — clipping its own close button — and overlap the toolbar on small
+     laptops / half-screen windows. Below ~640px the full-width overlay (layout.css) overrides this. */
+  max-width: calc(100% - var(--canvas-min));
   flex: 0 0 auto;
   border-left: 1px solid var(--border);
   background: var(--surface);
@@ -19,15 +23,16 @@
 /* Drag handle on the drawer's LEFT edge — the mirror of .sidebar-resizer (layout.css). The drawer is
    a static flex item flush to .main's right edge, so the handle is positioned against .main (the
    positioned ancestor) rather than the drawer itself — keeping .drawer unpositioned so the health
-   stripe still paints across its top (topology.css .stripe-over-drawer). min(--drawer-w, 70vw)
-   mirrors the drawer's own width:var(--drawer-w)/max-width:70vw, so the handle tracks the rendered
-   edge as it resizes. A centered hairline brightens on hover/focus; the 6px hit target clears the
+   stripe still paints across its top (topology.css .stripe-over-drawer). The right offset mirrors the
+   drawer's own width:var(--drawer-w)/max-width clamp, so the handle tracks the rendered edge as it
+   resizes (and as the canvas-floor cap narrows the drawer on small screens). A centered hairline
+   brightens on hover/focus; the 6px hit target clears the
    WCAG minimum. body.resizing-col (layout.css) handles the drag cursor + selection suppression. */
 .drawer-resizer {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: min(var(--drawer-w), 70vw);
+  right: min(var(--drawer-w), calc(100% - var(--canvas-min)));
   width: 6px;
   margin-right: -3px; /* straddle the border so neither side loses layout width */
   z-index: 6;
