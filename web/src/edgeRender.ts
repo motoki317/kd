@@ -52,7 +52,7 @@ export const DASHED: Partial<Record<EdgeType, boolean>> = {
 
 // Human-readable label for an edge type, so operators don't need to know the graph package's edge
 // taxonomy by heart.
-export const EDGE_LABELS: Record<EdgeType, string> = {
+const EDGE_LABELS: Record<EdgeType, string> = {
   ownerReference: 'owns',
   scheduledOn: 'runs on',
   selects: 'selects',
