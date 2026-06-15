@@ -26,8 +26,11 @@ function classifyLevel(word: string): LogLevel {
 // parseLogLevel best-effort extracts a severity from the head of a log line so the viewer can show a
 // colored badge for error-first scanning. Deliberately CONSERVATIVE to avoid badging prose: it only
 // recognizes (1) klog/glog "E0521 …" prefixes, (2) an explicit structured field (level=warn,
-// "level":"error", severity=info), or (3) an UPPERCASE level token near the start ("<ts> ERROR …",
-// "[WARN]") — a lowercase "error" buried in a message is ignored. Returns null when unsure.
+// "level":"error", severity=info), (3) an UPPERCASE level token near the start ("<ts> ERROR …",
+// "[WARN]"), or (4) a bare level word of ANY case in the leading FIELD slot — at the line start or
+// right after a timestamp ("<ts><TAB>info<TAB>…", as VictoriaMetrics / zap-console / many Go loggers
+// emit). A lowercase level word anywhere ELSE (buried in prose) is still ignored. Returns null when
+// unsure.
 export function parseLogLevel(line: string): LogLevel | null {
   const head = line.slice(0, 64)
   const klog = /^[EWIF]\d{4}\s/.exec(head)
@@ -45,6 +48,13 @@ export function parseLogLevel(line: string): LogLevel | null {
   // unstructured line is usually prose, not the line's own severity.
   const tok = /(?:^|[\s[(])(ERROR|ERR|FATAL|PANIC|WARN|WARNING|INFO|DEBUG|TRACE)(?:[\s\])]|:)/.exec(head)
   if (tok) return classifyLevel(tok[1])
+  // Bare level word — ANY case — in the leading field slot: the line starts with it, or with up to
+  // two timestamp-shaped tokens (e.g. "2026-…T…Z<TAB>" or "<date> <time> ") then it, bounded by a
+  // delimiter. This is the VictoriaMetrics / zap-console "<ts>\tinfo\t<src>\t<msg>" shape, which the
+  // UPPERCASE-only rule above misses. Anchoring to that positional slot is what keeps a lowercase
+  // level safe from prose: "returned an error" never starts with a level word or a timestamp.
+  const positional = /^(?:[0-9][0-9:.,T/+\-Z]*[ \t]+){0,2}(error|err|fatal|panic|warn|warning|info|debug|trace)(?=[ \t:]|$)/i.exec(head)
+  if (positional) return classifyLevel(positional[1])
   return null
 }
 

@@ -170,9 +170,24 @@ describe('parseLogLevel', () => {
     expect(parseLogLevel('[WARN] retrying')).toBe('warn')
     expect(parseLogLevel('12:00:00 INFO started')).toBe('info')
   })
+  it('detects a bare lowercase level field at the line start or after a timestamp', () => {
+    // VictoriaMetrics / zap-console / many Go loggers: "<RFC3339 ts>\t<level>\t<source>\t<msg>". The
+    // level is a standalone LOWERCASE field — not key=value, not an UPPERCASE token — so the older
+    // rules missed it and the line went unbadged.
+    expect(parseLogLevel('2026-05-21T12:00:00.000Z\tinfo\tlib/scrape/scraper.go:114\treading configs')).toBe('info')
+    expect(parseLogLevel('2026-05-21T12:00:00.000Z\twarn\tlib/storage.go:9\tdisk nearly full')).toBe('warn')
+    // Space-separated date + time (two leading tokens) before the level, too.
+    expect(parseLogLevel('2026-05-21 12:00:00,123 error connection refused')).toBe('error')
+    // A console logger with no timestamp that leads with the level.
+    expect(parseLogLevel('debug entering handler')).toBe('debug')
+  })
   it('does NOT badge a lowercase level word buried in prose', () => {
     expect(parseLogLevel('handled request, no error occurred')).toBeNull()
     expect(parseLogLevel('starting server on :8080')).toBeNull()
+    // A level word must be a whole token in the leading slot — a substring or a non-leading token stays prose.
+    expect(parseLogLevel('information about the cluster follows')).toBeNull() // "info" is a substring of a word
+    expect(parseLogLevel('traceback (most recent call last):')).toBeNull() // "trace" is a substring of a word
+    expect(parseLogLevel('2026 errors were logged today')).toBeNull() // level word not in the field slot
   })
   it('folds fatal/panic into error and trace into debug', () => {
     expect(parseLogLevel('FATAL boom')).toBe('error')
