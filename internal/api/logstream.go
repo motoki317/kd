@@ -9,7 +9,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,7 +105,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 		go func() { wg.Wait(); close(lines) }()
 	}
 
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
 	defer heartbeat.Stop()
 	for {
 		select {
@@ -307,6 +309,11 @@ func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *
 			return
 		}
 	}
+	// A line over the 1MB token cap ends the scan with bufio.ErrTooLong; log it so a truncated
+	// stream is diagnosable rather than looking like an idle pod.
+	if err := scanner.Err(); err != nil {
+		slog.Warn("log stream ended early", "namespace", pod.Namespace, "pod", pod.Name, "container", container, "err", err)
+	}
 }
 
 // defaultLogContainer picks which container's logs to show when the request names none. An empty
@@ -345,8 +352,10 @@ func parseTail(s string) *int64 {
 	if s == "" {
 		return nil
 	}
-	var n int64
-	if _, err := fmt.Sscan(s, &n); err != nil || n < 0 {
+	// ParseInt rejects trailing garbage ("12x") and hex/whitespace that fmt.Sscan would silently
+	// accept — a malformed tailLines should fall back to the default, not a half-parsed count.
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 {
 		return nil
 	}
 	return &n

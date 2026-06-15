@@ -47,6 +47,9 @@ func TestParseTail(t *testing.T) {
 		{"0", ptr(0)},     // zero is valid (tail nothing, then follow)
 		{"-5", nil},       // negative → unset, not a negative tail
 		{"abc", nil},      // non-numeric → unset
+		{"12x", nil},      // trailing garbage → unset (not a half-parsed 12)
+		{" 12 ", nil},     // surrounding whitespace → unset
+		{"0x10", nil},     // hex → unset (not 16)
 	}
 	for _, c := range cases {
 		got := parseTail(c.in)

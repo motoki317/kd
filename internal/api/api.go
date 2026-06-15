@@ -292,9 +292,7 @@ func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		// Headers may already be sent on a streaming encode failure; log-and-move-on is the
-		// best we can do without corrupting the response.
-		return
-	}
+	// Best-effort: headers are already sent, so a mid-encode failure (a dropped client
+	// connection) can't be recovered or reported to the client.
+	_ = json.NewEncoder(w).Encode(v)
 }

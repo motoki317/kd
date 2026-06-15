@@ -14,6 +14,11 @@ import (
 	"github.com/motoki317/kd/internal/kube/graph"
 )
 
+// sseHeartbeatInterval is how often an idle SSE stream emits a `: heartbeat` comment, so a proxy
+// or browser doesn't drop a connection that simply has no events to send. Shared by both SSE
+// handlers (graph + log stream).
+const sseHeartbeatInterval = 15 * time.Second
+
 // handleGraphStream streams the namespace graph: an initial `snapshot` event with the full
 // graph, then `patch` events as cache changes are coalesced. See
 // docs/ADR/20260527-realtime-transport-sse.md.
@@ -92,7 +97,7 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
 	defer heartbeat.Stop()
 	// The capacity view is refreshed on its own cadence: metrics-server samples ~every 15s, and a
 	// usage push is independent of graph-change debouncing.
