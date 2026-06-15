@@ -35,6 +35,13 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b37 (2026-06-15, deadcode + readability pass)** — two adversarial-verify survey passes (analyzers +
+  ~47 candidates) over the post-feature-cycle tree: removed dead exports/branches (Hub.after, gridDims
+  rankdir, EDGE_LABELS, `toGroup`, `breathing`), converged duplication (spec_* `asUnstructuredKind`,
+  `edgeBuilder.add`, store `resourceForKind`, `worstNonHealthy`, LogViewer `Highlighted`, capacity
+  `segW`), idiomatic Go (`slices`/sets), condensed AGENTS/backlog/comment bloat. 13 commits, behavior-
+  preserving; canvas/capacity/relationship surfaces live-verified. Analyzers now clean but for the
+  tracked Endpoints→EndpointSlice deprecation (Future).
 - **b36 (2026-06-14, process-memory pass)** — informer SetTransform drops CRD OpenAPI schemas +
   managedFields before objects enter the cache (drawer fetches CRDs live via `Cache.GetLive`), `GOGC=50`,
   off-by-default `--pprof-addr`: live heap 175→39 MiB, peak RSS 368→92 MiB. Remaining levers in Open.
