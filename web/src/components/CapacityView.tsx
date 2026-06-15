@@ -17,6 +17,10 @@ import type { KNode } from '../types'
 // full capacity-width card — see the focusBox comment at the click site).
 export type CapFocusBox = { x: number; y: number; width: number; height: number }
 
+// Drawn width of a stacked segment: shave a half-pixel so adjacent segments read as separate cells,
+// floored so a sub-pixel segment still paints. (CapBulletBar's 1px floor is a different rule.)
+const segW = (w: number) => Math.max(0.5, w - 0.5)
+
 // CapacityView renders the Nodes group-by's SVG content: per-node rows of stacked Req/Use bars with
 // pod segments, aggregate folds, and (expanded) per-pod bullet cards. Extracted from Topology.tsx —
 // the geometry-heavy, most actively-developed view deserved its own file — but deliberately kept
@@ -193,7 +197,7 @@ export default function CapacityView(props: {
                     classList={{ faded: props.segFaded(s.node), selected: s.node.id === props.selectedId, [`h-${s.node.health.toLowerCase()}`]: true }}
                     x={s.x}
                     y={s.y}
-                    width={Math.max(0.5, s.width - 0.5)}
+                    width={segW(s.width)}
                     height={s.height}
                     onClick={(e) => { e.stopPropagation(); props.onSelect(s.node.id) }}
                     onPointerMove={(e) => props.onHover(s.node.id, tipFromSeg(s, 'req', props.resource), e)}
@@ -208,7 +212,7 @@ export default function CapacityView(props: {
                     classList={{ faded: props.aggFaded(`small:${row.host}`) }}
                     x={o().x}
                     y={o().y}
-                    width={Math.max(0.5, o().width - 0.5)}
+                    width={segW(o().width)}
                     height={o().height}
                     onPointerMove={(e) => props.onHover(`small:${row.host}`, aggTip(tipFromAgg(o(), 'req', props.resource)), e)}
                     onPointerLeave={() => props.onLeave()}
@@ -222,7 +226,7 @@ export default function CapacityView(props: {
                     classList={{ faded: props.aggFaded(`other:${row.host}`) }}
                     x={o().x}
                     y={o().y}
-                    width={Math.max(0.5, o().width - 0.5)}
+                    width={segW(o().width)}
                     height={o().height}
                     onPointerMove={(e) => props.onHover(`other:${row.host}`, aggTip(tipFromAgg(o(), 'req', props.resource)), e)}
                     onPointerLeave={() => props.onLeave()}
@@ -266,12 +270,12 @@ export default function CapacityView(props: {
                         classList={segClasses(s)}
                         x={s.x}
                         y={s.y}
-                        width={Math.max(0.5, s.width - 0.5)}
+                        width={segW(s.width)}
                         height={s.height}
                       />
                       {/* Bursting (usage > request): hatch overlay, color-independent. */}
                       <Show when={s.over && !props.segFaded(s.node)}>
-                        <rect class="cap-burst-overlay" x={s.x} y={s.y} width={Math.max(0.5, s.width - 0.5)} height={s.height} />
+                        <rect class="cap-burst-overlay" x={s.x} y={s.y} width={segW(s.width)} height={s.height} />
                       </Show>
                       {/* Near-limit (≥90% of its limit — OOM/throttle risk): a FIXED-SIZE warning
                           notch above the segment. The .near outline stroke vanishes on a few-px
@@ -295,7 +299,7 @@ export default function CapacityView(props: {
                     classList={{ faded: props.aggFaded(`small:${row.host}`) }}
                     x={o().x}
                     y={o().y}
-                    width={Math.max(0.5, o().width - 0.5)}
+                    width={segW(o().width)}
                     height={o().height}
                     onPointerMove={(e) => props.onHover(`small:${row.host}`, aggTip(tipFromAgg(o(), 'use', props.resource)), e)}
                     onPointerLeave={() => props.onLeave()}
@@ -309,7 +313,7 @@ export default function CapacityView(props: {
                     classList={{ faded: props.aggFaded(`other:${row.host}`) }}
                     x={o().x}
                     y={o().y}
-                    width={Math.max(0.5, o().width - 0.5)}
+                    width={segW(o().width)}
                     height={o().height}
                     onPointerMove={(e) => props.onHover(`other:${row.host}`, aggTip(tipFromAgg(o(), 'use', props.resource)), e)}
                     onPointerLeave={() => props.onLeave()}
