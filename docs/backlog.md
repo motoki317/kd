@@ -35,6 +35,18 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b39 (2026-06-15, remote-EKS dogfooding pass, 13 rounds)** — drove kd against three real remote
+  clusters (multi-node capacity, 400+ cluster-scoped resources, dense kube-system, ~100-Workflow app
+  namespaces, real failed Argo Workflows). Two fixes, both only reproducible against remote shapes:
+  (1) the first `/namespaces` after a cold context rolled up a half-synced cache — a Service whose
+  EndpointSlices hadn't listed yet read "no endpoints", pods weren't Running — flashing many
+  namespaces a transient Degraded the 15s poll left stale; now waits briefly for the resource
+  informers too (04731c9). (2) "All containers" became the default for every multi-container pod,
+  burying an Argo step pod's `main` error under `wait`-executor noise ("no artifact sidecars to
+  kill"); now prefers `main` when present (66dbe20). Re-confirmed mature on real data: multi-node
+  capacity (0 overshoot, ip-10 node names fit), dense relationship/kind layout (0 overlaps),
+  cluster-scoped drawer, merged-log per-container color tags, the drawer-width cap (b38), and the
+  Workflow failure drill-down (`message` = "step: main: Error (exit code 1)").
 - **b38 (2026-06-15, user-directed dogfooding pass)** — multi-perspective agent-browser dogfooding
   (beginner exploration · operator triage with induced failures · narrow/phone viewport · keyboard ·
   light theme · kind view at 367-resource density · cluster-scoped drawer · trouble-badge jump · edge
