@@ -2,7 +2,7 @@
 default:
     @just --list
 
-# Run the Go API (:8080) and the Vite dev server (:5173) together.
+# Run the Go API (:9123) and the Vite dev server (:5173) together.
 dev:
     #!/usr/bin/env bash
     set -euo pipefail

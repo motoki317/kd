@@ -46,7 +46,7 @@ reusing the address-row idiom.
 
 1. Extractor in the matching `internal/kube/graph/spec_<domain>.go` (routing tables in
    `spec_routing.go`). Typed kinds type-assert; CRs like HPA navigate `*unstructured`.
-2. Field on `Node` in `model.go` → wire in `build.go` → add to the `nodesEqual` repaint check in
+2. Field on `Node` in `model.go` → wire in `build.go` → add to the `nodeEqual` repaint check in
    `diff.go`.
 3. Render a labelled chip in `web/src/components/KindFacts.tsx` (+ `web/src/types.ts` field).
 4. **If the extractor type-asserts a kind NOT already converted, register it in `unstructured.go`
