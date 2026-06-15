@@ -7,6 +7,7 @@ package graph
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -46,12 +47,17 @@ func intStrString(v any) string {
 	return ""
 }
 
-// asUnstructuredKind returns obj as an unstructured object when it is one AND its kind matches — the
-// access gate every CR-essence extractor shares (kd keeps CRs and the few schemaless built-ins like HPA
-// and StorageClass as *unstructured.Unstructured; see typedFactories). nil when the type or kind differs,
-// so a caller reads `if u := asUnstructuredKind(obj, "X"); u != nil { … }`.
-func asUnstructuredKind(obj runtime.Object, kind string) *unstructured.Unstructured {
-	if u, ok := obj.(*unstructured.Unstructured); ok && u.GetKind() == kind {
+// asUnstructuredKind returns obj as an unstructured object when it is one AND its kind matches one of
+// `kinds` — the access gate every CR-essence extractor shares (kd keeps CRs and the few schemaless
+// built-ins like HPA and StorageClass as *unstructured.Unstructured; see typedFactories). Pass several
+// kinds to gate a small family (Issuer/ClusterIssuer, the two webhook configs). nil when the type or
+// kind differs, so a caller reads `if u := asUnstructuredKind(obj, "X"); u != nil { … }`.
+func asUnstructuredKind(obj runtime.Object, kinds ...string) *unstructured.Unstructured {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil
+	}
+	if slices.Contains(kinds, u.GetKind()) {
 		return u
 	}
 	return nil

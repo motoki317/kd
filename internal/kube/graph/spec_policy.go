@@ -146,13 +146,8 @@ func npPorts(ports []networkingv1.NetworkPolicyPort) string {
 // Empty for any other kind. ValidatingWebhookConfiguration/MutatingWebhookConfiguration arrive
 // unstructured (admissionregistration types aren't in kd's typed factories).
 func webhookConfigSummary(obj runtime.Object) string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return ""
-	}
-	switch u.GetKind() {
-	case "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration":
-	default:
+	u := asUnstructuredKind(obj, "ValidatingWebhookConfiguration", "MutatingWebhookConfiguration")
+	if u == nil {
 		return ""
 	}
 	webhooks, _, _ := unstructured.NestedSlice(u.Object, "webhooks")

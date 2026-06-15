@@ -83,8 +83,8 @@ func routes(obj runtime.Object) []string {
 // match with no path "/", and a RegularExpression path is prefixed "~" to distinguish it. HTTPRoute is a
 // CRD, so it arrives unstructured (no typed factory) and is navigated by field path.
 func httpRouteRoutes(obj runtime.Object) []string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || u.GetKind() != "HTTPRoute" {
+	u := asUnstructuredKind(obj, "HTTPRoute")
+	if u == nil {
 		return nil
 	}
 	hosts, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "hostnames")
@@ -158,18 +158,12 @@ func httpRouteBackends(rule map[string]any) string {
 		if name == "" {
 			continue
 		}
-		if port := httpRoutePort(r); port != "" {
+		if port := intStrString(r["port"]); port != "" {
 			name += ":" + port
 		}
 		out = append(out, name)
 	}
 	return strings.Join(out, ", ")
-}
-
-// httpRoutePort reads a backendRef's port, tolerating both numeric shapes unstructured decoding yields
-// (int64 from the dynamic client, float64 from a JSON round-trip).
-func httpRoutePort(ref map[string]any) string {
-	return intStrString(ref["port"])
 }
 
 // traefikIngressRouteRoutes formats a Traefik IngressRoute's routing table as "match → service[:port]"
@@ -178,8 +172,8 @@ func httpRoutePort(ref map[string]any) string {
 // with no plain-Service backend (a TraefikService chain, or middleware-only) still shows its match so
 // the rule is visible. IngressRoute is a CRD, so it arrives unstructured.
 func traefikIngressRouteRoutes(obj runtime.Object) []string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || u.GetKind() != "IngressRoute" || !isTraefik(u) {
+	u := asUnstructuredKind(obj, "IngressRoute")
+	if u == nil || !isTraefik(u) {
 		return nil
 	}
 	routeList, _, _ := unstructured.NestedSlice(u.Object, "spec", "routes")

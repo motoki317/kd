@@ -151,6 +151,22 @@ func hpaMetricSide(m map[string]any) string {
 	return ""
 }
 
+// hpaResourceMetric unwraps one HPA metric entry as a Resource-type metric, returning its resource
+// name and the (current/target/etc.) map both hpaMetrics loops navigate. ok is false for a non-map
+// entry, a non-Resource metric type, or a missing resource block — the skip both loops share.
+func hpaResourceMetric(entry any) (name string, res map[string]any, ok bool) {
+	mm, isMap := entry.(map[string]any)
+	if !isMap || mm["type"] != "Resource" {
+		return "", nil, false
+	}
+	res, _ = mm["resource"].(map[string]any)
+	if res == nil {
+		return "", nil, false
+	}
+	name, _ = res["name"].(string)
+	return name, res, true
+}
+
 // hpaMetrics renders the metric actually driving an HPA's decision — "cpu 72% / 80%" (current /
 // target) — the fact the replica counts alone can't explain ("why is it scaling?" / "how close to
 // the trigger is it?"). Covers the Resource metric type (the overwhelmingly common case: CPU/memory
@@ -167,15 +183,10 @@ func hpaMetrics(obj runtime.Object) string {
 	currentByName := map[string]string{}
 	current, _, _ := unstructured.NestedSlice(u.Object, "status", "currentMetrics")
 	for _, m := range current {
-		mm, ok := m.(map[string]any)
-		if !ok || mm["type"] != "Resource" {
+		name, res, ok := hpaResourceMetric(m)
+		if !ok {
 			continue
 		}
-		res, _ := mm["resource"].(map[string]any)
-		if res == nil {
-			continue
-		}
-		name, _ := res["name"].(string)
 		cur, _ := res["current"].(map[string]any)
 		if side := hpaMetricSide(cur); side != "" {
 			currentByName[name] = side
@@ -184,15 +195,10 @@ func hpaMetrics(obj runtime.Object) string {
 	var parts []string
 	metrics, _, _ := unstructured.NestedSlice(u.Object, "spec", "metrics")
 	for _, m := range metrics {
-		mm, ok := m.(map[string]any)
-		if !ok || mm["type"] != "Resource" {
+		name, res, ok := hpaResourceMetric(m)
+		if !ok {
 			continue
 		}
-		res, _ := mm["resource"].(map[string]any)
-		if res == nil {
-			continue
-		}
-		name, _ := res["name"].(string)
 		tgt, _ := res["target"].(map[string]any)
 		target := hpaMetricSide(tgt)
 		if name == "" || target == "" {

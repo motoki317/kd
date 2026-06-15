@@ -67,8 +67,8 @@ func certExpiry(obj runtime.Object) string {
 // staging endpoint issues UNTRUSTED certs — the #1 cert-manager mistake — so prod vs staging must be
 // obvious). "" for other kinds.
 func issuerConfig(obj runtime.Object) string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok || (u.GetKind() != "Issuer" && u.GetKind() != "ClusterIssuer") {
+	u := asUnstructuredKind(obj, "Issuer", "ClusterIssuer")
+	if u == nil {
 		return ""
 	}
 	spec, found, _ := unstructured.NestedMap(u.Object, "spec")

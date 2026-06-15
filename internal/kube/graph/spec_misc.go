@@ -158,13 +158,8 @@ func crdSummary(obj runtime.Object) string {
 // each endpoint follows as ":port/path every interval". Empty for any other kind. Both are CRDs, so
 // they arrive unstructured.
 func scrapeConfig(obj runtime.Object) []string {
-	u, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return nil
-	}
-	switch u.GetKind() {
-	case "ServiceMonitor", "VMServiceScrape":
-	default:
+	u := asUnstructuredKind(obj, "ServiceMonitor", "VMServiceScrape")
+	if u == nil {
 		return nil
 	}
 	target := "selects " + unstructuredSelectorSummary(u.Object, "spec", "selector")
@@ -215,8 +210,10 @@ func unstructuredSelectorSummary(obj map[string]any, fields ...string) string {
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &sel); err != nil {
 		return "all services"
 	}
-	if s := selectorSummary(&sel); s != "all pods" {
-		return s
+	// Test emptiness structurally (the same predicate selectorSummary uses) rather than by matching
+	// its "all pods" output string — a monitor with no selector scrapes every service here.
+	if len(sel.MatchLabels) == 0 && len(sel.MatchExpressions) == 0 {
+		return "all services"
 	}
-	return "all services"
+	return selectorSummary(&sel)
 }
