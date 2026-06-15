@@ -1,6 +1,11 @@
 {
   description = "kd — web-served Kubernetes dashboard (Go server + Solid.js client)";
 
+  nixConfig = {
+    extra-substituters = [ "https://motoki317-kd.cachix.org" ];
+    extra-trusted-public-keys = [ "motoki317-kd.cachix.org-1:OHPa0dKoYMM2K1BcCmnLldB9bWXn8Gn/+X+ZNOo12xA=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
