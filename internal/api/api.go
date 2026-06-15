@@ -34,6 +34,10 @@ type Store interface {
 	// WaitForNamespacesSync blocks until the namespaces informer has done its initial LIST (or ctx
 	// is done) so a freshly-built context serves its FULL namespace list, not a half-synced partial.
 	WaitForNamespacesSync(ctx context.Context) bool
+	// WaitForCacheSync blocks until every started resource informer has done its initial LIST (or ctx
+	// is done), reporting whether all synced. The namespace-health rollup waits on it briefly so a
+	// cold context summarizes a settled cache, not a half-synced one that flashes false Degraded.
+	WaitForCacheSync(ctx context.Context) bool
 	SnapshotNamespace(namespace string) []runtime.Object
 	// SnapshotNodesAndPods returns all Nodes + all Pods cluster-wide, for the capacity (Nodes)
 	// view, which shows every namespace's pods on each node regardless of the selected namespace.
@@ -218,6 +222,15 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	waitCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	store.WaitForNamespacesSync(waitCtx)
 	cancel()
+	// Then briefly wait for the RESOURCE informers too, so the per-namespace health below rolls up a
+	// settled cache. The first /namespaces after a cold context otherwise summarizes a half-synced
+	// snapshot — a Service whose endpoints haven't listed yet reads "no endpoints", pods aren't Running
+	// yet — flashing many namespaces a transient Degraded that the 15s client poll only clears later
+	// (caught dogfooding a large remote cluster). Separate, shorter budget than the list wait so a slow
+	// or denied GVR delays the sidebar at most a moment; if sync outlasts it, the poll self-corrects.
+	syncCtx, cancelSync := context.WithTimeout(r.Context(), 2*time.Second)
+	store.WaitForCacheSync(syncCtx)
+	cancelSync()
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, store.ListNamespaces())
 	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible)+1)}
 	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real
