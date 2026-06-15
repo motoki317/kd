@@ -47,6 +47,16 @@ describe('LogViewer', () => {
     expect(select.value).toBe('__all__')
   })
 
+  it('defaults a multi-container pod with a `main` to main, not the merged executor noise', () => {
+    // An Argo Workflows step pod (`wait` executor sidecar + `main`): the merged view would drown the
+    // step's real output in "no artifact sidecars to kill" noise, so prefer `main` like the single
+    // stream does. The picker still offers All containers for when the cross-talk IS wanted.
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['init', 'wait', 'main']} restarts={0} />)
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect(select.value).toBe('main')
+    expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toContain('All containers')
+  })
+
   it('turns "waiting for log output…" into a terminal notice when the tailed resource is deleted', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     expect(container.querySelector('.logs-waiting')?.textContent).toContain('waiting for log output')

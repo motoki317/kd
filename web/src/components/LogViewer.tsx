@@ -67,8 +67,15 @@ export default function LogViewer(props: Props) {
   // Selected container for a single multi-container pod. Defaults to ALL_CONTAINERS (merged across
   // every container) when the pod has more than one — a single container hides the cross-talk that
   // explains most multi-container failures (an app erroring because its sidecar/proxy isn't up yet).
+  // EXCEPT an Argo Workflows step pod (a `main` container behind a `wait` executor sidecar): there the
+  // sidecars are pure executor noise that drowns the step's real output, so defer to defaultLogContainer
+  // — which prefers `main` — exactly as the single-stream default does. (Same reason the merged view
+  // isn't the default for those: triaging a failed workflow step wants `main`, not "no artifact
+  // sidecars to kill".)
   const initialContainer = () =>
-    !props.aggregated && props.containers.length > 1 ? ALL_CONTAINERS : defaultLogContainer(props.containers)
+    !props.aggregated && props.containers.length > 1 && !props.containers.includes('main')
+      ? ALL_CONTAINERS
+      : defaultLogContainer(props.containers)
   const [container, setContainer] = createSignal(initialContainer())
   // The merged all-container view (single pod) — labels each line by container and timestamp-orders
   // them, since the per-container tail dumps otherwise arrive grouped, not interleaved.
