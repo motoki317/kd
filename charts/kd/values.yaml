@@ -168,8 +168,14 @@ resources:
     memory: 256Mi
 
 # -- Pod-level security context. kd runs as non-root with a runtime-default seccomp profile.
+# runAsUser/runAsGroup MUST be stated numerically: the distroless base image declares a
+# non-numeric `USER nonroot`, which the kubelet cannot resolve to a UID, so with
+# runAsNonRoot alone it rejects the pod ("image has non-numeric user (nonroot), cannot verify
+# user is non-root"). 65532 is the distroless `nonroot` uid/gid.
 podSecurityContext:
   runAsNonRoot: true
+  runAsUser: 65532 # @schema type:integer
+  runAsGroup: 65532 # @schema type:integer
   seccompProfile:
     type: RuntimeDefault
 
