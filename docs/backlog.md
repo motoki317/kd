@@ -35,6 +35,14 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
+- **b38 (2026-06-15, user-directed dogfooding pass)** — multi-perspective agent-browser dogfooding
+  (beginner exploration · operator triage with induced failures · narrow/phone viewport · keyboard ·
+  light theme · kind view at 367-resource density · cluster-scoped drawer · trouble-badge jump · edge
+  tooltips · context switch) across two real clusters. One fix: the resizable drawer's `max-width`
+  was viewport-relative (`70vw`) and ignored the namespace-sidebar offset, so it overflowed the
+  viewport below ~760px (clipping its own close button) and the absolutely-positioned toolbar
+  overlapped it across ~640–1040px (incl. the common 1024px laptop / half-screen) — re-capped to
+  `.main` width minus a `--canvas-min` canvas floor (54a9bed). Every other surface re-confirmed mature.
 - **b37 (2026-06-15, deadcode + readability pass)** — two adversarial-verify survey passes (analyzers +
   ~47 candidates) over the post-feature-cycle tree: removed dead exports/branches (Hub.after, gridDims
   rankdir, EDGE_LABELS, `toGroup`, `breathing`), converged duplication (spec_* `asUnstructuredKind`,
