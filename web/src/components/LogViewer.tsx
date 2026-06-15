@@ -85,6 +85,14 @@ export default function LogViewer(props: Props) {
   // Case-sensitive matching for the filter (off by default — most triage is case-insensitive, but
   // an exact match disambiguates e.g. "ERROR" the level from "error" in prose). (cycle 321)
   const [caseSensitive, setCaseSensitive] = createSignal(false)
+  // One filter-highlight pass shared by every render path (plain / ANSI segment / JSON message /
+  // JSON extras): split the text on the active filter and wrap each hit in <mark>. Closes over the
+  // filter signals so call sites pass only the text.
+  const Highlighted = (p: { text: string }) => (
+    <For each={splitByMatch(p.text, filter(), caseSensitive())}>
+      {(s) => (s.match ? <mark class="log-match">{s.text}</mark> : <>{s.text}</>)}
+    </For>
+  )
   // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
   const [timestamps, setTimestamps] = createSignal(false)
   // Combined mode interleaves several containers' streams BY TIME, so the timestamp is what makes the
@@ -579,18 +587,12 @@ export default function LogViewer(props: Props) {
                   // matched substring inline (cycle 249), making the hit's position obvious.
                   <Show
                     when={hasAnsi(l.line)}
-                    fallback={
-                      <For each={splitByMatch(l.line, filter(), caseSensitive())}>
-                        {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
-                      </For>
-                    }
+                    fallback={<Highlighted text={l.line} />}
                   >
                     <For each={parseAnsi(l.line)}>
                       {(seg) => (
                         <span style={ansiStyleToCss(seg.style)}>
-                          <For each={splitByMatch(seg.text, filter(), caseSensitive())}>
-                            {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
-                          </For>
+                          <Highlighted text={seg.text} />
                         </span>
                       )}
                     </For>
@@ -600,16 +602,12 @@ export default function LogViewer(props: Props) {
                 {(j) => (
                   <>
                     <span class="log-msg">
-                      <For each={splitByMatch(j().message, filter(), caseSensitive())}>
-                        {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
-                      </For>
+                      <Highlighted text={j().message} />
                     </span>
                     <Show when={j().extras}>
                       <span class="log-json-extra">
                         {' '}
-                        <For each={splitByMatch(j().extras, filter(), caseSensitive())}>
-                          {(p) => (p.match ? <mark class="log-match">{p.text}</mark> : <>{p.text}</>)}
-                        </For>
+                        <Highlighted text={j().extras} />
                       </span>
                     </Show>
                   </>
