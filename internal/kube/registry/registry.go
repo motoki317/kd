@@ -248,6 +248,7 @@ func (r *Registry) runBuild(name string, e *entry) {
 	// The default context is already logged (with a full-sync "connected") around the startup
 	// Prewarm, so skip it here to avoid a duplicate line.
 	lazy := name != r.current
+	connStart := time.Now()
 	if lazy {
 		slog.Info("connecting to cluster", "context", name)
 	}
@@ -275,7 +276,7 @@ func (r *Registry) runBuild(name string, e *entry) {
 		return
 	}
 	if lazy {
-		slog.Info("cluster connected", "context", name)
+		slog.Info("cluster connected", "context", name, "took", time.Since(connStart).Round(time.Millisecond))
 	}
 	r.mu.Lock()
 	e.cache = c
