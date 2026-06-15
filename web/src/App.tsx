@@ -131,6 +131,32 @@ export default function App() {
     window.addEventListener('pointerup', onUp)
     document.body.classList.add('resizing-col')
   }
+  // Tunable drawer (resource-detail panel) width — the mirror of the sidebar resizer on the right
+  // edge. Operators reading logs/manifests want a wider panel; those who want canvas drag it narrow.
+  // Persisted like the sidebar width; clamped, and capped further by the drawer's max-width:70vw in
+  // CSS. Drives the --drawer-w token on .body (which .drawer already reads).
+  const DRAWER_MIN = 360
+  const DRAWER_MAX = 760
+  const DRAWER_DEFAULT = 520
+  const clampDrawer = (w: number) => Math.max(DRAWER_MIN, Math.min(DRAWER_MAX, Math.round(w)))
+  const [drawerWidth, setDrawerWidth] = createSignal(clampDrawer(Number(readRawPref('kd:drawerWidth')) || DRAWER_DEFAULT))
+  createEffect(() => writePref('kd:drawerWidth', String(drawerWidth())))
+  // The drawer sits at the right, so it grows LEFTWARD: dragging its left-edge handle left widens it
+  // (opposite sign from the sidebar). Same window-level listeners + body class as the sidebar drag.
+  const startDrawerResize = (e: PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = drawerWidth()
+    const onMove = (ev: PointerEvent) => setDrawerWidth(clampDrawer(startW - (ev.clientX - startX)))
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.classList.remove('resizing-col')
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    document.body.classList.add('resizing-col')
+  }
   // REACTIVE phone-width signal for overlay gating (isNarrowScreen is a one-shot read): while the
   // sidebar OVERLAYS the canvas, the covered surface must leave the Tab order (inert below) — a
   // keyboard user tabbing the overlay otherwise lands on invisible toolbar chips under it.
@@ -446,7 +472,7 @@ export default function App() {
         </div>
       </Show>
 
-      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }} style={{ '--sidebar-w': `${sidebarWidth()}px` }}>
+      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }} style={{ '--sidebar-w': `${sidebarWidth()}px`, '--drawer-w': `${drawerWidth()}px` }}>
         <Sidebar
           namespaces={sidebarNs}
           selected={namespace()}
@@ -557,6 +583,12 @@ export default function App() {
             onBack={goBackSelection}
             onClose={() => setSelectedId(null)}
             hasPods={(id) => hasDescendantPod(id, nodes())}
+            resizeWidth={drawerWidth()}
+            resizeMin={DRAWER_MIN}
+            resizeMax={DRAWER_MAX}
+            onResizeStart={startDrawerResize}
+            onResizeTo={(w) => setDrawerWidth(clampDrawer(w))}
+            onResizeReset={() => setDrawerWidth(DRAWER_DEFAULT)}
           />
           </Suspense>
           </Show>

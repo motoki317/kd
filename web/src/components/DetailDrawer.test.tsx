@@ -202,6 +202,49 @@ describe('DetailDrawer', () => {
     expect(drawer.classList.contains('expanded')).toBe(false)
   })
 
+  it('offers a left-edge resize handle only when resizing is wired and the panel is compact', () => {
+    // No resize props → no handle (callers/tests that don't wire resizing).
+    const bare = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    expect(bare.container.querySelector('.drawer-resizer')).toBeNull()
+    bare.unmount()
+
+    const calls: { to: number[]; resets: number } = { to: [], resets: 0 }
+    const { container } = render(() => (
+      <DetailDrawer
+        ctx="test-ctx"
+        node={configMap}
+        owners={[]}
+        onNavigate={() => {}}
+        onClose={() => {}}
+        resizeWidth={520}
+        resizeMin={360}
+        resizeMax={760}
+        onResizeStart={() => {}}
+        onResizeTo={(w) => calls.to.push(w)}
+        onResizeReset={() => (calls.resets += 1)}
+      />
+    ))
+    const handle = container.querySelector('.drawer-resizer') as HTMLElement
+    expect(handle).toBeTruthy()
+    expect(handle.getAttribute('role')).toBe('separator')
+    expect(handle.getAttribute('aria-valuenow')).toBe('520')
+    expect(handle.getAttribute('aria-valuemin')).toBe('360')
+    expect(handle.getAttribute('aria-valuemax')).toBe('760')
+    // Handle is on the LEFT edge → ← widens, → narrows; Home/End jump to min/max (each computed from
+    // the static 520 prop, since App — not the component — owns the width signal).
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    expect(calls.to).toEqual([528, 512, 360, 760])
+    // Double-click resets to the default width.
+    handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    expect(calls.resets).toBe(1)
+    // Expanding the panel hides the handle — it fills the canvas, so there's no edge to drag.
+    ;(container.querySelector('.drawer-expand') as HTMLButtonElement).click()
+    expect(container.querySelector('.drawer-resizer')).toBeNull()
+  })
+
   it('[ / ] do nothing when no node is shown (cycle 292)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     // Should be empty — no drawer rendered.

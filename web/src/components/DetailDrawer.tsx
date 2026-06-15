@@ -47,6 +47,16 @@ interface Props {
   // see App's drawerNode. Tabs keep their normal empty/error states; owner chips remain the path
   // to the replacement.
   deleted?: boolean
+  // Drag-to-resize the panel (mirrors the sidebar resizer). App owns the width signal + persistence;
+  // the drawer just renders the left-edge handle and reports drags. Omitted by callers that don't
+  // wire resizing (and unit tests) — the handle then doesn't render. The handle is suppressed in
+  // expanded mode (the panel fills the canvas; there is no edge to drag).
+  resizeWidth?: number
+  resizeMin?: number
+  resizeMax?: number
+  onResizeStart?: (e: PointerEvent) => void
+  onResizeTo?: (width: number) => void
+  onResizeReset?: () => void
 }
 
 type Tab = 'logs' | 'events' | 'manifest'
@@ -257,6 +267,32 @@ export default function DetailDrawer(props: Props) {
           // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
           aria-label={`${node().kind} ${node().name} details`}
         >
+          {/* Left-edge drag handle — the mirror of the namespace sidebar's resizer. A focusable
+              separator (WAI-ARIA window-splitter): ←/→ nudge the width, Home/End jump to the
+              min/max, double-click resets. The handle on the LEFT edge grows the panel LEFTWARD, so
+              ← widens. Hidden in expanded mode (no edge to drag) and on phone width (CSS). */}
+          <Show when={props.onResizeStart && !expanded()}>
+            <div
+              class="drawer-resizer"
+              role="separator"
+              tabindex="0"
+              aria-orientation="vertical"
+              aria-label="Resize the details panel"
+              aria-valuemin={props.resizeMin}
+              aria-valuemax={props.resizeMax}
+              aria-valuenow={props.resizeWidth}
+              onPointerDown={props.onResizeStart}
+              onDblClick={() => props.onResizeReset?.()}
+              onKeyDown={(e) => {
+                const step = e.shiftKey ? 32 : 8
+                const w = props.resizeWidth ?? 0
+                if (e.key === 'ArrowLeft') { e.preventDefault(); props.onResizeTo?.(w + step) }
+                else if (e.key === 'ArrowRight') { e.preventDefault(); props.onResizeTo?.(w - step) }
+                else if (e.key === 'Home') { e.preventDefault(); props.onResizeTo?.(props.resizeMin ?? w) }
+                else if (e.key === 'End') { e.preventDefault(); props.onResizeTo?.(props.resizeMax ?? w) }
+              }}
+            />
+          </Show>
           <Show when={props.deleted}>
             {/* Terminal state, spelled out: the resource is gone but the operator keeps their
                 context (name, last-known facts, owner chips to find the replacement). aria-live

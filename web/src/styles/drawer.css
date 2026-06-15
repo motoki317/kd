@@ -16,6 +16,43 @@
   animation: drawer-out 0.22s cubic-bezier(0.55, 0, 0.7, 0.2) forwards;
   pointer-events: none;
 }
+/* Drag handle on the drawer's LEFT edge — the mirror of .sidebar-resizer (layout.css). The drawer is
+   a static flex item flush to .main's right edge, so the handle is positioned against .main (the
+   positioned ancestor) rather than the drawer itself — keeping .drawer unpositioned so the health
+   stripe still paints across its top (topology.css .stripe-over-drawer). min(--drawer-w, 70vw)
+   mirrors the drawer's own width:var(--drawer-w)/max-width:70vw, so the handle tracks the rendered
+   edge as it resizes. A centered hairline brightens on hover/focus; the 6px hit target clears the
+   WCAG minimum. body.resizing-col (layout.css) handles the drag cursor + selection suppression. */
+.drawer-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: min(var(--drawer-w), 70vw);
+  width: 6px;
+  margin-right: -3px; /* straddle the border so neither side loses layout width */
+  z-index: 6;
+  cursor: col-resize;
+  background: transparent;
+}
+.drawer-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background-color 0.12s;
+}
+.drawer-resizer:hover::before,
+.drawer-resizer:focus-visible::before {
+  background: var(--accent);
+  width: 2px;
+}
+.drawer-resizer:focus-visible {
+  outline: none;
+}
 /* Expanded mode (cycle 311): lift the drawer out of the flex row and fill the whole canvas area
    (.main is position: relative), covering the topology so logs/manifests get the full width. The
    topbar + namespace sidebar stay visible for navigation. The drop shadow seats it above the canvas

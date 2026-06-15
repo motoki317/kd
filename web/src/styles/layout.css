@@ -57,8 +57,10 @@ body.resizing-col {
     position: relative;
   }
   /* The sidebar overlays the canvas here, so there's no shared edge to drag — and the absolute
-     overlay ignores the resizer's flow width anyway. Hide it to avoid a dead handle on the canvas. */
-  .sidebar-resizer {
+     overlay ignores the resizer's flow width anyway. Hide it to avoid a dead handle on the canvas.
+     The drawer goes full-width too, so its left-edge handle would land mid-content — hide it as well. */
+  .sidebar-resizer,
+  .drawer-resizer {
     display: none;
   }
   .body:not(.sidebar-collapsed) .sidebar {
