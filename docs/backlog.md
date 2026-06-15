@@ -35,130 +35,35 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b36 (2026-06-14, process-memory pass)** — heap-profiled against a medium cluster (off-by-default
-  `--pprof-addr`, GOMAXPROCS pinned to the node core count). Shipped: a SetTransform on every informer
-  that drops CRD OpenAPI schemas + managedFields + last-applied before objects enter the cache (CRD
-  schemas alone were ~74% of live heap), drawer fetches CRDs live (`Cache.GetLive`) for the full
-  manifest; `GOGC=50` default. Result: live heap 175→39 MiB (-78%), peak RSS 368→~92 MiB (-75%). See
-  the "Process memory — remaining levers" item under Open for what was measured-and-deferred.
-
-- **b35 (2026-06-12, user-directed de-AI-slop design overhaul)** — the user called the look "AI-slop"
-  (too-small text, info overload with no strong/weak distinction, pill-rounding everywhere, too many
-  shortcuts) and asked for a full visual overhaul. Shipped, each slice live-verified: keyboard surface
-  cut from ~17 global bindings to FOUR (`/`, `↑↓`, `Esc`, `?`; every removed key already had a clickable
-  control); help overlay rewritten from a 25-row two-column wall to one small card (4 keys + edge
-  legend); a fixed design language — IBM Plex Sans (chrome) / Plex Mono (data: names, counts, logs,
-  manifests), a four-step type scale (nothing readable under 12.5px; was 91/120 declarations ≤12px),
-  sharp 2/4px radii (pills/capsules eliminated, circles = real dots only) — all token-driven
-  (tokens.css) and codified in AGENTS.md "Design language"; toolbar folded from 4 permanent chip rows
-  (~130px) to ONE row (49px, measured) with relationship/kind facets behind a badged Filters
-  disclosure; sidebar's permanent legend + "# = not ready" key removed (hover titles + health pills
-  teach the vocabulary in place); logs panel's duplicate "Logs" caption dropped. Trouble path
-  (ImagePullBackOff card → drawer container card → warning events), light theme, and 375px phone all
-  re-verified live under the new language. Deliberately NOT changed: canvas SVG card text (zoom-coupled,
-  char-count-tuned card widths — mono there needs a card-geometry retune, see open items); capacity
-  char-width constants left conservative (Plex measures narrower: 6.08–6.2 vs 6.6 px/char, safe).
+- **b36 (2026-06-14, process-memory pass)** — informer SetTransform drops CRD OpenAPI schemas +
+  managedFields before objects enter the cache (drawer fetches CRDs live via `Cache.GetLive`), `GOGC=50`,
+  off-by-default `--pprof-addr`: live heap 175→39 MiB, peak RSS 368→92 MiB. Remaining levers in Open.
+- **b35 (2026-06-12, user-directed de-AI-slop design overhaul)** — keyboard cut to FOUR bindings, help to
+  one card, a fixed design language (Plex Sans/Mono, 4-step type scale, sharp 2/4px radii — all
+  token-driven), toolbar folded to one row + badged Filters disclosure. Codified in AGENTS.md "Design
+  language"; each slice live-verified.
 - **b34 (2026-06-11, whole-codebase structure pass)** — pure file-structure refactor, zero behavior
-  change per slice: split `graph/spec.go` (1230 lines) and `health_cr.go` (702) into domain/family
-  siblings; `index.css` (3972) into `styles/<area>.css` behind an @import barrel (rebuilt bundle
-  byte-identical, proving no visual change); `layout.ts` (1308) into `layout/` modules behind a
-  re-export index (zero importer edits); App.tsx (1008→658) wiring into flat factory modules
-  (keyboard/url/subscription/session/selection/sidebar-health); Topology.tsx (2309→1712) seams into
-  `components/topology/` (toolbar/spotlight/collapse/hover/exit/empty). Each extracted surface
-  re-verified live (Esc ladder, deep-link `?sel=`, spotlight fade counts, fold pills, cap tooltip);
-  docs references updated (AGENTS.md nav + recipe subsection, frontend-internals key files).
-- **b33 (2026-06-11, dogfooding D130–D150)** — light-theme a11y + operator-flow pass. Shipped: the
-  collapse-pill trouble badge, the cap-view warn/cordon/near-cap labels (D131), and the sidebar ns-count
-  attention badge (D132) all colored small TEXT with the vivid graphics health values, which measure
-  ~2.2–3.4:1 on the light theme (3.06 on the selected-row tint) — switched to the darker `healthTextColor`
-  inks (4.5–5.2:1, AA; dark theme resolves the same vars back to vivid, verified 4.73 live); resource
-  names in the drawer hero and capacity tooltip wrapped `word-break: break-all` mid-word ("…-defa /
-  ult-…") — switched to `overflow-wrap: anywhere` so k8s names break at their hyphens, splitting only an
-  oversize hash segment (D138, measured live at 390px). Verified clean & mature: end-to-end light-theme
-  triage flow (attention badge → troubled ns → troubled card → drawer hero/events, zero vivid-text
-  offenders in the drawer); event-source pill jumps to the involved pod; failed-Workflow logs stream via
-  BuildForLogs on real EKS data; logs container picker in lockstep with the stream, init-container logs
-  load; search Enter-cycle steps matches with the "X of N" indicator (an apparent no-op was "no matches",
-  stated explicitly); kinds row edge-fade scroll affordance at 390px; Kind view folds at 112 resources;
-  capacity own-pods-first node order confirmed live on EKS (refuted my own "fold zero-pod rows" idea —
-  designed Contrast/Proximity); RBAC lens hover verbs at 200 objects; [cluster] inventory behind the
-  counted "Show orphaned" checkbox; Esc deliberately clears spotlights but not the persisted relationship
-  arrangement; help overlay compact (~1.8k chars, visual edge legend). Native-select gotcha: the context
-  switcher needs a real change event, not option clicks (operator mice are fine).
-- **b32 (2026-06-11, dogfooding D121–D129)** — EKS-shape pass. Shipped: an EKS Fargate node reports
-  allocatable.pods=1 (one pod per micro-VM by design), so the D101 pod-cap label rendered a red "1 / 1
-  pods" that falsely read as pressure on every Fargate pod — raised the guard to cap > 1 so a dedicated
-  single-pod node falls back to the bare count (verified live: Fargate now reads "· 1 pod", real nodes
-  keep "N / 110 pods"). Also documented (agent skill) that graph/stream multiplexes the namespace graph
-  AND the cluster-wide capacity feed as separate SSE events — conflating them faked a "relationship view
-  drops 158 pods" scale bug (D125, no real bug). Verified clean & mature: zero Unknown-health across 6
-  diverse CRD namespaces (Karpenter NodePool/NodeClaim/EC2NodeClass, Kyverno ClusterPolicy, ECK Elastic,
-  Argo, VictoriaMetrics operator — all classified); induced CreateContainerConfigError surfaces the exact
-  cause ("configmap X not found") in the container card; EBS storage chain (Pod→PVC→PV with the
-  cluster-scoped PV riding along) renders with "Bound NGi"; context switch k3s↔EKS is clean (count/URL
-  update, no stale selection); README concise/beginner-friendly. No LoadBalancer Service found to exercise
-  externalAddress live (unit-tested for Service + Ingress).
-- **b31 (2026-06-11, dogfooding D107–D120)** — breadth pass across two real clusters (k3s + an EKS
-  cluster), mostly confirming maturity. Shipped: the expanded-node fit comment said "largest-usage-first"
-  but the sort is max(reserved, used) — corrected; a node reporting 0 pod-capacity now falls back to the
-  bare count (was "N / 0 pods", ambered on a N/0=∞ ratio — adversarial self-review of D101). Strong
-  validation: pod-cap (D101) on 8 real EKS nodes rendered correct ENI-based caps AND correctly ambered a
-  node at its ceiling ("1 / 1 pods") — the binding-constraint case the 1000-cap k3s node couldn't show.
-  Verified clean & mature: Network lens IngressRoute→Service→Pod chain on real Traefik; Volumes lens
-  accurately shows no phantom PVCs (DB StatefulSets mount only Secrets here); chrome copy concise/
-  beginner-appropriate (no bloat); memory capacity view reads Use≫Req under-requesting at a glance; URL
-  round-trip (rels/capRes/group/sel) with URL>pref>default precedence; search matches name/kind/label/IP/
-  multi-word status (cluster scope holds only cluster-scoped kinds, so namespaced statuses are correctly
-  absent there — not a bug). IngressRoute essence (Host rule → service · via middleware chain) and ArgoCD
-  Application essence (status-line "· OutOfSync" pairing + dest + synced-rev chips, health rule maps
-  Missing→Degraded) both confirmed comprehensive — the verify-first rule caught that the sync-status chip
-  I was about to add already exists.
-- **b30 (2026-06-11, dogfooding D101–D106)** — the capacity & "needs attention" trouble-finding flow,
-  dogfooded against a real cluster. The Nodes view showed a bare "N pods" — now "N / cap pods" (a real
-  node reported a 1000 pod-cap, so "89 pods" had falsely read as near the 110 default; the denominator
-  inverts the headroom read), ambered near the ceiling. A Degraded no-endpoints Service had folded into
-  a neutral "+ show N more" pill — exactly where the "needs attention" jump lands you — so a collapse
-  pill now surfaces the worst health it hides ("● 1 degraded", red), no filter required. Verified clean:
-  pod-cap persists across the CPU/Memory toggle; the Ownership lens hides a relationship-less Degraded
-  resource but the legend advertises its count over ALL nodes and clicking it surfaces the resource
-  across lenses; the sidebar flags the troubled namespace with a red ns-dot + a glossed title + a global
-  jump button; the degraded Service drawer shows status + selector + empty Events (prose would bloat).
-  Also scrubbed a leaked context name from the b29 note (caught by leakcheck).
-- **b29 (2026-06-11, dogfooding D91–D96 + refactor)** — a cert-manager + Ingress legibility cluster
-  (mostly off a real cluster's cert-manager/Argo shapes): CronWorkflow now offers aggregated logs of its
-  scheduled runs (the grandchild CronWorkflow→Workflow→pods chain; "did last night's backup succeed?"
-  — 1521 lines live), which also activates the D78 never-run message for it; an Ingress shows its
-  serving address ("ext localhost", the ALB hostname an operator curls) by generalizing the Service
-  external-address reader; an Issuer/ClusterIssuer shows its backing CA ("ACME · Let's Encrypt
-  (staging — untrusted)" caution-tinted — the #1 cert-manager mistake); an expired Certificate reads
-  "expired N ago" not "in 0s". Refactor: the two byte-identical CR-condition scanners folded into
-  crConditionField. Verified clean: Ingress→Service→Pod Network chain + routing table, CronWorkflow
-  logs at 375px (the 32px "overflow" was the frozen drawer-in animation), monitor ns 0-Unknown CRs,
-  beginner Deployment+Service+Ingress walk. New technique catalogued: minimal open-schema CRD to
-  live-verify a CR chip without the operator installed.
-- **b28 (2026-06-11, dogfooding D79–D90)** — the dead-credentials context switch
-  (a real shape that day) caught two lies: the stale selection ghosted into the drawer under a false
-  "Deleted from the cluster" banner (selection now clears on ctx change), and disabling the broken
-  current context's option made the native select silently display a DIFFERENT cluster (current
-  option never disabled; `selected` declared per option). A second reachable cluster opened fresh
-  shapes: cert-manager Certificate drawer gained its essence chips (names / expires-in / issuer —
-  the spec-chip pattern + a future-direction relativeUntil); real Degraded no-endpoints Service,
-  ArgoCD app-of-apps, 544-resource cluster scope with zero Unknown noise, run-history CronJob
-  (never-ran state correctly absent), 375px cert-chip wrap — all verified clean. Rejected: vendor
-  CRD icons (built-ins-only line). GRPCRoute deferral re-verified (still no instances).
-  **Adversarial survey of the session's 10 changes caught 1 real / 9 clean: an RBAC bypass in the
-  same-session cluster-scope log fix** — a `Pod` addressed through `__cluster__` streamed any
-  namespace's pod, authorized only against the cluster scope; now each rode-along pod is re-checked
-  against its own namespace (regression test added). The exit-0 crashloop card-explainer also shipped
-  (D89): a Deployment running one-shot work reads its contradiction in words.
-- **b27 (2026-06-11, dogfooding D61–D78)** — shipped: cluster-scoped log streams
-  (a Node's static-pod logs — etcd/apiserver one click away on a beginner's Docker Desktop; client
-  sentinel + server logSnapshot), single-slash search fallback (label keys / image fragments were
-  unsearchable), never-run CronJob Logs honesty, drag-pan text-selection suppression, sidebar filter
-  trim, README run-path completion, chart policy.csv group-token doc, backlog re-condensed 713→405.
-  Verified clean: redeploy-while-tab-open recovery, finished-Workflow logs on real data, STS→PVC→PV
-  chain, previous-logs kubelet passthrough, kube-system static-pod tree, dblclick-fit discoverability.
-  Logged: cluster-scope Node Logs-tab gap (joins the hasLogs Open item).
+  change: split `spec.go`/`health_cr.go`/`index.css`/`layout.ts` into domain siblings, App.tsx +
+  Topology.tsx into factory/seam modules. Each surface re-verified live; docs references updated.
+- **b33 (2026-06-11, dogfooding D130–D150)** — light-theme a11y (small health TEXT moved to darker
+  `healthText*` inks ≥4.5:1) + k8s-name `overflow-wrap: anywhere`; light-theme triage flow verified mature.
+- **b32 (2026-06-11, dogfooding D121–D129)** — EKS-shape pass: Fargate `pods=1` cap guard (cap > 1 falls
+  back to a bare count); 6 diverse CRD namespaces classify with 0-Unknown; storage chain + context switch
+  clean.
+- **b31 (2026-06-11, dogfooding D107–D120)** — breadth across k3s + EKS: pod-cap validated on real
+  ENI-based caps (incl. a node ambered at its ceiling); 0-pod-cap fallback; mostly confirmed mature.
+- **b30 (2026-06-11, dogfooding D101–D106)** — Nodes view reads "N / cap pods" (denominator inverts the
+  headroom read), and a collapse pill surfaces the worst health it hides ("● 1 degraded") so trouble isn't
+  buried in a neutral fold.
+- **b29 (2026-06-11, dogfooding D91–D96)** — CronWorkflow aggregated run logs, Ingress serving address,
+  Issuer backing CA ("staging — untrusted" caution), expired-cert relative time; two CR-condition scanners
+  folded into crConditionField.
+- **b28 (2026-06-11, dogfooding D79–D90)** — dead-credentials context switch fixes (selection clears on
+  switch, native-select current option never disabled); an adversarial survey of the session caught an
+  RBAC bypass — a `__cluster__`-addressed Pod streamed any namespace's logs, now re-checked per namespace.
+- **b27 (2026-06-11, dogfooding D61–D78)** — cluster-scoped log streams (a Node's static-pod logs),
+  single-slash search fallback, never-run CronJob honesty, drag-pan text-selection suppression; backlog
+  re-condensed 713→405.
 - **b22–b26 (2026-06-10, operator-flow dogfooding D1–D60)** — sixty successive
   human-operator walks through the live UI (landing/triage, logs, capacity, lenses, keyboard, phone,
   deep links, rollouts, SSE churn, a11y, manifest find, folds, history). Two fixes shipped: macOS
