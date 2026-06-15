@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, startTransition, Suspense } from 'solid-js'
 import { CLUSTER_SCOPE, fetchEvents, isForbidden } from '../api'
 import { kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
@@ -183,24 +183,39 @@ export default function DetailDrawer(props: Props) {
   // Events are fetched as soon as a node is selected, so switching tabs is instant. (The manifest
   // fetch lives in ManifestPanel, keyed the same way.)
   const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ctx, k.ns, k.kind, k.name))
-  const warnings = () => events()?.filter((e) => e.type === 'Warning').length ?? 0
+  // The loaded events read WITHOUT suspending. The tab badge and warn dot live in the tablist —
+  // ABOVE the events panel's <Suspense> — so reading the suspending events() accessor there
+  // re-suspends the drawer's OUTER boundary (App wraps the whole drawer in <Suspense>). On every 8s
+  // refetch that detaches and re-inserts the drawer's DOM, restarting the slide-in animation: the
+  // "drawer keeps re-opening every few seconds" flicker. resource.latest gives the last value
+  // without suspending, but only once resolved (it suspends while unresolved, throws while errored),
+  // so gate on state and treat the not-yet-loaded / errored window as empty.
+  const loadedEvents = createMemo(() => (events.state === 'ready' || events.state === 'refreshing' ? events.latest ?? [] : []))
+  const eventCount = () => loadedEvents().length
+  const warnings = () => loadedEvents().filter((e) => e.type === 'Warning').length
   // Warnings-only toggle: noisy resources emit many Normal events (Pulled, Created, Started…) that
   // bury the Warning a triage needs. Resets when the drawer switches to a different resource so
   // the filter doesn't silently follow operators into a new context.
   const [warnOnly, setWarnOnly] = createSignal(false)
   createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
-  const shownEvents = createMemo(() => {
-    // The resource throws when errored; reading events() then surfaces an uncaught rejection. The
-    // outer Show gates the JSX, but the memo also runs reactively so we must short-circuit here.
+  // A lazy accessor, NOT createMemo: an eager memo runs at component-init time — OUTSIDE the events
+  // panel's <Suspense> — so its suspending events() read would register with the drawer's OUTER
+  // boundary (App wraps the drawer in <Suspense>) and re-suspend it on every refetch, detaching and
+  // re-inserting the drawer DOM (replaying the slide-in). As a plain function it's first read inside
+  // the panel's own Suspense, so the INNER boundary owns the load. Guard events.error first: the
+  // resource throws on read when errored.
+  const shownEvents = () => {
     if (events.error) return []
     const all = events() ?? []
     return warnOnly() ? all.filter((e) => e.type === 'Warning') : all
-  })
+  }
 
   // Events are transient and a failing resource keeps emitting them, so poll while the drawer is
   // open (a no-op when nothing is selected) to keep the tab badge and list current.
   onMount(() => {
-    const t = setInterval(() => refetchEvents(), 8000)
+    // Refetch inside a transition so a poll keeps the current list on screen (stale-while-revalidate)
+    // instead of dropping the events panel back to its "loading…" fallback every 8s.
+    const t = setInterval(() => void startTransition(() => refetchEvents()), 8000)
     onCleanup(() => clearInterval(t))
   })
 
@@ -366,9 +381,9 @@ export default function DetailDrawer(props: Props) {
                   onClick={() => setTab(t)}
                 >
                   {TAB_LABELS[t]}
-                  <Show when={t === 'events' && !events.error && (events()?.length ?? 0) > 0}>
+                  <Show when={t === 'events' && !events.error && eventCount() > 0}>
                     <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
-                      {events()!.length > 99 ? '99+' : events()!.length}
+                      {eventCount() > 99 ? '99+' : eventCount()}
                     </span>
                   </Show>
                 </button>
@@ -435,7 +450,7 @@ export default function DetailDrawer(props: Props) {
               >
                 {/* Warnings-only toggle: surfaced only when there's a mix to filter (some warnings AND
                     some normal). Pure "all normal" or "all warnings" hides the chip — no useful action. */}
-                <Show when={(events()?.length ?? 0) > 0 && warnings() > 0 && warnings() < (events()?.length ?? 0)}>
+                <Show when={eventCount() > 0 && warnings() > 0 && warnings() < eventCount()}>
                   <div class="events-filter">
                     <button
                       class="events-filter-chip"

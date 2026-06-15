@@ -1,6 +1,6 @@
 import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSignal } from 'solid-js'
+import { createSignal, Suspense } from 'solid-js'
 import DetailDrawer from './DetailDrawer'
 import type { KNode } from '../types'
 
@@ -58,6 +58,30 @@ describe('DetailDrawer', () => {
       <DetailDrawer ctx="test-ctx" node={configMap} deleted={false} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     expect(live.container.querySelector('.drawer-deleted')).toBeNull()
+  })
+
+  it('keeps the drawer visible while events are still loading (events read must not suspend the OUTER boundary)', async () => {
+    // App wraps the whole drawer in <Suspense>. The events tab badge sits ABOVE the events panel's
+    // own Suspense, so a suspending events() read there re-suspends the OUTER boundary — and the 8s
+    // poll re-runs it, detaching/re-inserting the drawer's DOM and replaying its slide-in animation
+    // (the reported "drawer re-opens every few seconds" flicker). Hold the events fetch pending and
+    // resolve the manifest: the drawer must still be on screen, the events suspense contained to the
+    // panel's own boundary. Before the fix the outer boundary stayed stuck on the never-resolving
+    // events read and the drawer never rendered.
+    vi.stubGlobal('fetch', (url: string) =>
+      url.includes('/events')
+        ? new Promise<Response>(() => {}) // never resolves
+        : Promise.resolve(new Response('kind: ConfigMap\n', { status: 200 })),
+    )
+    const { container } = render(() => (
+      <Suspense fallback={<div class="outer-fallback" />}>
+        <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      </Suspense>
+    ))
+    // The manifest resolves and the outer boundary settles; events stay pending throughout.
+    await vi.waitFor(() => expect(container.querySelector('aside.drawer')).toBeTruthy())
+    expect(container.querySelector('.outer-fallback')).toBeNull()
+    expect(container.querySelector('.drawer-name')?.textContent).toContain('settings')
   })
 
   it('shows Events/Manifest tabs (no Logs) for a non-loggable resource', () => {

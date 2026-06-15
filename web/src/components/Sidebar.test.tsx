@@ -34,6 +34,26 @@ describe('Sidebar', () => {
     expect(counts).toEqual(['1', '3'])
   })
 
+  it('keeps the list on screen during a refetch (loading=true with rows already present)', () => {
+    // The 15s health poll flips resource.loading true for a few ms. Swapping the whole list out for
+    // "loading…" each time tore down and rebuilt every row — the namespace-bar flicker. With rows
+    // already present, a refetch must keep the SAME list element on screen, not the loading fallback.
+    const [loading, setLoading] = createSignal(false)
+    const { container } = render(() => (
+      <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={loading()} failed={false} />
+    ))
+    const listBefore = container.querySelector('.ns-list')
+    expect(listBefore).toBeTruthy()
+    // A refetch begins.
+    setLoading(true)
+    expect(container.querySelector('.sidebar-loading')).toBeNull() // no flash to the loading fallback
+    expect(container.querySelector('.ns-list')).toBe(listBefore) // same element — rows not rebuilt
+    // The genuine first load (loading with no rows yet) still shows the loading state.
+    const empty = render(() => <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={true} failed={false} />)
+    expect(empty.container.querySelector('.sidebar-loading')).toBeTruthy()
+    expect(empty.container.querySelector('.ns-list')).toBeNull()
+  })
+
   it('makes the trouble badge a jump button when a handler is wired (a plain span otherwise)', () => {
     // Without a handler: a passive count.
     const plain = render(() => (

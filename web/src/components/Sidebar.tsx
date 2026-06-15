@@ -192,7 +192,11 @@ export default function Sidebar(props: Props) {
           </button>
         </Show>
       </div>
-      <Show when={!props.loading} fallback={<div class="sidebar-loading">loading…</div>}>
+      {/* "loading…" only on the FIRST load (no rows yet). resource.loading also flips true for the
+          few ms of the 15s health refetch; gating on it alone swapped the whole list out for the
+          fallback and rebuilt every row each poll (the namespace-bar flicker). Keep the current rows
+          on screen while it refreshes — the reconciled store patches them in place. */}
+      <Show when={!props.loading || props.namespaces.length > 0} fallback={<div class="sidebar-loading">loading…</div>}>
         <Show
           when={!props.failed}
           fallback={
