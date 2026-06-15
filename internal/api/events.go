@@ -39,8 +39,8 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The graph (for the resource's UID and its owned subtree) comes from the cached snapshot.
-	snapshot := graph.AsTypedSlice(store.SnapshotNamespace(ns))
-	g := graph.Build(snapshot)
+	// Build re-runs the typed conversion internally, so pass the raw snapshot (like handleGraph).
+	g := graph.Build(store.SnapshotNamespace(ns))
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {
 		http.Error(w, "not found", http.StatusNotFound)

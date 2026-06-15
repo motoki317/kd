@@ -354,11 +354,9 @@ func nodeStatusSummary(n *corev1.Node) string {
 	if n.Spec.Unschedulable {
 		status += ",SchedulingDisabled"
 	}
-	if ready {
-		if len(pressures) > 0 {
-			status += " · " + strings.Join(pressures, ", ")
-		}
-	} else if notReadyReason != "" {
+	if ready && len(pressures) > 0 {
+		status += " · " + strings.Join(pressures, ", ")
+	} else if !ready && notReadyReason != "" {
 		status += " · " + notReadyReason
 	}
 	return status

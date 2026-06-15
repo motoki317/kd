@@ -29,11 +29,10 @@ type crdRefRule struct {
 	// for v1 — operators with array-of-refs (Workflow templateRef inside steps) need a
 	// dedicated rule per shape, or fall back to the convention scanner.
 	jsonPath []string
-	// toKind is the kind name of the referenced resource. toGroup is the API group; when
-	// empty, the rule resolves against any node whose name matches (and we accept whichever
-	// kind comes first), so well-known kinds without a group still resolve.
-	toKind  string
-	toGroup string
+	// toKind is the kind name of the referenced resource; the index resolves by
+	// kind+namespace+name (the API group is not compared), so a well-known kind resolves
+	// regardless of its group.
+	toKind string
 	// namespaced reports whether the referenced kind is namespaced; cross-namespace refs
 	// in v1 only resolve when the target lives in the same namespace as the referrer.
 	namespaced bool
@@ -53,41 +52,41 @@ var crdRefRules = []crdRefRule{
 	// roots it under the cron instead — the cron carries the same template link (rule below).
 	{fromGroup: "argoproj.io", fromKind: "Workflow",
 		jsonPath: []string{"workflowTemplateRef", "name"},
-		toKind:   "WorkflowTemplate", toGroup: "argoproj.io", namespaced: true, skipIfOwned: true},
+		toKind:   "WorkflowTemplate", namespaced: true, skipIfOwned: true},
 	// A CronWorkflow references the template it instantiates (nested under spec.workflowSpec), so
 	// the template still anchors the tree (template → cronworkflow → workflows) even though each
 	// owned Workflow's own template edge is suppressed.
 	{fromGroup: "argoproj.io", fromKind: "CronWorkflow",
 		jsonPath: []string{"workflowSpec", "workflowTemplateRef", "name"},
-		toKind:   "WorkflowTemplate", toGroup: "argoproj.io", namespaced: true},
+		toKind:   "WorkflowTemplate", namespaced: true},
 	// cert-manager: a Certificate references its issuer through spec.issuerRef (kind is
 	// either Issuer or ClusterIssuer; we encode both as separate rules).
 	{fromGroup: "cert-manager.io", fromKind: "Certificate",
 		jsonPath: []string{"issuerRef", "name"},
-		toKind:   "Issuer", toGroup: "cert-manager.io", namespaced: true},
+		toKind:   "Issuer", namespaced: true},
 	{fromGroup: "cert-manager.io", fromKind: "Certificate",
 		jsonPath: []string{"issuerRef", "name"},
-		toKind:   "ClusterIssuer", toGroup: "cert-manager.io", namespaced: false},
+		toKind:   "ClusterIssuer", namespaced: false},
 	// cert-manager: a Certificate writes its rendered TLS material into a Secret it names.
 	{fromGroup: "cert-manager.io", fromKind: "Certificate",
 		jsonPath: []string{"secretName"},
-		toKind:   "Secret", toGroup: "", namespaced: true},
+		toKind:   "Secret", namespaced: true},
 	// external-secrets.io: an ExternalSecret references a SecretStore (or ClusterSecretStore)
 	// for the backend, and writes into a target Secret.
 	{fromGroup: "external-secrets.io", fromKind: "ExternalSecret",
 		jsonPath: []string{"secretStoreRef", "name"},
-		toKind:   "SecretStore", toGroup: "external-secrets.io", namespaced: true},
+		toKind:   "SecretStore", namespaced: true},
 	{fromGroup: "external-secrets.io", fromKind: "ExternalSecret",
 		jsonPath: []string{"secretStoreRef", "name"},
-		toKind:   "ClusterSecretStore", toGroup: "external-secrets.io", namespaced: false},
+		toKind:   "ClusterSecretStore", namespaced: false},
 	{fromGroup: "external-secrets.io", fromKind: "ExternalSecret",
 		jsonPath: []string{"target", "name"},
-		toKind:   "Secret", toGroup: "", namespaced: true},
+		toKind:   "Secret", namespaced: true},
 	// ArgoCD: an Application points at a destination namespace + project, and references a
 	// project (an AppProject CR in the same namespace, usually "argocd").
 	{fromGroup: "argoproj.io", fromKind: "Application",
 		jsonPath: []string{"project"},
-		toKind:   "AppProject", toGroup: "argoproj.io", namespaced: true},
+		toKind:   "AppProject", namespaced: true},
 }
 
 // hasControllerOwner reports whether the object has a controller ownerReference — i.e. something

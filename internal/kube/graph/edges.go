@@ -46,6 +46,15 @@ type edgeBuilder struct {
 	pods      map[string]*corev1.Pod // "ns/name" -> typed pod, for named-targetPort resolution
 }
 
+// add appends an edge, deduplicating via b.seen — the single place the dedup invariant lives.
+func (b *edgeBuilder) add(e Edge) {
+	if b.seen[e] {
+		return
+	}
+	b.seen[e] = true
+	b.edges = append(b.edges, e)
+}
+
 // link adds an edge from a source node to a target identified by (kind, namespace, name),
 // skipping it when either endpoint is missing from the graph.
 func (b *edgeBuilder) link(fromID string, typ EdgeType, toKind, toNamespace, toName string) {
@@ -53,12 +62,7 @@ func (b *edgeBuilder) link(fromID string, typ EdgeType, toKind, toNamespace, toN
 	if !ok || fromID == "" {
 		return
 	}
-	e := Edge{From: fromID, To: toID, Type: typ}
-	if b.seen[e] {
-		return
-	}
-	b.seen[e] = true
-	b.edges = append(b.edges, e)
+	b.add(Edge{From: fromID, To: toID, Type: typ})
 }
 
 // buildEdges infers every relationship edge from the typed objects, resolving endpoints
@@ -81,11 +85,7 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 	for _, n := range nodes {
 		for _, ownerUID := range n.OwnerUIDs {
 			if uids[ownerUID] {
-				e := Edge{From: ownerUID, To: n.ID, Type: EdgeOwner}
-				if !b.seen[e] {
-					b.seen[e] = true
-					b.edges = append(b.edges, e)
-				}
+				b.add(Edge{From: ownerUID, To: n.ID, Type: EdgeOwner})
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func (b *edgeBuilder) podEdges(id, ns string, p *corev1.Pod) {
 			}
 		}
 	}
-	for _, c := range append(append([]corev1.Container{}, p.Spec.InitContainers...), p.Spec.Containers...) {
+	for _, c := range slices.Concat(p.Spec.InitContainers, p.Spec.Containers) {
 		b.containerRefs(id, ns, c)
 	}
 }
@@ -244,7 +244,7 @@ func (b *edgeBuilder) serviceEdges(id, ns string, svc *corev1.Service, nodes []N
 			ep.Total++
 			contributes := hasNumeric || len(namedPorts) == 0
 			if pod := b.pods[ns+"/"+n.Name]; pod != nil {
-				for _, c := range append(append([]corev1.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+				for _, c := range slices.Concat(pod.Spec.InitContainers, pod.Spec.Containers) {
 					for _, cp := range c.Ports {
 						if cp.Name != "" && slices.Contains(namedPorts, cp.Name) {
 							resolved[cp.Name] = true

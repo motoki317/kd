@@ -27,13 +27,7 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 	if err != nil || !found {
 		return ""
 	}
-	type cand struct {
-		text     string
-		isPod    bool
-		isHook   bool
-		finished string
-	}
-	var best *cand
+	var best *argoFailureCand
 	for _, raw := range nodes {
 		n, ok := raw.(map[string]any)
 		if !ok {
@@ -59,8 +53,8 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 		nodeName, _ := n["name"].(string)
 		isHook := strings.Contains(nodeName, ".onExit") || strings.Contains(nodeName, ".hooks.")
 		fin, _ := n["finishedAt"].(string)
-		c := cand{text: text, isPod: n["type"] == "Pod", isHook: isHook, finished: fin}
-		if best == nil || moreRelevantFailure(c.isHook, c.isPod, c.finished, c.text, best.isHook, best.isPod, best.finished, best.text) {
+		c := argoFailureCand{text: text, isPod: n["type"] == "Pod", isHook: isHook, finished: fin}
+		if best == nil || moreRelevantFailure(c, *best) {
 			cc := c
 			best = &cc
 		}
@@ -71,21 +65,30 @@ func argoWorkflowMessage(u *unstructured.Unstructured) string {
 	return best.text
 }
 
-// moreRelevantFailure orders two failed Workflow leaves: a primary-pipeline failure outranks an
-// exit-handler/hook failure (which runs after, and reports on, the real error); then a Pod
-// (container) execution outranks a parent step; then the most recently finished failure; then a
-// stable name order for determinism.
-func moreRelevantFailure(aHook, aPod bool, aFin, aText string, bHook, bPod bool, bFin, bText string) bool {
-	if aHook != bHook {
-		return !aHook
+// argoFailureCand is one candidate failed-leaf from a Workflow's status.nodes, carrying the axes
+// moreRelevantFailure ranks on.
+type argoFailureCand struct {
+	text     string
+	isPod    bool
+	isHook   bool
+	finished string
+}
+
+// moreRelevantFailure reports whether a outranks b as the Workflow's "real" failure: a primary-pipeline
+// failure outranks an exit-handler/hook failure (which runs after, and reports on, the real error);
+// then a Pod (container) execution outranks a parent step; then the most recently finished failure;
+// then a stable name order for determinism.
+func moreRelevantFailure(a, b argoFailureCand) bool {
+	if a.isHook != b.isHook {
+		return !a.isHook
 	}
-	if aPod != bPod {
-		return aPod
+	if a.isPod != b.isPod {
+		return a.isPod
 	}
-	if aFin != bFin {
-		return aFin > bFin
+	if a.finished != b.finished {
+		return a.finished > b.finished
 	}
-	return aText < bText
+	return a.text < b.text
 }
 
 // argoHealth covers the argoproj.io group, which hosts several unrelated controllers, so it
