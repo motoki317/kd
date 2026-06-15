@@ -374,7 +374,7 @@ function placeColumns(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Set<
   }
   for (const hub of hubs) {
     const hr = rank.get(hub.id) ?? 0
-    const r = hub.after ? hr + 1 : hr - 1 // children sit one column right; fan-in parents one column left
+    const r = hr + 1 // children sit one column right of the hub
     const areaH = hubArea(hub.blocks, 'LR').h
     let top = (seedY.get(hub.id) ?? 0) - areaH / 2 // seed only; the block stack is re-centred on the hub below
     for (const b of hub.blocks) {
@@ -528,8 +528,8 @@ function placeWithDagre(nodes: KNode[], edges: KEdge[], hubs: Hub[], wrapped: Se
     const area = areaById.get(n.id)!
     const boxH = NODE_HEIGHT + hubGap + area.h
     const top = p.y - boxH / 2
-    const cardY = hub.after ? top + NODE_HEIGHT / 2 : p.y + boxH / 2 - NODE_HEIGHT / 2
-    const gridTop = hub.after ? top + NODE_HEIGHT + hubGap : top
+    const cardY = top + NODE_HEIGHT / 2
+    const gridTop = top + NODE_HEIGHT + hubGap
     positioned.push({ ...n, x: p.x, y: cardY, width: NODE_WIDTH, height: NODE_HEIGHT })
     placeBlocksTB(hub, p.x, gridTop, area.w, positioned)
   }
@@ -561,16 +561,14 @@ function layoutComponent(nodes: KNode[], edges: KEdge[], rankdir: 'TB' | 'LR' = 
     if (a && b) positionedEdges.push({ ...e, points: orthRoute(a, b, rankdir) })
   }
 
-  // Bundled hub↔pill edges (D6): one orthogonal connector standing in for the many edges to the
-  // leaves the pill folds away, typed by the relationship the siblings shared with the hub. Drawn in
-  // the real direction so the arrow flows the same way as the unfolded edges would: children fold →
-  // hub→pill, parents fold → pill→hub.
+  // Bundled hub→pill edges (D6): one orthogonal connector standing in for the many edges to the
+  // leaves the pill folds away, typed by the relationship the siblings shared with the hub. Drawn
+  // hub→pill so the arrow flows the same way the unfolded hub→leaf edges would.
   for (const hub of hubs) {
     if (!posById.has(hub.id)) continue
     for (const pill of hub.pills) {
       if (!posById.has(pill.id)) continue
-      const [from, to] = hub.after ? [hub.id, pill.id] : [pill.id, hub.id]
-      positionedEdges.push({ from, to, type: pill.type, points: orthRoute(posById.get(from)!, posById.get(to)!, rankdir) })
+      positionedEdges.push({ from: hub.id, to: pill.id, type: pill.type, points: orthRoute(posById.get(hub.id)!, posById.get(pill.id)!, rankdir) })
     }
   }
 

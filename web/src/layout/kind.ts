@@ -145,14 +145,11 @@ export function kindGroups(layout: Layout): KindGroup[] {
     }))
 }
 
-// gridDims chooses a near-square grid for n leaves. In 'TB' it leans wide (more columns than rows)
-// so the block grows downward rather than across; in 'LR' it leans tall (more rows than columns)
-// so a hub's children stack into a vertical column and the block grows rightward — the LR flow
-// direction. The grouped All/Nodes views call it without a rankdir and get the wide default.
-function gridDims(n: number, rankdir: 'TB' | 'LR' = 'TB'): { cols: number; rows: number; w: number; h: number } {
-  const major = Math.min(n, Math.ceil(Math.sqrt(n * TARGET_ASPECT)))
-  const cols = rankdir === 'LR' ? Math.ceil(n / major) : major
-  const rows = rankdir === 'LR' ? major : Math.ceil(n / major)
+// gridDims chooses a near-square grid for n cells, leaning wide (more columns than rows) so the
+// kind box grows downward rather than across.
+function gridDims(n: number): { cols: number; rows: number; w: number; h: number } {
+  const cols = Math.min(n, Math.ceil(Math.sqrt(n * TARGET_ASPECT)))
+  const rows = Math.ceil(n / cols)
   return {
     cols,
     rows,

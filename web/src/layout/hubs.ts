@@ -50,10 +50,6 @@ export interface Hub {
   // the cross-flow axis (down the column in LR), each a vertical run so same-kind cards group and the
   // pill lands at the bottom of its run.
   blocks: LeafBlock[]
-  // Whether the leaf area sits AFTER the hub in the flow direction (below it in TB / to its right
-  // in LR). True for a parent whose children are leaves (edges point hub->leaf); false when the
-  // hub is the shared target the leaves point at (e.g. pods->Node), so the area sits before it.
-  after: boolean
   // One entry per "+N older" pill folded out of this hub's leaves: the pill id and the edge type to
   // bundle from the hub to it (all hidden same-kind siblings shared the hub via this relationship).
   pills: { id: string; type: EdgeType }[]
@@ -179,7 +175,6 @@ export function findHubs(nodes: KNode[], edges: KEdge[], expanded: ReadonlySet<s
     hubs.push({
       id,
       blocks: collapsed.blocks,
-      after: true, // children always sit AFTER the hub in flow (to its right in LR)
       pills: collapsed.pills,
     })
     // Every ORIGINAL leaf is owned by the hub (excluded from the Dagre skeleton); hidden ones simply
