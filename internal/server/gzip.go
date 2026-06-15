@@ -32,11 +32,10 @@ func gzipMiddleware(next http.Handler) http.Handler {
 // compressibleType reports whether a Content-Type is worth gzipping. Fonts (woff2) and images are
 // already compressed, so re-compressing them only burns CPU (and can grow them).
 func compressibleType(contentType string) bool {
-	ct := contentType
-	if i := strings.IndexByte(ct, ';'); i >= 0 {
-		ct = ct[:i]
+	if i := strings.IndexByte(contentType, ';'); i >= 0 {
+		contentType = contentType[:i]
 	}
-	switch strings.TrimSpace(ct) {
+	switch strings.TrimSpace(contentType) {
 	case "text/html", "text/css", "text/plain", "text/javascript",
 		"application/javascript", "application/json", "application/yaml",
 		"image/svg+xml", "text/event-stream":

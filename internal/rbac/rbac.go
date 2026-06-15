@@ -192,11 +192,11 @@ func (p *Policy) decide(user string, groups []string, scope string, resources []
 // roleSet is the set of roles acting on the caller's behalf: the default roles, the
 // user's assignments, and each group's assignments. Parse validated every name, so each
 // entry resolves in p.roles.
-func (p *Policy) roleSet(user string, groups []string) map[string]bool {
-	set := map[string]bool{}
+func (p *Policy) roleSet(user string, groups []string) map[string]struct{} {
+	set := map[string]struct{}{}
 	add := func(names []string) {
 		for _, n := range names {
-			set[n] = true
+			set[n] = struct{}{}
 		}
 	}
 	add(p.defaultRoles)

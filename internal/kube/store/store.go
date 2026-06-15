@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 
@@ -210,12 +209,7 @@ func (c *Cache) Start(ctx context.Context) error {
 	// against a Background ctx — a watcher launched before a failed Discover would block forever.
 	go func() {
 		<-ctx.Done()
-		// Idempotent close so manual Shutdown + ctx-cancel both work.
-		select {
-		case <-c.stopCh:
-		default:
-			close(c.stopCh)
-		}
+		c.stop() // idempotent close so manual Shutdown + ctx-cancel both work
 	}()
 
 	// Wire change handlers BEFORE starting informers so a viewer who connects mid-sync watches the
@@ -507,28 +501,34 @@ func (c *Cache) reconcile(ctx context.Context) {
 // determinism. The ClusterScope sentinel and cluster-scoped kinds are fetched without a namespace.
 func (c *Cache) GetLive(ctx context.Context, kind, namespace, name string) (*unstructured.Unstructured, error) {
 	c.mu.Lock()
-	var (
-		chosen     schema.GroupVersionResource
-		namespaced bool
-		found      bool
-	)
-	for gvr, r := range c.resources {
-		if r.Kind != kind {
-			continue
-		}
-		if !found || gvr.Group < chosen.Group {
-			chosen, namespaced, found = gvr, r.Namespaced, true
-		}
-	}
+	r, found := c.resourceForKind(kind)
 	c.mu.Unlock()
 	if !found {
 		return nil, fmt.Errorf("store: no registered resource for kind %q", kind)
 	}
-	ri := c.dynClient.Resource(chosen)
-	if namespaced && namespace != "" && namespace != ClusterScope {
+	ri := c.dynClient.Resource(r.GVR)
+	if r.Namespaced && namespace != "" && namespace != ClusterScope {
 		return ri.Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	}
 	return ri.Get(ctx, name, metav1.GetOptions{})
+}
+
+// resourceForKind returns the registered Resource whose Kind matches, choosing the
+// lexicographically smallest API group on a collision (two GVRs sharing a Kind, e.g. a CRD
+// shadowing a built-in) so kind→resource resolution is deterministic across map-iteration
+// order. Caller must hold c.mu.
+func (c *Cache) resourceForKind(kind string) (Resource, bool) {
+	var chosen Resource
+	found := false
+	for _, r := range c.resources {
+		if r.Kind != kind {
+			continue
+		}
+		if !found || r.GVR.Group < chosen.GVR.Group {
+			chosen, found = r, true
+		}
+	}
+	return chosen, found
 }
 
 // Client exposes the underlying typed clientset for operations that bypass the cache, e.g.
@@ -551,17 +551,11 @@ func (c *Cache) MetricsClient() metricsversioned.Interface { return c.metrics }
 func (c *Cache) GroupForKind(kind string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var groups []string
-	for _, r := range c.resources {
-		if r.Kind == kind {
-			groups = append(groups, r.GVR.Group)
-		}
-	}
-	if len(groups) == 0 {
+	r, ok := c.resourceForKind(kind)
+	if !ok {
 		return "", false
 	}
-	sort.Strings(groups)
-	return groups[0], true
+	return r.GVR.Group, true
 }
 
 // KindShortNames maps each registered kind to its preferred API short name (the first entry of
@@ -617,7 +611,7 @@ func (c *Cache) ListNamespaces() []string {
 	}
 	var names []string
 	for _, obj := range r.Informer.GetIndexer().List() {
-		if m, err := meta(obj); err == nil {
+		if m, ok := obj.(metav1.Object); ok {
 			names = append(names, m.GetName())
 		}
 	}
@@ -660,23 +654,18 @@ func (c *Cache) notify() {
 	}
 }
 
-// meta is a thin wrapper around the apimachinery meta accessor so call sites don't import it.
-func meta(obj any) (metav1.Object, error) {
-	o, ok := obj.(metav1.Object)
-	if ok {
-		return o, nil
-	}
-	// Unstructured satisfies metav1.Object via its GetObjectMeta pointer; the type
-	// assertion above should always succeed for cached objects. Fall through is defensive.
-	return nil, fmt.Errorf("store: object is not metav1.Object: %T", obj)
-}
-
-// Shutdown stops every informer and waits for the goroutines. Safe to call multiple times.
-func (c *Cache) Shutdown() {
+// stop closes stopCh idempotently (closing a closed channel panics), tearing down every
+// informer goroutine. Shared by Shutdown and Start's ctx-mirror goroutine.
+func (c *Cache) stop() {
 	select {
 	case <-c.stopCh:
 	default:
 		close(c.stopCh)
 	}
+}
+
+// Shutdown stops every informer and waits for the goroutines. Safe to call multiple times.
+func (c *Cache) Shutdown() {
+	c.stop()
 	c.factory.Shutdown()
 }

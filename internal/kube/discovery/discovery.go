@@ -5,10 +5,10 @@
 package discovery
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,14 +84,14 @@ func (c clientDiscoverer) Discover(ctx context.Context) ([]Resource, error) {
 			})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].GVR.Group != out[j].GVR.Group {
-			return out[i].GVR.Group < out[j].GVR.Group
+	slices.SortFunc(out, func(a, b Resource) int {
+		if c := cmp.Compare(a.GVR.Group, b.GVR.Group); c != 0 {
+			return c
 		}
-		if out[i].GVR.Version != out[j].GVR.Version {
-			return out[i].GVR.Version < out[j].GVR.Version
+		if c := cmp.Compare(a.GVR.Version, b.GVR.Version); c != 0 {
+			return c
 		}
-		return out[i].GVR.Resource < out[j].GVR.Resource
+		return cmp.Compare(a.GVR.Resource, b.GVR.Resource)
 	})
 	return out, nil
 }
