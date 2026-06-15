@@ -76,7 +76,7 @@ export function createClusterSession(deps: {
   // 'connecting' on initial subscribe, 'live' once a snapshot arrives, 'offline' on stream error.
   // Distinguishing connecting from offline avoids the alarming "offline" pill flashing on every
   // first load / namespace switch when nothing is wrong — the stream just hasn't yielded yet.
-  const [connState, setConnState] = createSignal<'connecting' | 'live' | 'offline'>('connecting')
+  const [connState, setConnState] = createSignal<ConnState>('connecting')
   const connected = () => connState() === 'live'
   // A failed namespace-list fetch is a cluster-level failure (unreachable or forbidden context),
   // not just a sidebar problem: with no namespace ever picked the subscribe effect never runs, so

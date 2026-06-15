@@ -66,13 +66,6 @@ export const EDGE_LABELS: Record<EdgeType, string> = {
   scrapes: 'scrapes',
 }
 
-// The human verbs for every non-ownership (dashed) edge type, derived from DASHED so the help
-// overlay's edge legend can list them without hand-maintaining a parallel copy that drifts (it had
-// silently dropped "runs as"/usesServiceAccount). Insertion order of DASHED gives a stable reading
-// order. Ownership is the solid backbone and is shown on its own legend row, so it's excluded here.
-export const nonOwnershipEdgeLabels = (): string[] =>
-  (Object.keys(DASHED) as EdgeType[]).map((t) => EDGE_LABELS[t])
-
 function nodeLabel(n: KNode): string {
   const ns = n.namespace ? `${n.namespace}/` : ''
   return `${n.kind} ${ns}${n.name}`

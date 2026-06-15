@@ -6,10 +6,9 @@
 // import each other directly (never through this barrel) to keep the graph cycle-free:
 // core ← collapse ← hubs ← relationship, and core/collapse ← kind ← relationship.
 
-export { byName, COLLAPSE_KIND, KIND_HEADER_HEIGHT, NODE_HEIGHT, NODE_WIDTH } from './core'
-export type { CollapseMeta, Layout, Point, PositionedEdge, PositionedNode } from './core'
+export { byName, COLLAPSE_KIND, NODE_HEIGHT, NODE_WIDTH } from './core'
+export type { CollapseMeta, Layout, Point, PositionedNode } from './core'
 export { COLLAPSE_VISIBLE, connGroups } from './collapse'
 export { kindGroups, layoutGraphByKind } from './kind'
-export type { KindGroup } from './kind'
 export { layoutGraph, layoutGraphWithOrphans } from './relationship'
 export type { OrphanLayout } from './relationship'

@@ -83,7 +83,6 @@ export function createSelectionDetails(deps: {
 
   return {
     capById,
-    selectedNode,
     selectedUsage,
     selectedWorkloadUsage,
     selectedHostCapacity,

@@ -60,7 +60,7 @@ export function parseRels(raw: string | null): Set<RelCategory> | null {
 // is stored referrer→referenced (Workflow→WorkflowTemplate) but the template is the conceptual
 // parent. This reproduces the old server-side viewSpecs[ViewOwnership].reverseEdges; only `refers`
 // reverses — `ownerReference` is already owner→owned.
-export const REVERSE_EDGES = new Set<EdgeType>(['refers'])
+const REVERSE_EDGES = new Set<EdgeType>(['refers'])
 
 // activeEdgeTypes returns the union of every selected category's edge types — the set of edge
 // types that should be drawn (and therefore drive connectivity) for the current relationship

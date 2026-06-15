@@ -612,7 +612,7 @@ export default function Topology(props: Props) {
     minY: number,
     maxX: number,
     maxY: number,
-    opts: { maxScale: number; focus: { x: number; y: number }; breathing?: number },
+    opts: { maxScale: number; focus: { x: number; y: number } },
   ) {
     const rect = svg!.getBoundingClientRect()
     const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
@@ -630,12 +630,11 @@ export default function Topology(props: Props) {
     nodes: { x: number; y: number; width: number; height: number }[],
     maxScale: number | ((w: number, h: number) => number),
     focus?: { x: number; y: number },
-    breathing?: number,
   ) {
     const bb = boundingBox(nodes)
     const ms = typeof maxScale === 'function' ? maxScale(bb.width, bb.height) : maxScale
     const f = focus ?? { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 }
-    return computeFitFloored(bb.minX, bb.minY, bb.maxX, bb.maxY, { maxScale: ms, focus: f, breathing })
+    return computeFitFloored(bb.minX, bb.minY, bb.maxX, bb.maxY, { maxScale: ms, focus: f })
   }
 
   // Fit-all on a real scope switch (context/namespace) OR a client-side restructure (grouping /
