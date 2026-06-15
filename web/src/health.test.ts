@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HEALTH_ORDER, healthSeverity, healthHint, healthColor, healthTextColor } from './health'
+import { HEALTH_ORDER, healthSeverity, healthHint, healthColor, healthTextColor, worstNonHealthy } from './health'
 import type { Health } from './types'
 
 describe('health mappings', () => {
@@ -45,5 +45,18 @@ describe('health mappings', () => {
       colours.add(healthColor(h))
     }
     expect(colours.size).toBe(HEALTH_ORDER.length) // no two states share a colour
+  })
+
+  describe('worstNonHealthy', () => {
+    it('returns null when empty or every state is Healthy', () => {
+      expect(worstNonHealthy([])).toBe(null)
+      expect(worstNonHealthy(['Healthy', 'Healthy'])).toBe(null)
+    })
+
+    it('picks the most-severe non-Healthy state, ignoring Healthy', () => {
+      expect(worstNonHealthy(['Healthy', 'Progressing', 'Degraded'])).toBe('Degraded')
+      expect(worstNonHealthy(['Unknown', 'Progressing'])).toBe('Progressing')
+      expect(worstNonHealthy(['Suspended', 'Healthy'])).toBe('Suspended')
+    })
   })
 })

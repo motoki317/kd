@@ -10,7 +10,7 @@ import { createCapacityHover } from './topology/capacityHover'
 import { autoExpandSelection, createExpandedClusters } from './topology/collapseState'
 import { createExitAnimation } from './topology/exitAnimation'
 import { createSpotlight } from './topology/spotlight'
-import { HEALTH_ORDER, healthColor, healthHint, healthSeverity, healthTextColor } from '../health'
+import { HEALTH_ORDER, healthColor, healthHint, healthTextColor, worstNonHealthy } from '../health'
 import { kindStats as computeKindStats } from '../kindStats'
 import { orderedForNav } from '../nav'
 import { cardKindLabel, cardName, cardStatus, cardTitle, pluralizeKind, prefixParentNames } from '../names'
@@ -455,14 +455,10 @@ export default function Topology(props: Props) {
   // hides, health-coloured, so a troubled fold looks different from a benign one (Contrast + explicit
   // over implicit). Returns null when every hidden node is Healthy.
   const collapseHiddenTrouble = (meta: CollapseMeta): { count: number; worst: Health } | null => {
-    let worst: Health | null = null
-    let count = 0
-    for (const n of meta.hidden) {
-      if (n.health === 'Healthy') continue
-      count++
-      if (!worst || healthSeverity[n.health] > healthSeverity[worst]) worst = n.health
-    }
-    return worst ? { count, worst } : null
+    const worst = worstNonHealthy(meta.hidden.map((n) => n.health))
+    if (!worst) return null
+    const count = meta.hidden.reduce((c, n) => c + (n.health === 'Healthy' ? 0 : 1), 0)
+    return { count, worst }
   }
   // Whether a collapse pill should dim. A kind filter fades a pill of an unselected kind (composing
   // like individual cards do). Additionally, while triaging by an explicit query (search or the health

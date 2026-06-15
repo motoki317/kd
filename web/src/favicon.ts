@@ -4,7 +4,7 @@
 // matches the worst-health state visible in the current view, so the tab itself signals "look at
 // me" — same idea as Gmail's unread count favicon, but for cluster trouble.
 
-import { healthSeverity, HEALTH_ORDER } from './health'
+import { HEALTH_ORDER, worstNonHealthy } from './health'
 import type { Health } from './types'
 
 // Hex values mirror the --health-* CSS variables in index.css. Centralized as plain hex here
@@ -18,16 +18,12 @@ const HEALTH_HEX: Record<Health, string> = {
   Unknown: '#9aa5b1',
 }
 
-// worstHealth returns the most attention-worthy health state present in the given counts, or null
-// when nothing is present at all (empty/loading state — favicon falls back to plain brand mark).
-// Pure healthy reads as "no badge needed" → returns null so the caller hides the dot.
+// worstHealth returns the most attention-worthy health state present in the given counts, or null when
+// nothing non-Healthy is present (empty/loading or all-green — favicon falls back to plain brand mark).
+// Folds the present (nonzero) states through the shared reducer; the counts themselves don't matter,
+// only which states appear.
 export function worstHealth(counts: Partial<Record<Health, number>>): Health | null {
-  let worst: Health | null = null
-  for (const h of HEALTH_ORDER) {
-    if (!counts[h]) continue
-    if (worst === null || healthSeverity[h] > healthSeverity[worst]) worst = h
-  }
-  return worst && worst !== 'Healthy' ? worst : null
+  return worstNonHealthy(HEALTH_ORDER.filter((h) => counts[h]))
 }
 
 // faviconSvg returns the SVG markup for the favicon. The badge is a filled circle in the bottom-

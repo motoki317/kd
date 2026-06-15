@@ -14,6 +14,18 @@ export const healthSeverity: Record<Health, number> = {
   Healthy: 0,
 }
 
+// worstNonHealthy folds a set of health states to the most attention-worthy non-Healthy one (the
+// server's graph.severity order), or null when every state is Healthy. The shared primitive behind the
+// kind-chip severity dots, the collapse-pill trouble badge, and the favicon attention badge.
+export function worstNonHealthy(healths: Iterable<Health>): Health | null {
+  let worst: Health | null = null
+  for (const h of healths) {
+    if (h === 'Healthy') continue
+    if (worst === null || healthSeverity[h] > healthSeverity[worst]) worst = h
+  }
+  return worst
+}
+
 // Plain-English gloss for each health state. The bare enum word — "Unknown" especially — doesn't
 // tell a first-time operator what a colored dot means, so tooltips use this instead of the raw word.
 export const healthHint: Record<Health, string> = {

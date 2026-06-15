@@ -1,4 +1,4 @@
-import { healthSeverity } from './health'
+import { worstNonHealthy } from './health'
 import type { PositionedNode } from './layout'
 import type { Health } from './types'
 
@@ -22,13 +22,11 @@ export function kindStats(nodes: PositionedNode[]): Map<string, KindStat> {
   const add = (n: { kind: string; health: Health }) => {
     const s = stats.get(n.kind)
     if (!s) {
-      stats.set(n.kind, { count: 1, worst: n.health !== 'Healthy' ? n.health : null })
+      stats.set(n.kind, { count: 1, worst: worstNonHealthy([n.health]) })
       return
     }
     s.count++
-    if (n.health !== 'Healthy' && (s.worst === null || healthSeverity[n.health] > healthSeverity[s.worst])) {
-      s.worst = n.health
-    }
+    s.worst = worstNonHealthy(s.worst ? [s.worst, n.health] : [n.health])
   }
   for (const n of nodes) {
     if (n.collapse) {
