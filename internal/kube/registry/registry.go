@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -242,8 +243,20 @@ func (r *Registry) getOrCreate(name string) *entry {
 // once per entry (guarded by entry.once). Closes ready so waiters can proceed.
 func (r *Registry) runBuild(name string, e *entry) {
 	defer close(e.ready)
+	// Log lazily-built contexts (a UI context switch) the same way main.go logs the default at
+	// startup, so the server log shows the switch being handled instead of going silent — the
+	// "nothing happens, no 'connecting to cluster' log" an operator sees on a multi-context switch.
+	// The default context is already logged (with a full-sync "connected") around the startup
+	// Prewarm, so skip it here to avoid a duplicate line.
+	lazy := name != r.current
+	if lazy {
+		slog.Info("connecting to cluster", "context", name)
+	}
 	clients, err := r.build(name)
 	if err != nil {
+		if lazy {
+			slog.Error("cluster connection failed", "context", name, "err", err)
+		}
 		r.setStatus(e, StatusError, err)
 		return
 	}
@@ -254,8 +267,14 @@ func (r *Registry) runBuild(name string, e *entry) {
 	// process exits. A dedicated context keeps Start() independent of any single HTTP request.
 	startCtx := context.Background()
 	if err := c.Start(startCtx); err != nil {
+		if lazy {
+			slog.Error("cluster connection failed", "context", name, "err", err)
+		}
 		r.setStatus(e, StatusError, fmt.Errorf("registry: start cache for %q: %w", name, err))
 		return
+	}
+	if lazy {
+		slog.Info("cluster connected", "context", name)
 	}
 	r.mu.Lock()
 	e.cache = c

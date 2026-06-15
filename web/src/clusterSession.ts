@@ -5,7 +5,7 @@
 // A factory: App calls it inside its component body so the resources/effects run under its root.
 
 import { createEffect, createMemo, createResource, createSignal, onCleanup, untrack, type Accessor, type Setter } from 'solid-js'
-import { ApiError, fetchContexts, fetchKinds, fetchNamespaces } from './api'
+import { ApiError, fetchContexts, fetchKinds, fetchNamespaces, type NamespaceInfo } from './api'
 import { setServerShortNames } from './names'
 import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
 
@@ -46,11 +46,26 @@ export function createClusterSession(deps: {
 
   // Namespace list is keyed on ctx so a context switch refetches against the new cluster. Wait for
   // ctx to resolve so the first fetch hits the right URL (avoids a doomed call to /contexts/null/).
-  const [namespaces, { refetch: refetchNamespaces }] = createResource(ctx, (c) => fetchNamespaces(c))
+  // The value carries the context it was fetched FOR so the list can be dropped the instant ctx
+  // changes — see namespaceList.
+  const [namespaces, { refetch: refetchNamespaces }] = createResource(ctx, async (c) => ({ forCtx: c, list: await fetchNamespaces(c) }))
   // namespaces() rethrows if the fetch errored (Solid resources throw on read in an error state), which
   // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
   // read the list through this guard, which yields [] on error/while loading.
-  const namespaceList = createMemo(() => (namespaces.error ? [] : namespaces() ?? []))
+  //
+  // Drop the list the moment ctx changes (forCtx !== ctx()), rather than letting the resource's
+  // stale-while-revalidate keep the PREVIOUS cluster's namespaces on screen during the refetch.
+  // Two reasons: (1) showing another cluster's namespaces after a switch is wrong on its face; (2) it
+  // mirrors how the graph resets to empty on a ctx switch, which the sidebar list did NOT — the
+  // sidebar kept churning the old list through the new cluster's resolves (cold-cache partial → full)
+  // amid the SSE-resubscribe update storm, and Solid's fine-grained subscriptions intermittently
+  // desynced so the list stuck on the old cluster forever (the "switching contexts loads nothing" bug).
+  // A synchronous []-then-repopulate on ctx change is the clean transition the graph already had.
+  const namespaceList = createMemo<NamespaceInfo[]>(() => {
+    if (namespaces.error) return []
+    const v = namespaces()
+    return v && v.forCtx === ctx() ? v.list : []
+  })
   // Kind → API short-name map (cycle 302): fetched once per context so cards label kinds with the
   // cluster's own abbreviations (cm, pdb, CRD-defined shorts) instead of a hardcoded guess. Keyed
   // on ctx because CRDs — hence short names — differ per cluster. Feeds names.ts via a setter

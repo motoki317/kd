@@ -31,6 +31,9 @@ const ClusterScopeNamespace = store.ClusterScope
 // Store is the read surface the API needs from a single context's informer cache.
 type Store interface {
 	ListNamespaces() []string
+	// WaitForNamespacesSync blocks until the namespaces informer has done its initial LIST (or ctx
+	// is done) so a freshly-built context serves its FULL namespace list, not a half-synced partial.
+	WaitForNamespacesSync(ctx context.Context) bool
 	SnapshotNamespace(namespace string) []runtime.Object
 	// SnapshotNodesAndPods returns all Nodes + all Pods cluster-wide, for the capacity (Nodes)
 	// view, which shows every namespace's pods on each node regardless of the selected namespace.
@@ -208,6 +211,13 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Serve the FULL namespace list, not the half-synced partial a just-built context starts with:
+	// the registry returns a cache the instant its watches start, so a UI context switch's first
+	// /namespaces hit otherwise saw only the cluster sentinel. Bounded so a never-syncing informer
+	// (RBAC-denied namespaces watch) falls through to whatever ListNamespaces has rather than hanging.
+	waitCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	store.WaitForNamespacesSync(waitCtx)
+	cancel()
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, store.ListNamespaces())
 	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible)+1)}
 	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real

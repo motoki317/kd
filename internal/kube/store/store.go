@@ -587,6 +587,25 @@ func (c *Cache) KindShortNames() map[string]string {
 	return out
 }
 
+// WaitForNamespacesSync blocks until the namespaces informer has completed its initial LIST (or ctx
+// is done), reporting whether it ended up synced. Returns true immediately when the informer isn't
+// registered (RBAC-denied / absent) so a caller falls through to ListNamespaces' nil rather than
+// hanging. The registry hands out a cache as soon as its watches START (not once synced), so the
+// FIRST /namespaces hit on a freshly-built context — exactly what a UI context switch triggers —
+// otherwise reads a half-empty indexer and returns a misleading partial list (just the cluster
+// sentinel). Waiting on this one informer (a single namespaces LIST) is fast even against a remote
+// cluster, unlike WaitForCacheSync which blocks on every GVR. The default context is prewarmed, so
+// it's already synced and this returns at once.
+func (c *Cache) WaitForNamespacesSync(ctx context.Context) bool {
+	c.mu.Lock()
+	r, ok := c.resources[namespacesGVR]
+	c.mu.Unlock()
+	if !ok {
+		return true
+	}
+	return cache.WaitForCacheSync(ctx.Done(), r.Informer.HasSynced)
+}
+
 // ListNamespaces returns all cached namespace names, sorted. Returns nil if the
 // namespaces informer isn't available (e.g. RBAC denied).
 func (c *Cache) ListNamespaces() []string {

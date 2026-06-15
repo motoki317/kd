@@ -25,15 +25,23 @@ export function createSidebarHealth(deps: {
   // namespace as a fresh object on every `summary` event, so the Sidebar's <For> tore down and recreated
   // that row each tick (the namespace-list "flicker"). reconcile patches only the changed row's health
   // in place, so <For> keeps the DOM and the dot recolours surgically — the same fix the canvas cards got.
-  const [sidebarNs, setSidebarNs] = createStore<NamespaceInfo[]>([])
-  createEffect(() => {
+  // Compute the merged list in a MEMO, then reconcile it into the store through a single-dependency
+  // effect. The merge reads four sources (the polled list + the open ns + its live summary + conn
+  // state); folding them into one pure memo keeps the reconcile effect depending on a SINGLE input.
+  // A context switch fires an interleaved storm of these updates (the namespace resource resolving
+  // while the SSE resubscribe flips connState/summary), and an effect that read all four directly
+  // intermittently latched a stale list — it ran on a connState change a beat before the resource's
+  // value committed, then never re-fired for the value, leaving the sidebar stuck on the PREVIOUS
+  // cluster's namespaces. Routing the four through a glitch-free memo makes the effect re-run exactly
+  // when the merged value changes (verified live across cluster switches).
+  const merged = createMemo<NamespaceInfo[]>(() => {
     const list = namespaceList()
     const ns = namespace()
     const live = liveSummary()
-    const next =
-      !connected() || !ns || !live ? list : list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
-    setSidebarNs(reconcile(next, { key: 'name' }))
+    return !connected() || !ns || !live ? list : list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
   })
+  const [sidebarNs, setSidebarNs] = createStore<NamespaceInfo[]>([])
+  createEffect(() => setSidebarNs(reconcile(merged(), { key: 'name' })))
 
   // Per-namespace health across the WHOLE cluster, for the favicon attention badge. Counts over
   // sidebarNs — the /namespaces poll with the open namespace kept live from the SSE summary — the SAME
