@@ -13,9 +13,10 @@ import (
 // lives here too (see appendRideAlong).
 
 // SnapshotNamespace returns every cached object in the given namespace, plus the
-// cluster-scoped objects that a namespaced object in this namespace references (one hop
-// via ownerReferences or any spec-field reference that resolves to a cluster-scoped
-// object). See ride-along policy in docs/ADR/20260528-dynamic-informers-and-cluster-scope.md.
+// cluster-scoped objects associated with it: those a namespaced object references (one hop via
+// ownerReferences or a spec-field reference) and the ClusterRoleBindings that grant a ClusterRole
+// to a ServiceAccount in this namespace. See ride-along policy in
+// docs/ADR/20260528-dynamic-informers-and-cluster-scope.md.
 //
 // For the cluster sentinel (ClusterScope) returns every cluster-scoped object.
 func (c *Cache) SnapshotNamespace(namespace string) []runtime.Object {
@@ -99,25 +100,38 @@ func (c *Cache) SnapshotNodesAndPods() []runtime.Object {
 	return out
 }
 
-// appendRideAlong adds cluster-scoped objects that are referenced (one hop) by the
-// namespaced objects already in `out`. Resolved references:
+// appendRideAlong adds cluster-scoped objects associated with the namespaced objects already in
+// `out`. Resolved references:
 //   - metadata.ownerReferences UID → any cluster-scoped object with that UID
 //   - PVC.spec.volumeName → PersistentVolume
+//   - RoleBinding.roleRef → ClusterRole (when roleRef.kind == ClusterRole)
+//   - a ClusterRoleBinding that binds a ServiceAccount in this namespace → that binding, plus a
+//     second hop to the ClusterRole it grants
+//
+// The RBAC chain is what lets a namespace's RBAC relationship view show the cluster-scoped grants
+// its ServiceAccounts actually hold: a namespaced RoleBinding can grant a ClusterRole, and a
+// cluster-scoped ClusterRoleBinding can grant one to a namespaced SA — both otherwise invisible
+// from inside the namespace, so their `binds` edges were dropped for want of a target node. The
+// ClusterRoleBinding is the one reference resolved in REVERSE (the cluster-scoped object names the
+// namespaced SA, not vice-versa), so it costs a scan of every ClusterRoleBinding — bounded by
+// ClusterRoleBinding cardinality (low in practice), unlike the others which stay bounded by the
+// namespace's own reference fan-out.
 //
 // A Pod's Node is deliberately NOT pulled in: the pod↔node story lives in the Nodes group-by
 // (capacity) view, and the `scheduledOn` edge isn't surfaced by any relationship category, so a
 // rode-along Node only ever appeared as a permanently-orphaned card in the namespace graph.
 //
 // Lookups go through the per-informer indexer: UID via the uidIndex secondary index
-// (installed by registerLocked), Node/PV by name via the default key index. Each lookup is
-// O(|refs|) so the total work is bounded by the namespaced-object reference fan-out, not by
-// the size of cluster-scoped state — important on clusters with thousands of CRs.
+// (installed by registerLocked), Node/PV/ClusterRole by name via the default key index. Each
+// keyed lookup is O(|refs|); the ClusterRoleBinding scan is O(|ClusterRoleBindings|).
 func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Object {
 	if len(out) == 0 {
 		return out
 	}
 	wantUIDs := map[string]bool{}
 	wantPVNames := map[string]bool{}
+	wantClusterRoles := map[string]bool{} // ClusterRole names (cluster-scoped) referenced by a roleRef
+	saKeys := map[string]bool{}           // "namespace/name" of every ServiceAccount in this namespace
 	have := map[string]bool{}
 	for _, obj := range out {
 		u, ok := obj.(*unstructured.Unstructured)
@@ -132,13 +146,20 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 				wantUIDs[string(or.UID)] = true
 			}
 		}
-		if u.GetKind() == "PersistentVolumeClaim" {
+		switch u.GetKind() {
+		case "PersistentVolumeClaim":
 			if name, found, _ := unstructured.NestedString(u.Object, "spec", "volumeName"); found && name != "" {
 				wantPVNames[name] = true
 			}
+		case "ServiceAccount":
+			saKeys[u.GetNamespace()+"/"+u.GetName()] = true
+		case "RoleBinding":
+			if name := clusterRoleRefName(u); name != "" {
+				wantClusterRoles[name] = true
+			}
 		}
 	}
-	if len(wantUIDs) == 0 && len(wantPVNames) == 0 {
+	if len(wantUIDs) == 0 && len(wantPVNames) == 0 && len(wantClusterRoles) == 0 && len(saKeys) == 0 {
 		return out
 	}
 	add := func(obj any) {
@@ -153,6 +174,9 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 		have[uid] = true
 		out = append(out, u)
 	}
+	// First: owner UIDs, PVs, and the reverse ClusterRoleBinding scan. The scan feeds second-hop
+	// ClusterRole names, so it must complete before ClusterRoles are resolved below — and resource
+	// order here is arbitrary (the map-derived slice), so the two phases can't be merged.
 	for _, r := range resources {
 		if r.Namespaced {
 			continue
@@ -174,6 +198,65 @@ func appendRideAlong(out []runtime.Object, resources []Resource) []runtime.Objec
 				}
 			}
 		}
+		if r.Kind == "ClusterRoleBinding" && len(saKeys) > 0 {
+			for _, obj := range idx.List() {
+				u, ok := obj.(*unstructured.Unstructured)
+				if !ok || !bindsServiceAccount(u, saKeys) {
+					continue
+				}
+				add(u)
+				if name := clusterRoleRefName(u); name != "" {
+					wantClusterRoles[name] = true
+				}
+			}
+		}
+	}
+	// Then resolve ClusterRoles named by a RoleBinding's roleRef or a rode-along ClusterRoleBinding's.
+	if len(wantClusterRoles) > 0 {
+		for _, r := range resources {
+			if r.Namespaced || r.Kind != "ClusterRole" {
+				continue
+			}
+			idx := r.Informer.GetIndexer()
+			for name := range wantClusterRoles {
+				if obj, exists, _ := idx.GetByKey(name); exists {
+					add(obj)
+				}
+			}
+		}
 	}
 	return out
+}
+
+// clusterRoleRefName returns the name of the ClusterRole a binding's roleRef targets, or "" if the
+// roleRef is a namespaced Role. roleRef is a top-level field on both RoleBinding and
+// ClusterRoleBinding; a ClusterRoleBinding's roleRef.kind is always ClusterRole, a RoleBinding's
+// may be either.
+func clusterRoleRefName(u *unstructured.Unstructured) string {
+	if kind, _, _ := unstructured.NestedString(u.Object, "roleRef", "kind"); kind != "ClusterRole" {
+		return ""
+	}
+	name, _, _ := unstructured.NestedString(u.Object, "roleRef", "name")
+	return name
+}
+
+// bindsServiceAccount reports whether any of a binding's subjects is a ServiceAccount whose
+// "namespace/name" is in saKeys. subjects is a top-level field on both binding kinds.
+func bindsServiceAccount(u *unstructured.Unstructured, saKeys map[string]bool) bool {
+	subjects, _, _ := unstructured.NestedSlice(u.Object, "subjects")
+	for _, s := range subjects {
+		m, ok := s.(map[string]any)
+		if !ok {
+			continue
+		}
+		if kind, _, _ := unstructured.NestedString(m, "kind"); kind != "ServiceAccount" {
+			continue
+		}
+		sns, _, _ := unstructured.NestedString(m, "namespace")
+		sname, _, _ := unstructured.NestedString(m, "name")
+		if saKeys[sns+"/"+sname] {
+			return true
+		}
+	}
+	return false
 }

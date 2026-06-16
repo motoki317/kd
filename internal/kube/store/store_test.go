@@ -27,7 +27,11 @@ var fixedResources = []discovery.Resource{
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, Kind: "Namespace", Namespaced: false},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}, Kind: "Node", Namespaced: false},
 	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "serviceaccounts"}, Kind: "ServiceAccount", Namespaced: true},
 	{GVR: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, Kind: "Deployment", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "rolebindings"}, Kind: "RoleBinding", Namespaced: true},
+	{GVR: schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterroles"}, Kind: "ClusterRole", Namespaced: false},
+	{GVR: schema.GroupVersionResource{Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "clusterrolebindings"}, Kind: "ClusterRoleBinding", Namespaced: false},
 }
 
 // uns builds a *unstructured.Unstructured with the given GVK + metadata + extra fields, so
@@ -68,6 +72,40 @@ func node(name string) *unstructured.Unstructured {
 
 func deployment(namespace, name string) *unstructured.Unstructured {
 	return uns("apps/v1", "Deployment", namespace, name, "dep-"+name, nil)
+}
+
+func serviceAccount(namespace, name string) *unstructured.Unstructured {
+	return uns("v1", "ServiceAccount", namespace, name, "sa-"+namespace+"-"+name, nil)
+}
+
+func clusterRole(name string) *unstructured.Unstructured {
+	return uns("rbac.authorization.k8s.io/v1", "ClusterRole", "", name, "cr-"+name, nil)
+}
+
+func saSubject(namespace, name string) map[string]any {
+	return map[string]any{"kind": "ServiceAccount", "namespace": namespace, "name": name}
+}
+
+func anySlice(ms []map[string]any) []any {
+	out := make([]any, len(ms))
+	for i, m := range ms {
+		out[i] = m
+	}
+	return out
+}
+
+func roleBinding(namespace, name, refKind, refName string, subjects ...map[string]any) *unstructured.Unstructured {
+	return uns("rbac.authorization.k8s.io/v1", "RoleBinding", namespace, name, "rb-"+name, map[string]any{
+		"roleRef":  map[string]any{"apiGroup": "rbac.authorization.k8s.io", "kind": refKind, "name": refName},
+		"subjects": anySlice(subjects),
+	})
+}
+
+func clusterRoleBinding(name, refName string, subjects ...map[string]any) *unstructured.Unstructured {
+	return uns("rbac.authorization.k8s.io/v1", "ClusterRoleBinding", "", name, "crb-"+name, map[string]any{
+		"roleRef":  map[string]any{"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": refName},
+		"subjects": anySlice(subjects),
+	})
 }
 
 // crd builds a minimal unstructured CustomResourceDefinition carrying the spec.group and
@@ -207,6 +245,77 @@ func TestStoreSnapshotClusterSentinel(t *testing.T) {
 	c := startTestStore(t, ns("alpha"), node("node-1"))
 	if len(c.SnapshotNamespace(ClusterScope)) == 0 {
 		t.Error("SnapshotNamespace(ClusterScope) returned empty; want cluster-scoped objects")
+	}
+}
+
+// hasObject reports whether the snapshot contains an object of the given kind+name.
+func hasObject(objs []runtime.Object, kind, name string) bool {
+	for _, o := range objs {
+		u, ok := o.(*unstructured.Unstructured)
+		if ok && u.GetKind() == kind && u.GetName() == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestStoreSnapshotRideAlongRoleBindingClusterRole(t *testing.T) {
+	// A namespaced RoleBinding whose roleRef targets a cluster-scoped ClusterRole pulls that
+	// ClusterRole into the namespace snapshot, so the RBAC view's binds edge has a node to land on.
+	c := startTestStore(t,
+		ns("alpha"),
+		serviceAccount("alpha", "deployer"),
+		clusterRole("view"),
+		roleBinding("alpha", "deployer-view", "ClusterRole", "view", saSubject("alpha", "deployer")),
+	)
+	objs := c.SnapshotNamespace("alpha")
+	if !hasObject(objs, "ClusterRole", "view") {
+		t.Error("a ClusterRole referenced by a namespaced RoleBinding's roleRef should ride along")
+	}
+}
+
+func TestStoreSnapshotRideAlongClusterRoleBindingForNamespaceSA(t *testing.T) {
+	// A cluster-scoped ClusterRoleBinding that grants a ClusterRole to a ServiceAccount in this
+	// namespace rides along (resolved in reverse — the binding names the SA), and so does the
+	// ClusterRole it binds (the second hop), completing the SA → CRB → ClusterRole chain.
+	c := startTestStore(t,
+		ns("alpha"),
+		serviceAccount("alpha", "deployer"),
+		clusterRole("admin"),
+		clusterRoleBinding("deployer-admin", "admin", saSubject("alpha", "deployer")),
+	)
+	objs := c.SnapshotNamespace("alpha")
+	if !hasObject(objs, "ClusterRoleBinding", "deployer-admin") {
+		t.Error("a ClusterRoleBinding binding a namespace's ServiceAccount should ride along")
+	}
+	if !hasObject(objs, "ClusterRole", "admin") {
+		t.Error("the ClusterRole a rode-along ClusterRoleBinding grants should ride along (second hop)")
+	}
+}
+
+func TestStoreSnapshotRideAlongClusterScopedRBACStaysOut(t *testing.T) {
+	// Negative cases: cluster-scoped RBAC objects that are NOT associated with the namespace must
+	// not leak into it. A ClusterRoleBinding for a DIFFERENT namespace's SA, and a ClusterRole no
+	// namespaced binding references, both stay out.
+	c := startTestStore(t,
+		ns("alpha"), ns("beta"),
+		serviceAccount("alpha", "deployer"),
+		serviceAccount("beta", "other"),
+		clusterRole("admin"),  // bound only to beta's SA
+		clusterRole("unused"), // referenced by nothing
+		clusterRoleBinding("other-admin", "admin", saSubject("beta", "other")),
+		// A namespaced RoleBinding bound to a same-namespace Role must not drag in any ClusterRole.
+		roleBinding("alpha", "deployer-edit", "Role", "edit", saSubject("alpha", "deployer")),
+	)
+	objs := c.SnapshotNamespace("alpha")
+	if hasObject(objs, "ClusterRoleBinding", "other-admin") {
+		t.Error("a ClusterRoleBinding for another namespace's SA must not ride along")
+	}
+	if hasObject(objs, "ClusterRole", "admin") {
+		t.Error("a ClusterRole bound only to another namespace's SA must not ride along")
+	}
+	if hasObject(objs, "ClusterRole", "unused") {
+		t.Error("an unreferenced ClusterRole must not ride along")
 	}
 }
 

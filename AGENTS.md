@@ -297,10 +297,15 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
 - **Cluster-scope sentinel** `"__cluster__"` (`CLUSTER_SCOPE` / `store.ClusterScope`):
   - Treated everywhere as a real namespace by route shape, but expands to the cluster's
     cluster-scoped snapshot server-side. The sidebar pins it above the namespace list.
-  - Cluster-scoped objects ride along into namespace views when referenced AND drawable there —
-    currently just a PVC's PV (via the `mounts` edge). A Pod's Node deliberately does NOT ride along:
-    no relationship category draws the `scheduledOn` edge (the pod↔node story is the Nodes group-by
-    view), so a rode-along Node only ever appeared as a permanently-orphaned card.
+  - Cluster-scoped objects ride along into namespace views when referenced AND drawable there
+    (`store.appendRideAlong`): a PVC's PV (via the `mounts` edge), a RoleBinding's ClusterRole
+    `roleRef`, and the ClusterRoleBindings that grant a ClusterRole to a ServiceAccount in the
+    namespace (+ that ClusterRole — the RBAC view's whole reason cluster-scoped grants are visible
+    from inside a namespace). The CRB case is resolved in REVERSE (the binding names the namespaced
+    SA), so it scans every ClusterRoleBinding — fine at their cardinality, unlike CRs. A Pod's Node
+    deliberately does NOT ride along: no relationship category draws the `scheduledOn` edge (the
+    pod↔node story is the Nodes group-by view), so a rode-along Node only ever appeared as a
+    permanently-orphaned card.
   - A cluster-scoped resource's drawer must substitute the sentinel for its empty `{ns}` (an empty
     path segment → `namespaces//…` → 307→404).
 - **PVC → PV edge**: emitted as `EdgeMounts` (not a new edge type) so the existing volumes view picks it

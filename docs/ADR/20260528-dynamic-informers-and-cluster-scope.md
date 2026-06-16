@@ -58,10 +58,19 @@ unstructured field access. Unknown kinds (CRs) stay unstructured and flow throug
 **Cluster scope** is a pseudo-namespace named `__cluster__` (DNS-1123-invalid, so it can
 never collide with a real namespace). The client pins it to the top of the sidebar.
 Server-side `SnapshotNamespace(__cluster__)` returns every cluster-scoped object;
-`SnapshotNamespace(ns)` for a real namespace returns its namespaced objects **plus** any
-cluster-scoped objects referenced one hop from a namespaced object (a Pod's `nodeName` →
-Node, a PVC's `volumeName` → PV, plus ownerReferences) — the ride-along policy that
-replaces "every Node in every snapshot".
+`SnapshotNamespace(ns)` for a real namespace returns its namespaced objects **plus** the
+cluster-scoped objects associated with the namespace — the ride-along policy that replaces
+"every Node in every snapshot". Associated means:
+
+- referenced one hop from a namespaced object: a PVC's `volumeName` → PV, a RoleBinding's
+  `roleRef` → ClusterRole, plus ownerReferences. (A Pod's `nodeName` → Node is deliberately
+  *excluded*: no relationship category draws the `scheduledOn` edge, so a rode-along Node only
+  ever appears as a permanently-orphaned card — the pod↔node story lives in the Nodes view.)
+- a ClusterRoleBinding that grants a ClusterRole to a ServiceAccount **in** the namespace, plus
+  a second hop to that ClusterRole. This is the one reference resolved in *reverse* (the
+  cluster-scoped binding names the namespaced SA, not vice-versa), so it costs a scan of every
+  ClusterRoleBinding — acceptable given their low cardinality. Without it, a namespace's RBAC
+  relationship view could never show the cluster-level grants its ServiceAccounts actually hold.
 
 **Policy.csv** stays the kd app-layer authz surface. `resourceClasses(kind, group)`
 returns BOTH the legacy class (pods/nodes/workloads/rbac/…) and the GVR group; the new
