@@ -1,10 +1,102 @@
 package api
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 )
+
+// blockUntilCancelled is a log stream that blocks on Read until ctx is cancelled, then surfaces
+// ctx.Err() — exactly how a kube GetLogs body read behaves when the client closes the viewer and the
+// request context is cancelled.
+type blockUntilCancelled struct{ ctx context.Context }
+
+func (r blockUntilCancelled) Read([]byte) (int, error) {
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+// scanLogStream must stay quiet when the client closes the viewer (ctx cancelled → context.Canceled
+// from the body read) — that is normal teardown on every tailed pod/container, not an anomaly. It must
+// still warn on a genuine abnormal end (an oversized line → bufio.ErrTooLong; a mid-stream read
+// failure) so a truncated stream stays diagnosable. Reproduces the "log stream ended early
+// err=context canceled" warning spam seen on open/close.
+func TestScanLogStreamEndReporting(t *testing.T) {
+	pod := &corev1.Pod{}
+	pod.Namespace, pod.Name = "team-a", "api-b-0"
+
+	cases := []struct {
+		name     string
+		reader   func(ctx context.Context) io.Reader
+		cancel   bool // cancel ctx before scanning (client closed the viewer)
+		wantWarn bool
+	}{
+		{
+			name:     "client closed viewer: context canceled stays quiet",
+			reader:   func(ctx context.Context) io.Reader { return blockUntilCancelled{ctx} },
+			cancel:   true,
+			wantWarn: false,
+		},
+		{
+			name:     "normal EOF stays quiet",
+			reader:   func(context.Context) io.Reader { return strings.NewReader("line one\nline two\n") },
+			wantWarn: false,
+		},
+		{
+			name:     "oversized line warns (bufio.ErrTooLong)",
+			reader:   func(context.Context) io.Reader { return strings.NewReader(strings.Repeat("x", 2*1024*1024)) },
+			wantWarn: true,
+		},
+		{
+			name: "mid-stream read failure warns",
+			reader: func(context.Context) io.Reader {
+				return io.MultiReader(strings.NewReader("partial"), errReader{io.ErrUnexpectedEOF})
+			},
+			wantWarn: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+			defer slog.SetDefault(prev)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if c.cancel {
+				cancel()
+			}
+
+			out := make(chan logLine, 16)
+			done := make(chan struct{})
+			go func() {
+				for range out {
+				}
+				close(done)
+			}()
+			scanLogStream(ctx, c.reader(ctx), pod, "api-b", false, out)
+			close(out)
+			<-done
+
+			gotWarn := strings.Contains(buf.String(), "log stream ended early")
+			if gotWarn != c.wantWarn {
+				t.Errorf("warning emitted = %v, want %v\nlog: %s", gotWarn, c.wantWarn, buf.String())
+			}
+		})
+	}
+}
+
+// errReader yields its error on the first Read, simulating a stream that fails partway.
+type errReader struct{ err error }
+
+func (r errReader) Read([]byte) (int, error) { return 0, r.err }
 
 // defaultLogContainer prefers a container named "main" (the Argo Workflows step that does the real
 // work, behind a `wait` executor sidecar) so a workflow pod's logs aren't just executor noise; it

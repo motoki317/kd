@@ -8,7 +8,9 @@ package api
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -294,7 +296,14 @@ func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *
 		return
 	}
 	defer stream.Close()
-	scanner := bufio.NewScanner(stream)
+	scanLogStream(ctx, stream, pod, container, timestamps, out)
+}
+
+// scanLogStream reads lines from an opened pod-log stream, tagging each with the pod and container
+// names, until the stream ends or ctx is cancelled. Split from streamContainerLogs so the read loop
+// and its end-of-stream reporting are testable over a plain io.Reader.
+func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container string, timestamps bool, out chan<- logLine) {
+	scanner := bufio.NewScanner(rc)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		ll := logLine{Pod: pod.Name, Container: container, Line: scanner.Text()}
@@ -309,9 +318,12 @@ func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *
 			return
 		}
 	}
-	// A line over the 1MB token cap ends the scan with bufio.ErrTooLong; log it so a truncated
-	// stream is diagnosable rather than looking like an idle pod.
-	if err := scanner.Err(); err != nil {
+	// Closing the log viewer cancels ctx, which propagates to the underlying body read and surfaces
+	// here as context.Canceled (sometimes wrapped) — that's the normal teardown path on every open
+	// stream, not an anomaly, so it must stay quiet (else a routine close logs one WARN per tailed
+	// pod/container). Warn only on a genuine abnormal end, e.g. a line over the 1MB token cap ending
+	// the scan with bufio.ErrTooLong, so a truncated stream stays diagnosable.
+	if err := scanner.Err(); err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
 		slog.Warn("log stream ended early", "namespace", pod.Namespace, "pod", pod.Name, "container", container, "err", err)
 	}
 }
