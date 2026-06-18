@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { compareNamespaces, mostTroubled, namespaceLabel, nextTroubled, troubledNamespaces } from './ns'
+import { compareNamespaces, mergeNamespaceHealth, mostTroubled, namespaceLabel, nextTroubled, troubledNamespaces } from './ns'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
+import type { LiveHealth } from './ns'
 
 const list: NamespaceInfo[] = [
   { name: 'zeta', health: 'Healthy' },
@@ -62,6 +63,44 @@ describe('nextTroubled', () => {
   it('returns undefined when nothing is troubled', () => {
     expect(nextTroubled([{ name: 'a', health: 'Healthy' }], null)).toBeUndefined()
     expect(nextTroubled([], null)).toBeUndefined()
+  })
+})
+
+describe('mergeNamespaceHealth', () => {
+  // The poll says api-b is Progressing with 2 not-ready; the live SSE summaries override it.
+  const poll: NamespaceInfo[] = [
+    { name: 'api-b', health: 'Progressing', nonReady: 2 },
+    { name: 'shop', health: 'Healthy' },
+  ]
+  const entry = (over: Partial<LiveHealth>): LiveHealth => ({ health: 'Healthy', gen: 5, ctx: 'ctxA', ...over })
+  const apiB = (rows: NamespaceInfo[]) => rows.find((n) => n.name === 'api-b')!
+
+  it('returns the poll list untouched when the live cache is empty', () => {
+    expect(mergeNamespaceHealth(poll, {}, 5, 'ctxA')).toEqual(poll)
+  })
+
+  it('applies a current-context entry recorded in the current poll generation', () => {
+    const merged = mergeNamespaceHealth(poll, { 'api-b': entry({ health: 'Healthy' }) }, 5, 'ctxA')
+    expect(apiB(merged).health).toBe('Healthy')
+    expect(apiB(merged).nonReady).toBeUndefined() // healed → the poll's stale count is dropped
+    expect(merged.find((n) => n.name === 'shop')).toBe(poll[1]) // untouched rows pass through by reference
+  })
+
+  it('keeps the live value until a newer poll supersedes it — the anti-flap invariant', () => {
+    const cache = { 'api-b': entry({ health: 'Degraded', nonReady: 7, gen: 5 }) }
+    // gen 5 == current: navigating away does not bump the generation, so the value holds (no revert flap).
+    expect(apiB(mergeNamespaceHealth(poll, cache, 5, 'ctxA')).health).toBe('Degraded')
+    // gen 5 < 6: a genuine 15s poll has landed, so the namespace self-corrects to the poll value.
+    expect(apiB(mergeNamespaceHealth(poll, cache, 6, 'ctxA')).health).toBe('Progressing')
+  })
+
+  it('ignores an entry recorded under a different context (same namespace name across clusters)', () => {
+    const merged = mergeNamespaceHealth(poll, { 'api-b': entry({ health: 'Healthy', ctx: 'ctxB' }) }, 5, 'ctxA')
+    expect(apiB(merged).health).toBe('Progressing')
+  })
+
+  it('ignores a cached entry for a namespace absent from the poll list', () => {
+    expect(mergeNamespaceHealth(poll, { ghost: entry({ health: 'Degraded' }) }, 5, 'ctxA')).toEqual(poll)
   })
 })
 

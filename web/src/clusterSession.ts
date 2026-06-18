@@ -6,6 +6,7 @@
 
 import { createEffect, createMemo, createResource, createSignal, onCleanup, untrack, type Accessor, type Setter } from 'solid-js'
 import { ApiError, fetchContexts, fetchKinds, fetchNamespaces, type NamespaceInfo } from './api'
+import { createLiveHealth } from './liveHealth'
 import { setServerShortNames } from './names'
 import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
 
@@ -66,6 +67,23 @@ export function createClusterSession(deps: {
     const v = namespaces()
     return v && v.forCtx === ctx() ? v.list : []
   })
+  // Poll generation: a monotonic counter bumped each time an ACCEPTED /namespaces response lands —
+  // accepted by the SAME forCtx rule namespaceList uses, so an out-of-order or previous-context
+  // response never advances it. The live-health cache stamps each entry with the generation it arrived
+  // in; an entry overrides the poll only until the next generation supersedes it (see
+  // mergeNamespaceHealth). Bumped on the resolved VALUE, not on refetch start, so the resource's
+  // stale-while-revalidate window doesn't invalidate live entries a beat early.
+  const [pollGen, setPollGen] = createSignal(0)
+  createEffect(() => {
+    if (namespaces.error) return
+    const v = namespaces()
+    if (v && v.forCtx === untrack(ctx)) setPollGen((g) => g + 1)
+  })
+  // Per-namespace live health: real-time SSE summaries merged over the poll so the sidebar stops
+  // flapping between the two as the operator navigates — see liveHealth.ts. recordSummary is fed by the
+  // graph subscription's `summary` handler; mergedNamespaces is the single source the sidebar (and the
+  // trouble jump below) reads.
+  const { mergedNamespaces, recordSummary } = createLiveHealth({ ctx, namespaceList, pollGen })
   // Kind → API short-name map (cycle 302): fetched once per context so cards label kinds with the
   // cluster's own abbreviations (cm, pdb, CRD-defined shorts) instead of a hardcoded guess. Keyed
   // on ctx because CRDs — hence short names — differ per cluster. Feeds names.ts via a setter
@@ -109,7 +127,9 @@ export function createClusterSession(deps: {
   // re-landing on the single worst. No-op when nothing is troubled; returns whether it acted so the
   // keyboard handler only swallows the key when it actually jumped.
   const jumpToTrouble = (): boolean => {
-    const next = nextTroubled(namespaceList(), namespace())
+    // Read the MERGED list (same source the trouble badge counts), not the raw poll — otherwise the
+    // badge and the jump it triggers could disagree once a live summary has refreshed a row.
+    const next = nextTroubled(mergedNamespaces(), namespace())
     if (next) {
       setNamespace(next.name)
       setNsFlash((t) => t + 1) // pulse the row so the jump's landing is unmissable
@@ -155,6 +175,8 @@ export function createClusterSession(deps: {
     namespaces,
     refetchNamespaces,
     namespaceList,
+    mergedNamespaces,
+    recordSummary,
     noNamespaces,
     connState,
     setConnState,

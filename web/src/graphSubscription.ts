@@ -24,7 +24,9 @@ export function createGraphSubscription(deps: {
   setSelectionHistory: Setter<string[]>
   graph: GraphState
   setGraph: SetStoreFunction<GraphState>
-  setLiveSummary: Setter<NamespaceSummary | null>
+  // Records a stream's per-namespace summary into the live-health cache, keyed by the context and
+  // namespace this stream was opened FOR (captured below) so a late event can't mis-key — see liveHealth.ts.
+  recordSummary: (ctx: string, ns: string, s: NamespaceSummary) => void
   setCapacity: Setter<Capacity | null>
   connState: Accessor<ConnState>
   setConnState: Setter<ConnState>
@@ -45,7 +47,7 @@ export function createGraphSubscription(deps: {
     setSelectionHistory,
     graph,
     setGraph,
-    setLiveSummary,
+    recordSummary,
     setCapacity,
     connState,
     setConnState,
@@ -94,8 +96,10 @@ export function createGraphSubscription(deps: {
     }
     firstSubscribe = false
     setGraph(reconcile(emptyState()))
-    setLiveSummary(null) // previous stream's summary belongs to the previous namespace — clear it
-    setCapacity(null) // same: the previous stream's capacity feed belongs to the previous scope
+    // NB: no per-switch reset of the live summary — the cache is keyed by namespace and gated by
+    // context + poll generation (liveHealth.ts), so a just-left namespace keeps its last real-time
+    // value (no revert-to-stale flap) until the next poll supersedes it.
+    setCapacity(null) // the previous stream's capacity feed belongs to the previous scope
     setConnState('connecting')
     const close = streamGraph(c, ns, {
       snapshot: (g) => {
@@ -109,7 +113,7 @@ export function createGraphSubscription(deps: {
         setSelectedId(sel.id)
       },
       patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
-      summary: (s) => setLiveSummary(s),
+      summary: (s) => recordSummary(c, ns, s),
       capacity: (c) => setCapacity(c),
       error: () => {
         // On the TRANSITION into offline, refetch the contexts list: the failure that just broke

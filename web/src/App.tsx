@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, lazy, Match, onCleanup, onMount, Show, Suspense, Switch } from 'solid-js'
 import { createStore } from 'solid-js/store'
-import { CLUSTER_SCOPE, type NamespaceSummary } from './api'
+import { CLUSTER_SCOPE } from './api'
 import { hasDescendantPod } from './loggable'
 import { emptyState, type GraphState } from './graphState'
 import { matchSel } from './nav'
@@ -55,7 +55,8 @@ export default function App() {
     authFailed,
     namespaces,
     refetchNamespaces,
-    namespaceList,
+    mergedNamespaces,
+    recordSummary,
     noNamespaces,
     connState,
     setConnState,
@@ -183,11 +184,6 @@ export default function App() {
     onCleanup(() => mq.removeEventListener('change', onChange))
   })
   const [graph, setGraph] = createStore<GraphState>(emptyState())
-  // Live namespace summary from the SSE feed, computed server-side over the UNFILTERED graph so
-  // it doesn't disagree with /namespaces. When unset (no live stream yet) we fall back to the
-  // polled list — keeping the sidebar from briefly flipping a degraded ns to healthy on click
-  // just because the current view (e.g. ownership) doesn't include the unhealthy resource.
-  const [liveSummary, setLiveSummary] = createSignal<NamespaceSummary | null>(null)
   // The cluster-wide capacity feed (all Nodes + Pods across every namespace, with live usage) the
   // Nodes group-by draws. Independent of the namespace-scoped graph: a node hosts pods from every
   // namespace, so the view always shows the whole cluster and dims pods outside the selected
@@ -266,7 +262,7 @@ export default function App() {
     setSelectionHistory,
     graph,
     setGraph,
-    setLiveSummary,
+    recordSummary,
     setCapacity,
     connState,
     setConnState,
@@ -277,8 +273,8 @@ export default function App() {
     },
   })
 
-  // Sidebar rows kept live from the SSE summary + the favicon attention badge — see sidebarHealth.ts.
-  const { sidebarNs } = createSidebarHealth({ namespaceList, namespace, liveSummary, connected })
+  // Sidebar rows reconciled from the merged poll+live health + the favicon attention badge — see sidebarHealth.ts.
+  const { sidebarNs } = createSidebarHealth({ mergedNamespaces })
 
   // Global keyboard shortcuts (returns the ref-setter for the search box "/" focuses) — see
   // appKeyboard.ts. Deliberately four bindings; everything else is click-driven.

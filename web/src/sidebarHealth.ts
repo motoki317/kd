@@ -1,47 +1,29 @@
 // The sidebar's live per-namespace health and the favicon attention badge, extracted from App.tsx
-// together because they must derive from the SAME merged source (the /namespaces poll with the open
-// namespace kept live from the SSE summary) — splitting them is how favicon and trouble badge once
-// disagreed. A factory: App calls it inside its component body so the effects run under its root.
+// together because they must derive from the SAME merged source — splitting them is how favicon and
+// trouble badge once disagreed. The merge itself (poll + real-time SSE summaries) lives upstream in
+// liveHealth.ts; this factory just reconciles its output into a row-stable store and paints the favicon.
+// A factory: App calls it inside its component body so the effects run under its root.
 
 import { createEffect, createMemo, type Accessor } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { CLUSTER_SCOPE, type NamespaceInfo, type NamespaceSummary } from './api'
+import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 import { faviconDataUrl, worstHealth } from './favicon'
 
 export function createSidebarHealth(deps: {
-  namespaceList: Accessor<NamespaceInfo[]>
-  namespace: Accessor<string | null>
-  liveSummary: Accessor<NamespaceSummary | null>
-  connected: () => boolean
+  // The poll merged with the per-namespace live-summary cache (liveHealth.ts) — a single glitch-free
+  // memo, so the reconcile effect below depends on ONE input. Earlier this factory did the merge from
+  // four raw sources and an effect reading them directly intermittently latched a stale list across a
+  // cluster switch (it ran on a connState change a beat before the resource value committed, then never
+  // re-fired). Folding the merge into the upstream memo is what keeps the effect glitch-free.
+  mergedNamespaces: Accessor<NamespaceInfo[]>
 }) {
-  const { namespaceList, namespace, liveSummary, connected } = deps
-  // Keep the sidebar entry for the namespace being viewed live from the SSE `summary` event,
-  // instead of letting it lag up to 15s behind the /namespaces poll. The server computes summary
-  // from the UNFILTERED graph (same as /namespaces), so it never disagrees with the polled
-  // value — fixes the old bug where opening a degraded namespace in ownership view "healed" it
-  // because the filtered topology omitted the actually-degraded resource (e.g. an endpointless
-  // Service that lives in network view).
-  // Held in a RECONCILED store (keyed by name) rather than a plain memo: the memo rebuilt the selected
-  // namespace as a fresh object on every `summary` event, so the Sidebar's <For> tore down and recreated
-  // that row each tick (the namespace-list "flicker"). reconcile patches only the changed row's health
-  // in place, so <For> keeps the DOM and the dot recolours surgically — the same fix the canvas cards got.
-  // Compute the merged list in a MEMO, then reconcile it into the store through a single-dependency
-  // effect. The merge reads four sources (the polled list + the open ns + its live summary + conn
-  // state); folding them into one pure memo keeps the reconcile effect depending on a SINGLE input.
-  // A context switch fires an interleaved storm of these updates (the namespace resource resolving
-  // while the SSE resubscribe flips connState/summary), and an effect that read all four directly
-  // intermittently latched a stale list — it ran on a connState change a beat before the resource's
-  // value committed, then never re-fired for the value, leaving the sidebar stuck on the PREVIOUS
-  // cluster's namespaces. Routing the four through a glitch-free memo makes the effect re-run exactly
-  // when the merged value changes (verified live across cluster switches).
-  const merged = createMemo<NamespaceInfo[]>(() => {
-    const list = namespaceList()
-    const ns = namespace()
-    const live = liveSummary()
-    return !connected() || !ns || !live ? list : list.map((n) => (n.name === ns ? { ...n, health: live.health, nonReady: live.nonReady } : n))
-  })
+  const { mergedNamespaces } = deps
+  // Hold the merged list in a RECONCILED store (keyed by name), not a plain memo: a memo rebuilt the
+  // refreshed namespace as a fresh object on every update, so the Sidebar's <For> tore down and
+  // recreated that row each tick (the namespace-list "flicker"). reconcile patches only the changed
+  // row's health in place, so <For> keeps the DOM and the dot recolours surgically.
   const [sidebarNs, setSidebarNs] = createStore<NamespaceInfo[]>([])
-  createEffect(() => setSidebarNs(reconcile(merged(), { key: 'name' })))
+  createEffect(() => setSidebarNs(reconcile(mergedNamespaces(), { key: 'name' })))
 
   // Per-namespace health across the WHOLE cluster, for the favicon attention badge. Counts over
   // sidebarNs — the /namespaces poll with the open namespace kept live from the SSE summary — the SAME
