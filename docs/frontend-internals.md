@@ -321,9 +321,9 @@ Both read `capRows()` AFTER the toggle (the memo recomputes synchronously) and d
 `.topology-toolbar` height (`toolbarEl` ref) and frames the graph into the area BELOW it — otherwise the
 topmost cards land hidden behind the bar. The `MIN_FIT_SCALE` overflow branch applies the same inset.
 
-**Width-primary fit + legibility floor (`MIN_FIT_SCALE`, viewport.ts `fitBoxFloored`):** EVERY
-automatic/affordance fit — the scope/layout fit-all effect, the manual Fit button, double-click-empty,
-and `'f'` — frames through `fitBoxFloored`, which is driven by the canvas **WIDTH**, NOT `min(width,
+**Width-primary fit + legibility floor (`MIN_FIT_SCALE`, viewport.ts `fitBoxFloored`):** the
+*floored* fits — the scope/layout fit-all effect and double-click-empty (`resetView`) — frame
+through `fitBoxFloored`, which is driven by the canvas **WIDTH**, NOT `min(width,
 height)`. Topology trees are far taller than wide and desktop canvases are wider than tall, so taking
 the height-fit (as `fitBox` does) shrank a tall tree until its text was noise. `fitBoxFloored` instead
 fits the width and lets a tall tree **overflow vertically** (top-anchored — scroll down for the tail),
@@ -335,15 +335,32 @@ clamped so content keeps covering the frame (no empty gutter past the first/last
 focuses the box's TOP-LEFT corner (open on the first resources, scroll down); a **selection** focuses
 the SELECTED card's centre, so a resource whose subtree overspills stays on-screen and readable with as
 much of the rest around it as fits. (With the drawer open the canvas is ~half width, so a wide subtree
-floors and the focus-clamp keeps the selected card centred.) Deliberately floorless / not width-primary:
-`frameMatches` (the "N matches" pill) and the manual Fit's filtered-subset branch still use `fitBox`
-(min-fit, no floor) — both are explicit "locate my scattered matches" gestures where framing the whole
-set, speck or not, is the point; the automatic FILTER fit keeps its own floor + worst-match fallback.
+floors and the focus-clamp keeps the selected card centred.) Deliberately **floorless**: the manual
+**Fit button** (`fitAll`) and `frameMatches` (the "N matches" pill). `fitAll` frames the whole layout
+box (`computeFitFor`, width-primary) with no floor, so a dense graph zooms all the way out until every
+resource is on screen (a 476-resource cluster fit at 0.16×); when a filter is active it frames just the
+lit subset (`fitNodeSet`, min-fit, mirroring `frameMatches`) so the matches aren't drowned in a faded
+graph — still floorless, so 8 matches fit at 0.31× while the faded remainder spills off-viewport. Both
+are explicit "show me everything / locate my scattered matches" gestures where framing the whole set,
+speck or not, is the point; only the automatic FILTER fit keeps its own floor + worst-match fallback.
 The Nodes view has its own fits (`fitCapBox`/`fitCapRowExpanded`, already width-driven + floor-aware).
 
 > The viewport-fit *math* is pure and unit-tested (`viewport.ts`); the live transform can't be verified
 > headless (rAF is frozen). See [`ADR 20260605`](ADR/20260605-testing-view-math-vs-headless-animation.md)
 > and the dogfooding playbook's "Measurement pitfalls".
+
+## Blueprint grid (pan/zoom tracking)
+
+The canvas backdrop is a 5-layer CSS `background-image` on `.topology` (2 minor lines @`GRID_MINOR`=26px,
+2 major @`GRID_MAJOR`=130px, 1 radial sheen). The cards live in an SVG `<g transform="translate(tx,ty)
+scale(s)">`, so to glue the grid to the cards the SAME `tx`/`ty`/`scale` signals drive an inline
+`background-position` (`${tx}px ${ty}px` for each line layer) and `background-size` (`${26*scale}px` /
+`${130*scale}px`); the sheen stays `0 0` / `100% 100%` (viewport-anchored, not world-anchored). It's
+drift-free because the grid reads the exact transform the `<g>` does — proven live (`background-position`
+== the `<g>` translate, and cell == base×scale, at scale 3). At low zoom (`.labels-hidden`, scale < 0.45)
+the dense minor lines would haze into a flat wash, so that rule zeroes ONLY `--grid-minor` to
+`transparent`, keeping the major grid for spatial reference and — critically — all 5 layers present, so
+the inline 5-entry size/position lists never misalign against the layer list.
 
 ## Adding a new layout
 
