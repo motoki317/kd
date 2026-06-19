@@ -2,11 +2,9 @@ import { For, Show } from 'solid-js'
 import { formatQuantity } from '../capacityLayout'
 import { useNow } from '../clock'
 import { healthColor, healthTextColor } from '../health'
-import { drawerResourceBars } from '../resourceBars'
 import { relativeAge } from '../time'
-import type { ContainerStatus, ContainerUsage, Health, Resources, ResourceUsage } from '../types'
+import type { ContainerStatus, ContainerUsage, Health, ResourceUsage } from '../types'
 import ImageRef from './ImageRef'
-import UsageGauges from './UsageGauges'
 
 // containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
 // same colors as the rest of the UI: a crash-loop or non-Completed exit is Degraded, a not-yet-ready
@@ -46,22 +44,16 @@ function containerGroups(statuses: ContainerStatus[]): { label: string; items: C
   ]
 }
 
-// num turns the wire's omitempty zero into "undeclared" for the gauge model — a 0 request/limit is
-// the unset default, not a meaningful bound.
-const num = (v?: number) => (v ? v : undefined)
-
-// ContainerCards is a Pod's per-container section (cycle 338): runtime state and resources belong
-// together — "which container is broken / which is hitting ITS limit?" — so each container is one
-// card pairing status (dot + state + restarts) with its OWN resource bars (live usage gauged against
-// its own req/lim — a per-pod sum can't say which container is near the ceiling; user-directed), its
-// last exit, and its image, grouped into Init vs app containers with counts. A floating tag
-// (":latest"/none) flags an image a rolling restart could silently change.
+// ContainerCards is a Pod's per-container section: runtime state and the per-container essentials
+// belong together — "which container is broken?" — so each container is one card pairing status
+// (dot + state + restarts) with its last exit and image, grouped into Init vs app containers with
+// counts. A floating tag (":latest"/none) flags an image a rolling restart could silently change.
+// Resource bars live in the drawer's segmented top gauge (the summed fill split by container), not
+// here; the one per-container resource signal kept on the card is the OOM alarm (memory ≥90% of a
+// container's OWN limit), since an imminent OOM kill is worth words even without a bar.
 export default function ContainerCards(props: {
   statuses: ContainerStatus[]
   usage?: ResourceUsage
-  // The pod's host-node capacity — the fallback ceiling for a container with no req/lim at all
-  // (it can eat up to the node), keeping the "Node" bar idiom the pod-level gauge used.
-  hostCapacity?: Resources
 }) {
   // A container's own usage reading: multi-container pods carry a per-container breakdown; a
   // single-container pod's breakdown is omitted on the wire (it would repeat the total), so the
@@ -99,21 +91,6 @@ export default function ContainerCards(props: {
                     const cu = usageFor(cs)
                     return cu && cs.memLimitBytes && (cu.memBytes ?? 0) / cs.memLimitBytes >= 0.9 ? cu : undefined
                   }
-                  // This container's own gauge: usage vs ITS req/lim. Skipped for finished
-                  // containers (bounds are meaningless after a clean exit) and when there is
-                  // nothing to show (no bound declared and no reading).
-                  const bars = () => {
-                    if (isDone(cs)) return []
-                    const cu = usageFor(cs)
-                    if (!cu && !cs.cpuLimitMilli && !cs.memLimitBytes && !cs.cpuRequestMilli && !cs.memRequestBytes) return []
-                    return drawerResourceBars({
-                      isNode: false,
-                      usage: cu ? { cpuMilli: cu.cpuMilli ?? 0, memBytes: cu.memBytes ?? 0 } : undefined,
-                      request: { cpuMilli: num(cs.cpuRequestMilli), memBytes: num(cs.memRequestBytes) },
-                      limit: { cpuMilli: num(cs.cpuLimitMilli), memBytes: num(cs.memLimitBytes) },
-                      hostCapacity: props.hostCapacity,
-                    })
-                  }
                   return (
                     <div
                       class="container-card"
@@ -150,11 +127,6 @@ export default function ContainerCards(props: {
                           </span>
                         </Show>
                       </div>
-                      <Show when={bars().length > 0}>
-                        <div class="container-bars">
-                          <UsageGauges groups={bars()} />
-                        </div>
-                      </Show>
                       <Show when={nearMemLimit()}>
                         {(cu) => (
                           <div

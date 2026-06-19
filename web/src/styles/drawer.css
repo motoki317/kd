@@ -370,17 +370,7 @@
   height: 9px;
   border-radius: var(--radius-s);
 }
-/* A container card's own resource bars (usage vs ITS req/lim). Indented to the card's detail
-   column; tighter spacing than the standalone drawer gauges — the card head already labels whose
-   numbers these are. */
-.container-bars {
-  padding-left: 16px;
-}
-.container-bars .pod-metrics {
-  margin-top: 2px;
-  gap: 5px;
-}
-/* Workload-gauge legend: names each segment colour where no container cards follow to do it. */
+/* The pod/workload gauge legend: names each segment colour (the per-container or per-pod split). */
 .metric-legend {
   display: flex;
   flex-wrap: wrap;

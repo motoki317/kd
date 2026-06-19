@@ -59,18 +59,17 @@ describe('ResourceSummary container status dots', () => {
     expect(cards[0].classList.contains('h-healthy')).toBe(true) // running+ready stays green
     expect(cards[1].classList.contains('h-degraded')).toBe(true) // failed exit stays red, not gray
   })
-  // "Which container is hitting ITS bound" must read directly: each container card carries its OWN
-  // gauge — live usage against that container's req/lim. The pod-level SUMMED gauge renders above
-  // the cards too (the whole pod at a glance — user-requested back), as a plain fill: per-container
-  // attribution lives on the cards, so the top gauge needs no stacked segments or swatch keys.
-  it('gauges each container card against its own req/lim, with a plain summed gauge up top', () => {
+  // A multi-container pod's resource story lives in ONE place: the summed top gauge, its fill split
+  // into a coloured segment per container (the workload-rollup language) + a name legend. The cards
+  // carry NO resource bars — only runtime status and the OOM alarm in words.
+  it('stacks the summed pod gauge by container with a legend, and the cards carry no bars', () => {
     const mi = 1024 * 1024
     const { container } = render(() => (
       <ResourceSummary
         node={{
           ...podWith([
             { name: 'app', ready: true, state: 'Running', cpuRequestMilli: 100, cpuLimitMilli: 500, memLimitBytes: 256 * mi },
-            { name: 'sidecar', ready: true, state: 'Running' }, // nothing declared → ungauged dashed bars
+            { name: 'sidecar', ready: true, state: 'Running' },
           ]),
           limits: { cpuMilli: 500, memBytes: 256 * mi },
         }}
@@ -85,43 +84,28 @@ describe('ResourceSummary container status dots', () => {
         }}
       />
     ))
-    // One summed gauge above the cards + one gauge per card. The top gauge keeps the plain fill —
-    // no stack, no swatches — because the cards below carry the per-container story.
+    // Exactly one gauge — the pod's. No per-container gauges on the cards.
     const gauges = [...container.querySelectorAll('.pod-metrics')]
-    expect(gauges.length).toBe(3)
-    expect(gauges.filter((g) => g.closest('.container-card') === null).length).toBe(1)
-    expect(container.querySelector('.metric-fill-stack')).toBeNull()
-    expect(container.querySelector('.container-swatch')).toBeNull()
-    // The top gauge sums the pod: 300m of the pod's 500m limit.
-    const top = gauges.find((g) => g.closest('.container-card') === null)!
-    expect(top.querySelector('.metric-val b')?.textContent).toBe('300m')
-    expect(top.textContent).toContain('/ 500m')
-    // app: CPU 250m gauged against ITS Lim 500m and Req 100m (over → hatched), Mem 240Mi vs 256Mi.
-    const appRows = container.querySelectorAll('.container-card')[0].querySelectorAll('.metric-row')
-    expect([...appRows].map((r) => r.querySelector('.metric-sublabel')?.textContent)).toEqual(['Lim', 'Req', 'Lim'])
-    expect(appRows[0].querySelector('.metric-val b')?.textContent).toBe('250m')
-    expect(appRows[0].textContent).toContain('/ 500m')
-    expect(appRows[1].textContent).toContain('/ 100m')
-    expect(appRows[1].querySelector('.metric-burst')).toBeTruthy() // 250m over its 100m request
-    expect(appRows[2].querySelector('.metric-val b')?.textContent).toBe('240Mi')
-    expect(appRows[2].textContent).toContain('/ 256Mi')
-    // sidecar declares no bounds → its readings draw on dashed ungauged tracks, never a fake-full bar.
-    const sidecarRows = container.querySelectorAll('.container-card')[1].querySelectorAll('.metric-row')
-    expect(sidecarRows.length).toBe(2)
-    expect([...sidecarRows].every((r) => r.querySelector('.metric-bar.unconstrained') !== null)).toBe(true)
-    // The bars carry the bounds now — no per-card bounds text row remains.
-    expect(container.querySelector('.container-usage')).toBeNull()
-    // The OOM alarm still reads in words on the affected card, driven by live usage.
+    expect(gauges.length).toBe(1)
+    expect(gauges[0].closest('.container-card')).toBeNull()
+    expect(container.querySelector('.container-card .pod-metrics')).toBeNull()
+    // The fill is stacked by container, named in a legend (app + sidecar, breakdown order).
+    expect(container.querySelector('.metric-fill-stack')).toBeTruthy()
+    expect([...container.querySelectorAll('.metric-legend-item')].map((e) => e.textContent?.trim())).toEqual(['app', 'sidecar'])
+    expect(container.querySelectorAll('.container-swatch').length).toBe(2)
+    // The top gauge still sums the pod: 300m of the pod's 500m limit.
+    expect(gauges[0].querySelector('.metric-val b')?.textContent).toBe('300m')
+    expect(gauges[0].textContent).toContain('/ 500m')
+    // The OOM alarm is the one per-container resource signal kept on the card, driven by live usage.
     const warn = container.querySelectorAll('.container-near-limit')
     expect(warn.length).toBe(1)
     expect(warn[0].textContent).toContain('240Mi')
     expect(warn[0].textContent).toContain('OOM')
     expect(warn[0].closest('.container-card')?.querySelector('.container-name')?.textContent).toBe('app')
   })
-  it('gauges an unconstrained container against the host node capacity when known', () => {
-    // The pod-level gauge's "Node" fallback ceiling moves onto the cards with the bars: a container
-    // with no req/lim at all can eat up to the node, so its reading is gauged against the node's
-    // size rather than shown on an ungauged dashed track.
+  it('segments the pod gauge by container even when no per-container bounds are declared', () => {
+    // With no pod-level lim/req, the gauge falls back to the host node's capacity — and still splits
+    // its fill by container, so each container's share reads against the node ceiling.
     const { container } = render(() => (
       <ResourceSummary
         node={podWith([
@@ -139,15 +123,14 @@ describe('ResourceSummary container status dots', () => {
         hostCapacity={{ cpuMilli: 4000 }}
       />
     ))
-    const cards = container.querySelectorAll('.container-card')
-    // app HAS a cpu limit → gauged against it, not the node.
-    expect(cards[0].querySelector('.metric-sublabel')?.textContent).toBe('Lim')
-    const sidecarCpu = cards[1].querySelector('.metric-row')!
-    expect(sidecarCpu.querySelector('.metric-sublabel')?.textContent).toBe('Node')
-    expect(sidecarCpu.querySelector('.metric-bar.unconstrained')).toBeNull()
-    expect(sidecarCpu.textContent).toContain('/ 4') // 4000m → the node's 4 cores
+    const top = container.querySelector('.pod-metrics')!
+    // The pod's CPU bar gauges against the host node (no pod lim/req), its fill stacked by container.
+    expect(top.querySelector('.metric-sublabel')?.textContent).toBe('Node')
+    expect(top.querySelector('.metric-fill-stack')).toBeTruthy()
+    expect([...container.querySelectorAll('.metric-legend-item')].map((e) => e.textContent?.trim())).toEqual(['app', 'sidecar'])
+    expect(container.querySelector('.container-card .pod-metrics')).toBeNull()
   })
-  it('gauges a single-container card with the pod total (the wire omits a 1-container breakdown) and skips finished containers', () => {
+  it('renders no resource bars on any card — finished or running — now that the gauge is up top', () => {
     const mi = 1024 * 1024
     const { container } = render(() => (
       <ResourceSummary
@@ -159,14 +142,13 @@ describe('ResourceSummary container status dots', () => {
         usage={{ cpuMilli: 50, memBytes: 16 * mi }}
       />
     ))
+    // Two cards (a done init + a running main), neither carrying bars.
     const cards = container.querySelectorAll('.container-card')
-    // The finished init container gets no bars — bounds are meaningless after a clean exit.
-    expect(cards[0].querySelector('.container-bars')).toBeNull()
-    // main's gauge reads the pod total as its own usage.
-    const cpu = cards[1].querySelector('.metric-row')!
-    expect(cpu.querySelector('.metric-sublabel')?.textContent).toBe('Lim')
-    expect(cpu.querySelector('.metric-val b')?.textContent).toBe('50m')
-    expect(cpu.textContent).toContain('/ 500m')
+    expect(cards.length).toBe(2)
+    expect(container.querySelector('.container-card .pod-metrics')).toBeNull()
+    expect(container.querySelector('.container-bars')).toBeNull()
+    // The done init container stays grayed (finished, not live-green).
+    expect(cards[0].classList.contains('done')).toBe(true)
   })
   // The restart count alone reads identically for ancient history and an active crashloop —
   // the age of the LAST restart is what makes "↻ N" interpretable.
@@ -225,6 +207,10 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(rows[0].textContent).toContain('/ 500m')
     expect(rows[1].querySelector('.metric-val b')?.textContent).toBe('120m') // usage again, not the request
     expect(rows[1].textContent).toContain('/ 100m')
+    // A pod with no per-container breakdown (the wire omits a 1-container one) stays a plain fill —
+    // there's nothing to split, so no stacked segments or legend.
+    expect(container.querySelector('.metric-fill-stack')).toBeNull()
+    expect(container.querySelector('.metric-legend')).toBeNull()
   })
   it('sizes each bar to its bound and hatches the overshoot when usage runs past a shorter bound', () => {
     // CPU 120m, limit 500m, request 100m → groupMax 500. The fill (0.24) is the SAME on both bars; the

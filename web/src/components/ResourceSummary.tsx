@@ -39,25 +39,17 @@ function podShareName(pod: string, workload: string): string {
   return pod.startsWith(workload + '-') ? '…-' + pod.slice(pod.lastIndexOf('-') + 1) : pod
 }
 
-// workloadSegments builds the rolled-up gauge's stack: one share per POD (the default — replicas
-// should pull even weight, so an outlier segment IS the finding) or per container NAME summed
-// fleet-wide (is the sidecar overhead material?). The pod split sums exactly to the total by
-// construction (unmetered pods are excluded from both sides). The container split can undercount its
-// total mid-rollout (a pod reporting no per-container breakdown still counts in the sum), so any
-// shortfall past 2% becomes an explicit dim "not yet attributed" segment — the stack must never
-// stretch partial shares to fill the whole width.
-function workloadSegments(wu: WorkloadUsage, by: 'pod' | 'container', workload: string): UsageSegment[] {
-  if (by === 'pod') {
-    return wu.pods.map((p, i) => ({
-      name: podShareName(p.name, workload),
-      color: paletteColor(i),
-      cpuMilli: p.cpuMilli ?? 0,
-      memBytes: p.memBytes ?? 0,
-    }))
-  }
-  const u = wu.usage
-  const breakdown = u.containers
-  if (!breakdown || breakdown.length < 2) return []
+// containerSegments splits a single usage reading into one coloured share per container NAME, in the
+// breakdown's order. Shared by the Pod gauge (split its own total — "which container is eating the
+// pod?") and the workload's by-container view (per-container summed fleet-wide — "is the sidecar
+// overhead material?"). Returns [] without a real split: no breakdown, or a single container (the
+// wire omits a 1-container breakdown, which would just repeat the total). The breakdown can
+// undercount its total when a pod reports no per-container split mid-report, so any shortfall past 2%
+// becomes an explicit dim "not yet attributed" segment — the stack must never stretch partial shares
+// to fill the whole width.
+function containerSegments(u: ResourceUsage | undefined): UsageSegment[] {
+  const breakdown = u?.containers
+  if (!u || !breakdown || breakdown.length < 2) return []
   const segs = breakdown.map((c, i) => ({
     name: c.name,
     color: paletteColor(i),
@@ -70,6 +62,20 @@ function workloadSegments(wu: WorkloadUsage, by: 'pod' | 'container', workload: 
     segs.push({ name: 'not yet attributed', color: 'var(--text-dim)', cpuMilli: Math.max(0, cpuRest), memBytes: Math.max(0, memRest) })
   }
   return segs
+}
+
+// workloadSegments builds the rolled-up gauge's stack: one share per POD (the default — replicas
+// should pull even weight, so an outlier segment IS the finding) or per container NAME summed
+// fleet-wide. The pod split sums exactly to the total by construction (unmetered pods are excluded
+// from both sides).
+function workloadSegments(wu: WorkloadUsage, by: 'pod' | 'container', workload: string): UsageSegment[] {
+  if (by === 'container') return containerSegments(wu.usage)
+  return wu.pods.map((p, i) => ({
+    name: podShareName(p.name, workload),
+    color: paletteColor(i),
+    cpuMilli: p.cpuMilli ?? 0,
+    memBytes: p.memBytes ?? 0,
+  }))
 }
 
 // ResourceSummary is the drawer header's "what is this resource" block: identity, the runtime meta
@@ -174,10 +180,11 @@ export default function ResourceSummary(props: Props) {
       </div>
       {/* CPU/memory resource bars — live usage gauged against each bound (a Node's Cap + Alloc, a
           Pod's summed Req + Lim), each bar's length sized to its ceiling and the fill extending past
-          it (hatched) on a burst. A Pod shows BOTH this summed gauge (the whole pod at a glance —
-          user-requested back after a per-card-only round) and per-container bars on each card below
-          (which container is near ITS bound); the plain fill here keeps the total readable without
-          re-keying card colours. */}
+          it (hatched) on a burst. A multi-container Pod stacks this summed fill BY CONTAINER (one
+          colour + a name legend per container — the same stacked-segment language the workload
+          rollup uses), so "which container is eating the pod" reads at a glance and the per-card bars
+          below are dropped. A single-container pod (the wire omits its breakdown) stays a plain fill;
+          a Node never segments. */}
       <Show when={props.node.kind === 'Node' || props.node.kind === 'Pod'}>
         <UsageGauges
           groups={drawerResourceBars({
@@ -189,6 +196,8 @@ export default function ResourceSummary(props: Props) {
             limit: props.node.limits,
             hostCapacity: props.hostCapacity,
           })}
+          segments={props.node.kind === 'Pod' ? containerSegments(props.usage) : undefined}
+          legend
         />
       </Show>
       {/* A workload's rolled-up usage (its replicas summed), gauged against the summed requests/limits —
@@ -243,8 +252,9 @@ export default function ResourceSummary(props: Props) {
       {/* The per-kind "declarative essence" blocks (Service ports, Ingress routes, Role rules, PDB
           policy, data keys…) — see KindFacts, the presentation counterpart of the server's spec.go. */}
       <KindFacts node={props.node} />
-      {/* A Pod's per-container cards (status + usage + image — see ContainerCards). Workloads expose
-          no per-container runtime, so they fall back to the distinct image list. */}
+      {/* A Pod's per-container cards (runtime status + image, and the OOM alarm — see ContainerCards;
+          the resource bars now live in the segmented top gauge). Workloads expose no per-container
+          runtime, so they fall back to the distinct image list. */}
       <Show
         when={(props.node.containerStatuses?.length ?? 0) > 0}
         fallback={
@@ -255,7 +265,7 @@ export default function ResourceSummary(props: Props) {
           </Show>
         }
       >
-        <ContainerCards statuses={props.node.containerStatuses ?? []} usage={props.usage} hostCapacity={props.hostCapacity} />
+        <ContainerCards statuses={props.node.containerStatuses ?? []} usage={props.usage} />
       </Show>
       <Show when={props.owners.length > 0}>
         <div class="drawer-owners">

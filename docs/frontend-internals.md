@@ -204,12 +204,15 @@ workload's summed Lim+Req — all on ONE shared linear scale (`scaleBars`): the 
 length on every bar in the group), each bar's TRACK length encodes its bound, and usage past a bound
 extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key invariants:
 
-- **A pod shows the summed gauge AND per-card bars.** The top gauge is the pod total against its
-  summed req/lim, as a plain fill (user-requested); each container card below carries its OWN bars —
-  that container's usage against ITS req/lim — because the summed gauge can't say which container is
-  near the ceiling. Finished containers get no bars; a container with a reading but no bounds gauges
-  against the host node's capacity (the "Node" bar) or, when that's unknown too, a dashed "ungauged"
-  track. Memory ≥90% of the container's OWN limit additionally alarms in words on the card.
+- **A pod's summed gauge stacks by container; the cards carry no bars.** The top gauge is the pod
+  total against its summed req/lim, and a multi-container pod splits its fill into one coloured
+  segment per container name (`containerSegments`, the same `UsageSegment` stack + `metric-legend`
+  row the workload rollup uses), so "which container is eating the pod" reads at a glance. It answers
+  "what share of the pod is each container," NOT "is each container near its OWN limit" — that read
+  was the per-card bars, removed (user-directed) to halve the drawer's length. A single-container pod
+  (the wire omits its breakdown) stays a plain fill; a Node never segments. The one per-container
+  resource signal kept on the card is the OOM alarm: memory ≥90% of the container's OWN limit reads
+  in words (`nearMemLimit`), since an imminent OOM kill is worth words even without a bar.
 - **Workload stacks split by pod or by container.** The rollup gauge's fill is a stack of segments
   (`UsageSegment`) — one per POD by default (replicas should pull even weight; an outlier segment is
   the finding; names use the topology's "…-suffix" relative form) — with a persisted caption-row
