@@ -17,7 +17,6 @@ interface Props {
   // and manifest fetches stay scoped to the cluster the operator is currently viewing.
   ctx: string
   node: KNode | null
-  owners: KNode[]
   // Live metrics-server consumption for the selected resource (Pods/Nodes), from the capacity feed;
   // threaded to the summary's usage gauges. Undefined when metrics are unavailable or the kind has none.
   usage?: ResourceUsage
@@ -28,7 +27,6 @@ interface Props {
   // A Pod's host-node capacity (the unconstrained-bar fallback ceiling), derived from the cluster-wide
   // capacity feed, threaded to the resource bars.
   hostCapacity?: Resources
-  onNavigate: (id: string) => void
   // Resolves a "Kind/name" string (e.g. an event's source) to a node id and selects it. Returns
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
   // isn't in the current graph (filtered out by view, or already gone).

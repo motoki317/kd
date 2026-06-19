@@ -73,13 +73,6 @@ export function createSelectionDetails(deps: {
     return id && lastResolved && lastResolved.id === id ? lastResolved : null
   })
   const selectionDeleted = createMemo(() => !!drawerNode() && !selectedNode())
-  // Owners present in the current graph, so the drawer can offer "walk up the tree" navigation.
-  // Derived from drawerNode (not selectedNode) so a DELETED pod's owner chips keep working — the
-  // ReplicaSet/Job chip is the one-click path to its replacement.
-  const ownerNodes = createMemo<KNode[]>(() => {
-    const n = drawerNode()
-    return (n?.ownerUIDs ?? []).map((id) => graph.nodes[id]).filter((o): o is KNode => !!o)
-  })
 
   return {
     capById,
@@ -89,6 +82,5 @@ export function createSelectionDetails(deps: {
     selectionAnnouncement,
     drawerNode,
     selectionDeleted,
-    ownerNodes,
   }
 }

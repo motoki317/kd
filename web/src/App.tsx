@@ -193,7 +193,7 @@ export default function App() {
   const nodes = createMemo(() => Object.values(graph.nodes))
   const edges = createMemo(() => graph.edges)
   // Selection-derived state for the drawer (capacity-feed fallback, live usage, the "deleted"
-  // terminal state, owner chips) — see selection.ts.
+  // terminal state) — see selection.ts.
   const {
     capById,
     selectedUsage,
@@ -202,7 +202,6 @@ export default function App() {
     selectionAnnouncement,
     drawerNode,
     selectionDeleted,
-    ownerNodes,
   } = createSelectionDetails({ selectedId, graph, capacity, nodes })
 
   // Keep the lazy drawer subtree off the render-blocking initial load: don't mount it (and thus
@@ -560,14 +559,12 @@ export default function App() {
             ctx={ctx() ?? ''}
             node={drawerNode()}
             deleted={selectionDeleted()}
-            owners={ownerNodes()}
             usage={selectedUsage()}
             workloadUsage={selectedWorkloadUsage()}
             hostCapacity={selectedHostCapacity()}
-            // Owner-chip clicks should push history (cycle 300) so the drawer back button walks back to the
-            // descendant the operator came from. The cycle-300 helper pushes the prior selection
-            // only when changing to a different node — so re-selecting the same node is a no-op.
-            onNavigate={selectAndRemember}
+            // A cross-reference jump (cycle 300) pushes history so the drawer back button walks back to
+            // the resource the operator came from. The cycle-300 helper pushes the prior selection only
+            // when changing to a different node — so re-selecting the same node is a no-op.
             onNavigateRef={(ref) => {
               const [kind, ...rest] = ref.split('/')
               const name = rest.join('/')

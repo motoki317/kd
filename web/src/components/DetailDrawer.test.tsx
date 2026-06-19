@@ -45,7 +45,7 @@ describe('DetailDrawer', () => {
     // must NOT silently close — it shows a terminal banner over the last-known facts, announced
     // via a live region.
     const deleted = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} deleted={true} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} deleted={true} onClose={() => {}} />
     ))
     const banner = deleted.container.querySelector('.drawer-deleted')
     expect(banner?.textContent).toContain('Deleted from the cluster')
@@ -53,7 +53,7 @@ describe('DetailDrawer', () => {
     expect(deleted.container.querySelector('.drawer-name')?.textContent).toContain('settings')
     deleted.unmount()
     const live = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} deleted={false} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} deleted={false} onClose={() => {}} />
     ))
     expect(live.container.querySelector('.drawer-deleted')).toBeNull()
   })
@@ -73,7 +73,7 @@ describe('DetailDrawer', () => {
     )
     const { container } = render(() => (
       <Suspense fallback={<div class="outer-fallback" />}>
-        <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+        <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
       </Suspense>
     ))
     // The manifest resolves and the outer boundary settles; events stay pending throughout.
@@ -98,7 +98,7 @@ describe('DetailDrawer', () => {
       )
     })
     const [node, setNode] = createSignal<KNode>(configMap)
-    render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
     await vi.waitFor(() => expect(manifestFetches.length).toBeGreaterThanOrEqual(1))
     const initial = manifestFetches.length
     // Same resource, fresh object identity (what a poll does) → key stays stable, no refetch.
@@ -111,19 +111,19 @@ describe('DetailDrawer', () => {
   })
 
   it('shows Events/Manifest tabs (no Logs) for a non-loggable resource', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const tabs = [...container.querySelectorAll('.drawer-tabs button')].map((b) => b.textContent?.trim())
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
   it('names the complementary landmark by the resource so it is identifiable in a landmark list', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const aside = container.querySelector('aside.drawer')!
     expect(aside.getAttribute('aria-label')).toBe('ConfigMap settings details')
   })
 
   it('exposes the tabs as a WAI-ARIA tablist with associated panels and roving tabindex', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const list = container.querySelector('.drawer-tabs')!
     expect(list.getAttribute('role')).toBe('tablist')
     const tabBtns = [...container.querySelectorAll('.drawer-tabs button')] as HTMLButtonElement[]
@@ -143,7 +143,7 @@ describe('DetailDrawer', () => {
   })
 
   it('arrow keys move between tabs within the tablist (APG keyboard model)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const list = container.querySelector('.drawer-tabs')!
     const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
     expect(active()).toBe('Manifest') // tabs = [Events, Manifest], non-loggable defaults to Manifest
@@ -160,14 +160,14 @@ describe('DetailDrawer', () => {
   it('renders a back button only when canBack is true and routes its click to onBack (cycle 300)', async () => {
     // Without canBack, no back button is rendered.
     const { container, unmount } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     expect(container.querySelector('.drawer-back')).toBeFalsy()
     unmount()
     // With canBack=true and an onBack callback, the button is rendered and clicking calls onBack.
     const onBack = vi.fn()
     const { container: c2 } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} canBack={true} onBack={onBack} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} canBack={true} onBack={onBack} />
     ))
     const btn = c2.querySelector('.drawer-back') as HTMLButtonElement
     expect(btn).toBeTruthy()
@@ -179,7 +179,7 @@ describe('DetailDrawer', () => {
     const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', namespace: 'shop', health: 'Healthy', containers: ['web'] }
     const [node, setNode] = createSignal<KNode | null>(null)
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />
     ))
     // The drawer mounts empty; the tab-default effect must not latch onto Manifest.
     expect(container.querySelector('.drawer-tabs')).toBeFalsy()
@@ -194,7 +194,7 @@ describe('DetailDrawer', () => {
     const podB: KNode = { id: 'b', kind: 'Pod', name: 'b', namespace: 'shop', health: 'Healthy', containers: ['c'] }
     const [node, setNode] = createSignal<KNode | null>(podA)
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />
     ))
     const active = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
     // Fresh open of a Pod defaults to Logs.
@@ -211,7 +211,7 @@ describe('DetailDrawer', () => {
 
   it('toggles an expanded (canvas-filling) mode via the expand button (cycle 311)', () => {
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer') as HTMLElement
     const btn = container.querySelector('.drawer-expand') as HTMLButtonElement
@@ -230,7 +230,7 @@ describe('DetailDrawer', () => {
 
   it('offers a left-edge resize handle only when resizing is wired and the panel is compact', () => {
     // No resize props → no handle (callers/tests that don't wire resizing).
-    const bare = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const bare = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     expect(bare.container.querySelector('.drawer-resizer')).toBeNull()
     bare.unmount()
 
@@ -239,8 +239,6 @@ describe('DetailDrawer', () => {
       <DetailDrawer
         ctx="test-ctx"
         node={configMap}
-        owners={[]}
-        onNavigate={() => {}}
         onClose={() => {}}
         resizeWidth={520}
         resizeMin={360}
@@ -272,7 +270,7 @@ describe('DetailDrawer', () => {
   })
 
   it('[ / ] do nothing when no node is shown (cycle 292)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} onClose={() => {}} />)
     // Should be empty — no drawer rendered.
     expect(container.querySelector('.drawer-tabs')).toBeFalsy()
     // Dispatching keydown should not throw.
@@ -281,7 +279,7 @@ describe('DetailDrawer', () => {
 
   it('renders labels as key/value chips, sorted by key', () => {
     const labeled: KNode = { ...configMap, labels: { tier: 'backend', app: 'shop' } }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={labeled} onClose={() => {}} />)
     const keys = [...container.querySelectorAll('.label-chip .label-key')].map((e) => e.textContent)
     const vals = [...container.querySelectorAll('.label-chip .label-val')].map((e) => e.textContent)
     expect(keys).toEqual(['app', 'tier'])
@@ -290,13 +288,13 @@ describe('DetailDrawer', () => {
 
   it('shows node capacity in the meta line when present', () => {
     const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', health: 'Healthy', capacity: '8 vCPU · 16Gi · 110 pods' }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node} onClose={() => {}} />)
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('8 vCPU · 16Gi · 110 pods')
   })
 
   it('echoes the card status string under the name, health-coloured for a troubled resource', () => {
     const es: KNode = { id: 'es1', kind: 'Elasticsearch', name: 'shop', namespace: 'shop', health: 'Progressing', status: 'Ready · yellow' }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={es} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={es} onClose={() => {}} />)
     const s = container.querySelector('.drawer-status') as HTMLElement
     expect(s).toBeTruthy()
     expect(s.textContent).toBe('Ready · yellow')
@@ -307,21 +305,21 @@ describe('DetailDrawer', () => {
 
   it('keeps a Healthy status quiet (dim, not green) so the eye lands on trouble', () => {
     const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web', namespace: 'shop', health: 'Healthy', status: 'Running' }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     const s = container.querySelector('.drawer-status') as HTMLElement
     expect(s.textContent).toBe('Running')
     expect(s.style.color).toBe('var(--text-dim)')
   })
 
   it('omits the status line when a resource has no status (e.g. a ConfigMap)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     expect(container.querySelector('.drawer-status')).toBeNull()
   })
 
   it('surfaces an unhealthy resource’s failure message, full text in the title for hover', () => {
     const msg = '0/3 nodes are available: 3 Insufficient cpu.'
     const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web', namespace: 'shop', health: 'Progressing', status: 'Unschedulable', message: msg }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     const m = container.querySelector('.drawer-message') as HTMLElement
     expect(m).toBeTruthy()
     expect(m.textContent).toBe(msg)
@@ -329,12 +327,12 @@ describe('DetailDrawer', () => {
   })
 
   it('omits the message block when a resource has none (the healthy/common case)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     expect(container.querySelector('.drawer-message')).toBeNull()
   })
 
   it('offers a copy-name button in the header (cycle 287: title also documents Shift+click for Kind/name)', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const btn = container.querySelector('.drawer-name .copy-btn') as HTMLButtonElement
     expect(btn).toBeTruthy()
     expect(btn.getAttribute('title')).toMatch(/^Copy name/)
@@ -349,7 +347,7 @@ describe('DetailDrawer', () => {
     })
     const labeled: KNode = { ...configMap, labels: { app: 'shop', version: 'v1.2.3' } }
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={labeled} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={labeled} onClose={() => {}} />
     ))
     const chips = [...container.querySelectorAll('.label-chip')] as HTMLButtonElement[]
     expect(chips.length).toBe(2)
@@ -372,7 +370,7 @@ describe('DetailDrawer', () => {
       value: { writeText: (s: string) => { writes.push(s); return Promise.resolve() } },
     })
     const { getByTitle } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     const btn = getByTitle('Copy share link') as HTMLButtonElement
     btn.click()
@@ -393,7 +391,7 @@ describe('DetailDrawer', () => {
         { name: 'sidecar', ready: false, restarts: 4, state: 'Waiting: CrashLoopBackOff' },
       ],
     }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     const names = [...container.querySelectorAll('.container-card .container-name')].map((e) => e.textContent)
     const states = [...container.querySelectorAll('.container-card .container-state')].map((e) => e.textContent)
     expect(names).toEqual(['app', 'sidecar'])
@@ -412,7 +410,7 @@ describe('DetailDrawer', () => {
         { name: 'sidecar', ready: true, state: 'Running' },
       ],
     }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     const lines = [...container.querySelectorAll('.container-last-terminated')].map((e) => e.textContent?.trim())
     expect(lines).toHaveLength(1) // only the restarted container, not the clean sidecar
     expect(lines[0]).toBe('last exit: OOMKilled (exit 137)')
@@ -429,7 +427,7 @@ describe('DetailDrawer', () => {
         { name: 'main', ready: false, restarts: 3, state: 'Waiting: CrashLoopBackOff', lastTerminated: 'Completed' },
       ],
     }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     const line = container.querySelector('.container-last-terminated')?.textContent
     expect(line).toContain('run one-shot work as a Job')
   })
@@ -446,7 +444,7 @@ describe('DetailDrawer', () => {
         { name: 'migrate', ready: true, state: 'Terminated: Completed', init: true },
       ],
     }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     // Init containers render in their own group (first), main containers in the second group.
     const names = [...container.querySelectorAll('.container-card .container-name')].map((e) => e.textContent)
     expect(names).toEqual(['wait-for-db', 'migrate', 'app', 'sidecar'])
@@ -457,7 +455,7 @@ describe('DetailDrawer', () => {
 
   it('renders each workload image (no per-container runtime to pair with)', () => {
     const workload: KNode = { ...configMap, kind: 'Deployment', images: ['nginx:1.25', 'envoy:1.29'] }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={workload} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={workload} onClose={() => {}} />)
     const imgs = [...container.querySelectorAll('.drawer-image code')].map((e) => e.textContent)
     expect(imgs).toEqual(['nginx:1.25', 'envoy:1.29'])
   })
@@ -475,7 +473,7 @@ describe('DetailDrawer', () => {
         { name: 'proxy', ready: true, state: 'Running', image: 'envoy:1.29' },
       ],
     }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     expect(container.querySelector('.drawer-images')).toBeNull() // no separate flat list for pods
     const cards = [...container.querySelectorAll('.container-card')]
     expect(cards.map((c) => c.querySelector('.container-name')?.textContent)).toEqual(['app', 'proxy'])
@@ -483,7 +481,7 @@ describe('DetailDrawer', () => {
   })
 
   it('omits the labels section when there are none', () => {
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     expect(container.querySelector('.drawer-labels')).toBeNull()
   })
 
@@ -496,7 +494,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     await findByText("Couldn't load events.")
     // The drawer itself still rendered (a thrown resource error would have torn it down).
@@ -508,7 +506,7 @@ describe('DetailDrawer', () => {
     // generic wording sends the operator into retry/distrust instead of a permissions request.
     vi.stubGlobal('fetch', () => Promise.resolve(new Response('forbidden', { status: 403 })))
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     await findByText("Access denied — your kd role can't read events here.")
     // Manifest tab: same split.
@@ -520,7 +518,7 @@ describe('DetailDrawer', () => {
     // Default beforeEach mock returns {events: []} → the empty state. The hint stops an operator from
     // reading an aged-out resource's empty tab as "nothing ever happened / broken feed".
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     await findByText('No recent events.')
     const hint = container.querySelector('.events-empty-hint')
@@ -537,7 +535,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     await findByText('BackOff')
     const count = container.querySelector('.event-count')
@@ -554,7 +552,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     await findByText('unavailable')
     expect(container.querySelector('.drawer')).toBeTruthy()
@@ -574,7 +572,7 @@ describe('DetailDrawer', () => {
       )
     })
     const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', namespace: '', health: 'Healthy' }
-    render(() => <DetailDrawer ctx="test-ctx" node={node} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    render(() => <DetailDrawer ctx="test-ctx" node={node} onClose={() => {}} />)
     await vi.waitFor(() => expect(urls.some((u) => u.includes('/resources/Node/worker-1'))).toBe(true))
     expect(urls.every((u) => !u.includes('/namespaces//'))).toBe(true)
     expect(urls.some((u) => u.includes('/namespaces/__cluster__/resources/Node/worker-1'))).toBe(true)
@@ -584,7 +582,7 @@ describe('DetailDrawer', () => {
     const podA: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
     const podB: KNode = { id: 'pb', kind: 'Pod', name: 'pod-b', namespace: 'shop', health: 'Healthy' }
     const [node, setNode] = createSignal<KNode>(podA)
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
     const tabBtn = (label: string) =>
       [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim().startsWith(label)) as HTMLButtonElement
     const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
@@ -598,7 +596,7 @@ describe('DetailDrawer', () => {
   it('falls back to the default tab when the new resource lacks the current one', () => {
     const pod: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
     const [node, setNode] = createSignal<KNode>(pod)
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
     const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
     // Pod defaults to Logs; switching to a non-loggable ConfigMap (no Logs tab) must fall back.
     expect(activeTab()).toBe('Logs')
@@ -608,7 +606,7 @@ describe('DetailDrawer', () => {
 
   it('renders an age in the meta line', () => {
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     expect(container.querySelector('.drawer-age')?.textContent).toContain('3d')
   })
@@ -619,7 +617,7 @@ describe('DetailDrawer', () => {
     // button drives — one affordance, two reachable places.
     const pod: KNode = { ...configMap, id: 'p1', kind: 'Pod', name: 'api-0', status: 'Running' }
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer')!
     expect(drawer.classList.contains('expanded')).toBe(false)
@@ -639,8 +637,6 @@ describe('DetailDrawer', () => {
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx"
         node={pod}
-        owners={[]}
-        onNavigate={() => {}}
         onNavigateRef={(ref) => {
           refNavigated.push(ref)
           return true
@@ -656,7 +652,7 @@ describe('DetailDrawer', () => {
 
   it('host meta is a static span when onNavigateRef is omitted (no nav available)', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     expect(container.querySelector('button.drawer-host')).toBeNull()
     expect(container.querySelector('.drawer-meta')?.textContent).toContain('on worker-1')
   })
@@ -679,7 +675,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     // Wait for events to render; expect all three reasons visible initially.
@@ -711,7 +707,7 @@ describe('DetailDrawer', () => {
     const writeText = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await findByText('BackOff')
@@ -743,7 +739,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await findByText('Pulled')
@@ -760,7 +756,7 @@ describe('DetailDrawer', () => {
       ),
     )
     const { container, findByPlaceholderText, findByText } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     // Wait until the manifest text actually loads — find runs against detail(), so an early
     // dispatch fires before the resource resolves and reports 0 matches.
@@ -796,7 +792,7 @@ describe('DetailDrawer', () => {
     try {
       const [node, setNode] = createSignal<KNode | null>(configMap)
       const { container } = render(() => (
-        <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />
+        <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />
       ))
       // Keyboard focus is inside the drawer (the close button).
       const closeBtn = container.querySelector('.drawer-close') as HTMLButtonElement
@@ -822,7 +818,7 @@ describe('DetailDrawer', () => {
     document.body.appendChild(elsewhere)
     try {
       const [node, setNode] = createSignal<KNode | null>(configMap)
-      render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+      render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
       elsewhere.focus()
       setNode(null)
       await Promise.resolve()
@@ -836,7 +832,7 @@ describe('DetailDrawer', () => {
 
   it('exposes the manifest YAML/JSON toggle as a radiogroup with roving tabindex', () => {
     // ConfigMap defaults to the Manifest tab, so the format toggle is rendered.
-    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const group = container.querySelector('.manifest-format')!
     expect(group.getAttribute('role')).toBe('radiogroup')
     expect(group.getAttribute('aria-label')).toBe('Manifest format')
@@ -883,8 +879,6 @@ describe('DetailDrawer', () => {
     const { container, findByTitle } = render(() => (
       <DetailDrawer ctx="test-ctx"
         node={deploy}
-        owners={[]}
-        onNavigate={() => {}}
         onNavigateRef={(ref) => {
           refNavigated.push(ref)
           return true
