@@ -1153,6 +1153,26 @@ export default function Topology(props: Props) {
     animateTo(target)
   }
 
+  // fitAll: the bottom-right Fit button. Frames everything with NO legibility floor, so a dense graph
+  // zooms all the way out until every resource is on screen — the operator's "show me everything".
+  // Distinct from resetView (double-click), which floors at MIN_FIT_SCALE to keep text readable and
+  // re-frames the selected subtree. When a filter is active it frames just the lit subset (mirroring
+  // resetView's cycle-214 rule): fitting the whole faded graph would shrink the matches to specks — but
+  // still WITHOUT the floor, unlike the automatic filter-fit. On a sparse, unfiltered view the floor
+  // never binds, so this and double-click coincide; the difference shows only when the fit is sub-floor.
+  function fitAll() {
+    const l = layout()
+    if (!svg || l.width === 0) return
+    const lit = matches() || props.healthFilter || activeKinds() ? l.nodes.filter((n) => !nodeFaded(n)) : null
+    if (lit && lit.length > 0) {
+      const target = fitNodeSet(lit, 1.4)
+      target.scale *= 0.92
+      animateTo(target)
+      return
+    }
+    animateTo(computeFitFor(0, 0, l.width, l.height, 1.4))
+  }
+
   return (
     // Below ~0.45 zoom the fixed-size card text renders at a few unreadable pixels, so it's just
     // noise over the overview. labels-hidden fades the text out, leaving a clean map of health-tinted,
@@ -1743,7 +1763,7 @@ export default function Topology(props: Props) {
       {/* Hide the Fit button when there's nothing on canvas — it would just trigger a no-op against
           an empty layout, and the empty-state copy already explains what to do. */}
       <Show when={props.nodes.length > 0}>
-      <button class="topology-fit" onClick={resetView} title="Fit to view (f)">
+      <button class="topology-fit" onClick={fitAll} title="Fit all resources in view">
         {/* Tiny "fit corners" glyph: four L-corners around an implied frame so the button reads
             as "frame the canvas" even before the eye lands on the word. */}
         <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
