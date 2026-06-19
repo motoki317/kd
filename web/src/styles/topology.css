@@ -28,7 +28,15 @@
     linear-gradient(var(--grid-major) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
     radial-gradient(ellipse 72% 52% at 50% 35%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 72%);
+  /* At-rest sizing (scale 1); Topology.tsx overrides background-size + position inline so the grid
+     pans and zooms WITH the cards. Keep the 26/130 here in sync with GRID_MINOR/GRID_MAJOR there. */
   background-size: 26px 26px, 26px 26px, 130px 130px, 130px 130px, 100% 100%;
+}
+/* Zoomed out past label legibility the minor lines (now scaled below ~12px) collapse into a haze, so
+   drop them — major lines + sheen still carry the field. The five background-image layers stay (only
+   the minor colour goes transparent) so the inline 5-entry size/position list never misaligns. */
+.topology.labels-hidden {
+  --grid-minor: transparent;
 }
 .topology-svg {
   width: 100%;

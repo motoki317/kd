@@ -124,6 +124,12 @@ interface Props {
 // zoomed to the floor on its first resources instead of fitting everything into an unreadable speck.
 const MIN_FIT_SCALE = 0.55
 
+// Blueprint-grid cell sizes (px at scale 1), kept in sync with the .topology background-image in
+// topology.css. The inline background-size below scales these by the live zoom so the grid pans and
+// zooms WITH the cards; a single source for the multiplier keeps the two sides aligned.
+const GRID_MINOR = 26
+const GRID_MAJOR = 130
+
 export default function Topology(props: Props) {
   // Per-cluster "+N more" collapse expansion state (see topology/collapseState.ts for the key scheme).
   const { expandedClusters, setExpandedClusters, toggleCluster } = createExpandedClusters()
@@ -1152,7 +1158,19 @@ export default function Topology(props: Props) {
     // noise over the overview. labels-hidden fades the text out, leaving a clean map of health-tinted,
     // icon-only cards; hover/click still reveal the detail. The icon + card color carry kind + health
     // at any zoom (cycle 325).
-    <div class="topology" classList={{ 'labels-hidden': scale() < 0.45 }}>
+    <div
+      class="topology"
+      classList={{ 'labels-hidden': scale() < 0.45 }}
+      // Track the canvas transform with the blueprint grid so it pans/zooms WITH the cards instead of
+      // sitting still under them: position = the content origin in screen space (tx,ty); cell size =
+      // base × scale. The five entries match the five background-image layers (minor ×2, major ×2,
+      // radial sheen) in CSS order — the sheen stays fixed (0 / 100%). Minor lines fade under
+      // .labels-hidden (topology.css) so a zoomed-out canvas doesn't haze into a solid field.
+      style={{
+        'background-position': `${tx()}px ${ty()}px, ${tx()}px ${ty()}px, ${tx()}px ${ty()}px, ${tx()}px ${ty()}px, 0 0`,
+        'background-size': `${GRID_MINOR * scale()}px ${GRID_MINOR * scale()}px, ${GRID_MINOR * scale()}px ${GRID_MINOR * scale()}px, ${GRID_MAJOR * scale()}px ${GRID_MAJOR * scale()}px, ${GRID_MAJOR * scale()}px ${GRID_MAJOR * scale()}px, 100% 100%`,
+      }}
+    >
       {/* Health-distribution stripe: a thin bar pinned to the top edge of the canvas, one segment
           per present state sized in proportion — the "what's this namespace doing?" read at a
           glance (a sliver of red on a sea of green). Spans the FULL width of the main view (a
