@@ -1,4 +1,5 @@
 import { For, Show } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 import { formatQuantity } from '../capacityLayout'
 import { useNow } from '../clock'
 import { healthColor, healthTextColor } from '../health'
@@ -37,11 +38,24 @@ function containerDot(cs: ContainerStatus): { color: string; text: string; cls: 
 // separately: init containers (run once, in order, before the app starts) and the long-running app
 // containers. Each carries a header label; order within a group is the server's (execution order).
 // Returned even when empty so the caller can render the section headers conditionally.
-function containerGroups(statuses: ContainerStatus[]): { label: string; items: ContainerStatus[] }[] {
+interface ContainerGroup {
+  label: string
+  init: boolean
+  items: ContainerStatus[]
+}
+function containerGroups(statuses: ContainerStatus[]): ContainerGroup[] {
   return [
-    { label: 'Init containers', items: statuses.filter((c) => c.init) },
-    { label: 'Containers', items: statuses.filter((c) => !c.init) },
+    { label: 'Init containers', init: true, items: statuses.filter((c) => c.init) },
+    { label: 'Containers', init: false, items: statuses.filter((c) => !c.init) },
   ]
+}
+
+// initSectionCollapsed: an init-container group whose every step has finished cleanly. Init containers
+// run once before the app and then sit "Completed" forever, so on a healthy pod they're noise the
+// operator has already accepted — collapse the section to its summary by default. A still-running or
+// failed init step keeps it expanded: that's the reason the pod isn't up yet, so it must stay in view.
+function initSectionCollapsed(g: ContainerGroup): boolean {
+  return g.init && g.items.length > 0 && g.items.every(isDone)
 }
 
 // ContainerCards is a Pod's per-container section: runtime state and the per-container essentials
@@ -71,11 +85,21 @@ export default function ContainerCards(props: {
       <For each={containerGroups(props.statuses)}>
         {(group) => (
           <Show when={group.items.length > 0}>
-            <div class="container-group">
-              <div class="container-group-head">
+            {/* A finished init section folds into a <details>; every other group is a plain <div>
+                that's always shown. The card list stays in the DOM either way (CSS hides it when
+                the <details> is closed) so the operator can expand to inspect a completed step. */}
+            <Dynamic
+              component={initSectionCollapsed(group) ? 'details' : 'div'}
+              class={initSectionCollapsed(group) ? 'container-group container-group-init' : 'container-group'}
+            >
+              <Dynamic component={initSectionCollapsed(group) ? 'summary' : 'div'} class="container-group-head">
                 {group.label}
                 <span class="container-group-count">{group.items.length}</span>
-              </div>
+                {/* Names WHY the section is folded — its steps all finished (explicit over implicit). */}
+                <Show when={initSectionCollapsed(group)}>
+                  <span class="container-group-note">done</span>
+                </Show>
+              </Dynamic>
               <For each={group.items}>
                 {(cs) => {
                   const dot = containerDot(cs)
@@ -167,7 +191,7 @@ export default function ContainerCards(props: {
                   )
                 }}
               </For>
-            </div>
+            </Dynamic>
           </Show>
         )}
       </For>

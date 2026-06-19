@@ -183,6 +183,50 @@ describe('ResourceSummary container status dots', () => {
     ))
     expect(ok.querySelector('.container-state')?.textContent).toBe('Running')
   })
+  // Init containers run once then sit "Completed" forever; once they've ALL finished they're noise on
+  // a healthy pod, so the section folds to its summary by default (still expandable).
+  it('collapses the init-containers section by default once every init step has completed', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'setup', ready: false, state: 'Terminated: Completed', init: true },
+          { name: 'migrate', ready: false, state: 'Terminated: Completed', init: true },
+          { name: 'app', ready: true, state: 'Running' },
+        ])}
+        {...base}
+      />
+    ))
+    // The init group is a <details> collapsed by default (no `open`), labelled "done".
+    const init = container.querySelector('.container-group-init') as HTMLDetailsElement
+    expect(init?.tagName.toLowerCase()).toBe('details')
+    expect(init.hasAttribute('open')).toBe(false)
+    expect(init.querySelector('summary')).toBeTruthy()
+    expect(init.querySelector('.container-group-note')?.textContent).toBe('done')
+    // Both done init cards stay in the DOM (expand to inspect); CSS hides them while closed.
+    expect(init.querySelectorAll('.container-card').length).toBe(2)
+    // The app "Containers" section is never collapsible — a plain div, always shown.
+    const appGroup = [...container.querySelectorAll('.container-group')].find((g) => !g.classList.contains('container-group-init'))!
+    expect(appGroup.tagName.toLowerCase()).toBe('div')
+  })
+  it('keeps the init-containers section expanded while an init step is still running or failed', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={podWith([
+          { name: 'setup', ready: false, state: 'Terminated: Completed', init: true },
+          { name: 'migrate', ready: false, state: 'Running', init: true }, // still working — the reason the pod is down
+          { name: 'app', ready: false, state: 'Waiting: PodInitializing' },
+        ])}
+        {...base}
+      />
+    ))
+    // Not all init steps are done → the section stays a plain expanded div, never folded away.
+    expect(container.querySelector('.drawer-containers .container-group-init')).toBeNull()
+    const initGroup = [...container.querySelectorAll('.container-group')].find(
+      (g) => g.querySelector('.container-group-head')?.textContent?.startsWith('Init'),
+    )!
+    expect(initGroup.tagName.toLowerCase()).toBe('div')
+    expect(initGroup.querySelectorAll('.container-card').length).toBe(2)
+  })
 })
 
 describe('ResourceSummary pod usage gauges', () => {

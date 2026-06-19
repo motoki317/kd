@@ -542,6 +542,47 @@ button.drawer-host:hover {
   padding: 0 6px;
   font-size: var(--fs-meta);
 }
+/* A finished init-container section folds into a <details> collapsed by default (its done steps are
+   noise on a healthy pod). `.container-card` sets an explicit `display`, which overrides the UA "hide
+   closed content" rule (same trap as .drawer-labels), so re-hide the cards while the section is closed. */
+.container-group-init:not([open]) > .container-card {
+  display: none;
+}
+.container-group-head {
+  position: relative; /* anchor the disclosure chevron in the left gutter */
+}
+summary.container-group-head {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+summary.container-group-head::-webkit-details-marker {
+  display: none;
+}
+/* Disclosure chevron, hung in the left gutter so the section label still aligns with the rest of the
+   drawer's caps labels (a flex <summary> drops the native triangle cross-browser). Points right when
+   collapsed, down when open. */
+summary.container-group-head::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.7;
+}
+.container-group-init[open] > summary.container-group-head::before {
+  transform: rotate(45deg);
+}
+/* "done" suffix on a folded init section — dim, so it reads as a state hint, not a second label. */
+.container-group-note {
+  color: var(--text-dim);
+  opacity: 0.8;
+}
 /* One card per container pairs its runtime status (head row) with its image (indented below), so the
    two facts an operator wants — "is it OK?" and "what's it running?" — sit together instead of in two
    separate lists (cycle 338). Health tint mirrors the topology card so trouble reads at a glance. */
