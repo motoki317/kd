@@ -87,6 +87,13 @@
   min-width: 0;
   max-height: 42vh;
   overflow-y: auto;
+  /* Flexbox owns the vertical rhythm: the stacked blocks (hero, meta, gauges, kind facts, container
+     cards, labels) sit on one uniform gap and carry NO margins of their own — per-block margins had
+     drifted out of step (a 10px gauge among 8px neighbours). The gap stays consistent as blocks come
+     and go. */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .drawer.expanded .drawer-summary {
   max-height: 30vh;
@@ -233,7 +240,6 @@
    trouble without shouting; clamped to 3 lines (full text on hover via title) so a long k8s message
    doesn't push the tabs/body off-screen. */
 .drawer-message {
-  margin: 8px 0 0;
   padding: 6px 9px;
   border-left: 2px solid var(--health-degraded);
   background: color-mix(in srgb, var(--health-degraded) 7%, transparent);
@@ -267,7 +273,6 @@
   gap: 6px;
   font-size: var(--fs-meta);
   color: var(--text-dim);
-  margin-top: 8px;
 }
 /* Live CPU/memory usage gauges for a Pod (cycle: pod metrics). One row per resource: a fixed-width
    label, the bar, and a right-aligned value — aligned columns so CPU and Mem read as a small table. */
@@ -275,7 +280,6 @@
   display: flex;
   flex-direction: column;
   gap: 9px; /* between resource groups (CPU / Mem) */
-  margin-top: 10px;
 }
 /* One resource's Use+Req bars, grouped under a CPU/Mem heading (Proximity) so the two read as a pair —
    the same "Use over Req" stack the Nodes capacity view draws for each node. */
@@ -467,56 +471,10 @@ button.drawer-host:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
-.drawer-owners {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-.owner-chip {
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  border-radius: var(--radius-s);
-  padding: 3px 10px;
-  font-size: var(--fs-caps);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-dim);
-  cursor: pointer;
-  max-width: 100%;
-  /* Wrap rather than ellipsise: an owner chip's name is often the resource you're about to click,
-     so seeing the full thing matters. The pill becomes a rounded box when it wraps to two lines. */
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
-}
-.owner-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
-}
-.owner-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.owner-arrow {
-  font-size: var(--fs-meta);
-  line-height: 1;
-}
-.owner-name {
-  text-transform: none;
-  color: var(--text);
-  font-weight: 600;
-}
 .drawer-containers {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
 }
 /* A container group — "Init containers" / "Containers" — with a count, so the operator reads how
    many of each kind exist before scanning the cards (cycle 338). */
@@ -548,35 +506,37 @@ button.drawer-host:hover {
 .container-group-init:not([open]) > .container-card {
   display: none;
 }
-.container-group-head {
-  position: relative; /* anchor the disclosure chevron in the left gutter */
-}
-summary.container-group-head {
+/* Disclosure triangle shared by the drawer's collapsible <details> sections — the init-container
+   group and the labels list — so they signal "expandable" the same way. A small filled triangle is
+   hung in the left gutter (a flex <summary> drops the native triangle cross-browser), pointing right
+   when collapsed and down when open. Gutter placement keeps each section label aligned with the
+   drawer's other caps labels rather than indenting it the way a native marker would. */
+summary.container-group-head,
+.drawer-labels > summary {
+  position: relative;
   cursor: pointer;
   user-select: none;
   list-style: none;
 }
-summary.container-group-head::-webkit-details-marker {
+summary.container-group-head::-webkit-details-marker,
+.drawer-labels > summary::-webkit-details-marker {
   display: none;
 }
-/* Disclosure chevron, hung in the left gutter so the section label still aligns with the rest of the
-   drawer's caps labels (a flex <summary> drops the native triangle cross-browser). Points right when
-   collapsed, down when open. */
-summary.container-group-head::before {
+summary.container-group-head::before,
+.drawer-labels > summary::before {
   content: '';
   position: absolute;
-  left: -11px;
+  left: -13px;
   top: 50%;
-  width: 5px;
-  height: 5px;
-  margin-top: -3px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  opacity: 0.7;
+  margin-top: -4px;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent currentColor;
+  opacity: 0.65;
 }
-.container-group-init[open] > summary.container-group-head::before {
-  transform: rotate(45deg);
+.container-group-init[open] > summary.container-group-head::before,
+.drawer-labels[open] > summary::before {
+  transform: rotate(90deg);
 }
 /* "done" suffix on a folded init section — dim, so it reads as a state hint, not a second label. */
 .container-group-note {
@@ -677,7 +637,6 @@ summary.container-group-head::before {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-top: 8px;
 }
 .drawer-image {
   display: flex;
@@ -732,7 +691,6 @@ summary.container-group-head::before {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
 }
 .port-addr {
   display: inline-flex;
@@ -841,16 +799,11 @@ summary.container-group-head::before {
 .port-addr.port-caution code {
   color: var(--caution-text);
 }
-.drawer-labels {
-  margin-top: 8px;
-}
 .drawer-labels > summary {
   font-size: var(--fs-caps);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-dim);
-  cursor: pointer;
-  user-select: none;
 }
 .label-chips {
   display: flex;
