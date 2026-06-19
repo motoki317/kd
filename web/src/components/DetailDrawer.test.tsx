@@ -84,6 +84,34 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-name')?.textContent).toContain('settings')
   })
 
+  it('does not refetch when the node object identity churns but the resource is unchanged (flap fix)', async () => {
+    // A background poll (the cluster-wide capacity feed) rebuilds the graph nodes every few seconds,
+    // handing the drawer a NEW object for the SAME logical resource. The resource key must stay
+    // reference-stable across those churns, or createResource refetches → the outer Suspense
+    // re-suspends → the drawer DOM re-inserts and replays its slide-in ("the sidebar re-opens every
+    // few seconds"). A genuine navigation (different kind/name) must still refetch.
+    const manifestFetches: string[] = []
+    vi.stubGlobal('fetch', (url: string) => {
+      if (!url.includes('/events')) manifestFetches.push(url)
+      return Promise.resolve(
+        url.includes('/events')
+          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
+          : new Response('kind: ConfigMap\n', { status: 200 }),
+      )
+    })
+    const [node, setNode] = createSignal<KNode>(configMap)
+    render(() => <DetailDrawer ctx="test-ctx" node={node()} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
+    await vi.waitFor(() => expect(manifestFetches.length).toBeGreaterThanOrEqual(1))
+    const initial = manifestFetches.length
+    // Same resource, fresh object identity (what a poll does) → key stays stable, no refetch.
+    setNode({ ...configMap })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(manifestFetches.length).toBe(initial)
+    // Sanity: a real navigation to a different resource DOES re-key and refetch.
+    setNode({ ...configMap, id: 'cm2', name: 'other' })
+    await vi.waitFor(() => expect(manifestFetches.length).toBe(initial + 1))
+  })
+
   it('shows Events/Manifest tabs (no Logs) for a non-loggable resource', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />)
     const tabs = [...container.querySelectorAll('.drawer-tabs button')].map((b) => b.textContent?.trim())

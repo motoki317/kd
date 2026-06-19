@@ -46,9 +46,17 @@ export default function ManifestPanel(props: {
       },
     ),
   )
+  // The manifest body read WITHOUT suspending. This memo is EAGER (created at panel init, outside the
+  // <Suspense> below), so reading the suspending detail() here would register the suspend with the
+  // drawer's OUTER boundary (App wraps the whole drawer) — and every manifest refetch would then detach
+  // + re-insert the drawer DOM, replaying its slide-in ("the sidebar keeps re-opening"). Reading
+  // .latest gated on state is the same stale-while-revalidating trick loadedEvents uses: it never
+  // suspends. The genuine first-load fallback still belongs to the INNER <Suspense>, whose <pre> body
+  // reads detail() directly.
+  const manifestText = createMemo(() => (detail.state === 'ready' || detail.state === 'refreshing' ? detail.latest ?? '' : ''))
   const manifestSegments = createMemo(() => {
     if (detail.error) return []
-    return splitByMatch(detail() ?? '', manifestQuery())
+    return splitByMatch(manifestText(), manifestQuery())
   })
   const manifestMatchCount = createMemo(() => (manifestQuery() ? manifestSegments().filter((s) => s.match).length : 0))
   let manifestPre: HTMLPreElement | undefined

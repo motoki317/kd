@@ -185,10 +185,25 @@ export default function DetailDrawer(props: Props) {
   // resource/events/log routes require a non-empty {ns} segment — an empty one collapses to a
   // double slash the server 404s. Map it to the cluster sentinel, which the server unmaps to ""
   // server-side. (A namespaced resource selected in cluster scope still carries its real namespace.)
-  const key = () =>
-    displayNode()
-      ? { ctx: props.ctx, ns: displayNode()!.namespace || CLUSTER_SCOPE, kind: displayNode()!.kind, name: displayNode()!.name }
-      : null
+  // Reference-stable while the resource IDENTITY (ctx/ns/kind/name) is unchanged. This is load-bearing
+  // for "the drawer must not flap on background updates": a live data tick re-creates the node OBJECT
+  // (the capacity feed rebuilds its Node map every poll; the SSE store reconciles changed resources),
+  // so a plain `() => {…}` here returned a NEW key on every tick — re-keying the events/manifest
+  // resources, which re-fetch on a new source and (via the manifest's eager segment memo, see
+  // ManifestPanel) re-suspend the drawer's OUTER <Suspense>, detaching + re-inserting the DOM and
+  // replaying the slide-in ("the sidebar keeps re-opening every few seconds"). These endpoints depend
+  // ONLY on the four identity strings, so returning the SAME object while they're unchanged means no
+  // spurious re-fetch and no flap — for every resource kind, not just Nodes. A genuine re-selection
+  // (different kind/name) or a manifest format toggle still produces a new key and re-fetches.
+  const key = createMemo<{ ctx: string; ns: string; kind: string; name: string } | null>((prev) => {
+    const n = displayNode()
+    if (!n) return null
+    const ns = n.namespace || CLUSTER_SCOPE
+    if (prev && prev.ctx === props.ctx && prev.ns === ns && prev.kind === n.kind && prev.name === n.name) {
+      return prev
+    }
+    return { ctx: props.ctx, ns, kind: n.kind, name: n.name }
+  })
 
   // Events are fetched as soon as a node is selected, so switching tabs is instant. (The manifest
   // fetch lives in ManifestPanel, keyed the same way.)
