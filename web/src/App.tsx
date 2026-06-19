@@ -248,6 +248,26 @@ export default function App() {
     }
   })
 
+  // The live connection dot pings once per SSE data event (snapshot/patch): a one-shot animation
+  // re-armed by removing the class, forcing a reflow, then re-adding it — so rapid patches each
+  // restart it. Static at rest (no events → no animation → zero idle compositing); the perpetual
+  // heartbeat this replaces cost ~5% idle CPU redrawing the canvas every refresh. See topbar.css.
+  let connDotRef: HTMLSpanElement | undefined
+  let lastPing = 0
+  const pingLive = () => {
+    const el = connDotRef
+    if (!el || !el.isConnected) return
+    // Throttle to ~1/s: a busy cluster patches faster than the 0.5s ping, and re-arming every patch
+    // would keep the animation (and full-canvas compositing) running continuously — the very idle
+    // cost this replaces. One ping/sec under load reads as "very live" and stays bounded.
+    const t = performance.now()
+    if (t - lastPing < 1000) return
+    lastPing = t
+    el.classList.remove('conn-ping')
+    void el.offsetWidth
+    el.classList.add('conn-ping')
+  }
+
   // The SSE graph feed: (re)subscribes on ctx/ns change and applies snapshot/patch/summary/capacity
   // events — see graphSubscription.ts.
   const { setReconnectTick } = createGraphSubscription({
@@ -265,6 +285,7 @@ export default function App() {
     setCapacity,
     connState,
     setConnState,
+    onLiveData: pingLive,
     refetchContexts,
     pendingSel: () => pendingSel,
     clearPendingSel: () => {
@@ -376,6 +397,7 @@ export default function App() {
           when={connState() === 'offline'}
           fallback={
             <span
+              ref={connDotRef}
               class="conn"
               classList={{ live: connState() === 'live', connecting: connState() === 'connecting' }}
               role="status"

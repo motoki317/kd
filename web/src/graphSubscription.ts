@@ -30,6 +30,10 @@ export function createGraphSubscription(deps: {
   setCapacity: Setter<Capacity | null>
   connState: Accessor<ConnState>
   setConnState: Setter<ConnState>
+  // Fired whenever the stream actually delivers graph data (snapshot or patch). Drives the live
+  // dot's one-shot "ping" so motion mirrors real stream liveness without a perpetual animation —
+  // at rest nothing runs, keeping idle compositing at zero.
+  onLiveData?: () => void
   refetchContexts: () => void
   // The "?sel=" deep-link still waiting to be restored — owned by App (its reactive restore path
   // also consumes it), read/cleared here because the snapshot resolution is authoritative over it.
@@ -51,6 +55,7 @@ export function createGraphSubscription(deps: {
     setCapacity,
     connState,
     setConnState,
+    onLiveData,
     refetchContexts,
     pendingSel,
     clearPendingSel,
@@ -111,8 +116,12 @@ export function createGraphSubscription(deps: {
         setGraph(reconcile(fromSnapshot(g)))
         setConnState('live')
         setSelectedId(sel.id)
+        onLiveData?.()
       },
-      patch: (p) => setGraph(reconcile(applyPatch(graph, p))),
+      patch: (p) => {
+        setGraph(reconcile(applyPatch(graph, p)))
+        onLiveData?.()
+      },
       summary: (s) => recordSummary(c, ns, s),
       capacity: (c) => setCapacity(c),
       error: () => {

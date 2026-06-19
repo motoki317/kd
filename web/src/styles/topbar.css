@@ -239,9 +239,11 @@
 .conn:not(.live):not(.connecting)::before {
   background: var(--health-degraded);
 }
-/* Pulsing leading dot (cycle 129): a slow heartbeat on the live pill makes the dashboard read as
-   alive at a glance — the SSE stream's actual liveness mirrored in pixels. Connecting amber
-   doesn't pulse the dot (the whole pill already pulses); offline shows a static dim dot. */
+/* Leading status dot: solid green = live, amber = connecting, dim = offline. The live dot is
+   static at rest and pings once per SSE data event (conn-ping, re-armed in App.tsx) — motion that
+   mirrors the stream's ACTUAL liveness. The former perpetual heartbeat looked alive even when the
+   stream was idle, and redrew the whole canvas every display refresh (~5% idle CPU on the
+   GPU/compositor, measured); the ping costs nothing at rest, only when data actually arrives. */
 .conn::before {
   content: '';
   flex: 0 0 auto;
@@ -256,11 +258,16 @@
 }
 .conn.live::before {
   background: var(--health-healthy);
-  animation: heartbeat 2.4s ease-in-out infinite;
 }
-@keyframes heartbeat {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.7); opacity: 0.55; }
+/* One-shot ping on each SSE data event. Finite (no `infinite`): it runs once and stops, so the
+   compositor goes quiet between events. App.tsx re-arms it via class-remove → reflow → class-add. */
+.conn.live.conn-ping::before {
+  animation: conn-ping 0.5s ease-out;
+}
+@keyframes conn-ping {
+  0% { transform: scale(1); opacity: 1; }
+  35% { transform: scale(1.65); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
 }
 /* "connecting…" is a transient state; a slow opacity pulse signals "working on it" instead of
    the alarming bare "offline" look. Progressing amber so it reads neutral-positive (waiting). */
@@ -276,11 +283,11 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
 }
-/* Reduced-motion: keep the color signal but skip the heartbeat scale/opacity — the bordered pill
-   still says "live" without anything moving. */
+/* Reduced-motion: drop the connecting pulse and the live ping; the colored pill and its word still
+   convey the state without motion. */
 @media (prefers-reduced-motion: reduce) {
-  .conn.live::before,
-  .conn.connecting { animation: none; }
+  .conn.connecting,
+  .conn.live.conn-ping::before { animation: none; }
 }
 /* Offline-as-button (cycle 291): when offline, the pill becomes a clickable retry. Inherit the
    .conn shape but add hover/focus affordance so the operator can tell it's actionable. */
