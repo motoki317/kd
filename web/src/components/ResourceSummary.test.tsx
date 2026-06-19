@@ -130,6 +130,83 @@ describe('ResourceSummary container status dots', () => {
     expect([...container.querySelectorAll('.metric-legend-item')].map((e) => e.textContent?.trim())).toEqual(['app', 'sidecar'])
     expect(container.querySelector('.container-card .pod-metrics')).toBeNull()
   })
+  // The legend is also a filter: clicking a container drops it from the gauge, and the fill AND the
+  // ceiling regauge against the rest — bounds SUBTRACTED from the pod total (never re-summed from the
+  // shown), so an unmetered-but-bounded container the breakdown can't see still counts.
+  it('clicking a legend container hides it and regauges the fill and ceiling against the rest', () => {
+    const mi = 1024 * 1024
+    const { container } = render(() => (
+      <ResourceSummary
+        node={{
+          ...podWith([
+            { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500, memLimitBytes: 256 * mi },
+            { name: 'sidecar', ready: true, state: 'Running', cpuLimitMilli: 100, memLimitBytes: 64 * mi },
+          ]),
+          limits: { cpuMilli: 600, memBytes: 320 * mi },
+        }}
+        {...base}
+        usage={{
+          cpuMilli: 300,
+          memBytes: 300 * mi,
+          containers: [
+            { name: 'app', cpuMilli: 250, memBytes: 240 * mi },
+            { name: 'sidecar', cpuMilli: 50, memBytes: 60 * mi },
+          ],
+        }}
+      />
+    ))
+    const cpu = () => container.querySelector('.metric-group .metric-val')?.textContent?.replace(/\s+/g, ' ').trim()
+    expect(cpu()).toBe('300m / 600m') // unfiltered: the full summed limit
+    const sidecar = [...container.querySelectorAll('.metric-legend-item')].find((e) => e.textContent?.trim() === 'sidecar') as HTMLElement
+    expect(sidecar.tagName).toBe('BUTTON') // a filterable legend item is a button
+    sidecar.click()
+    expect(sidecar.classList.contains('legend-off')).toBe(true)
+    expect(sidecar.getAttribute('aria-pressed')).toBe('false')
+    // sidecar's 100m limit and 50m usage lifted out: app alone, 250m of 500m.
+    expect(cpu()).toBe('250m / 500m')
+  })
+  it('refuses to hide the last shown container, keeping the gauge non-empty', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={{
+          ...podWith([
+            { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500 },
+            { name: 'sidecar', ready: true, state: 'Running', cpuLimitMilli: 100 },
+          ]),
+          limits: { cpuMilli: 600 },
+        }}
+        {...base}
+        usage={{ cpuMilli: 300, containers: [{ name: 'app', cpuMilli: 250 }, { name: 'sidecar', cpuMilli: 50 }] }}
+      />
+    ))
+    const item = (n: string) => [...container.querySelectorAll('.metric-legend-item')].find((e) => e.textContent?.trim() === n) as HTMLElement
+    item('sidecar').click()
+    expect(item('sidecar').classList.contains('legend-off')).toBe(true)
+    item('app').click() // hiding the last shown one would empty the gauge → refused
+    expect(item('app').classList.contains('legend-off')).toBe(false)
+    expect(container.querySelector('.metric-group')).toBeTruthy()
+  })
+  it('does not make the synthetic "not yet attributed" segment a toggle', () => {
+    // The rest segment has no bound to subtract, so hiding it would shrink the fill without moving the
+    // ceiling — it stays an inert label while the real containers are buttons.
+    const { container } = render(() => (
+      <ResourceSummary
+        node={{
+          ...podWith([
+            { name: 'app', ready: true, state: 'Running', cpuLimitMilli: 500 },
+            { name: 'sidecar', ready: true, state: 'Running', cpuLimitMilli: 100 },
+          ]),
+          limits: { cpuMilli: 600 },
+        }}
+        {...base}
+        usage={{ cpuMilli: 300, containers: [{ name: 'app', cpuMilli: 200 }, { name: 'sidecar', cpuMilli: 50 }] }}
+      />
+    ))
+    const legend = [...container.querySelectorAll('.metric-legend-item')]
+    expect(legend.map((e) => e.textContent?.trim())).toEqual(['app', 'sidecar', 'not yet attributed'])
+    expect(legend.find((e) => e.textContent?.trim() === 'app')?.tagName).toBe('BUTTON')
+    expect(legend.find((e) => e.textContent?.trim() === 'not yet attributed')?.tagName).toBe('SPAN')
+  })
   it('renders no resource bars on any card — finished or running — now that the gauge is up top', () => {
     const mi = 1024 * 1024
     const { container } = render(() => (

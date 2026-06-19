@@ -1,4 +1,5 @@
 import { For, Show, type JSX } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 import { formatPair, formatQuantity } from '../capacityLayout'
 import type { ResGroupModel } from '../resourceBars'
 
@@ -9,6 +10,17 @@ export interface UsageSegment {
   color: string
   cpuMilli: number
   memBytes: number
+  // This segment's own request/limit contribution. Present when the gauge is filterable (the pod's
+  // by-container split, a workload's by-pod/by-container split): hiding the segment subtracts these
+  // from the gauge's TOTAL bound — never sums the shown, so an unmetered-but-bounded container the
+  // breakdown can't see still counts. Absent on the synthetic "not yet attributed" rest.
+  reqCpu?: number
+  reqMem?: number
+  limCpu?: number
+  limMem?: number
+  // The synthetic rest segment (unattributed usage) — drawn in the stack/legend but not toggleable
+  // (it has no bound to subtract and isn't a real container).
+  synthetic?: boolean
 }
 
 // SEGMENT_PALETTE colours the stacked segments (the rollup has no cards, so position-keyed colours +
@@ -43,9 +55,15 @@ export default function UsageGauges(props: {
   // Extra gauge-scoped controls (the workload rollup's group-by toggle), rendered on the caption row
   // so the control sits next to the text describing what it regroups (Proximity).
   controls?: JSX.Element
+  // The set of segment names currently hidden by the operator (legend toggle). Hidden segments drop
+  // out of the fill stack here; the parent recomputes `groups` so the ceiling drops in lockstep.
+  hidden?: Set<string>
+  // When set, legend items become toggle buttons that hide/show their segment.
+  onToggleSegment?: (name: string) => void
 }) {
+  const shown = () => (props.segments ?? []).filter((s) => !props.hidden?.has(s.name))
   const segsFor = (res: 'cpu' | 'memory') =>
-    (props.segments ?? [])
+    shown()
       .map((s) => ({ name: s.name, color: s.color, value: res === 'cpu' ? s.cpuMilli : s.memBytes }))
       .filter((s) => s.value > 0)
   return (
@@ -135,12 +153,25 @@ export default function UsageGauges(props: {
         <Show when={props.legend && (props.segments?.length ?? 0) > 1}>
           <div class="metric-legend">
             <For each={props.segments}>
-              {(s) => (
-                <span class="metric-legend-item">
-                  <span class="container-swatch" style={{ background: s.color }} />
-                  {s.name}
-                </span>
-              )}
+              {(s) => {
+                const off = () => props.hidden?.has(s.name) ?? false
+                // Toggleable only for real segments — the synthetic "not yet attributed" rest has no
+                // bound to drop, so hiding it would shrink the fill without moving the ceiling.
+                const toggle = () => !!props.onToggleSegment && !s.synthetic
+                return (
+                  <Dynamic
+                    component={toggle() ? 'button' : 'span'}
+                    class="metric-legend-item"
+                    classList={{ 'legend-toggle': toggle(), 'legend-off': off() }}
+                    onClick={toggle() ? () => props.onToggleSegment!(s.name) : undefined}
+                    aria-pressed={toggle() ? !off() : undefined}
+                    title={toggle() ? `${off() ? 'Show' : 'Hide'} ${s.name} — the gauge regauges against the rest` : undefined}
+                  >
+                    <span class="container-swatch" style={{ background: s.color }} />
+                    {s.name}
+                  </Dynamic>
+                )
+              }}
             </For>
           </div>
         </Show>

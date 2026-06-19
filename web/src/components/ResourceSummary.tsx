@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, on, For, Show } from 'solid-js'
 import { healthHint, healthTextColor } from '../health'
 import { kindIcon } from '../icons'
 import { shortNodeName } from '../names'
@@ -45,21 +45,52 @@ function podShareName(pod: string, workload: string): string {
 // undercount its total when a pod reports no per-container split mid-report, so any shortfall past 2%
 // becomes an explicit dim "not yet attributed" segment — the stack must never stretch partial shares
 // to fill the whole width.
-function containerSegments(u: ResourceUsage | undefined): UsageSegment[] {
+type SegBounds = { reqCpu?: number; reqMem?: number; limCpu?: number; limMem?: number }
+function containerSegments(u: ResourceUsage | undefined, bounds?: (name: string) => SegBounds | undefined): UsageSegment[] {
   const breakdown = u?.containers
   if (!u || !breakdown || breakdown.length < 2) return []
-  const segs = breakdown.map((c, i) => ({
+  const segs: UsageSegment[] = breakdown.map((c, i) => ({
     name: c.name,
     color: paletteColor(i),
     cpuMilli: c.cpuMilli ?? 0,
     memBytes: c.memBytes ?? 0,
+    ...bounds?.(c.name),
   }))
   const cpuRest = (u.cpuMilli ?? 0) - segs.reduce((s, x) => s + x.cpuMilli, 0)
   const memRest = (u.memBytes ?? 0) - segs.reduce((s, x) => s + x.memBytes, 0)
   if (cpuRest > (u.cpuMilli ?? 0) * 0.02 || memRest > (u.memBytes ?? 0) * 0.02) {
-    segs.push({ name: 'not yet attributed', color: 'var(--text-dim)', cpuMilli: Math.max(0, cpuRest), memBytes: Math.max(0, memRest) })
+    segs.push({ name: 'not yet attributed', color: 'var(--text-dim)', cpuMilli: Math.max(0, cpuRest), memBytes: Math.max(0, memRest), synthetic: true })
   }
   return segs
+}
+
+// sumBy totals a per-segment number across the hidden segments — the amount to lift OUT of the
+// gauge's existing total when those segments are toggled off.
+function sumBy(segs: UsageSegment[], pick: (s: UsageSegment) => number | undefined): number {
+  return segs.reduce((acc, s) => acc + (pick(s) ?? 0), 0)
+}
+
+// minusUsage / minusBound subtract the hidden segments' share from the gauge's TOTAL usage / bound,
+// rather than re-summing the shown. So the unfiltered gauge stays byte-identical (nothing hidden →
+// nothing subtracted), and a bounded-but-unmetered container the breakdown can't see still counts in
+// the ceiling. A bound the resource never declared stays undefined (subtracting from "unset" is still
+// unset, not 0).
+function minusUsage(total: ResourceUsage | undefined, hidden: UsageSegment[]): ResourceUsage | undefined {
+  if (!total || hidden.length === 0) return total
+  return {
+    ...total,
+    cpuMilli: total.cpuMilli != null ? Math.max(0, total.cpuMilli - sumBy(hidden, (s) => s.cpuMilli)) : total.cpuMilli,
+    memBytes: total.memBytes != null ? Math.max(0, total.memBytes - sumBy(hidden, (s) => s.memBytes)) : total.memBytes,
+  }
+}
+function minusBound(total: Resources | undefined, hidden: UsageSegment[], kind: 'req' | 'lim'): Resources | undefined {
+  if (!total || hidden.length === 0) return total
+  const cpu = kind === 'req' ? (s: UsageSegment) => s.reqCpu : (s: UsageSegment) => s.limCpu
+  const mem = kind === 'req' ? (s: UsageSegment) => s.reqMem : (s: UsageSegment) => s.limMem
+  return {
+    cpuMilli: total.cpuMilli != null ? Math.max(0, total.cpuMilli - sumBy(hidden, cpu)) : total.cpuMilli,
+    memBytes: total.memBytes != null ? Math.max(0, total.memBytes - sumBy(hidden, mem)) : total.memBytes,
+  }
 }
 
 // workloadSegments builds the rolled-up gauge's stack: one share per POD (the default — replicas
@@ -85,6 +116,54 @@ export default function ResourceSummary(props: Props) {
   // Labels are high-signal metadata (app, version, team) the operator otherwise has to dig out of
   // the manifest. Sort by key for a stable, scannable order.
   const labels = createMemo(() => Object.entries(props.node.labels ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+
+  // Legend filter: the segment names the operator has toggled OFF the gauge. Held at the component top
+  // (NOT inside a gauge's render scope) so it survives the per-tick re-render of the node/usage props;
+  // the recompute below reads it. Reset when the inspected resource changes — a different resource's
+  // container/pod names are a different name space.
+  const [hidden, setHidden] = createSignal<Set<string>>(new Set())
+  createEffect(on(() => props.node.id, () => setHidden(new Set<string>())))
+
+  // The Pod gauge's per-container segments, each carrying its container's own req/lim (joined from the
+  // pod's container statuses — app containers only; init containers carry no live usage so never become
+  // a segment) so hiding a container can subtract its bound from the ceiling.
+  const podSegments = createMemo(() =>
+    props.node.kind === 'Pod'
+      ? containerSegments(props.usage, (name) => {
+          const cs = props.node.containerStatuses?.find((s) => s.name === name && !s.init)
+          return cs && { reqCpu: cs.cpuRequestMilli, reqMem: cs.memRequestBytes, limCpu: cs.cpuLimitMilli, limMem: cs.memLimitBytes }
+        })
+      : [],
+  )
+  // The Pod/Node gauge bars, recomputed against the shown subset: lift every hidden container's usage
+  // and bound out of the pod totals before building the bars (a Node never segments, so hidden stays
+  // empty there and the bars are byte-identical to the unfiltered build).
+  const podGroups = createMemo(() => {
+    const hiddenSegs = podSegments().filter((s) => hidden().has(s.name))
+    return drawerResourceBars({
+      isNode: props.node.kind === 'Node',
+      usage: minusUsage(props.usage, hiddenSegs),
+      capacity: props.node.capacityRes,
+      allocatable: props.node.allocatable,
+      request: minusBound(props.node.requests, hiddenSegs, 'req'),
+      limit: minusBound(props.node.limits, hiddenSegs, 'lim'),
+      hostCapacity: props.hostCapacity,
+    })
+  })
+
+  // Toggle a segment off/on. Refuses to hide the last shown real segment: an empty gauge (no fill, no
+  // ceiling) is a dead end, and keeping one shown keeps the recompute well-defined.
+  const toggleSegment = (name: string, segs: UsageSegment[]) =>
+    setHidden((prev) => {
+      const next = new Set<string>(prev)
+      if (next.has(name)) {
+        next.delete(name)
+        return next
+      }
+      if (segs.filter((s) => !s.synthetic && !next.has(s.name)).length <= 1) return prev
+      next.add(name)
+      return next
+    })
 
   return (
     <div class="drawer-summary">
@@ -181,20 +260,15 @@ export default function ResourceSummary(props: Props) {
           it (hatched) on a burst. A multi-container Pod stacks this summed fill BY CONTAINER (one
           colour + a name legend per container — the same stacked-segment language the workload
           rollup uses), so "which container is eating the pod" reads at a glance and the per-card bars
-          below are dropped. A single-container pod (the wire omits its breakdown) stays a plain fill;
-          a Node never segments. */}
+          below are dropped. Clicking a legend container hides it — the fill AND the ceiling regauge
+          against the remaining containers. A single-container pod (the wire omits its breakdown) stays
+          a plain fill; a Node never segments. */}
       <Show when={props.node.kind === 'Node' || props.node.kind === 'Pod'}>
         <UsageGauges
-          groups={drawerResourceBars({
-            isNode: props.node.kind === 'Node',
-            usage: props.usage,
-            capacity: props.node.capacityRes,
-            allocatable: props.node.allocatable,
-            request: props.node.requests,
-            limit: props.node.limits,
-            hostCapacity: props.hostCapacity,
-          })}
-          segments={props.node.kind === 'Pod' ? containerSegments(props.usage) : undefined}
+          groups={podGroups()}
+          segments={props.node.kind === 'Pod' ? podSegments() : undefined}
+          hidden={hidden()}
+          onToggleSegment={(name) => toggleSegment(name, podSegments())}
           legend
         />
       </Show>
