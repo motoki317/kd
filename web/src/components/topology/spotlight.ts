@@ -1,5 +1,6 @@
 import { createMemo } from 'solid-js'
-import { edgeKey, spotlightSubtree } from '../../graphState'
+import { edgeKey, spotlightNeighbors, spotlightSubtree } from '../../graphState'
+import type { GroupBy } from '../../types'
 import { isNodeFaded } from '../../fade'
 import { orderedForNav } from '../../nav'
 import { nodeMatches } from '../../search'
@@ -24,23 +25,47 @@ export function createSpotlight(src: {
   query: () => string
   kindFilter: () => Set<string> | null | undefined
   healthFilter: () => Health | null | undefined
+  // The card currently under the pointer, or null. In the relationship view (drawer closed) this
+  // previews the spotlight on hover; ignored in the Kinds/Nodes views.
+  hoverId: () => string | null
+  // The active layout strategy — decides the spotlight shape: none in 'kind', the full connected
+  // component in 'nodes', the direct (1-hop) neighbours in the relationship view (undefined too).
+  groupBy: () => GroupBy | undefined
 }) {
-  // When a node is selected, walk its connected component (edges treated as undirected) so the
-  // entire relationship tree containing the selection stays lit while everything else fades out —
-  // ArgoCD-style focus on "this resource and what relates to it". Cycle 157 promoted this from
-  // immediate-neighbors to full-component because the auto-fit targets the same set:
-  // clicking a Pod should frame Deployment+ReplicaSet+Pod, not just the parent edge.
+  // The relationship view is the default — undefined falls through to it (matches isRelGrouping in
+  // Topology.tsx). Only this view draws meaningful relationships, so only it carries the hover preview.
+  const relGrouping = () => {
+    const g = src.groupBy()
+    return g !== 'kind' && g !== 'nodes'
+  }
+  // The node the spotlight focuses on: the selection, or — when nothing is selected and the drawer is
+  // closed — the card under the pointer, so hovering previews "what connects to this" without
+  // committing a selection. A selection always wins (|| short-circuits), so hover never fights it.
+  const subjectId = () => src.selectedId() || (relGrouping() ? src.hoverId() : null)
+  // The selection/hover spotlight: the lit node set + edges that everything else fades behind. Its
+  // SHAPE depends on the layout:
+  //   - relationship view → the DIRECT (1-hop) neighbours only (spotlightNeighbors). Focusing a
+  //     resource lights and frames "what connects straight to it", not its whole transitive tree —
+  //     the user's "focus only into the direct related resources". (This reverses cycle 157, which
+  //     had promoted it to the full component; the tighter focus reads better on dense graphs.)
+  //   - Nodes (capacity) view → the full connected component (spotlightSubtree), unchanged: selecting
+  //     a pod still lights its workload's sibling pods across hosts, reachable only through the owner.
+  //   - Kinds view → no spotlight at all (null): the per-kind matrix draws no relationships, so
+  //     fading "related" cards scattered across boxes is noise, not signal (the user's request).
   // Walk only the DISPLAYED relationships (displayEdges, the relFilter projection) — NOT the full edge
-  // set. Following relationships the operator hasn't enabled lit (and framed) nodes they can't even
-  // see — e.g. a Pod dragging in its mounted ConfigMaps when Volumes is off, so the selection-fit
-  // zoomed way out. The spotlight now matches what's on screen. (BFS in spotlightSubtree, graphState.ts.)
+  // set — so the spotlight matches what's on screen rather than dragging in nodes reachable only via a
+  // relationship the operator turned off (e.g. a Pod's mounted ConfigMaps when Volumes is off).
   const related = createMemo(() => {
-    const id = src.selectedId()
+    const gb = src.groupBy()
+    if (gb === 'kind') return null
+    const id = subjectId()
     if (!id) return null
     // A ghost selection (the inspected resource was deleted; the drawer shows its terminal banner)
     // has no card on canvas — a spotlight with no subject would just fade EVERYTHING. No spotlight.
     if (!src.nodes().some((n) => n.id === id)) return null
-    return spotlightSubtree(id, src.displayEdges())
+    return gb === 'nodes'
+      ? spotlightSubtree(id, src.displayEdges())
+      : spotlightNeighbors(id, src.displayEdges())
   })
 
   // Search dims everything that doesn't match the query (by name, kind, label, or image), so a
@@ -133,16 +158,25 @@ export function createSpotlight(src: {
     const r = related()
     return r ? !r.edges.has(edgeKey(e)) : false
   }
-  // Accent only the edges DIRECTLY touching the selected node (one hop in or out) — not every edge
-  // in its connected component (cycle 309). The whole subtree still stays lit (nodeFaded keeps the
-  // component visible and edgeFaded leaves its edges in normal style); the accent is reserved for
-  // "what connects straight to the thing I clicked", so a Pod selection highlights only its own
-  // owner→pod link rather than lighting up the Deployment→RS→all-siblings backbone too.
+  // Accent the edges DIRECTLY touching the spotlight subject (one hop in or out). Since the
+  // relationship-view spotlight is now itself 1-hop, these are exactly the lit edges — the accent and
+  // the un-faded set coincide, so the direct relations read as the focus. Keyed off subjectId, so a
+  // hover preview (no selection) accents the hovered card's links the same way a selection does.
   const edgeAdjacent = (e: KEdge) => {
+    if (matches() || src.healthFilter() || activeKinds()) return false
+    const id = subjectId()
+    return !!id && (e.from === id || e.to === id)
+  }
+  // The animated network-flow trace AMPLIFIES (the "flow-lit" speed-up) only for a committed SELECTION,
+  // never a hover preview. The user flagged the on-select speed-up and asked it stay unchanged, so a
+  // hover must make the edge stand out via the main path's accent (edgeAdjacent above) WITHOUT also
+  // re-triggering the speed-up. Hence selectedId, not subjectId — the one place hover and selection
+  // deliberately diverge.
+  const edgeFlowLit = (e: KEdge) => {
     if (matches() || src.healthFilter() || activeKinds()) return false
     const id = src.selectedId()
     return !!id && (e.from === id || e.to === id)
   }
 
-  return { related, matches, matchOrdered, matchPos, activeKinds, nodeKindOk, nodeFaded, nodeById, edgeFaded, edgeAdjacent }
+  return { related, matches, matchOrdered, matchPos, activeKinds, nodeKindOk, nodeFaded, nodeById, edgeFaded, edgeAdjacent, edgeFlowLit }
 }

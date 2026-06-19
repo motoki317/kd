@@ -40,6 +40,24 @@ export function spotlightSubtree(id: string, edges: KEdge[]): { nodes: Set<strin
   return { nodes, edges: seen }
 }
 
+// spotlightNeighbors lights only the DIRECT relationships of `id`: the node itself, the nodes exactly
+// one edge away (in either direction), and the keys of those one-hop edges. The relationship view's
+// selection/hover spotlight uses this rather than the transitive spotlightSubtree, so focusing a
+// resource frames and lights "what connects straight to it" instead of its whole component — the
+// user's "focus only into the direct related resources". (The Nodes view keeps spotlightSubtree so
+// selecting a pod still lights its workload's siblings, reachable only through the shared owner.)
+export function spotlightNeighbors(id: string, edges: KEdge[]): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>([id])
+  const seen = new Set<string>()
+  for (const e of edges) {
+    if (e.from === id || e.to === id) {
+      seen.add(edgeKey(e))
+      nodes.add(e.from === id ? e.to : e.from)
+    }
+  }
+  return { nodes, edges: seen }
+}
+
 export function fromSnapshot(g: KGraph): GraphState {
   const nodes: Record<string, KNode> = {}
   // Tolerate a missing/null nodes or edges array: a namespace whose resources have no relationships

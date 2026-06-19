@@ -1098,10 +1098,11 @@ describe('Topology', () => {
     expect(onDeselect).toHaveBeenCalledOnce()
   })
 
-  it('lights the selected node\'s full connected component, fading the rest (cycle 157)', () => {
-    // Chain: Deployment → ReplicaSet → Pod (3 cards, 2 ownerReference edges). Plus an unrelated
-    // standalone Pod (id=4). Selecting the Pod in the chain should keep the whole chain lit
-    // (faded=0 for {1,2,3}) and fade only the standalone (faded=1 for {4}).
+  it('lights only the selected node\'s DIRECT neighbours, fading the rest (reverts cycle 157)', () => {
+    // Chain: Deployment(1) → ReplicaSet(2) → Pod(3), plus an unrelated standalone Pod(4). Selecting
+    // the Pod focuses on its DIRECT relations only: the Pod(3) and its owner ReplicaSet(2) stay lit;
+    // the Deployment(1) two hops up AND the standalone(4) both fade. The user's "focus only into the
+    // direct related resources" — not the whole transitive tree (which would leave only {4} faded).
     const chainNodes: KNode[] = [
       { id: '1', kind: 'Deployment', name: 'd', health: 'Healthy' },
       { id: '2', kind: 'ReplicaSet', name: 'rs', health: 'Healthy' },
@@ -1115,8 +1116,8 @@ describe('Topology', () => {
     const { container } = render(() => (
       <Topology nodes={chainNodes} edges={chainEdges} search="" {...base} selectedId="3" />
     ))
-    // Only the standalone Pod (id=4) should be faded; the chain (1,2,3) stays lit.
-    expect(faded(container)).toBe(1)
+    // The Deployment(1) (2 hops) and standalone(4) fade; only Pod(3)+ReplicaSet(2) stay lit.
+    expect(faded(container)).toBe(2)
   })
 
   it('pod→node is never spotlit — not even with the Disruption relationship on (it lives in the Nodes view)', () => {
@@ -1222,9 +1223,11 @@ describe('Topology', () => {
     expect(selected?.textContent).toMatch(/-3$/)
   })
 
-  it('accents only edges directly touching the selected node, not the whole component (cycle 309)', () => {
-    // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod should accent only the
-    // RS→Pod edge (2→3) that touches it — NOT the Deployment→RS edge (1→2) further up the tree.
+  it('accents the direct edge and fades the rest — direct-only focus (cycle 309, tightened)', () => {
+    // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod accents the RS→Pod edge (2→3)
+    // that touches it, and — now that the spotlight is direct-only — FADES the Deployment→RS edge
+    // (1→2) further up the tree (its endpoints are outside the 1-hop focus). The accented edge and the
+    // un-faded edge coincide: the direct relation is the focus.
     const chainNodes: KNode[] = [
       { id: '1', kind: 'Deployment', name: 'd', health: 'Healthy' },
       { id: '2', kind: 'ReplicaSet', name: 'rs', health: 'Healthy' },
@@ -1241,8 +1244,8 @@ describe('Topology', () => {
     expect(adjacent.length).toBe(1)
     // The one accented edge is RS→Pod (touches the selection), confirmed via its <title>.
     expect(adjacent[0].parentElement?.querySelector('title')?.textContent).toContain('owns Pod p')
-    // The rest of the subtree stays lit as context — no edge in the component is faded.
-    expect(container.querySelectorAll('.edges path.faded').length).toBe(0)
+    // The upstream Deployment→RS edge now fades — it's outside the direct (1-hop) focus.
+    expect(container.querySelectorAll('.edges path.faded').length).toBe(1)
   })
 
   it('does NOT call onDeselect when a card click lands on a node (cycle 161)', () => {
@@ -1311,14 +1314,14 @@ describe('Topology', () => {
     const none = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" />)
     expect(none.container.querySelectorAll('.edges > g').length).toBe(0)
     cleanup()
-    // Selected: still no arrows (the selection spotlight lights the related subtree instead). This is
-    // the whole point of the change — arrows stayed tangled across boxes rather than tracing a path.
+    // Selected: still no arrows. With no relationships drawn here, the selection spotlight is also
+    // suppressed — selecting a resource must NOT fade "related" cards scattered across the kind boxes
+    // (nothing on screen connects them, so the dimming reads as noise). The drawer still opens.
     const sel = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" selectedId="1" />
     ))
     expect(sel.container.querySelectorAll('.edges > g').length).toBe(0)
-    // The spotlight still works: selecting the Deployment fades the unrelated api-xyz Pod.
-    expect(sel.container.querySelectorAll('g.node.faded').length).toBeGreaterThan(0)
+    expect(sel.container.querySelectorAll('g.node.faded').length).toBe(0)
   })
 
   it('relationship grouping shows edges even with no selection', () => {
@@ -1332,6 +1335,68 @@ describe('Topology', () => {
       <Topology nodes={nodes} edges={edges} search="web" {...base} groupBy="kind" />
     ))
     expect(faded(container)).toBe(1) // api-xyz is faded
+  })
+
+  // Hover preview spotlight (relationship view, drawer closed): pointing at a card lights its direct
+  // relationships and fades the rest, without selecting — the same focus a selection gives, on hover.
+  const cardByName = (c: Element, re: RegExp): SVGGElement | undefined =>
+    [...c.querySelectorAll('g.node')].find((g) => re.test(g.querySelector('.node-name')?.textContent ?? '')) as
+      | SVGGElement
+      | undefined
+
+  it('hovering a card previews its direct-neighbour spotlight (no selection)', () => {
+    // Ownership edge web(1)→web-abc(2); api-xyz(3) is unrelated. Nothing selected → nothing faded.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    expect(faded(container)).toBe(0)
+    const web = cardByName(container, /^web$/)!
+    fireEvent.pointerEnter(web)
+    // Its direct neighbour (the Pod) stays lit; the unrelated api-xyz Pod fades.
+    expect(faded(container)).toBe(1)
+    fireEvent.pointerLeave(web)
+    // Leaving restores the resting view — hover is a transient preview, it commits nothing.
+    expect(faded(container)).toBe(0)
+  })
+
+  it('an active selection overrides hover — the drawer owns the spotlight', () => {
+    // web(1) selected → its 1-hop spotlight fades the unrelated api-xyz(3). Hovering that faded card
+    // must NOT re-light it: a selection wins, so hover never fights the open drawer.
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="1" />)
+    expect(faded(container)).toBe(1)
+    const api = cardByName(container, /api-xyz/)!
+    expect(api.classList.contains('faded')).toBe(true)
+    fireEvent.pointerEnter(api)
+    expect(faded(container)).toBe(1)
+    expect(api.classList.contains('faded')).toBe(true) // still faded — selection, not hover, rules
+  })
+
+  it('Kind grouping: hovering a card does not spotlight (no relationships drawn)', () => {
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} groupBy="kind" />)
+    fireEvent.pointerEnter(cardByName(container, /^web$/)!)
+    expect(faded(container)).toBe(0) // hover is inert in the Kinds view, like selection
+  })
+
+  it('hover accents a network edge but does NOT amplify its flow — only selection does', () => {
+    // A Service selects a Pod (a network edge → animated flow trace). The flow-lit speed-up is reserved
+    // for a committed selection (the user flagged it and asked it stay unchanged); a hover must accent
+    // the edge (main path .adjacent) WITHOUT re-triggering the speed-up.
+    const netNodes: KNode[] = [
+      { id: 'svc', kind: 'Service', name: 'web', health: 'Healthy' },
+      { id: 'pod', kind: 'Pod', name: 'web-abc', health: 'Healthy' },
+    ]
+    const netEdges: KEdge[] = [{ from: 'svc', to: 'pod', type: 'selects' }]
+    const net = { ...base, relFilter: new Set<RelCategory>(['network']) }
+
+    // Selected: the flow path amplifies (flow-lit) and the main path accents.
+    const sel = render(() => <Topology nodes={netNodes} edges={netEdges} search="" {...net} selectedId="svc" />)
+    expect(sel.container.querySelectorAll('.edges path.flow.flow-lit').length).toBe(1)
+    expect(sel.container.querySelectorAll('.edges path.adjacent').length).toBe(1)
+    cleanup()
+
+    // Hovered (no selection): the main path still accents, but the flow path must NOT be flow-lit.
+    const hov = render(() => <Topology nodes={netNodes} edges={netEdges} search="" {...net} />)
+    fireEvent.pointerEnter(cardByName(hov.container, /^web$/)!) // the Service card
+    expect(hov.container.querySelectorAll('.edges path.adjacent').length).toBe(1) // accents on hover
+    expect(hov.container.querySelectorAll('.edges path.flow.flow-lit').length).toBe(0) // but no speed-up
   })
 
   // Edge-hover endpoint halo (cycle 330/R4): hovering an edge marks both its endpoint cards .target.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyPatch, edgeKey, fromSnapshot, spotlightSubtree } from './graphState'
+import { applyPatch, edgeKey, fromSnapshot, spotlightNeighbors, spotlightSubtree } from './graphState'
 import type { KEdge, KGraph, Patch } from './types'
 
 const snapshot: KGraph = {
@@ -97,5 +97,32 @@ describe('spotlightSubtree', () => {
     const r = spotlightSubtree('a', edges)
     expect([...r.nodes].sort()).toEqual(['a', 'b', 'c'])
     expect(r.edges.size).toBe(3)
+  })
+})
+
+describe('spotlightNeighbors', () => {
+  const e = (from: string, to: string, type = 'ownerReference'): KEdge => ({ from, to, type } as KEdge)
+
+  it('lights only the one-hop neighbours, not the transitive component', () => {
+    // dep → rs → pod. Selecting the pod lights the pod and its DIRECT neighbour rs, but NOT dep
+    // (two hops up) — the difference from spotlightSubtree, which would walk the whole chain.
+    const edges = [e('dep', 'rs'), e('rs', 'pod')]
+    const r = spotlightNeighbors('pod', edges)
+    expect([...r.nodes].sort()).toEqual(['pod', 'rs'])
+    expect(r.edges.size).toBe(1) // only rs→pod
+  })
+
+  it('follows edges in either direction (incoming and outgoing)', () => {
+    // pod is owned by rs (incoming) and selected by svc (outgoing) — both direct, both lit.
+    const edges = [e('rs', 'pod'), e('svc', 'pod', 'selects'), e('rs', 'other')]
+    const r = spotlightNeighbors('pod', edges)
+    expect([...r.nodes].sort()).toEqual(['pod', 'rs', 'svc'])
+    expect(r.edges.size).toBe(2) // rs→pod and svc→pod; rs→other is not adjacent to pod
+  })
+
+  it('returns just the node itself when it has no edges', () => {
+    const r = spotlightNeighbors('lonely', [e('a', 'b')])
+    expect([...r.nodes]).toEqual(['lonely'])
+    expect(r.edges.size).toBe(0)
   })
 })

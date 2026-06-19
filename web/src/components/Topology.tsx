@@ -26,6 +26,12 @@ import type { Capacity, Health, KEdge, KNode, RelCategory } from '../types'
 const EMPTY_RELS: ReadonlySet<RelCategory> = new Set()
 const EMPTY_IDS: ReadonlySet<string> = new Set()
 
+// Network edge types (routes/selects/governs) — the links over which traffic actually flows. The
+// animated data-flow trace rides ONLY these, so the cybernetic motion visualizes real network data
+// movement; ownership stays a static structure drawn with plain solid arrows. Sourced from the
+// 'network' relationship category so it never drifts from relationships.ts.
+const NETWORK_EDGE_TYPES = new Set(REL_CATEGORIES.find((c) => c.id === 'network')?.edges ?? [])
+
 // The group-by options live with the toolbar's segmented control (topology/Toolbar.tsx); re-exported
 // here so App's keyboard shortcuts (1–3), urlState, and the help overlay keep one import path.
 export { GROUP_OPTIONS } from './topology/Toolbar'
@@ -343,9 +349,13 @@ export default function Topology(props: Props) {
   // Search query accessors: the query is owned by the parent so it resets on namespace/view change.
   const query = () => props.search
   const setQuery = (q: string) => props.onSearch(q)
+  // The card currently under the pointer (relationship view). Feeds the spotlight as a hover PREVIEW —
+  // hovering a card with the drawer closed fades to its direct neighbours, without selecting. Declared
+  // before createSpotlight: its `related` memo runs eagerly on creation and reads hoverId() (TDZ).
+  const [hoveredNodeId, setHoveredNodeId] = createSignal<string | null>(null)
   // Selection spotlight + search/kind-filter fade composition (see topology/spotlight.ts — the
   // fade precedence order lives there and is load-bearing).
-  const { related, matches, matchOrdered, matchPos, activeKinds, nodeKindOk, nodeFaded, nodeById, edgeFaded, edgeAdjacent } = createSpotlight({
+  const { related, matches, matchOrdered, matchPos, activeKinds, nodeKindOk, nodeFaded, nodeById, edgeFaded, edgeAdjacent, edgeFlowLit } = createSpotlight({
     nodes: () => props.nodes,
     visibleNodes,
     displayEdges,
@@ -354,6 +364,8 @@ export default function Topology(props: Props) {
     query,
     kindFilter: () => props.kindFilter,
     healthFilter: () => props.healthFilter,
+    hoverId: () => hoveredNodeId(),
+    groupBy: () => props.groupBy,
   })
   // The Nodes (capacity) view draws ONLY cluster Nodes + this namespace's Pods, sourced from the
   // cluster-wide capacity feed (props.capacity), NOT props.nodes' full per-kind inventory. Every count
@@ -473,10 +485,10 @@ export default function Topology(props: Props) {
   }
   // Kind grouping draws NO arrows at all: the cross-kind backbone fans across the whole matrix with
   // no meaningful routing (cards sit in per-kind boxes, not along their links), so the lines are pure
-  // noise — even on selection, where they tangled across boxes rather than tracing a path. The
-  // selection spotlight (related(), nodeFaded) still lights the connected subtree, which carries the
-  // "what connects to THIS" answer without the clutter. Every other view keeps its edges (their
-  // layouts route them meaningfully along the backbone).
+  // noise — even on selection, where they tangled across boxes rather than tracing a path. With no
+  // relationships drawn, the selection spotlight is also suppressed here (related() returns null for
+  // 'kind' — see spotlight.ts): fading "related" cards scattered across the boxes signals nothing the
+  // operator can follow. Every other view keeps its edges (their layouts route them meaningfully).
   const renderedEdges = createMemo(() => (props.groupBy === 'kind' ? [] : layout().edges))
 
   const [scale, setScale] = createSignal(1)
@@ -1441,6 +1453,18 @@ export default function Topology(props: Props) {
                     stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
                     marker-end="url(#arrow)"
                   />
+                  {/* Blueprint data-flow trace: a cyan dash that travels NETWORK edges (Ingress→
+                      Service→Pod traffic, NetworkPolicy) so the motion visualizes actual data flowing
+                      over the link. Ownership keeps plain solid arrows (structure, not traffic) — that
+                      kept the dense backbone from shimmering. Brighter/faster on edges adjacent to the
+                      selection; stilled under reduced-motion. */}
+                  <Show when={NETWORK_EDGE_TYPES.has(e.type)}>
+                    <path
+                      classList={{ flow: true, faded: edgeFaded(e), 'flow-lit': edgeFlowLit(e) }}
+                      d={edgePath(e.points)}
+                      fill="none"
+                    />
+                  </Show>
                 </g>
               )}
             </For>
@@ -1492,17 +1516,24 @@ export default function Topology(props: Props) {
                     clearTimeout(cardClickTimer)
                     props.onSelect(n.id)
                   }}
+                  /* Hover preview spotlight (relationship view, drawer closed): point at a card and
+                     its direct relationships light while the rest fades — a no-commit preview of the
+                     selection focus. The spotlight ignores hover while a selection owns the view, so
+                     setting the id unconditionally is safe (subjectId gates it). No camera move. */
+                  onPointerEnter={() => setHoveredNodeId(n.id)}
+                  onPointerLeave={() => setHoveredNodeId((cur) => (cur === n.id ? null : cur))}
                 >
                   {/* Hover tooltip: a compact "everything on the card + a little more" view, so
                       a tightly-truncated card in a zoomed-out graph still reveals the full name,
                       age, host (pods), and restart count without selecting it. */}
                   <title>{cardTitle(n, now())}</title>
-                  <rect class="node-bg" width={n.width} height={n.height} rx="9" />
-                  {/* Cycle 163: a faint white-to-transparent strip across the top of the card
-                      gives the surface a subtle "glass tile" highlight (more pronounced on the
-                      tinted non-healthy cards). Drawn at 1.5px below the bg's top border so it
-                      tucks inside the rounded corners. */}
-                  <rect class="node-glaze" x="1.5" y="1.5" width={n.width - 3} height={Math.min(20, n.height / 3)} rx="7.5" />
+                  {/* Blueprint card (theme overhaul): a notched "tech panel" — sharp corners with
+                      the top-right chamfered, the cut traced in accent (.node-notch), and corner
+                      brackets (.node-bracket) that light up on selection. Health stays carried by
+                      the body border + tint (see CSS), so the schematic framing never bears status. */}
+                  <path class="node-bg" d={`M0 0 H${n.width - 10} L${n.width} 10 V${n.height} H0 Z`} />
+                  <path class="node-notch" d={`M${n.width - 10} 0 L${n.width} 10`} />
+                  <path class="node-bracket" d={`M0 12 L0 0 L12 0 M0 ${n.height - 12} L0 ${n.height} L12 ${n.height} M${n.width - 12} ${n.height} L${n.width} ${n.height} L${n.width} ${n.height - 12}`} />
                   {/* Icon-forward card (cycle 126): a 28×28 kind silhouette anchors the left column
                       and a small uppercase kind label sits under it; the right column lays name,
                       status and the restart/age badge on their own rows so nothing competes for
@@ -1579,7 +1610,7 @@ export default function Topology(props: Props) {
                           ? `Show ${meta().hidden.length} fewer ${pluralizeKind(meta().groupKind, meta().hidden.length)}`
                           : `Show ${meta().hidden.length} more ${pluralizeKind(meta().groupKind, meta().hidden.length)}`}
                       </title>
-                      <rect class="collapse-pill-bg" width={n.width} height={n.height} rx="9" />
+                      <path class="collapse-pill-bg" d={`M0 0 H${n.width - 10} L${n.width} 10 V${n.height} H0 Z`} />
                       <Show
                         when={!meta().expanded}
                         fallback={
