@@ -2,7 +2,7 @@ kd has been deployed as {{ include "kd.fullname" . }} in namespace {{ .Release.N
 
 {{- if .Values.ingressRoute.enabled }}
 
-Reachable via the Traefik IngressRoute at: https://{{ .Values.ingressRoute.host }}
+Reachable via the Traefik IngressRoute at: http{{ if not (kindIs "invalid" .Values.ingressRoute.tls) }}s{{ end }}://{{ .Values.ingressRoute.host }}
 {{- else if .Values.ingress.enabled }}
 
 Reachable via Ingress at:

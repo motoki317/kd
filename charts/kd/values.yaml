@@ -143,16 +143,19 @@ ingress:
 ingressRoute:
   # -- Create a Traefik IngressRoute (instead of a standard Ingress).
   enabled: false # @schema type:boolean
-  # -- Traefik entryPoints to bind.
+  # -- Traefik entryPoints to bind. Defaults to the plaintext `web` entrypoint, matching the
+  # TLS-off default below; switch to `websecure` when you opt into TLS.
   entryPoints:
-    - websecure
+    - web
   # -- Host matched by the route's Rule.
   host: kd.example.com
   # -- Middlewares applied to the route (e.g. the forward-auth middleware that emits the
   # identity header). Each item is {name, namespace}.
   middlewares: [] # @schema type:array; item:object
-  # -- TLS block. Empty object enables TLS with the default resolver; set to null to disable.
-  tls: {} # @schema type:[object, null]
+  # -- TLS block. Off by default (TLS is opt-in — most edges terminate TLS upstream). Set to an
+  # empty object `{}` to enable TLS with Traefik's default certificate/TLS store, or populate a
+  # Traefik TLS spec (e.g. `certResolver`); pair either with `entryPoints: [websecure]`.
+  tls: # @schema type:[object, null]
 
 # -- Compute resources for the kd container. Sized to kd's measured footprint after the
 # informer-cache trimming + GOGC tuning (~90Mi steady, ~120Mi under heavy concurrent load on a

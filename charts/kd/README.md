@@ -119,6 +119,18 @@ header. Set `config.groupsHeader` to enable group-based policy.
         namespace: auth
   ```
 
+  The route binds the plaintext `web` entrypoint and serves no TLS by default — most edges
+  terminate TLS upstream. To terminate TLS at Traefik instead, switch the entrypoint and set the
+  `tls` block:
+
+  ```yaml
+  ingressRoute:
+    enabled: true
+    host: kd.example.com
+    entryPoints: [websecure]
+    tls: {} # Traefik's default certificate/TLS store; or set e.g. certResolver here.
+  ```
+
 ## Narrowing the ClusterRole
 
 The default grants wildcard read so dynamic informers can discover CRDs at runtime — the same model
