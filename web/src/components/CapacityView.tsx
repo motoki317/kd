@@ -134,14 +134,13 @@ export default function CapacityView(props: {
                   : undefined
               }
             >
-              <rect
+              {/* Opaque notched panel — matches the relationship/kind cards (Repetition): the same
+                  top-right chamfer + an opaque surface so the Node box reads as a drafted panel, not
+                  a transparent frame letting the grid bleed through. */}
+              <path
                 class="cap-node-frame"
                 classList={{ clickable: expandable, expanded: row.expanded, selected: !!row.node && row.node.id === props.selectedId }}
-                x={fx}
-                y={fy}
-                width={fw}
-                height={fh}
-                rx="8"
+                d={`M${fx} ${fy} H${fx + fw - 10} L${fx + fw} ${fy + 10} V${fy + fh} H${fx} Z`}
               />
               {/* Node name packed into the card's top-left (no caret); CAP_HEADER_INSET=26 in
                   layout.ts reserves the matching left offset + card width so it never overflows. */}

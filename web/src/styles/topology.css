@@ -18,14 +18,17 @@
   position: relative;
   min-width: 0;
   background-color: var(--bg);
-  /* Two stacked layers (cycle 130): the dot grid for spatial reference, plus a faint elliptical
-     sheen centered slightly above center — gives the canvas a quiet "stage" feel so the resource
-     cards read as elements arranged on a surface, not floating in fog. The sheen is intentionally
-     subtle (~7% of the surface color) so it does not compete with the cards themselves. */
+  /* Blueprint grid (theme overhaul): an engineering field — fine minor lines every 26px with a
+     heavier major line every 130px (5×), both drawn in faint cyan off the accent. Replaces the old
+     dot grid so the canvas reads as a schematic the cards are drafted onto. A cyan sheen above
+     center keeps the quiet "stage" lift so cards sit on a surface, not in fog. */
   background-image:
-    radial-gradient(var(--border) 1px, transparent 1px),
-    radial-gradient(ellipse 75% 55% at 50% 35%, color-mix(in srgb, var(--surface) 50%, transparent), transparent 75%);
-  background-size: 22px 22px, 100% 100%;
+    linear-gradient(var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    radial-gradient(ellipse 72% 52% at 50% 35%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 72%);
+  background-size: 26px 26px, 26px 26px, 130px 130px, 130px 130px, 100% 100%;
 }
 .topology-svg {
   width: 100%;
@@ -759,17 +762,17 @@
      "I'm focused" cue rather than just an outline change. */
   filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.14));
 }
-/* In dark mode, a black drop-shadow on a dark surface is invisible — drop it for the resting state
-   (the colored border carries the card edge already) and switch hover/selected to a faint white
-   glow so the lift still reads. */
+/* In the holo-grid (dark) a black drop-shadow on the dark ground is invisible — drop it for the
+   resting state (the colored border carries the card edge already) and switch hover/selected to a
+   cyan glow so the lift reads as the panel powering up, not just an outline change. */
 [data-theme='dark'] .node {
   filter: none;
 }
 [data-theme='dark'] .node:hover {
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.12));
+  filter: drop-shadow(0 0 8px var(--glow-soft));
 }
 [data-theme='dark'] .node.selected {
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.16));
+  filter: drop-shadow(0 0 10px var(--glow));
 }
 /* Selection focus: fade everything not connected to the selected node, and light up the edges
    that are, so a resource's relationships pop out of a dense graph. */
@@ -885,6 +888,51 @@
 .edges path:not(.owner).faded {
   opacity: 0.06;
 }
+/* Blueprint live-edge data-flow (theme overhaul): a travelling cyan dash laid over NETWORK edges
+   (routes/selects/governs) so traffic links read as LIVE — data physically moving Ingress→Service→
+   Pod — while the ownership backbone stays a still, solid structure. Quiet at rest; brighter and
+   faster on edges adjacent to the selection, so picking a card lights up its connections. The flow
+   path carries no .owner class, so it's a :not(.owner) match — defined after that opacity rule to win
+   on equal specificity; stilled entirely under reduced-motion. */
+.edges path.flow {
+  stroke: var(--flow);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 15;
+  opacity: 0.5;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--glow-soft));
+  animation: edge-flow 1.5s linear infinite;
+}
+.edges path.flow.flow-lit {
+  opacity: 0.95;
+  stroke-width: 2;
+  stroke-dasharray: 2 11;
+  filter: drop-shadow(0 0 3px var(--glow));
+  animation-duration: 0.9s;
+}
+.edges path.flow.faded { opacity: 0.05; }
+@keyframes edge-flow {
+  to { stroke-dashoffset: -160; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edges path.flow { animation: none; opacity: 0.32; }
+  .edges path.flow.flow-lit { animation: none; opacity: 0.7; }
+}
+/* One outline colour per card. --card-border is the SINGLE source for every stroke on a card — the
+   body border, the chamfer notch, and the corner brackets all read it — so the whole outline is one
+   uniform colour instead of a health body with cyan corners (the reported "each corner is a different
+   colour"). It carries health at rest and flips to the accent on hover/selection. Ordering is
+   load-bearing: :hover sits BEFORE the health classes so a hovered non-healthy card keeps its status
+   colour, and .target/.selected sit AFTER them so a selection overrides health with the accent. */
+.node { --card-border: color-mix(in srgb, var(--health-healthy) 55%, var(--border-strong)); }
+.node:hover { --card-border: var(--accent); }
+.node.h-unknown { --card-border: var(--health-unknown); }
+.node.h-suspended { --card-border: var(--health-suspended); }
+.node.h-progressing { --card-border: var(--health-progressing); }
+.node.h-degraded { --card-border: var(--health-degraded); }
+.node.target { --card-border: var(--accent); }
+.node.selected { --card-border: var(--accent); }
 /* Card background carries health: every state gets a colored border + matching pastel tint so the
    whole card body reads as the status indicator. Cycle 126 dropped the inset stripe in favor of
    this (frees the left padding for the larger icon, and the colored body is far more visible at
@@ -892,15 +940,11 @@
    pops out of a wall of green; selection overrides with the accent border. */
 .node-bg {
   fill: color-mix(in srgb, var(--health-healthy) 5%, var(--surface));
-  stroke: color-mix(in srgb, var(--health-healthy) 55%, var(--border-strong));
+  stroke: var(--card-border);
   stroke-width: 1.5;
   transition: stroke 0.1s, stroke-width 0.1s, fill 0.1s;
 }
-.node:hover .node-bg {
-  stroke: var(--accent);
-}
 .node.h-degraded .node-bg {
-  stroke: var(--health-degraded);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-degraded) 9%, var(--surface));
   /* Soft health-tinted halo (cycle 136): only non-healthy states wear it, so trouble cards
@@ -910,31 +954,26 @@
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--health-degraded) 38%, transparent));
 }
 .node.h-progressing .node-bg {
-  stroke: var(--health-progressing);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-progressing) 8%, var(--surface));
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-progressing) 28%, transparent));
 }
 .node.h-suspended .node-bg {
-  stroke: var(--health-suspended);
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-suspended) 9%, var(--surface));
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--health-suspended) 28%, transparent));
 }
 .node.h-unknown .node-bg {
-  stroke: var(--health-unknown);
   stroke-width: 1.5;
   fill: color-mix(in srgb, var(--health-unknown) 6%, var(--surface));
 }
 .node.selected .node-bg {
-  stroke: var(--accent);
   stroke-width: 2.5;
 }
 /* Edge-hover endpoint halo (cycle 330/R4): an accent ring + glow distinct from the resting health
    tint, so hovering an edge makes "these two cards" pop even when they're far apart. Transient, so it
    sits below .selected in the cascade and a selected endpoint keeps its selection look. */
 .node.target .node-bg {
-  stroke: var(--accent);
   stroke-width: 2.5;
   filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 50%, transparent));
 }
@@ -943,19 +982,33 @@
 .edge-hit {
   pointer-events: stroke;
 }
-/* Top-of-card glaze (cycle 163): a faint linear-fade rect that mimics a soft inset highlight on
-   the upper edge — gives cards a tactile "tile" feel. Strong-but-faint over the surface; transparent
-   on the bottom so it only reads at the top. SVG can't do linear-gradient via attribute, but we can
-   use the rounded rect with a gradient fill defined in <defs> globally. Falling back to an opacity
-   trick via fill: white at low alpha + only the top — by limiting height to ~⅓ of the card the
-   highlight naturally fades off at the bottom edge of its own rect. */
-.node-glaze {
-  fill: white;
-  opacity: 0.16;
+/* Blueprint notch + corner brackets (theme overhaul). The chamfered top-right cut and the corner
+   brackets both read --card-border, so they're the SAME colour as the body border (one uniform
+   outline, never a cyan corner on a health body). Brackets stay muted at rest — a wall of cards must
+   read calm — and the cut + brackets light up (full opacity, a matching glow) when the card is
+   hovered or selected. Colour is carried entirely by --card-border; these only modulate opacity. */
+.node-notch {
+  fill: none;
+  stroke: var(--card-border);
+  stroke-width: 1.4;
+  opacity: 0.65;
   pointer-events: none;
+  transition: opacity 0.12s;
 }
-[data-theme='dark'] .node-glaze {
-  opacity: 0.08; /* gentler in dark mode so the highlight doesn't compete with the surface */
+.node-bracket {
+  fill: none;
+  stroke: var(--card-border);
+  stroke-width: 1.4;
+  opacity: 0.3;
+  pointer-events: none;
+  transition: opacity 0.12s, filter 0.12s;
+}
+.node:hover .node-bracket { opacity: 0.6; }
+.node:hover .node-notch { opacity: 0.9; }
+.node.selected .node-notch { opacity: 1; }
+.node.selected .node-bracket {
+  opacity: 1;
+  filter: drop-shadow(0 0 3px var(--glow));
 }
 /* Kind icon: monochrome in the dim text color so it never competes with the health-tinted body
    (the body carries status; the icon carries type). Official glyphs (icons.tsx) self-declare

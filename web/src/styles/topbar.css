@@ -7,7 +7,10 @@
   gap: 16px;
   padding: 0 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  /* Blueprint keyline: the chrome edges are drawn in a cyan-bled border with a hairline underglow,
+     so the frame reads as part of the schematic rather than a plain divider. */
+  border-bottom: 1px solid var(--keyline);
+  box-shadow: 0 1px 0 var(--glow-soft);
   z-index: 5;
   position: relative;
 }
@@ -161,7 +164,7 @@
   box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .group-seg button.active:hover {
-  background: color-mix(in srgb, var(--accent) 92%, white);
+  background: var(--accent-hover);
 }
 .group-seg button:focus-visible {
   outline: 2px solid var(--accent);

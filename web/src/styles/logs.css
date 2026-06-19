@@ -22,7 +22,7 @@
   transition: background-color 0.12s, box-shadow 0.12s;
 }
 .logs-jump:hover {
-  background: color-mix(in srgb, var(--accent) 90%, white);
+  background: var(--accent-hover);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 .logs-jump:focus-visible {
@@ -175,8 +175,8 @@
 .logs-wrap.active:hover,
 .gauge-group-btn.active:hover {
   color: var(--on-accent);
-  background: color-mix(in srgb, var(--accent) 90%, white);
-  border-color: color-mix(in srgb, var(--accent) 90%, white);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 .logs-filter {
   border: 1px solid var(--border);

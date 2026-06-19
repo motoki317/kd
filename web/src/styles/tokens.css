@@ -1,24 +1,54 @@
+/* ============================================================================
+   Blueprint theme tokens. kd is drawn like an engineering schematic: a cool
+   technical ground, a precise grid, and an electric-cyan accent that lights the
+   live signals (focus, selection, data-flow on edges). Light reads as
+   "blueprint on paper", dark as a "holo-grid". Health hues stay vivid and
+   semantic — the accent never bears status, so cyan can sit near the greens/
+   blues without being mistaken for one (context disambiguates: health lives on
+   cards, cyan lives on chrome).
+   ========================================================================== */
 :root {
-  --bg: #f5f6f8;
+  /* Cool blueprint paper. The ground carries a faint cyan cast; panels stay
+     clean white so DATA reads crisp on top of the tinted field + grid. */
+  --bg: #e9f0f4;
   --surface: #ffffff;
-  --surface-2: #fbfbfd;
-  --border: #e3e6ea;
-  --border-strong: #cfd4da;
-  --text: #1e2430;
-  --text-dim: #6b7280;
-  --accent: #2f6feb;
-  /* Text/icon color on an --accent fill (active segment buttons, the "↓ Latest" pill). White clears
-     the 4.5:1 text bar on the light theme's #2f6feb but measures 3.35:1 on the dark theme's lighter
-     #4d8bf0, so the dark palette flips this to near-black instead of darkening the accent itself
-     (focus rings and edge highlights want the lighter accent on dark). */
-  --on-accent: #fff;
-  --edge-color: #b6bdc7;
+  --surface-2: #eef5f8;
+  --border: #cddee6;
+  --border-strong: #a7c2cc;
+  --text: #102028;
+  --text-dim: #54707b;
+
+  /* TWO cyans, by contrast role (mirrors the health text/graphics split below):
+     --accent is the interactive fill — deep enough that white (--on-accent)
+     clears the 4.5:1 text bar on it (≈5:1 here). --accent-bright is the vivid
+     electric cyan for GRAPHICS only (grid majors, edge traces, glows, brackets,
+     focus rings) where the 3:1 graphics bar applies, so it can stay luminous. */
+  --accent: #0a7689;
+  --accent-bright: #07a8c4;
+  --on-accent: #ffffff;
+  /* Hover fill for an accent-filled button (active segment, jump-to-latest, find-match). It must
+     DARKEN in light — lightening the deep cyan toward white dropped white-on-accent text under the
+     4.5:1 bar (~4.37:1). Darkening raises the contrast instead and still reads as a pressed affordance.
+     Dark theme flips it to brighter (below), the same logic --on-accent follows. */
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, #000);
+  --edge-color: #a7c2cd;
+
+  /* Treatment tokens (Blueprint signature). Defined off the accents so the
+     whole language re-tints from two values. */
+  --grid-minor: color-mix(in srgb, var(--accent) 8%, transparent);
+  --grid-major: color-mix(in srgb, var(--accent) 16%, transparent);
+  --glow: color-mix(in srgb, var(--accent-bright) 50%, transparent);
+  --glow-soft: color-mix(in srgb, var(--accent-bright) 22%, transparent);
+  --flow: var(--accent-bright);
+  /* Cyan-leaning keyline for panel edges — a hair of accent bled into the
+     border so chrome reads as drawn, not just bordered. */
+  --keyline: color-mix(in srgb, var(--accent) 28%, var(--border));
 
   --health-healthy: #18be94;
   --health-progressing: #2f86eb;
   --health-degraded: #e5544b;
   --health-suspended: #f0a92a;
-  --health-unknown: #9aa5b1;
+  --health-unknown: #93a3ac;
   /* Caution colour used as TEXT (not a border/fill/dot). The vivid --health-suspended amber reads on a
      dark surface but drops to ~1.9:1 on the light theme's near-white surfaces, so caution TEXT uses
      this darker amber in light mode (≥4.5:1) while borders/fills/dots keep the vivid hue. */
@@ -36,8 +66,7 @@
 
   /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
-     glance. Distinct enough from --health-progressing (blue) to not
-     trigger a status read; close enough to the K8s brand to feel canonical. Only affects the
+     glance. Indigo — clearly off the cyan accent and the health greens/blues. Only affects the
      icon and the small kind label — never the health border/tint. */
   --pod-accent: #5b6cf0;
 
@@ -57,9 +86,13 @@
   --fs-title: 17px;
 
   /* Corners — near-flat. kd is an instrument, not a toy: 2px takes the burr off small controls,
-     4px off panels/cards. No pills, no capsules; circles are reserved for actual dots. */
+     4px off panels/cards. The Blueprint card/panel notch (a chamfered corner cut, not a round) is
+     drawn on top of these via clip-path — hard-edged, so it keeps the "no pills, no capsules" rule.
+     Circles stay reserved for actual status dots. */
   --radius-s: 2px;
   --radius-m: 4px;
+  /* The notched "tech panel" corner is a 10px chamfer cut directly into the card/panel SVG path
+     geometry (Topology.tsx / CapacityView.tsx) — a layout constant, not a paintable token. */
 
   --topbar-h: 52px;
   --sidebar-w: 230px;
@@ -71,22 +104,28 @@
   color: var(--text);
 }
 
-/* Dark palette: only the neutrals flip; health hues stay vivid (and node tints adapt automatically
-   since they color-mix with --surface). The log pane is dark in both. Keyed off [data-theme='dark']
-   — never prefers-color-scheme directly — because theme.ts resolves the light/dark/system preference
-   to a concrete value and stamps it on <html data-theme>, so 'system' (OS-tracking) and the explicit
-   pins share this one rule. */
+/* Holo-grid (dark): a near-black blue-tinted ground with a brighter cyan accent
+   the dark field can carry. Only the neutrals + accent flip; health hues stay
+   vivid (and node tints adapt automatically since they color-mix with --surface).
+   The log pane is dark in both. Keyed off [data-theme='dark'] — never
+   prefers-color-scheme directly — because theme.ts resolves the light/dark/system
+   preference to a concrete value and stamps it on <html data-theme>, so 'system'
+   (OS-tracking) and the explicit pins share this one rule. */
 :root[data-theme='dark'] {
-  --bg: #0f1115;
-  --surface: #171a21;
-  --surface-2: #1d212a;
-  --border: #2a2f3a;
-  --border-strong: #3d4452;
-  --text: #e4e8ef;
-  --text-dim: #98a2b3;
-  --accent: #4d8bf0;
-  --on-accent: #0f1115; /* 5.6:1 on #4d8bf0; white is only 3.35:1 */
-  --edge-color: #3f4654;
+  --bg: #060c11;
+  --surface: #0b141b;
+  --surface-2: #102029;
+  --border: #1c333f;
+  --border-strong: #2c4f5e;
+  --text: #d4e7ee;
+  --text-dim: #7a9aa6;
+  --accent: #2fcfe4;
+  --accent-bright: #45e2f5;
+  --on-accent: #04141a; /* near-black: high contrast on the bright cyan; white would glare */
+  /* Brighter on hover (the inverse of light): the near-black --on-accent text gains contrast as the
+     cyan brightens, so the lift reads without dropping legibility. */
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff);
+  --edge-color: #21424f;
   --pod-accent: #8593f5;
   --caution-text: #f0a92a; /* on dark, the vivid hues read fine as text */
   --degraded-text: #e5544b;

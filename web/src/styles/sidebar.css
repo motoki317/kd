@@ -2,7 +2,7 @@
 .sidebar {
   width: var(--sidebar-w);
   flex: 0 0 auto;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--keyline);
   background: var(--surface);
   display: flex;
   flex-direction: column;
@@ -16,11 +16,13 @@
   gap: 6px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
+  /* Blueprint caps label: wider tracking + a cyan cast give section headers a drafted "legend"
+     feel; the hierarchy comes from tracking, not smallness. */
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-dim));
   font-weight: 600;
   padding: 4px 4px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--keyline);
   margin-bottom: 2px;
 }
 .ns-trouble {
@@ -111,9 +113,15 @@
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+/* Active namespace: a faint cyan wash so the selected row reads as a lit panel at a glance, not
+   just a left tick. */
+.ns-list button.active {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
 /* Active-row left accent (cycle 134): a 3px vertical bar at the left edge so the active namespace
    reads at a peripheral glance without needing to track the row tint. Tied to ::before so it
-   layers under the button content cleanly. */
+   layers under the button content cleanly. Blueprint: the bar carries a cyan glow so it reads as
+   the active circuit line. */
 .ns-list button.active::before {
   content: '';
   position: absolute;
@@ -123,6 +131,7 @@
   width: 3px;
   border-radius: 0;
   background: var(--accent);
+  box-shadow: 0 0 6px var(--glow);
 }
 .ns-name {
   flex: 1;

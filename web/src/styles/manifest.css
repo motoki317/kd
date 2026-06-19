@@ -76,7 +76,7 @@
   color: var(--on-accent);
 }
 .manifest-format button.active:hover {
-  background: color-mix(in srgb, var(--accent) 90%, white);
+  background: var(--accent-hover);
 }
 .manifest-format button:focus-visible {
   outline: 2px solid var(--accent);

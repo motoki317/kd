@@ -7,7 +7,10 @@
      laptops / half-screen windows. Below ~640px the full-width overlay (layout.css) overrides this. */
   max-width: calc(100% - var(--canvas-min));
   flex: 0 0 auto;
-  border-left: 1px solid var(--border);
+  /* Blueprint keyline: the drawer reads as a panel snapped onto the schematic — a cyan-bled left
+     edge with a hairline glow, matching the topbar/sidebar frame. */
+  border-left: 1px solid var(--keyline);
+  box-shadow: -1px 0 0 var(--glow-soft);
   background: var(--surface);
   display: flex;
   flex-direction: column;
@@ -105,7 +108,7 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--keyline);
   /* Anchor for the absolutely-overlaid action cluster (see .drawer-actions). */
   position: relative;
 }
@@ -344,6 +347,8 @@
   background: var(--accent);
   border-radius: 4px 0 0 4px;
   transition: width 0.2s;
+  /* Blueprint: a faint cyan bloom so the live-usage bar reads as a lit gauge, not a flat fill. */
+  box-shadow: 0 0 5px var(--glow-soft);
 }
 /* Multi-container fill: one segment per container, widths proportional to each share (flex-grow =
    value), colours keyed to the card swatches. Total width identical to the plain fill — the stack
@@ -964,7 +969,7 @@ button.drawer-host:hover {
   display: flex;
   gap: 2px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--keyline);
 }
 .drawer-tabs button {
   border: 0;
@@ -986,6 +991,8 @@ button.drawer-host:hover {
 .drawer-tabs button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  /* Blueprint: the active tab's underline carries a cyan glow so the live tab reads as energized. */
+  box-shadow: 0 1px 0 var(--glow);
 }
 .drawer-tabs button:focus-visible {
   outline: 2px solid var(--accent);
