@@ -310,23 +310,21 @@ export default function DetailDrawer(props: Props) {
           </Show>
           <Show when={props.deleted}>
             {/* Terminal state, spelled out: the resource is gone but the operator keeps their
-                context (name, last-known facts, owner chips to find the replacement). aria-live
+                context (name, last-known facts). aria-live
                 so the transition is announced — visually the banner appears where the eye already
                 is, but a screen reader would otherwise never hear the resource died. A sibling of
                 the header, NOT a child: in the header's flex row the zero-basis summary "fits" on
                 the banner's 100%-width line and collapses to 0px. */}
             <div class="drawer-deleted" role="status" aria-live="polite">
-              Deleted from the cluster — showing its last known state{props.owners.length ? '. The owner chip leads to any replacement' : ''}.
+              Deleted from the cluster — showing its last known state.
             </div>
           </Show>
           <header class="drawer-header">
             <ResourceSummary
               node={node()}
-              owners={props.owners}
               usage={props.usage}
               workloadUsage={props.workloadUsage}
               hostCapacity={props.hostCapacity}
-              onNavigate={props.onNavigate}
               onNavigateRef={props.onNavigateRef}
             />
             {/* Header action cluster: back (when history exists, cycle 300), share (copies the

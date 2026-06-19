@@ -16,8 +16,6 @@ import UsageGauges, { paletteColor, type UsageSegment } from './UsageGauges'
 
 interface Props {
   node: KNode
-  owners: KNode[]
-  onNavigate: (id: string) => void
   // Optional "Kind/name" → select navigator; lets the host meta jump to its Node when present.
   onNavigateRef?: (kindSlashName: string) => boolean
   // Live metrics-server consumption for this resource (Pods and Nodes), keyed into by the drawer from
@@ -266,21 +264,6 @@ export default function ResourceSummary(props: Props) {
         }
       >
         <ContainerCards statuses={props.node.containerStatuses ?? []} usage={props.usage} />
-      </Show>
-      <Show when={props.owners.length > 0}>
-        <div class="drawer-owners">
-          <For each={props.owners}>
-            {(o) => (
-              <button class="owner-chip" onClick={() => props.onNavigate(o.id)} title={`Go to ${o.kind} ${o.name}`}>
-                <span class="owner-arrow">↑</span>
-                <svg class="drawer-kind-icon" viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
-                  {kindIcon(o.kind)}
-                </svg>
-                {o.kind} <span class="owner-name">{o.name}</span>
-              </button>
-            )}
-          </For>
-        </div>
       </Show>
       {/* Collapsed by default: most resources carry a long label set (Helm/kustomize noise) that
           pushes the rest of the summary below the fold — the operator expands it when needed. */}

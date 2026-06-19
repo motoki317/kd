@@ -43,14 +43,12 @@ describe('DetailDrawer', () => {
   it('deleted: stays open on the last-known node with an explicit banner; absent otherwise', () => {
     // The inspected resource vanished mid-investigation (rollout replaced the pod): the drawer
     // must NOT silently close — it shows a terminal banner over the last-known facts, announced
-    // via a live region, and the owner chips stay as the path to the replacement.
-    const owner: KNode = { id: 'rs1', kind: 'ReplicaSet', name: 'web-abc', health: 'Healthy' }
+    // via a live region.
     const deleted = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} deleted={true} owners={[owner]} onNavigate={() => {}} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} deleted={true} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     const banner = deleted.container.querySelector('.drawer-deleted')
     expect(banner?.textContent).toContain('Deleted from the cluster')
-    expect(banner?.textContent).toContain('owner chip') // owner present → points at the replacement path
     expect(banner?.getAttribute('aria-live')).toBe('polite')
     expect(deleted.container.querySelector('.drawer-name')?.textContent).toContain('settings')
     deleted.unmount()
@@ -608,16 +606,11 @@ describe('DetailDrawer', () => {
     expect(activeTab()).toBe('Manifest')
   })
 
-  it('renders an age and clickable owner chips', () => {
-    const owner: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
-    const navigated: string[] = []
-    const { container, getByTitle } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={configMap} owners={[owner]} onNavigate={(id) => navigated.push(id)} onClose={() => {}} />
+  it('renders an age in the meta line', () => {
+    const { container } = render(() => (
+      <DetailDrawer ctx="test-ctx" node={configMap} owners={[]} onNavigate={() => {}} onClose={() => {}} />
     ))
     expect(container.querySelector('.drawer-age')?.textContent).toContain('3d')
-    const chip = getByTitle('Go to Deployment web')
-    chip.click()
-    expect(navigated).toEqual(['d1'])
   })
 
   it('goes full screen from the logs toolbar, driving the same expanded state as the header button', () => {

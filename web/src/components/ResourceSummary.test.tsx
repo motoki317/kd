@@ -6,7 +6,7 @@ import type { KNode } from '../types'
 
 afterEach(cleanup)
 
-const base = { owners: [], onNavigate: () => {} }
+const base = {}
 
 describe('ResourceSummary hero health gloss', () => {
   it('explains the health-tint colour via a title gloss — gray "Unknown" reads as a fault otherwise', () => {
