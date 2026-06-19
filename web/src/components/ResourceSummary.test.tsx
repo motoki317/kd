@@ -484,6 +484,44 @@ describe('ResourceSummary pod usage gauges', () => {
     expect(legend.map((l) => l.textContent)).toEqual(['app', 'sidecar', 'not yet attributed'])
     localStorage.removeItem('kd:workloadGaugeBy')
   })
+  // The workload rollup is filterable too: hide a replica (by pod) or a container name (by container),
+  // and the summed fill + ceiling regauge against the rest — the same subtract-the-hidden recompute as
+  // the pod gauge, over the workload totals.
+  it('filters the workload gauge by replica and by container, regauging the summed ceiling', () => {
+    localStorage.removeItem('kd:workloadGaugeBy') // default: by pod
+    const dep: KNode = { id: 'd9', kind: 'Deployment', name: 'web', health: 'Healthy' }
+    const workloadUsage = {
+      usage: { cpuMilli: 300, containers: [{ name: 'app', cpuMilli: 250 }, { name: 'sidecar', cpuMilli: 50 }] },
+      requests: { cpuMilli: 200 },
+      limits: { cpuMilli: 600 },
+      podCount: 2,
+      meteredPods: 2,
+      pods: [
+        { name: 'web-aaaaa', cpuMilli: 200, reqCpu: 100, limCpu: 400 },
+        { name: 'web-bbbbb', cpuMilli: 100, reqCpu: 100, limCpu: 200 },
+      ],
+      containerBounds: { app: { limCpu: 500 }, sidecar: { limCpu: 100 } },
+    }
+    const { container } = render(() => <ResourceSummary node={dep} {...base} workloadUsage={workloadUsage} />)
+    const limVal = () =>
+      [...container.querySelectorAll('.metric-row')]
+        .find((r) => r.querySelector('.metric-sublabel')?.textContent === 'Lim')
+        ?.querySelector('.metric-val')
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim()
+    const click = (name: string) => ([...container.querySelectorAll('.metric-legend-item')].find((e) => e.textContent?.trim() === name) as HTMLElement).click()
+    // By pod: both replicas summed; hiding …-bbbbb lifts its 100m usage + 200m limit out.
+    expect(limVal()).toBe('300m / 600m')
+    click('…-bbbbb')
+    expect(limVal()).toBe('200m / 400m')
+    // Flip to by container — a different split, so the replica filter no longer applies (full gauge).
+    ;([...container.querySelectorAll('.gauge-group-btn')].find((b) => /container/i.test(b.textContent ?? '')) as HTMLElement).click()
+    expect(limVal()).toBe('300m / 600m')
+    // By container: hiding the sidecar lifts its summed 100m limit (and 50m usage).
+    click('sidecar')
+    expect(limVal()).toBe('250m / 500m')
+    localStorage.removeItem('kd:workloadGaugeBy')
+  })
   it('caption notes partial metering when some replicas have no reading yet', () => {
     const dep: KNode = { id: 'd2', kind: 'StatefulSet', name: 'db', health: 'Healthy' }
     const workloadUsage = {

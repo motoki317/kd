@@ -98,12 +98,16 @@ function minusBound(total: Resources | undefined, hidden: UsageSegment[], kind: 
 // fleet-wide. The pod split sums exactly to the total by construction (unmetered pods are excluded
 // from both sides).
 function workloadSegments(wu: WorkloadUsage, by: 'pod' | 'container', workload: string): UsageSegment[] {
-  if (by === 'container') return containerSegments(wu.usage)
+  if (by === 'container') return containerSegments(wu.usage, (name) => wu.containerBounds?.[name])
   return wu.pods.map((p, i) => ({
     name: podShareName(p.name, workload),
     color: paletteColor(i),
     cpuMilli: p.cpuMilli ?? 0,
     memBytes: p.memBytes ?? 0,
+    reqCpu: p.reqCpu,
+    reqMem: p.reqMem,
+    limCpu: p.limCpu,
+    limMem: p.limMem,
   }))
 }
 
@@ -122,7 +126,18 @@ export default function ResourceSummary(props: Props) {
   // the recompute below reads it. Reset when the inspected resource changes — a different resource's
   // container/pod names are a different name space.
   const [hidden, setHidden] = createSignal<Set<string>>(new Set())
-  createEffect(on(() => props.node.id, () => setHidden(new Set<string>())))
+  // Which way a workload gauge splits its fill: per replica (default) or per container name. Lifted to
+  // the component top (with `hidden`) so the reset below can clear the filter when the split flips — the
+  // two modes are different name spaces (pod suffixes vs container names). A display habit, so it
+  // persists like the other kd:* prefs.
+  const [gaugeBy, setGaugeBy] = createSignal<'pod' | 'container'>(readRawPref('kd:workloadGaugeBy') === 'container' ? 'container' : 'pod')
+  const setBy = (v: 'pod' | 'container') => {
+    setGaugeBy(v)
+    writePref('kd:workloadGaugeBy', v)
+  }
+  // Clear the filter when the inspected resource changes (its names are a different name space) or the
+  // workload split flips. Fires once on mount too (clearing an already-empty set — a no-op).
+  createEffect(on([() => props.node.id, gaugeBy], () => setHidden(new Set<string>())))
 
   // The Pod gauge's per-container segments, each carrying its container's own req/lim (joined from the
   // pod's container statuses — app containers only; init containers carry no live usage so never become
@@ -148,6 +163,25 @@ export default function ResourceSummary(props: Props) {
       request: minusBound(props.node.requests, hiddenSegs, 'req'),
       limit: minusBound(props.node.limits, hiddenSegs, 'lim'),
       hostCapacity: props.hostCapacity,
+    })
+  })
+
+  // The workload rollup's segments (one share per replica, or per container name) and its bars, both
+  // recomputed against the shown subset the same way the pod gauge is — hidden shares subtracted from
+  // the summed totals. Empty for non-workloads (Pods/Nodes use the gauge above).
+  const workloadSegs = createMemo(() => {
+    const wu = props.workloadUsage
+    return wu ? workloadSegments(wu, gaugeBy(), props.node.name) : []
+  })
+  const workloadGroups = createMemo(() => {
+    const wu = props.workloadUsage
+    if (!wu) return []
+    const hiddenSegs = workloadSegs().filter((s) => hidden().has(s.name))
+    return drawerResourceBars({
+      isNode: false,
+      usage: minusUsage(wu.usage, hiddenSegs),
+      request: minusBound(wu.requests, hiddenSegs, 'req'),
+      limit: minusBound(wu.limits, hiddenSegs, 'lim'),
     })
   })
 
@@ -277,15 +311,6 @@ export default function ResourceSummary(props: Props) {
           Rendered like a Pod gauge (same request/limit semantics) with a caption naming the rollup. */}
       <Show when={props.workloadUsage}>
         {(wu) => {
-          // Which way the fill splits: per replica (default — an uneven pod is the finding) or per
-          // container name fleet-wide. A display habit, so it persists like the other kd:* prefs.
-          const [gaugeBy, setGaugeBy] = createSignal<'pod' | 'container'>(
-            readRawPref('kd:workloadGaugeBy') === 'container' ? 'container' : 'pod',
-          )
-          const setBy = (v: 'pod' | 'container') => {
-            setGaugeBy(v)
-            writePref('kd:workloadGaugeBy', v)
-          }
           const groupBtn = (v: 'pod' | 'container', label: string, title: string) => (
             <button class="gauge-group-btn" classList={{ active: gaugeBy() === v }} aria-pressed={gaugeBy() === v} onClick={() => setBy(v)} title={title}>
               {label}
@@ -293,13 +318,10 @@ export default function ResourceSummary(props: Props) {
           )
           return (
             <UsageGauges
-              groups={drawerResourceBars({
-                isNode: false,
-                usage: wu().usage,
-                request: wu().requests,
-                limit: wu().limits,
-              })}
-              segments={workloadSegments(wu(), gaugeBy(), props.node.name)}
+              groups={workloadGroups()}
+              segments={workloadSegs()}
+              hidden={hidden()}
+              onToggleSegment={(name) => toggleSegment(name, workloadSegs())}
               segmentsLabel={`per ${gaugeBy()}`}
               legend
               caption={

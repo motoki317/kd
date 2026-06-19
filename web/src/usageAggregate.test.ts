@@ -23,10 +23,11 @@ describe('aggregateWorkloadUsage', () => {
       limits: { cpuMilli: 500, memBytes: 1000 },
       podCount: 2,
       meteredPods: 2,
-      // per-pod shares (the "group by pod" segment source), name-sorted, summing to the total
+      // per-pod shares (the "group by pod" segment source), name-sorted, summing to the total — each
+      // carries its own req/lim so hiding the replica subtracts its bound from the ceiling too.
       pods: [
-        { name: 'a', cpuMilli: 80, memBytes: 150 },
-        { name: 'b', cpuMilli: 120, memBytes: 250 },
+        { name: 'a', cpuMilli: 80, memBytes: 150, reqCpu: 100, reqMem: 200, limCpu: 250, limMem: 500 },
+        { name: 'b', cpuMilli: 120, memBytes: 250, reqCpu: 100, reqMem: 200, limCpu: 250, limMem: 500 },
       ],
     })
   })
@@ -66,6 +67,30 @@ describe('aggregateWorkloadUsage', () => {
   it('omits the breakdown when there is no real split (single-container pods carry none)', () => {
     const agg = aggregateWorkloadUsage([pod('a'), pod('b')], { a: { cpuMilli: 10 }, b: { cpuMilli: 20 } })
     expect(agg?.usage.containers).toBeUndefined()
+  })
+
+  it('sums per-container req/lim across replicas for the by-container filter, skipping init containers', () => {
+    // The by-container view's ceiling subtrahend: each container name's req/lim summed fleet-wide, from
+    // the replicas' container statuses (spec bounds). Init containers carry no live usage, so they never
+    // become a segment and must not contribute a bound.
+    const mk = (id: string): KNode =>
+      ({
+        id,
+        kind: 'Pod',
+        name: id,
+        namespace: 'ns',
+        health: 'Healthy',
+        containerStatuses: [
+          { name: 'app', ready: true, state: 'Running', cpuRequestMilli: 100, cpuLimitMilli: 500, memLimitBytes: 256 },
+          { name: 'sidecar', ready: true, state: 'Running', cpuRequestMilli: 50 },
+          { name: 'setup', init: true, ready: false, state: 'Terminated: Completed', cpuRequestMilli: 999 },
+        ],
+      }) as KNode
+    const agg = aggregateWorkloadUsage([mk('a'), mk('b')], { a: { cpuMilli: 1 }, b: { cpuMilli: 1 } })
+    expect(agg?.containerBounds).toEqual({
+      app: { reqCpu: 200, limCpu: 1000, limMem: 512 },
+      sidecar: { reqCpu: 100 },
+    })
   })
 
   it('returns null when no descendant pod has a usage reading', () => {

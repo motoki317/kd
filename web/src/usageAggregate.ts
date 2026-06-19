@@ -3,16 +3,33 @@ import type { ContainerUsage, KNode, Resources, ResourceUsage } from './types'
 // WorkloadUsage is a workload's resource consumption rolled up from its descendant pods, so the drawer
 // can gauge a Deployment/StatefulSet's TOTAL live usage against its TOTAL reservation — the "how much is
 // this workload using?" answer a per-pod view can't give at a glance.
+// SegBounds is a segment's own request/limit contribution — what a hidden legend item subtracts from
+// the workload's ceiling (the same vocabulary the pod gauge uses for its containers).
+export interface SegBounds {
+  reqCpu?: number
+  reqMem?: number
+  limCpu?: number
+  limMem?: number
+}
+// PodShare is one replica's usage total plus its own summed request/limit — the by-pod segment carries
+// its bound so hiding the replica drops it from the ceiling too.
+export interface PodShare extends ContainerUsage, SegBounds {}
+
 export interface WorkloadUsage {
   usage: ResourceUsage
   requests?: Resources
   limits?: Resources
   podCount: number // descendant pods in the graph
   meteredPods: number // how many had a usage reading (metrics-server can lag a freshly-created pod)
-  // Each metered pod's own total — the "group by pod" segment source (one share per replica). Reuses
-  // the ContainerUsage shape (a named cpu/mem share); name-sorted so segment order is stable across
-  // ticks. Sums exactly to `usage` by construction: unmetered pods are excluded from both.
-  pods: ContainerUsage[]
+  // Each metered pod's own total + bound — the "group by pod" segment source (one share per replica).
+  // Name-sorted so segment order is stable across ticks; usage sums exactly to `usage` by construction
+  // (unmetered pods are excluded from both).
+  pods: PodShare[]
+  // Per-container-name summed request/limit across the metered pods — the bound side of the
+  // by-container segment source (usage lives in `usage.containers`). Hiding a container name in the
+  // by-container view subtracts these from the workload ceiling. Summed over the SAME metered pods as
+  // `requests`/`limits`, so the shown total stays a like-for-like ratio.
+  containerBounds?: Record<string, SegBounds>
 }
 
 // aggregateWorkloadUsage sums descendant-pod usage and requests/limits. Usage comes from the capacity
@@ -42,19 +59,39 @@ export function aggregateWorkloadUsage(
   // Per-container sums across the fleet ("is the sidecar overhead material workload-wide?") — the
   // same names recur on every replica, so summing by name keeps the pod-level segment vocabulary.
   const byName = new Map<string, { cpuMilli: number; memBytes: number }>()
-  const podShares: ContainerUsage[] = []
+  // Per-container-name bound sums (from each replica's container statuses, app containers only) — the
+  // by-container filter's subtrahend. Kept apart from `byName`: usage comes from metrics, bounds from spec.
+  const boundsByName = new Map<string, SegBounds>()
+  const podShares: PodShare[] = []
   for (const p of pods) {
     const u = usage[p.id]
     if (!u) continue // unmetered pod: excluded from BOTH sides so the ratio stays like-for-like
     metered++
     cpuMilli += u.cpuMilli ?? 0
     memBytes += u.memBytes ?? 0
-    podShares.push({ name: p.name, cpuMilli: u.cpuMilli ?? 0, memBytes: u.memBytes ?? 0 })
+    podShares.push({
+      name: p.name,
+      cpuMilli: u.cpuMilli ?? 0,
+      memBytes: u.memBytes ?? 0,
+      reqCpu: p.requests?.cpuMilli,
+      reqMem: p.requests?.memBytes,
+      limCpu: p.limits?.cpuMilli,
+      limMem: p.limits?.memBytes,
+    })
     for (const c of u.containers ?? []) {
       const acc = byName.get(c.name) ?? { cpuMilli: 0, memBytes: 0 }
       acc.cpuMilli += c.cpuMilli ?? 0
       acc.memBytes += c.memBytes ?? 0
       byName.set(c.name, acc)
+    }
+    for (const cs of p.containerStatuses ?? []) {
+      if (cs.init) continue // init containers carry no live usage, so they're never a segment
+      const acc = boundsByName.get(cs.name) ?? {}
+      if (cs.cpuRequestMilli != null) acc.reqCpu = (acc.reqCpu ?? 0) + cs.cpuRequestMilli
+      if (cs.memRequestBytes != null) acc.reqMem = (acc.reqMem ?? 0) + cs.memRequestBytes
+      if (cs.cpuLimitMilli != null) acc.limCpu = (acc.limCpu ?? 0) + cs.cpuLimitMilli
+      if (cs.memLimitBytes != null) acc.limMem = (acc.limMem ?? 0) + cs.memLimitBytes
+      boundsByName.set(cs.name, acc)
     }
     if (p.requests?.cpuMilli != null) {
       hasReqCpu = true
@@ -86,5 +123,6 @@ export function aggregateWorkloadUsage(
     podCount: pods.length,
     meteredPods: metered,
     pods: podShares.sort((a, b) => a.name.localeCompare(b.name)),
+    containerBounds: boundsByName.size > 0 ? Object.fromEntries(boundsByName) : undefined,
   }
 }
