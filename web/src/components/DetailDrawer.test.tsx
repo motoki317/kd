@@ -631,26 +631,19 @@ describe('DetailDrawer', () => {
     expect(drawer.classList.contains('expanded')).toBe(false)
   })
 
-  it('host meta is a click-to-jump button when onNavigateRef is provided', () => {
+  it('host meta is a click-to-jump button that requests the Node by name when onGoToNode is provided', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
-    const refNavigated: string[] = []
+    const visited: string[] = []
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx"
-        node={pod}
-        onNavigateRef={(ref) => {
-          refNavigated.push(ref)
-          return true
-        }}
-        onClose={() => {}}
-      />
+      <DetailDrawer ctx="test-ctx" node={pod} onGoToNode={(host) => visited.push(host)} onClose={() => {}} />
     ))
     const host = container.querySelector('button.drawer-host') as HTMLButtonElement | null
     expect(host).toBeTruthy()
     host!.click()
-    expect(refNavigated).toEqual(['Node/worker-1'])
+    expect(visited).toEqual(['worker-1'])
   })
 
-  it('host meta is a static span when onNavigateRef is omitted (no nav available)', () => {
+  it('host meta is a static span when onGoToNode is omitted (no nav available)', () => {
     const pod: KNode = { ...configMap, kind: 'Pod', host: 'worker-1' }
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
     expect(container.querySelector('button.drawer-host')).toBeNull()

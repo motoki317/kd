@@ -572,6 +572,14 @@ export default function App() {
               if (match) selectAndRemember(match.id)
               return !!match
             }}
+            // The host chip can't resolve through the namespace graph (a Pod's Node never rides along),
+            // so jump explicitly: switch to the Nodes view and select the Node out of the cluster-wide
+            // capacity feed, which is the only place its UID is known.
+            onGoToNode={(host) => {
+              setGroupBy('nodes')
+              const node = [...capById().values()].find((n) => n.kind === 'Node' && n.name === host)
+              if (node) selectAndRemember(node.id)
+            }}
             canBack={selectionHistory().length > 0}
             onBack={goBackSelection}
             onClose={() => setSelectedId(null)}

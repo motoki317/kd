@@ -31,6 +31,8 @@ interface Props {
   // whether a match was found, so the UI can avoid presenting a navigable pill when the source
   // isn't in the current graph (filtered out by view, or already gone).
   onNavigateRef?: (kindSlashName: string) => boolean
+  // Jump a Pod's host-meta chip to its Node: switch to the Nodes view and select that Node.
+  onGoToNode?: (host: string) => void
   // Navigation history affordance (cycle 300): canBack=true when a prior selection exists; onBack
   // pops one step. Optional so the drawer still works for callers that haven't wired history.
   canBack?: boolean
@@ -323,7 +325,7 @@ export default function DetailDrawer(props: Props) {
               usage={props.usage}
               workloadUsage={props.workloadUsage}
               hostCapacity={props.hostCapacity}
-              onNavigateRef={props.onNavigateRef}
+              onGoToNode={props.onGoToNode}
             />
             {/* Header action cluster: back (when history exists, cycle 300), share (copies the
                 deep-link URL) and close. Grouped in a flex row so space-between in the header

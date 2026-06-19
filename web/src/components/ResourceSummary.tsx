@@ -16,8 +16,9 @@ import UsageGauges, { paletteColor, type UsageSegment } from './UsageGauges'
 
 interface Props {
   node: KNode
-  // Optional "Kind/name" → select navigator; lets the host meta jump to its Node when present.
-  onNavigateRef?: (kindSlashName: string) => boolean
+  // Jump to a Pod's host Node: switches to the Nodes view and selects that Node. The Node never rides
+  // along into a namespace graph, so an in-graph "Kind/name" navigator can't reach it — this always works.
+  onGoToNode?: (host: string) => void
   // Live metrics-server consumption for this resource (Pods and Nodes), keyed into by the drawer from
   // the capacity feed. Absent when metrics-server is unavailable or the kind has no usage gauge.
   usage?: ResourceUsage
@@ -271,13 +272,13 @@ export default function ResourceSummary(props: Props) {
           <span class="drawer-age">↻ {props.node.restarts} restarts</span>
         </Show>
         <Show when={props.node.host}>
-          {/* Clickable when the Node is in the current graph (Nodes view + Ownership both include
-              it); otherwise render the same chrome as a static span so the line is consistent. */}
-          {props.onNavigateRef ? (
+          {/* Clicking jumps to the Nodes view with this Node selected (onGoToNode); static-span
+              fallback keeps the line consistent if no navigator is wired. */}
+          {props.onGoToNode ? (
             <button
               class="drawer-age drawer-host"
-              title={`Go to Node ${props.node.host}`}
-              onClick={() => props.onNavigateRef!(`Node/${props.node.host}`)}
+              title={`Show Node ${props.node.host} in the Nodes view`}
+              onClick={() => props.onGoToNode!(props.node.host!)}
             >
               on {shortNodeName(props.node.host!)}
             </button>
