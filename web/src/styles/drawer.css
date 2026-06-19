@@ -769,7 +769,6 @@ summary.container-group-head::before,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 8px;
 }
 .route-row {
   font-size: var(--fs-meta);
