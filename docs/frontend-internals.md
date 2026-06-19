@@ -228,6 +228,22 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
 - **Server gate.** The wire only carries a breakdown for pods with >1 container reading (joinUsage);
   a single-container pod's card reads the pod total as its own usage (the omitted breakdown would
   just repeat it).
+- **The legend is a filter; the recompute SUBTRACTS the hidden, never sums the shown.** Clicking a
+  segment in the legend (`onToggleSegment`) drops that container/replica from the gauge, and the fill
+  AND the ceiling regauge against the rest — so "what does this container alone draw against its own
+  request" is one click. Each `UsageSegment` carries its own req/lim (the pod joins them from
+  `containerStatuses`; the workload from per-pod `requests`/`limits` and per-container `containerBounds`),
+  and `minusUsage`/`minusBound` lift the hidden segments' usage/bound OUT of the gauge's existing total.
+  This is deliberate over summing the shown: the ceiling total is summed over every app container in the
+  SPEC (`podRequests`/`aggregateWorkloadUsage`), but segments come from the metrics-server breakdown
+  (metered only) — summing the shown would drop a bounded-but-unmetered container (just-started,
+  crash-looping) from the ceiling and shrink the *unfiltered* gauge below today's. Subtracting keeps
+  unfiltered byte-identical (nothing hidden → nothing subtracted) and degrades to "sum the shown" when
+  the breakdown does partition the total. The synthetic "not yet attributed" rest has no bound, so it
+  isn't toggleable; the last shown segment can't be hidden (an empty gauge is a dead end). The `hidden`
+  set and the workload split toggle (`kd:workloadGaugeBy`) live at the `ResourceSummary` TOP (not inside
+  a gauge's render scope) so the filter survives per-tick prop churn; an effect resets it when the
+  resource changes or the split flips (different name spaces: replica suffixes vs container names).
 
 ## Canvas empty-state ladder
 
