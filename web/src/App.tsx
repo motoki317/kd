@@ -53,7 +53,8 @@ export default function App() {
     refetchContexts,
     contextsInfo,
     authFailed,
-    namespaces,
+    namespacesError,
+    namespacesLoading,
     refetchNamespaces,
     mergedNamespaces,
     recordSummary,
@@ -422,7 +423,7 @@ export default function App() {
               // re-run against — retry the failed bootstrap fetches too, so one button serves
               // every failure class.
               if (contextsRes.error) void refetchContexts()
-              if (namespaces.error) void refetchNamespaces()
+              if (namespacesError()) void refetchNamespaces()
               setReconnectTick((n) => n + 1)
             }}
           >
@@ -499,8 +500,8 @@ export default function App() {
             // the operator's next move is reading the topology it was covering.
             if (isNarrowScreen()) setSidebarHidden(true)
           }}
-          loading={namespaces.loading}
-          failed={!!namespaces.error}
+          loading={namespacesLoading()}
+          failed={namespacesError()}
           onRetry={() => refetchNamespaces()}
           flash={nsFlash()}
           onJumpToTrouble={jumpToTrouble}

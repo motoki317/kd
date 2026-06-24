@@ -102,6 +102,7 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/contexts", a.handleContexts)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces", a.handleNamespaces)
+	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/stream", a.handleNamespacesStream)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/kinds", a.handleKinds)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/graph", a.handleGraph)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/graph/stream", a.handleGraphStream)
@@ -216,37 +217,52 @@ func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Serve the FULL namespace list, not the half-synced partial a just-built context starts with:
-	// the registry returns a cache the instant its watches start, so a UI context switch's first
-	// /namespaces hit otherwise saw only the cluster sentinel. Bounded so a never-syncing informer
-	// (RBAC-denied namespaces watch) falls through to whatever ListNamespaces has rather than hanging.
-	waitCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	a.waitForNamespaceSync(r.Context(), store)
+	writeJSON(w, namespacesResponse{Namespaces: a.namespaceEntries(store, id)})
+}
+
+// waitForNamespaceSync blocks (bounded) until the informers have settled, so the namespace-health
+// rollup summarizes a real cache rather than a half-synced one. Shared by the REST handler and the
+// SSE stream's first push.
+//
+// Serve the FULL namespace list, not the half-synced partial a just-built context starts with: the
+// registry returns a cache the instant its watches start, so a UI context switch's first read
+// otherwise saw only the cluster sentinel. The list wait is bounded so a never-syncing informer
+// (RBAC-denied namespaces watch) falls through to whatever ListNamespaces has rather than hanging.
+// Then briefly wait for the RESOURCE informers too: a cold context otherwise summarizes a half-synced
+// snapshot — a Service whose endpoints haven't listed yet reads "no endpoints", pods aren't Running
+// yet — flashing many namespaces a transient Degraded (caught dogfooding a large remote cluster). The
+// resource wait is a shorter budget so a slow or denied GVR delays the sidebar at most a moment; if
+// sync outlasts it, the stream's next refresh self-corrects.
+func (a *API) waitForNamespaceSync(ctx context.Context, store Store) {
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	store.WaitForNamespacesSync(waitCtx)
 	cancel()
-	// Then briefly wait for the RESOURCE informers too, so the per-namespace health below rolls up a
-	// settled cache. The first /namespaces after a cold context otherwise summarizes a half-synced
-	// snapshot — a Service whose endpoints haven't listed yet reads "no endpoints", pods aren't Running
-	// yet — flashing many namespaces a transient Degraded that the 15s client poll only clears later
-	// (caught dogfooding a large remote cluster). Separate, shorter budget than the list wait so a slow
-	// or denied GVR delays the sidebar at most a moment; if sync outlasts it, the poll self-corrects.
-	syncCtx, cancelSync := context.WithTimeout(r.Context(), 2*time.Second)
+	syncCtx, cancelSync := context.WithTimeout(ctx, 2*time.Second)
 	store.WaitForCacheSync(syncCtx)
 	cancelSync()
+}
+
+// namespaceEntries builds the RBAC-filtered per-namespace health list from the cache snapshot: the
+// cluster pseudo-namespace pinned first (when the caller may open it), then every visible namespace
+// with its worst-resource health. Cheap enough to recompute per change, but see the SSE stream's
+// refresh throttle — it rolls up EVERY namespace, so it isn't recomputed on every store tick.
+func (a *API) namespaceEntries(store Store, id auth.Identity) []namespaceEntry {
 	visible := a.enforcer.VisibleNamespaces(id.User, id.Groups, store.ListNamespaces())
-	resp := namespacesResponse{Namespaces: make([]namespaceEntry, 0, len(visible)+1)}
-	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real
-	// namespaces (FR-004). Gate on the exact check the cluster graph drill-in performs
-	// (pods/list — see handleGraph), so the entry appears iff opening it would succeed; a
-	// different class here (it used to be nodes) shows rows that then 403.
+	out := make([]namespaceEntry, 0, len(visible)+1)
+	// The cluster pseudo-namespace is pinned first so the sidebar puts it above the real namespaces
+	// (FR-004). Gate on the exact check the cluster graph drill-in performs (pods/list — see
+	// handleGraph), so the entry appears iff opening it would succeed; a different class here (it used
+	// to be nodes) shows rows that then 403.
 	if a.enforcer.Enforce(id.User, id.Groups, rbac.ClusterScope, "pods", "list") {
 		cs := graph.SummarizeCluster(store.SnapshotNamespace(ClusterScopeNamespace))
-		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: ClusterScopeNamespace, Health: string(cs.Health), NonReady: cs.NonReady})
+		out = append(out, namespaceEntry{Name: ClusterScopeNamespace, Health: string(cs.Health), NonReady: cs.NonReady})
 	}
 	for _, n := range visible {
 		s := graph.Summarize(store.SnapshotNamespace(n))
-		resp.Namespaces = append(resp.Namespaces, namespaceEntry{Name: n, Health: string(s.Health), NonReady: s.NonReady})
+		out = append(out, namespaceEntry{Name: n, Health: string(s.Health), NonReady: s.NonReady})
 	}
-	writeJSON(w, resp)
+	return out
 }
 
 type kindsResponse struct {

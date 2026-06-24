@@ -5,7 +5,7 @@
 // A factory: App calls it inside its component body so the resources/effects run under its root.
 
 import { createEffect, createMemo, createResource, createSignal, onCleanup, untrack, type Accessor, type Setter } from 'solid-js'
-import { ApiError, fetchContexts, fetchKinds, fetchNamespaces, type NamespaceInfo } from './api'
+import { ApiError, fetchContexts, fetchKinds, streamNamespaces, type NamespaceInfo } from './api'
 import { createLiveHealth } from './liveHealth'
 import { setServerShortNames } from './names'
 import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
@@ -45,40 +45,63 @@ export function createClusterSession(deps: {
     if (!known) setCtx(info.default)
   })
 
-  // Namespace list is keyed on ctx so a context switch refetches against the new cluster. Wait for
-  // ctx to resolve so the first fetch hits the right URL (avoids a doomed call to /contexts/null/).
-  // The value carries the context it was fetched FOR so the list can be dropped the instant ctx
-  // changes — see namespaceList.
-  const [namespaces, { refetch: refetchNamespaces }] = createResource(ctx, async (c) => ({ forCtx: c, list: await fetchNamespaces(c) }))
-  // namespaces() rethrows if the fetch errored (Solid resources throw on read in an error state), which
-  // would crash the whole app instead of letting the sidebar show its "couldn't load" state — so always
-  // read the list through this guard, which yields [] on error/while loading.
-  //
-  // Drop the list the moment ctx changes (forCtx !== ctx()), rather than letting the resource's
-  // stale-while-revalidate keep the PREVIOUS cluster's namespaces on screen during the refetch.
-  // Two reasons: (1) showing another cluster's namespaces after a switch is wrong on its face; (2) it
-  // mirrors how the graph resets to empty on a ctx switch, which the sidebar list did NOT — the
-  // sidebar kept churning the old list through the new cluster's resolves (cold-cache partial → full)
-  // amid the SSE-resubscribe update storm, and Solid's fine-grained subscriptions intermittently
-  // desynced so the list stuck on the old cluster forever (the "switching contexts loads nothing" bug).
-  // A synchronous []-then-repopulate on ctx change is the clean transition the graph already had.
+  // Per-namespace health arrives over a long-lived SSE stream (was a 15s poll): the server rolls up
+  // every visible namespace's worst health and pushes the list on connect and whenever it changes. The
+  // stream is keyed on ctx so a context switch closes the old one and opens a fresh stream against the
+  // new cluster. The value carries the context it was received FOR so the list can be dropped the
+  // instant ctx changes — see namespaceList.
+  const [nsData, setNsData] = createSignal<{ forCtx: string; list: NamespaceInfo[] } | null>(null)
+  // nsReceived gates the "loaded but empty" terminal state (noNamespaces) apart from "not delivered
+  // yet" (loading); nsErrored drives the offline transition below. nsReconnect re-opens the stream on
+  // demand (the offline pill / retry button), like the graph subscription's reconnectTick.
+  const [nsReceived, setNsReceived] = createSignal(false)
+  const [nsErrored, setNsErrored] = createSignal(false)
+  const [nsReconnect, setNsReconnect] = createSignal(0)
+  const refetchNamespaces = () => setNsReconnect((n) => n + 1)
+  createEffect(() => {
+    const c = ctx()
+    nsReconnect() // tracked: a manual reconnect tears down the stream and opens a fresh one
+    if (!c) return // wait for ctx to resolve so the stream hits the right URL, not /contexts/null/
+    // Drop the list synchronously on a ctx change rather than keeping the PREVIOUS cluster's
+    // namespaces on screen during the switch: (1) showing another cluster's list is wrong on its face;
+    // (2) it mirrors how the graph resets to empty on a ctx switch (the sidebar list previously kept
+    // churning the old list and intermittently stuck on it — the "switching contexts loads nothing"
+    // bug). A synchronous reset-then-repopulate is the clean transition the graph already had.
+    setNsData(null)
+    setNsReceived(false)
+    setNsErrored(false)
+    const close = streamNamespaces(c, {
+      namespaces: (list) => {
+        setNsData({ forCtx: c, list })
+        setNsReceived(true)
+        setNsErrored(false) // a fresh push means the stream recovered from a transient drop
+      },
+      error: () => setNsErrored(true),
+    })
+    onCleanup(close)
+  })
+  // Guard reads through this memo: yields [] on error / before the first push, and drops the list the
+  // instant ctx changes (forCtx !== ctx()).
   const namespaceList = createMemo<NamespaceInfo[]>(() => {
-    if (namespaces.error) return []
-    const v = namespaces()
+    if (nsErrored()) return []
+    const v = nsData()
     return v && v.forCtx === ctx() ? v.list : []
   })
-  // Poll generation: a monotonic counter bumped each time an ACCEPTED /namespaces response lands —
-  // accepted by the SAME forCtx rule namespaceList uses, so an out-of-order or previous-context
-  // response never advances it. The live-health cache stamps each entry with the generation it arrived
-  // in; an entry overrides the poll only until the next generation supersedes it (see
-  // mergeNamespaceHealth). Bumped on the resolved VALUE, not on refetch start, so the resource's
-  // stale-while-revalidate window doesn't invalidate live entries a beat early.
+  // Poll generation: a monotonic counter bumped each time an ACCEPTED push lands — accepted by the
+  // SAME forCtx rule namespaceList uses, so a previous-context push never advances it. The live-health
+  // cache stamps each entry with the generation it arrived in; an entry overrides the stream value only
+  // until the next generation supersedes it (see mergeNamespaceHealth).
   const [pollGen, setPollGen] = createSignal(0)
   createEffect(() => {
-    if (namespaces.error) return
-    const v = namespaces()
+    if (nsErrored()) return
+    const v = nsData()
     if (v && v.forCtx === untrack(ctx)) setPollGen((g) => g + 1)
   })
+  // Resource-shaped accessors the rest of the app reads (App.tsx): error state and a loading flag that
+  // mirrors the old createResource surface. namespacesLoading is true until the first push (or after a
+  // reconnect resets it), and false once errored so the sidebar shows the failure, not a spinner.
+  const namespacesError = () => nsErrored()
+  const namespacesLoading = () => !nsReceived() && !nsErrored()
   // Per-namespace live health: real-time SSE summaries merged over the poll so the sidebar stops
   // flapping between the two as the operator navigates — see liveHealth.ts. recordSummary is fed by the
   // graph subscription's `summary` handler; mergedNamespaces is the single source the sidebar (and the
@@ -96,22 +119,25 @@ export function createClusterSession(deps: {
   // first load / namespace switch when nothing is wrong — the stream just hasn't yielded yet.
   const [connState, setConnState] = createSignal<ConnState>('connecting')
   const connected = () => connState() === 'live'
-  // A failed namespace-list fetch is a cluster-level failure (unreachable or forbidden context),
+  // A failed namespace-list stream is a cluster-level failure (unreachable or forbidden context),
   // not just a sidebar problem: with no namespace ever picked the subscribe effect never runs, so
   // nothing else would move connState off its initial 'connecting' — the pill and the canvas would
-  // promise progress forever (caught live against a dead kubeconfig context). Treat it like a
-  // stream error: go offline, and refresh the contexts list (transition-gated, like the stream's
-  // error path) so the canvas diagnosis can name the server's reason for THIS context.
+  // promise progress forever (caught live against a dead kubeconfig context). Treat it like a stream
+  // error: go offline and refresh the contexts list so the canvas diagnosis can name the server's
+  // reason for THIS context. Gated on 'connecting' (bootstrap): once the graph stream is live, IT owns
+  // connState, so a transient namespaces-stream blip (EventSource auto-retries) leaves the sidebar
+  // briefly stale rather than flashing a false "offline".
   createEffect(() => {
-    if (!namespaces.error) return
-    if (untrack(connState) !== 'offline') void refetchContexts()
+    if (!nsErrored()) return
+    if (untrack(connState) !== 'connecting') return
+    void refetchContexts()
     setConnState('offline')
   })
   // An empty namespace list that loaded FINE is its own terminal state, distinct from offline:
   // the cluster answered, this account just can't see anything (lockdown policy). Without it the
   // canvas spun "connecting…" forever — no namespace means the subscribe effect never runs, so
-  // connState never moves. Gated on 'ready' so the unresolved pre-fetch state doesn't flash it.
-  const noNamespaces = createMemo(() => namespaces.state === 'ready' && namespaceList().length === 0)
+  // connState never moves. Gated on a delivered (non-errored) push so the pre-stream state doesn't flash it.
+  const noNamespaces = createMemo(() => nsReceived() && !nsErrored() && namespaceList().length === 0)
   // A non-auth contexts failure (kd itself down/broken) reads offline, engaging the retry pill.
   createEffect(() => {
     if (contextsRes.error && !authFailed()) setConnState('offline')
@@ -163,16 +189,13 @@ export function createClusterSession(deps: {
     }
   })
 
-  // Keep the sidebar's per-namespace health roughly current without a dedicated stream.
-  const interval = setInterval(() => refetchNamespaces(), 15000)
-  onCleanup(() => clearInterval(interval))
-
   return {
     contextsRes,
     refetchContexts,
     contextsInfo,
     authFailed,
-    namespaces,
+    namespacesError,
+    namespacesLoading,
     refetchNamespaces,
     namespaceList,
     mergedNamespaces,

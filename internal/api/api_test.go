@@ -317,6 +317,44 @@ func TestEventStreamSendsEvents(t *testing.T) {
 	}
 }
 
+// TestNamespacesStreamSendsSnapshot verifies the namespaces SSE feed sends an initial `namespaces`
+// frame with the RBAC-filtered list, so the sidebar holds one connection instead of polling /namespaces.
+func TestNamespacesStreamSendsSnapshot(t *testing.T) {
+	srv := newServer(t, "", fixtureObjs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+ctxPath+"/namespaces/stream", nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+	sc := bufio.NewScanner(resp.Body)
+	sawEvent, sawShop := false, false
+	for sc.Scan() {
+		line := sc.Text()
+		if strings.HasPrefix(line, "event: namespaces") {
+			sawEvent = true
+		}
+		if strings.HasPrefix(line, "data: ") && strings.Contains(line, "\"shop\"") {
+			sawShop = true
+		}
+		if sawEvent && sawShop {
+			break
+		}
+	}
+	if !sawEvent {
+		t.Error("expected an initial 'namespaces' event on the namespaces stream")
+	}
+	if !sawShop {
+		t.Error("expected the visible namespace 'shop' in the stream payload")
+	}
+}
+
 func TestGraphStreamSendsSnapshot(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)

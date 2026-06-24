@@ -40,11 +40,24 @@ export interface NamespaceInfo {
   nonReady?: number // count of non-Healthy resources, the scale behind the health dot
 }
 
-export async function fetchNamespaces(ctx: string): Promise<NamespaceInfo[]> {
-  const res = await fetch(`${ctxBase(ctx)}/namespaces`)
-  if (!res.ok) throw new Error(`namespaces: ${res.status}`)
-  const body = (await res.json()) as { namespaces: NamespaceInfo[] }
-  return body.namespaces
+export interface NamespacesStreamHandlers {
+  // namespaces carries the full per-namespace health list each time it changes (the server diffs and
+  // pushes only on change), so the handler replaces the list wholesale.
+  namespaces: (list: NamespaceInfo[]) => void
+  error?: () => void
+}
+
+// streamNamespaces tails the cluster's per-namespace health over SSE, returning a function that closes
+// the stream. The server rolls up every visible namespace's worst health and pushes the (small) list
+// on connect and whenever it changes — so the sidebar holds one quiet connection instead of polling
+// /namespaces every 15s.
+export function streamNamespaces(ctx: string, h: NamespacesStreamHandlers): () => void {
+  const es = new EventSource(`${ctxBase(ctx)}/namespaces/stream`)
+  es.addEventListener('namespaces', (e) =>
+    h.namespaces(((JSON.parse((e as MessageEvent).data) as { namespaces?: NamespaceInfo[] }).namespaces) ?? []),
+  )
+  es.onerror = () => h.error?.()
+  return () => es.close()
 }
 
 // fetchKinds returns the cluster's kind → API short-name map (kubectl's SHORTNAMES, e.g.

@@ -11,8 +11,94 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/graph"
 )
+
+// namespacesRefreshInterval bounds how often the namespaces stream re-summarizes the cluster. Unlike
+// the graph stream — which rebuilds ONE namespace per change and can afford a 300ms debounce — this
+// rolls up EVERY visible namespace, so recomputing on each store change would turn constant lease
+// churn (leases renew every few seconds in every cluster) into a full-cluster re-summarization several
+// times a second. Recompute on this coarse cadence instead, gated by whether anything changed, so CPU
+// matches the old 15s client poll while only diffs reach the wire. The OPEN namespace stays instantly
+// fresh via the graph stream's `summary` event; this feed keeps the OTHER namespaces coarsely current.
+const namespacesRefreshInterval = 15 * time.Second
+
+// handleNamespacesStream streams the sidebar's per-namespace health: a `namespaces` event with the
+// full list on connect, then again whenever the rolled-up health changes. Replaces the client's 15s
+// /namespaces poll. See docs/ADR/20260527-realtime-transport-sse.md.
+func (a *API) handleNamespacesStream(w http.ResponseWriter, r *http.Request) {
+	id, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	setSSEHeaders(w)
+
+	changes, unsubscribe := store.Subscribe()
+	defer unsubscribe()
+
+	// Wait for the informers to settle before the first push, exactly like the REST handler, so the
+	// sidebar's first paint isn't a half-synced partial that flashes false Degraded.
+	a.waitForNamespaceSync(r.Context(), store)
+
+	var sent []namespaceEntry
+	have := false
+	push := func() bool {
+		next := a.namespaceEntries(store, id)
+		if have && slices.Equal(sent, next) {
+			return true // unchanged: stay silent so an idle cluster costs nothing on the wire
+		}
+		sent, have = next, true
+		if !writeSSE(w, "namespaces", namespacesResponse{Namespaces: next}) {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !push() {
+		return
+	}
+
+	refresh := time.NewTicker(namespacesRefreshInterval)
+	defer refresh.Stop()
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeat.Stop()
+	// dirty gates the recompute: the change signal is cluster-wide and fires on unrelated churn, so a
+	// refresh tick re-summarizes only when something actually changed since the last push (and never on
+	// a fully idle cluster). Bounds the full-cluster rollup to once per refresh interval.
+	dirty := false
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-changes:
+			dirty = true
+		case <-refresh.C:
+			if !dirty {
+				continue
+			}
+			dirty = false
+			if !push() {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
 
 // sseHeartbeatInterval is how often an idle SSE stream emits a `: heartbeat` comment, so a proxy
 // or browser doesn't drop a connection that simply has no events to send. Shared by both SSE
