@@ -14,8 +14,10 @@ streaming: (1) resource/graph change feeds, and (2) pod log tailing. Both are
 
 # Decision
 
-Use **Server-Sent Events (SSE)** over HTTP for both the resource watch feed and log
-streaming.
+Use **Server-Sent Events (SSE)** over HTTP for every live, server→client feed. The client does
+**no timer-based polling**: anything that changes while the user watches arrives over an SSE
+stream, and the only remaining `fetch` calls are one-shot, on-demand reads of effectively static
+data (`/contexts`, `/kinds`, a resource manifest).
 
 - **Watch feed:** the client subscribes to a view (e.g. `GET /api/v1/namespaces/{ns}/graph/stream`).
   The server sends an initial `snapshot` event (full `{nodes, edges}`) then incremental
@@ -23,10 +25,17 @@ streaming.
   notifications. Heartbeat comments keep the connection alive through proxies.
 - **Logs:** `GET /api/v1/namespaces/{ns}/pods/{pod}/log/stream?container=&follow=true` returns
   an SSE stream of log lines wrapping the Kubernetes `pods/log` follow stream.
+- **Resource events** (`.../resources/{kind}/{name}/events/stream`) and **sidebar namespace
+  health** (`.../namespaces/stream`) replaced 8s and 15s client polls with SSE feeds that push
+  the (diffed) list only when it changes. Both still expose the one-shot REST endpoint alongside
+  the stream, mirroring `graph` / `graph/stream`.
 - Every SSE request passes through the same auth + RBAC middleware as REST; the identity
   header is a normal request header, so no special handshake auth is needed.
-- The server coalesces informer events over a short window before emitting patches, to avoid
-  flooding the client during churn (e.g. a rollout).
+- The server coalesces change before emitting, to avoid flooding the client during churn. The
+  cadence is per-feed: the graph debounces a 300ms window (one namespace rebuilt per change);
+  namespace health re-summarizes on a coarse ~15s tick gated by a change flag (it rolls up
+  EVERY namespace, so per-change recompute would amplify constant lease churn); events re-list
+  on a fixed interval. Each pushes only when the result differs from the last sent.
 
 # Consequences
 
@@ -57,3 +66,9 @@ streaming.
 
 - The watch endpoint reuses the same graph model and views as the REST endpoint
   (resource-relationship-graph ADR); REST returns a snapshot, SSE returns snapshot + patches.
+- Not every SSE feed is informer-driven. The graph and namespace-health feeds wake on the store's
+  change signal (a cached, watched kind changed). Events are intentionally NOT cached
+  (`store.DefaultSkipKinds` — too high-cardinality and short-lived), so their stream polls the
+  live Events API server-side on a fixed interval and diffs. This still removes the *client* poll
+  (one quiet connection, deltas only) — the goal is no client-side polling, not zero server-side
+  timers; the log stream likewise re-resolves descendant pods on a server-side ticker.

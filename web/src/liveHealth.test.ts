@@ -43,8 +43,8 @@ describe('createLiveHealth', () => {
       // Navigating elsewhere swaps the list object but does NOT bump the poll generation:
       h.setNamespaceList([...basePoll])
       expect(apiB(h.mergedNamespaces()).health).toBe('Degraded') // no flap when leaving the namespace
-      h.setPollGen(1) // a genuine 15s /namespaces poll lands
-      expect(apiB(h.mergedNamespaces()).health).toBe('Progressing') // self-corrects to the poll
+      h.setPollGen(1) // a genuine /namespaces stream push lands
+      expect(apiB(h.mergedNamespaces()).health).toBe('Progressing') // self-corrects to the stream value
     }))
 
   it('drops a late summary whose stream context is no longer current', () =>

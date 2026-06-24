@@ -50,10 +50,10 @@ export interface LiveHealth {
   ctx: string
 }
 
-// mergeNamespaceHealth overlays the real-time SSE summary cache onto the 15s /namespaces poll so each
-// sidebar row shows its freshest KNOWN health without flapping as the operator navigates. The two
-// inputs are the SAME server computation at different times: the poll (≤15s stale, every namespace)
-// and the live cache (real-time, only namespaces whose stream the operator has opened). A cached entry
+// mergeNamespaceHealth overlays the real-time SSE summary cache onto the namespaces health stream so
+// each sidebar row shows its freshest KNOWN health without flapping as the operator navigates. The two
+// inputs are the SAME server computation at different times: the cluster-wide feed (≤15s stale, every
+// namespace) and the live cache (real-time, only namespaces whose stream the operator has opened). A cached entry
 // wins only when (a) it belongs to the current context — so one cluster's health never bleeds into a
 // same-named namespace of another — and (b) no newer poll has superseded it, i.e. its generation is
 // still the current one. Generations are monotonic, so `gen >= pollGen` reads as "not yet superseded":

@@ -26,7 +26,7 @@ export function createSidebarHealth(deps: {
   createEffect(() => setSidebarNs(reconcile(mergedNamespaces(), { key: 'name' })))
 
   // Per-namespace health across the WHOLE cluster, for the favicon attention badge. Counts over
-  // sidebarNs — the /namespaces poll with the open namespace kept live from the SSE summary — the SAME
+  // sidebarNs — the namespaces health stream with the open namespace kept live from the graph SSE summary — the SAME
   // source the sidebar trouble badge reads, so favicon and badge never disagree. Excludes the
   // cluster-scope sentinel to match the badge (troubledNamespaces). NOT the open namespace's node set:
   // a tab-per-cluster operator parked on a healthy namespace must still see the favicon flag trouble in

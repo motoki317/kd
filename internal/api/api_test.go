@@ -375,7 +375,7 @@ func TestGraphStreamSendsSnapshot(t *testing.T) {
 		if strings.HasPrefix(sc.Text(), "event: snapshot") {
 			sawSnapshot = true
 		}
-		// The summary event lets the sidebar override the polled /namespaces health from the
+		// The summary event lets the sidebar override the streamed /namespaces health from the
 		// UNFILTERED graph — so the sidebar can't disagree with /namespaces just because the
 		// current view filtered out a degraded resource.
 		if strings.HasPrefix(sc.Text(), "event: summary") {

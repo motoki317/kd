@@ -266,13 +266,16 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
 - **`embed_web` build tag**: the default `go build` does NOT embed the client (placeholder page).
   `just build` sets the tag.
 - **Events are queried LIVE, not from the cache**: `"events"` is in `store.DefaultSkipKinds`
-  (high-cardinality, short-lived), so the informer snapshot NEVER holds Events. The `/events` handler
-  (`internal/api/events.go`) builds the graph from the snapshot (for the resource UID + owned subtree)
-  but fetches the events themselves via `store.Client().CoreV1().Events(ns).List()` at request time
-  (`NamespaceAll` for the `__cluster__` sentinel). Do NOT "read events from `SnapshotNamespace`" — they
-  aren't there, and the Events tab silently goes empty (the f80bab1→42ee8a2 regression). The handler
-  test must run WITHOUT `EagerKinds:["events"]` — eager-loading events is a config real deploys never
-  use, and it masks exactly this bug.
+  (high-cardinality, short-lived), so the informer snapshot NEVER holds Events. The shared
+  `resourceEvents` helper (`internal/api/events.go`) builds the graph from the snapshot (for the
+  resource UID + owned subtree) but fetches the events themselves via
+  `store.Client().CoreV1().Events(ns).List()` at request time (`NamespaceAll` for the `__cluster__`
+  sentinel). Both the REST `/events` handler and the `/events/stream` SSE feed call it — the stream
+  re-lists on a server-side ticker and pushes only diffs (it does NOT wake on the store's change
+  signal, which only fires for cached/watched kinds). Do NOT "read events from `SnapshotNamespace`" —
+  they aren't there, and the Events tab silently goes empty (the f80bab1→42ee8a2 regression). The
+  handler test must run WITHOUT `EagerKinds:["events"]` — eager-loading events is a config real deploys
+  never use, and it masks exactly this bug.
 - **`Build` vs `BuildForLogs` — pick by purpose**:
   - `graph.Build` is for the **displayed topology**. It runs `isHistorical`, which drops finished
     controller-pods (`Succeeded` under a Job/CronJob/Workflow) and zero-replica ReplicaSets — they

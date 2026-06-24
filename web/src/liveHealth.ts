@@ -1,7 +1,8 @@
 // The per-namespace live-health cache: real-time SSE `summary` events accumulated and merged over the
-// 15s /namespaces poll, so the sidebar shows each namespace's freshest known health without flapping as
-// the operator navigates. Extracted from the cluster session as a factory taking plain accessors, so the
-// context/generation gating is unit-testable (liveHealth.test.ts) without the /namespaces resource.
+// namespaces health stream (a coarse cluster-wide refresh, ~15s cadence), so the sidebar shows each
+// namespace's freshest known health without flapping as the operator navigates. Extracted from the
+// cluster session as a factory taking plain accessors, so the context/generation gating is
+// unit-testable (liveHealth.test.ts) without the namespaces stream.
 //
 // Background: the SSE `summary` is per-stream and carries NO namespace name — it is implicitly the open
 // namespace's. The old code kept it in a single signal cleared on every switch, so the open row showed
