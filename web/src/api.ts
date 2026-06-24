@@ -103,13 +103,27 @@ export interface EventEntry {
   source?: string // "Kind/name" of the involvedObject; shown for aggregated events from descendants
 }
 
-// fetchEvents returns the Kubernetes events about a resource, newest-first.
-export async function fetchEvents(ctx: string, ns: string, kind: string, name: string): Promise<EventEntry[]> {
-  const res = await fetch(
-    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/resources/${kind}/${encodeURIComponent(name)}/events`,
+export interface EventStreamHandlers {
+  // events carries the full, newest-first list each time it changes (the server diffs server-side and
+  // only pushes on change), so the handler replaces the list wholesale.
+  events: (list: EventEntry[]) => void
+  error?: () => void
+}
+
+// streamEvents tails a resource's Kubernetes events over SSE, returning a function that closes the
+// stream. The server lists events live (they aren't cached) and pushes the subtree-aggregated list
+// only when it changes — so the drawer holds one quiet connection instead of polling every 8s.
+export function streamEvents(ctx: string, ns: string, kind: string, name: string, h: EventStreamHandlers): () => void {
+  // A cluster-scoped resource has an empty namespace; substitute the scope sentinel so the URL
+  // doesn't collapse to `namespaces//…` (which the server 307→404s) — same rule as logs/manifest.
+  const es = new EventSource(
+    `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns || CLUSTER_SCOPE)}/resources/${kind}/${encodeURIComponent(name)}/events/stream`,
   )
-  if (!res.ok) throw new ApiError(`events: ${res.status}`, res.status)
-  return ((await res.json()) as { events: EventEntry[] }).events ?? []
+  es.addEventListener('events', (e) =>
+    h.events(((JSON.parse((e as MessageEvent).data) as { events?: EventEntry[] }).events) ?? []),
+  )
+  es.onerror = () => h.error?.()
+  return () => es.close()
 }
 
 // NamespaceSummary mirrors the server's graph.Summary: the namespace's worst health and the

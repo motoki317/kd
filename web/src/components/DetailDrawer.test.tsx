@@ -4,23 +4,37 @@ import { createSignal, Suspense } from 'solid-js'
 import DetailDrawer from './DetailDrawer'
 import type { KNode } from '../types'
 
-// A loggable resource mounts LogViewer, which opens an EventSource on mount; a no-op stub keeps it
-// from touching the network.
-class NoopEventSource {
+// The drawer opens an EventSource for the events feed (always) and LogViewer opens one for logs
+// (loggable kinds). This tracked stub lets a test find the events stream by URL and emit its
+// `events` / `error` frames the way the server does; the manifest still loads over fetch.
+let eventSources: FakeEventSource[] = []
+class FakeEventSource {
+  url: string
   onerror: (() => void) | null = null
-  addEventListener() {}
+  listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
+  constructor(url: string) {
+    this.url = url
+    eventSources.push(this)
+  }
+  addEventListener(name: string, fn: (e: MessageEvent) => void) {
+    ;(this.listeners[name] ||= []).push(fn)
+  }
+  emit(name: string, payload: unknown) {
+    const ev = new MessageEvent(name, { data: JSON.stringify(payload) })
+    for (const fn of this.listeners[name] ?? []) fn(ev)
+  }
   close() {}
 }
+const eventStream = () => eventSources.find((es) => es.url.includes('/events/stream'))!
+// Deliver an events payload the way the server's `events` SSE frame does.
+const emitEvents = (list: unknown[]) => eventStream().emit('events', { events: list })
 
-// Stub the network so the manifest/events resources resolve without a server.
+// Stub the network so the manifest resolves without a server; events arrive via emitEvents.
 beforeEach(() => {
-  vi.stubGlobal('EventSource', NoopEventSource)
-  vi.stubGlobal('fetch', (url: string) =>
-    Promise.resolve(
-      url.includes('/events')
-        ? new Response(JSON.stringify({ events: [] }), { status: 200 })
-        : new Response('kind: ConfigMap\nmetadata:\n  name: settings\n', { status: 200 }),
-    ),
+  eventSources = []
+  vi.stubGlobal('EventSource', FakeEventSource)
+  vi.stubGlobal('fetch', () =>
+    Promise.resolve(new Response('kind: ConfigMap\nmetadata:\n  name: settings\n', { status: 200 })),
   )
 })
 afterEach(() => {
@@ -58,28 +72,21 @@ describe('DetailDrawer', () => {
     expect(live.container.querySelector('.drawer-deleted')).toBeNull()
   })
 
-  it('keeps the drawer visible while events are still loading (events read must not suspend the OUTER boundary)', async () => {
-    // App wraps the whole drawer in <Suspense>. The events tab badge sits ABOVE the events panel's
-    // own Suspense, so a suspending events() read there re-suspends the OUTER boundary — and the 8s
-    // poll re-runs it, detaching/re-inserting the drawer's DOM and replaying its slide-in animation
-    // (the reported "drawer re-opens every few seconds" flicker). Hold the events fetch pending and
-    // resolve the manifest: the drawer must still be on screen, the events suspense contained to the
-    // panel's own boundary. Before the fix the outer boundary stayed stuck on the never-resolving
-    // events read and the drawer never rendered.
-    vi.stubGlobal('fetch', (url: string) =>
-      url.includes('/events')
-        ? new Promise<Response>(() => {}) // never resolves
-        : Promise.resolve(new Response('kind: ConfigMap\n', { status: 200 })),
-    )
+  it('renders immediately while the events stream has not delivered yet (no Suspense on the events feed)', async () => {
+    // The events feed is an SSE signal, not a suspending resource, so a not-yet-delivered stream can't
+    // hold App's OUTER <Suspense> (the cause of the old "drawer re-opens every few seconds" flicker,
+    // when a suspending events() read above the panel re-suspended the boundary on every 8s poll). The
+    // drawer shows immediately with the events panel on its own "loading…" state; never emit here.
     const { container } = render(() => (
       <Suspense fallback={<div class="outer-fallback" />}>
         <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
       </Suspense>
     ))
-    // The manifest resolves and the outer boundary settles; events stay pending throughout.
     await vi.waitFor(() => expect(container.querySelector('aside.drawer')).toBeTruthy())
     expect(container.querySelector('.outer-fallback')).toBeNull()
     expect(container.querySelector('.drawer-name')?.textContent).toContain('settings')
+    // The events panel sits on its own loading state, contained — the drawer is fully usable.
+    expect(container.querySelector('.events-panel .drawer-loading')?.textContent).toContain('loading')
   })
 
   it('does not refetch when the node object identity churns but the resource is unchanged (flap fix)', async () => {
@@ -90,24 +97,23 @@ describe('DetailDrawer', () => {
     // few seconds"). A genuine navigation (different kind/name) must still refetch.
     const manifestFetches: string[] = []
     vi.stubGlobal('fetch', (url: string) => {
-      if (!url.includes('/events')) manifestFetches.push(url)
-      return Promise.resolve(
-        url.includes('/events')
-          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      )
+      manifestFetches.push(url)
+      return Promise.resolve(new Response('kind: ConfigMap\n', { status: 200 }))
     })
     const [node, setNode] = createSignal<KNode>(configMap)
     render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
     await vi.waitFor(() => expect(manifestFetches.length).toBeGreaterThanOrEqual(1))
     const initial = manifestFetches.length
-    // Same resource, fresh object identity (what a poll does) → key stays stable, no refetch.
+    const streams = eventSources.length // the events stream must not be re-opened on a churn either
+    // Same resource, fresh object identity (what a poll does) → key stays stable, no refetch/resubscribe.
     setNode({ ...configMap })
     await new Promise((r) => setTimeout(r, 0))
     expect(manifestFetches.length).toBe(initial)
-    // Sanity: a real navigation to a different resource DOES re-key and refetch.
+    expect(eventSources.length).toBe(streams)
+    // Sanity: a real navigation to a different resource DOES re-key, refetch, and re-open the stream.
     setNode({ ...configMap, id: 'cm2', name: 'other' })
     await vi.waitFor(() => expect(manifestFetches.length).toBe(initial + 1))
+    expect(eventSources.length).toBe(streams + 1)
   })
 
   it('shows Events/Manifest tabs (no Logs) for a non-loggable resource', () => {
@@ -488,58 +494,47 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-labels')).toBeNull()
   })
 
-  it("shows a load error (not 'no events') when the events fetch fails, without crashing", async () => {
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response('boom', { status: 500 })
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      ),
-    )
+  it("shows a load error (not 'no events') when the events stream drops, without crashing", async () => {
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    // EventSource can't surface an HTTP status, so any stream drop reads as the one generic notice.
+    eventStream().onerror?.()
     await findByText("Couldn't load events.")
-    // The drawer itself still rendered (a thrown resource error would have torn it down).
+    // The drawer itself still rendered (a thrown error would have torn it down).
     expect(container.querySelector('.drawer')).toBeTruthy()
   })
 
-  it('a 403 names itself — access denied, not the generic load failure (events + manifest)', async () => {
-    // kd's own policy denying drill-in must read as "ask your admin", not "kd is broken": the
-    // generic wording sends the operator into retry/distrust instead of a permissions request.
+  it('a 403 names itself in the Manifest tab — access denied, not a generic load failure', async () => {
+    // kd's own policy denying drill-in must read as "ask your admin", not "kd is broken": the generic
+    // wording sends the operator into retry/distrust instead of a permissions request. The manifest is
+    // REST so it can read the 403; the events feed is SSE (EventSource hides the status) and can only
+    // show its generic notice — an accepted trade for one quiet connection over a polling fetch.
     vi.stubGlobal('fetch', () => Promise.resolve(new Response('forbidden', { status: 403 })))
-    const { container, findByText } = render(() => (
+    const { findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
-    await findByText("Access denied — your kd role can't read events here.")
-    // Manifest tab: same split.
-    ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Manifest'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    // ConfigMap defaults to the Manifest tab, so the manifest 403 renders without a tab switch.
     await findByText("Access denied — your kd role can't read this manifest.")
   })
 
   it('explains the ~1h event TTL under an empty events list (not just "No recent events")', async () => {
-    // Default beforeEach mock returns {events: []} → the empty state. The hint stops an operator from
-    // reading an aged-out resource's empty tab as "nothing ever happened / broken feed".
+    // An empty events payload → the empty state. The hint stops an operator from reading an aged-out
+    // resource's empty tab as "nothing ever happened / broken feed".
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    emitEvents([]) // the stream delivered, with nothing
     await findByText('No recent events.')
     const hint = container.querySelector('.events-empty-hint')
     expect(hint?.textContent).toContain('about an hour')
   })
 
   it('glosses a coalesced event\'s ×N count in plain words on hover', async () => {
-    const ev = { type: 'Warning', reason: 'BackOff', message: 'restarting failed container', count: 7, last: new Date().toISOString() }
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response(JSON.stringify({ events: [ev] }), { status: 200 })
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      ),
-    )
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    emitEvents([{ type: 'Warning', reason: 'BackOff', message: 'restarting failed container', count: 7, last: new Date().toISOString() }])
     await findByText('BackOff')
     const count = container.querySelector('.event-count')
     expect(count?.textContent).toBe('×7')
@@ -564,21 +559,20 @@ describe('DetailDrawer', () => {
   it('requests a cluster-scoped resource under the __cluster__ namespace, not an empty one', async () => {
     // A Node/PriorityClass/ClusterRole carries no namespace; an empty {ns} segment collapses to a
     // double slash the server 404s (manifest + events both showed "unavailable"). The drawer must
-    // substitute the cluster sentinel the server unmaps to "".
+    // substitute the cluster sentinel the server unmaps to "" — on the manifest fetch AND the events
+    // stream URL.
     const urls: string[] = []
     vi.stubGlobal('fetch', (url: string) => {
       urls.push(url)
-      return Promise.resolve(
-        url.includes('/events')
-          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
-          : new Response('kind: Node\n', { status: 200 }),
-      )
+      return Promise.resolve(new Response('kind: Node\n', { status: 200 }))
     })
     const node: KNode = { id: 'n1', kind: 'Node', name: 'worker-1', namespace: '', health: 'Healthy' }
     render(() => <DetailDrawer ctx="test-ctx" node={node} onClose={() => {}} />)
     await vi.waitFor(() => expect(urls.some((u) => u.includes('/resources/Node/worker-1'))).toBe(true))
     expect(urls.every((u) => !u.includes('/namespaces//'))).toBe(true)
     expect(urls.some((u) => u.includes('/namespaces/__cluster__/resources/Node/worker-1'))).toBe(true)
+    // The events stream substitutes the sentinel too (an empty ns would 307→404 the SSE connect).
+    expect(eventStream().url).toContain('/namespaces/__cluster__/resources/Node/worker-1/events/stream')
   })
 
   it('keeps the active tab across selections when the new resource has it', () => {
@@ -655,27 +649,16 @@ describe('DetailDrawer', () => {
   })
 
   it('events list offers a warnings-only toggle when there is a mix to filter', async () => {
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response(
-              JSON.stringify({
-                events: [
-                  { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
-                  { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
-                  { type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() },
-                ],
-              }),
-              { status: 200 },
-            )
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      ),
-    )
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    emitEvents([
+      { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
+      { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
+      { type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() },
+    ])
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    // Wait for events to render; expect all three reasons visible initially.
+    // All three reasons visible initially.
     await findByText('Pulled')
     expect(container.querySelectorAll('.event-item').length).toBe(3)
     const chip = container.querySelector('.events-filter-chip') as HTMLButtonElement
@@ -687,25 +670,12 @@ describe('DetailDrawer', () => {
   })
 
   it('Alt-click copies an event as "Reason: message" with the green flash (log-line idiom)', async () => {
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response(
-              JSON.stringify({
-                events: [
-                  { type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() },
-                ],
-              }),
-              { status: 200 },
-            )
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      ),
-    )
     const writeText = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    emitEvents([{ type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString() }])
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await findByText('BackOff')
     const item = container.querySelector('.event-item') as HTMLElement
@@ -720,24 +690,13 @@ describe('DetailDrawer', () => {
   })
 
   it('omits the warnings-only chip when all events are the same type', async () => {
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response(
-              JSON.stringify({
-                events: [
-                  { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
-                  { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
-                ],
-              }),
-              { status: 200 },
-            )
-          : new Response('kind: ConfigMap\n', { status: 200 }),
-      ),
-    )
     const { container, findByText } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
+    emitEvents([
+      { type: 'Normal', reason: 'Pulled', message: 'image pulled', count: 1, last: new Date().toISOString() },
+      { type: 'Normal', reason: 'Created', message: 'container created', count: 1, last: new Date().toISOString() },
+    ])
     ;[...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.includes('Events'))!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await findByText('Pulled')
     expect(container.querySelector('.events-filter-chip')).toBeNull()
@@ -848,29 +807,6 @@ describe('DetailDrawer', () => {
   })
 
   it('clicking an aggregated event source pill navigates via onNavigateRef', async () => {
-    // Stub the events fetch to return an event whose source differs from the root resource —
-    // i.e. an aggregated event from a descendant pod.
-    vi.stubGlobal('fetch', (url: string) =>
-      Promise.resolve(
-        url.includes('/events')
-          ? new Response(
-              JSON.stringify({
-                events: [
-                  {
-                    type: 'Warning',
-                    reason: 'BackOff',
-                    message: 'crash-looping',
-                    count: 3,
-                    last: new Date().toISOString(),
-                    source: 'Pod/web-7d9f-2xkp',
-                  },
-                ],
-              }),
-              { status: 200 },
-            )
-          : new Response('kind: Deployment\n', { status: 200 }),
-      ),
-    )
     const deploy: KNode = { id: 'd1', kind: 'Deployment', name: 'web', namespace: 'shop', health: 'Degraded' }
     const refNavigated: string[] = []
     const { container, findByTitle } = render(() => (
@@ -883,6 +819,8 @@ describe('DetailDrawer', () => {
         onClose={() => {}}
       />
     ))
+    // An event whose source differs from the root — i.e. aggregated from a descendant pod.
+    emitEvents([{ type: 'Warning', reason: 'BackOff', message: 'crash-looping', count: 3, last: new Date().toISOString(), source: 'Pod/web-7d9f-2xkp' }])
     // The drawer opens to Logs by default for a Deployment; flip to Events to render the list.
     const tabs = [...container.querySelectorAll('.drawer-tabs button')] as HTMLButtonElement[]
     tabs.find((b) => b.textContent?.includes('Events'))!.click()

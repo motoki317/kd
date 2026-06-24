@@ -2,6 +2,8 @@ package api
 
 import (
 	"cmp"
+	"context"
+	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -12,6 +14,13 @@ import (
 
 	"github.com/motoki317/kd/internal/kube/graph"
 )
+
+// eventStreamInterval is how often the event stream re-lists events from the apiserver. Events are
+// not cached (DefaultSkipKinds — too high-cardinality and short-lived to watch), so the stream
+// polls the live API server-side and pushes only when the list changes. This is the SAME List the
+// client used to issue every 8s; moving it server-side lets the drawer hold one quiet SSE
+// connection that's silent while nothing changes, instead of re-fetching the full list on a timer.
+const eventStreamInterval = 8 * time.Second
 
 type eventEntry struct {
 	Type    string `json:"type"`             // Normal | Warning
@@ -38,13 +47,97 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.authorizeKind(w, r, store, ns, kind, "get"); !ok {
 		return
 	}
-	// The graph (for the resource's UID and its owned subtree) comes from the cached snapshot.
-	// Build re-runs the typed conversion internally, so pass the raw snapshot (like handleGraph).
+	events, found, err := resourceEvents(r.Context(), store, ns, kind, name)
+	if !found {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to list events", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, eventsResponse{Events: events})
+}
+
+// handleResourceEventStream streams a resource's events over SSE: an `events` event carrying the full
+// list on connect, then again whenever the list changes. The server re-lists from the apiserver on
+// eventStreamInterval and diffs, so an idle resource's stream stays silent between heartbeats — the
+// drawer holds one connection instead of polling. See docs/ADR/20260527-realtime-transport-sse.md.
+func (a *API) handleResourceEventStream(w http.ResponseWriter, r *http.Request) {
+	ns, kind, name := r.PathValue("ns"), r.PathValue("kind"), r.PathValue("name")
+	store, ok := a.resolveStore(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := a.authorizeKind(w, r, store, ns, kind, "get"); !ok {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	setSSEHeaders(w)
+
+	// Push the current list only when it differs from the last sent one. A resource absent from the
+	// graph (deleted mid-stream, or a connect-time race) pushes an empty list rather than erroring:
+	// the drawer's deleted-banner — driven by the graph stream — owns that UX, so the event feed just
+	// goes quiet.
+	var sent []eventEntry
+	have := false
+	push := func() bool {
+		events, _, err := resourceEvents(r.Context(), store, ns, kind, name)
+		if err != nil {
+			return true // transient apiserver error: keep the stream open and retry next tick
+		}
+		if events == nil {
+			events = []eventEntry{}
+		}
+		if have && slices.Equal(sent, events) {
+			return true
+		}
+		sent, have = events, true
+		if !writeSSE(w, "events", eventsResponse{Events: events}) {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	if !push() {
+		return
+	}
+	poll := time.NewTicker(eventStreamInterval)
+	defer poll.Stop()
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-poll.C:
+			if !push() {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+// resourceEvents resolves the resource's UID and owned subtree from the cached graph snapshot and
+// returns the live events landing on that subtree, newest-first (kubectl-describe style). found is
+// false when the resource is absent from the graph; err is a non-nil apiserver List failure. Events
+// are NOT in the informer cache (DefaultSkipKinds), so they're listed live; the cluster sentinel
+// lists across all namespaces (a cluster-scoped resource's events have no fixed namespace).
+func resourceEvents(ctx context.Context, store Store, ns, kind, name string) (events []eventEntry, found bool, err error) {
 	g := graph.Build(store.SnapshotNamespace(ns))
 	rootID := g.NodeID(kind, name)
 	if rootID == "" {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
+		return nil, false, nil
 	}
 	// Aggregate over the resource and everything it owns, so a controller surfaces the scheduling
 	// and image-pull events that actually land on its pods.
@@ -52,24 +145,19 @@ func (a *API) handleResourceEvents(w http.ResponseWriter, r *http.Request) {
 	for _, id := range g.DescendantIDs(rootID) {
 		uids[id] = true
 	}
-	// Events are NOT eager-loaded into the informer cache (DefaultSkipKinds — too high-cardinality
-	// and short-lived to keep watched), so they are absent from the snapshot. Fetch them live from
-	// the API server on demand, kubectl-describe style. The cluster sentinel lists across all
-	// namespaces (a cluster-scoped resource's events have no fixed namespace).
 	eventsNS := ns
 	if eventsNS == ClusterScopeNamespace {
 		eventsNS = metav1.NamespaceAll
 	}
-	list, err := store.Client().CoreV1().Events(eventsNS).List(r.Context(), metav1.ListOptions{})
+	list, err := store.Client().CoreV1().Events(eventsNS).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		http.Error(w, "failed to list events", http.StatusBadGateway)
-		return
+		return nil, true, err
 	}
 	evs := make([]runtime.Object, len(list.Items))
 	for i := range list.Items {
 		evs[i] = &list.Items[i]
 	}
-	writeJSON(w, eventsResponse{Events: eventsFor(evs, uids, kind, name)})
+	return eventsFor(evs, uids, kind, name), true, nil
 }
 
 // eventsFor collects the events whose involvedObject is in the uid set (the resource and its

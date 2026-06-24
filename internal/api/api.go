@@ -107,6 +107,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/graph/stream", a.handleGraphStream)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/resources/{kind}/{name}", a.handleResource)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/resources/{kind}/{name}/events", a.handleResourceEvents)
+	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/resources/{kind}/{name}/events/stream", a.handleResourceEventStream)
 	mux.HandleFunc("GET /api/v1/contexts/{ctx}/namespaces/{ns}/resources/{kind}/{name}/log/stream", a.handleResourceLogStream)
 	return mux
 }

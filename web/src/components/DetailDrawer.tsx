@@ -1,5 +1,5 @@
-import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, onMount, Show, startTransition, Suspense } from 'solid-js'
-import { CLUSTER_SCOPE, fetchEvents, isForbidden } from '../api'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
+import { CLUSTER_SCOPE, streamEvents, type EventEntry } from '../api'
 import { ExpandGlyph, kindFromRef, kindIcon } from '../icons'
 import { nextRovingIndex } from '../rovingFocus'
 import { relativeAge } from '../time'
@@ -188,13 +188,14 @@ export default function DetailDrawer(props: Props) {
   // Reference-stable while the resource IDENTITY (ctx/ns/kind/name) is unchanged. This is load-bearing
   // for "the drawer must not flap on background updates": a live data tick re-creates the node OBJECT
   // (the capacity feed rebuilds its Node map every poll; the SSE store reconciles changed resources),
-  // so a plain `() => {…}` here returned a NEW key on every tick — re-keying the events/manifest
-  // resources, which re-fetch on a new source and (via the manifest's eager segment memo, see
-  // ManifestPanel) re-suspend the drawer's OUTER <Suspense>, detaching + re-inserting the DOM and
-  // replaying the slide-in ("the sidebar keeps re-opening every few seconds"). These endpoints depend
-  // ONLY on the four identity strings, so returning the SAME object while they're unchanged means no
-  // spurious re-fetch and no flap — for every resource kind, not just Nodes. A genuine re-selection
-  // (different kind/name) or a manifest format toggle still produces a new key and re-fetches.
+  // so a plain `() => {…}` here returned a NEW key on every tick — re-keying the events stream (a new
+  // key tears down and reopens its EventSource, flashing the panel back to "loading") and the manifest
+  // resource (which re-fetches and, via its eager segment memo in ManifestPanel, re-suspends the
+  // drawer's OUTER <Suspense>, detaching + re-inserting the DOM and replaying the slide-in — "the
+  // sidebar keeps re-opening every few seconds"). Both depend ONLY on the four identity strings, so
+  // returning the SAME object while they're unchanged means no spurious re-subscribe/re-fetch and no
+  // flap — for every resource kind, not just Nodes. A genuine re-selection (different kind/name) or a
+  // manifest format toggle still produces a new key.
   const key = createMemo<{ ctx: string; ns: string; kind: string; name: string } | null>((prev) => {
     const n = displayNode()
     if (!n) return null
@@ -205,44 +206,41 @@ export default function DetailDrawer(props: Props) {
     return { ctx: props.ctx, ns, kind: n.kind, name: n.name }
   })
 
-  // Events are fetched as soon as a node is selected, so switching tabs is instant. (The manifest
-  // fetch lives in ManifestPanel, keyed the same way.)
-  const [events, { refetch: refetchEvents }] = createResource(key, (k) => fetchEvents(k.ctx, k.ns, k.kind, k.name))
-  // The loaded events read WITHOUT suspending. The tab badge and warn dot live in the tablist —
-  // ABOVE the events panel's <Suspense> — so reading the suspending events() accessor there
-  // re-suspends the drawer's OUTER boundary (App wraps the whole drawer in <Suspense>). On every 8s
-  // refetch that detaches and re-inserts the drawer's DOM, restarting the slide-in animation: the
-  // "drawer keeps re-opening every few seconds" flicker. resource.latest gives the last value
-  // without suspending, but only once resolved (it suspends while unresolved, throws while errored),
-  // so gate on state and treat the not-yet-loaded / errored window as empty.
-  const loadedEvents = createMemo(() => (events.state === 'ready' || events.state === 'refreshing' ? events.latest ?? [] : []))
-  const eventCount = () => loadedEvents().length
-  const warnings = () => loadedEvents().filter((e) => e.type === 'Warning').length
+  // Events stream: a long-lived SSE keyed on the selected resource (the same identity-stable key the
+  // manifest uses). The server lists events live and pushes the subtree-aggregated list only when it
+  // changes, so switching tabs is instant, an idle resource costs one quiet connection, and the
+  // delicate Suspense-avoidance the 8s poll needed is gone — a plain signal can't re-suspend the
+  // drawer the way the old createResource read did.
+  const [eventList, setEventList] = createSignal<EventEntry[]>([])
+  // received tells "the stream hasn't delivered yet" (show loading) apart from "delivered an empty
+  // list" (show the no-events state); errored flips on an EventSource drop.
+  const [eventsReceived, setEventsReceived] = createSignal(false)
+  const [eventsErrored, setEventsErrored] = createSignal(false)
+  createEffect(() => {
+    const k = key()
+    if (!k) return
+    // Reset per resource so a switch shows loading, not the previous resource's events.
+    setEventList([])
+    setEventsReceived(false)
+    setEventsErrored(false)
+    const close = streamEvents(k.ctx, k.ns, k.kind, k.name, {
+      events: (list) => {
+        setEventList(list)
+        setEventsReceived(true)
+        setEventsErrored(false) // a fresh payload means the stream recovered from a transient drop
+      },
+      error: () => setEventsErrored(true),
+    })
+    onCleanup(close)
+  })
+  const eventCount = () => eventList().length
+  const warnings = () => eventList().filter((e) => e.type === 'Warning').length
   // Warnings-only toggle: noisy resources emit many Normal events (Pulled, Created, Started…) that
   // bury the Warning a triage needs. Resets when the drawer switches to a different resource so
   // the filter doesn't silently follow operators into a new context.
   const [warnOnly, setWarnOnly] = createSignal(false)
   createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
-  // A lazy accessor, NOT createMemo: an eager memo runs at component-init time — OUTSIDE the events
-  // panel's <Suspense> — so its suspending events() read would register with the drawer's OUTER
-  // boundary (App wraps the drawer in <Suspense>) and re-suspend it on every refetch, detaching and
-  // re-inserting the drawer DOM (replaying the slide-in). As a plain function it's first read inside
-  // the panel's own Suspense, so the INNER boundary owns the load. Guard events.error first: the
-  // resource throws on read when errored.
-  const shownEvents = () => {
-    if (events.error) return []
-    const all = events() ?? []
-    return warnOnly() ? all.filter((e) => e.type === 'Warning') : all
-  }
-
-  // Events are transient and a failing resource keeps emitting them, so poll while the drawer is
-  // open (a no-op when nothing is selected) to keep the tab badge and list current.
-  onMount(() => {
-    // Refetch inside a transition so a poll keeps the current list on screen (stale-while-revalidate)
-    // instead of dropping the events panel back to its "loading…" fallback every 8s.
-    const t = setInterval(() => void startTransition(() => refetchEvents()), 8000)
-    onCleanup(() => clearInterval(t))
-  })
+  const shownEvents = () => (warnOnly() ? eventList().filter((e) => e.type === 'Warning') : eventList())
 
   // Focus trap (cycle 326): expanded mode covers the topology, but the canvas controls (search, kind
   // chips, Fit) stay in the DOM and tabbable — Shift+Tab from the drawer's first control would land
@@ -399,7 +397,7 @@ export default function DetailDrawer(props: Props) {
                     onClick={() => setTab(t)}
                   >
                     {TAB_LABELS[t]}
-                    <Show when={t === 'events' && !events.error && eventCount() > 0}>
+                    <Show when={t === 'events' && !eventsErrored() && eventCount() > 0}>
                       <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
                         {eventCount() > 99 ? '99+' : eventCount()}
                       </span>
@@ -469,19 +467,14 @@ export default function DetailDrawer(props: Props) {
             id="drawer-tabpanel-events"
             aria-labelledby="drawer-tab-events"
           >
-            <Suspense fallback={<div class="drawer-loading">loading…</div>}>
-              {/* events() throws if the resource errored, so gate on events.error first — both to show
-                  a real error (not a misleading "no events") and to avoid reading the errored signal. */}
-              {/* A 403 is kd's own policy speaking — "ask your admin", not "kd is broken" — so it
-                  must not hide behind the generic load failure (the message an operator reads as
-                  a server fault and retries). */}
+            {/* The events stream drives plain signals (no Suspense): show loading until the first push,
+                a notice if the SSE drops, else the list. EventSource can't surface the HTTP status, so
+                a policy denial reads as the same generic failure as any other drop (unlike the manifest
+                tab, which is REST and still names a 403). */}
+            <Show when={eventsReceived() || eventsErrored()} fallback={<div class="drawer-loading">loading…</div>}>
               <Show
-                when={!events.error}
-                fallback={
-                  <div class="events-empty">
-                    {isForbidden(events.error) ? 'Access denied — your kd role can\'t read events here.' : "Couldn't load events."}
-                  </div>
-                }
+                when={!eventsErrored()}
+                fallback={<div class="events-empty">Couldn't load events.</div>}
               >
                 {/* Warnings-only toggle: surfaced only when there's a mix to filter (some warnings AND
                     some normal). Pure "all normal" or "all warnings" hides the chip — no useful action. */}
@@ -591,7 +584,7 @@ export default function DetailDrawer(props: Props) {
                   </ul>
                 </Show>
               </Show>
-            </Suspense>
+            </Show>
           </div>
 
           <ManifestPanel resKey={key()} nodeId={displayNode()?.id} active={tab() === 'manifest'} />

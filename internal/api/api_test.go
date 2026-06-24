@@ -260,6 +260,63 @@ func TestResourceEventsHandler(t *testing.T) {
 	}
 }
 
+// TestEventStreamSendsEvents verifies the SSE events feed sends an initial `events` frame carrying
+// the subtree-aggregated list (the Deployment's stream includes its pod's FailedScheduling), so the
+// drawer holds one connection instead of polling the REST endpoint.
+func TestEventStreamSendsEvents(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
+		&appsv1.Deployment{ObjectMeta: meta("shop", "web", "dep-uid")},
+		&appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "shop", Name: "web-rs", UID: "rs-uid",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "web", UID: "dep-uid", Controller: ptr(true)}},
+		}, Spec: appsv1.ReplicaSetSpec{Replicas: ptr(int32(1))}, Status: appsv1.ReplicaSetStatus{Replicas: 1}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "shop", Name: "web-a", UID: "pa",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-rs", UID: "rs-uid", Controller: ptr(true)}},
+		}, Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+		&corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Namespace: "shop", Name: "evt-1"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-a", UID: "pa"},
+			Reason:         "FailedScheduling", Type: corev1.EventTypeWarning, Message: "no nodes", Count: 1,
+			LastTimestamp: metav1.Now(),
+		},
+	}
+	srv := newServer(t, "", objs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+ctxPath+"/namespaces/shop/resources/Deployment/web/events/stream", nil)
+	req.Header.Set("X-Forwarded-User", "alice")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("event stream request: %v", err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+	sc := bufio.NewScanner(resp.Body)
+	sawEvents, sawReason := false, false
+	for sc.Scan() {
+		line := sc.Text()
+		if strings.HasPrefix(line, "event: events") {
+			sawEvents = true
+		}
+		if strings.HasPrefix(line, "data: ") && strings.Contains(line, "FailedScheduling") {
+			sawReason = true
+		}
+		if sawEvents && sawReason {
+			break
+		}
+	}
+	if !sawEvents {
+		t.Error("expected an initial 'events' event on the event stream")
+	}
+	if !sawReason {
+		t.Error("expected the subtree-aggregated FailedScheduling event in the stream payload")
+	}
+}
+
 func TestGraphStreamSendsSnapshot(t *testing.T) {
 	srv := newServer(t, "", fixtureObjs...)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
