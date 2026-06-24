@@ -346,21 +346,6 @@ export default function DetailDrawer(props: Props) {
                   </svg>
                 </button>
               </Show>
-              {/* Expand/restore: grow the drawer to fill the canvas for comfortable log/manifest
-                  reading, then shrink it back to the side panel. The 4-corner glyph points outward
-                  to "maximize" and inward to "restore" — a familiar window-control idiom. */}
-              <button
-                class="drawer-expand"
-                type="button"
-                title={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
-                aria-label={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
-                aria-pressed={expanded()}
-                onClick={() => setExpanded((v) => !v)}
-              >
-                <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
-                  <ExpandGlyph expanded={expanded()} />
-                </svg>
-              </button>
               <button
                 class="drawer-share"
                 title="Copy share link"
@@ -391,33 +376,57 @@ export default function DetailDrawer(props: Props) {
             </div>
           </header>
 
-          {/* Proper WAI-ARIA tabs (not aria-pressed toggle buttons): a screen reader announces
-              "tab, selected, 2 of 3" and associates each panel with its tab, and roving tabindex +
-              arrow keys give the expected in-widget keyboard model. (The global [ / ] shortcut still
-              cycles tabs from anywhere in the drawer; the arrows work once focus is on the tablist.) */}
-          <nav class="drawer-tabs" role="tablist" aria-label="Resource details" onKeyDown={onTablistKey}>
-            <For each={tabs()}>
-              {(t) => (
-                <button
-                  ref={(el) => (tabRefs[t] = el)}
-                  role="tab"
-                  id={`drawer-tab-${t}`}
-                  aria-controls={`drawer-tabpanel-${t}`}
-                  aria-selected={tab() === t}
-                  tabindex={tab() === t ? 0 : -1}
-                  classList={{ active: tab() === t }}
-                  onClick={() => setTab(t)}
-                >
-                  {TAB_LABELS[t]}
-                  <Show when={t === 'events' && !events.error && eventCount() > 0}>
-                    <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
-                      {eventCount() > 99 ? '99+' : eventCount()}
-                    </span>
-                  </Show>
-                </button>
-              )}
-            </For>
-          </nav>
+          {/* Tab bar: the WAI-ARIA tablist plus the full-screen toggle, which lives on the SAME row so
+              every tab (Logs/Events/Manifest) can expand — not just Logs (where the control used to
+              hide in the logs toolbar). The toggle sits OUTSIDE role="tablist" so it isn't announced as
+              a fourth tab. */}
+          <div class="drawer-tabbar">
+            {/* Proper WAI-ARIA tabs (not aria-pressed toggle buttons): a screen reader announces
+                "tab, selected, 2 of 3" and associates each panel with its tab, and roving tabindex +
+                arrow keys give the expected in-widget keyboard model. (The global [ / ] shortcut still
+                cycles tabs from anywhere in the drawer; the arrows work once focus is on the tablist.) */}
+            <nav class="drawer-tabs" role="tablist" aria-label="Resource details" onKeyDown={onTablistKey}>
+              <For each={tabs()}>
+                {(t) => (
+                  <button
+                    ref={(el) => (tabRefs[t] = el)}
+                    role="tab"
+                    id={`drawer-tab-${t}`}
+                    aria-controls={`drawer-tabpanel-${t}`}
+                    aria-selected={tab() === t}
+                    tabindex={tab() === t ? 0 : -1}
+                    classList={{ active: tab() === t }}
+                    onClick={() => setTab(t)}
+                  >
+                    {TAB_LABELS[t]}
+                    <Show when={t === 'events' && !events.error && eventCount() > 0}>
+                      <span class="tab-badge" classList={{ warn: warnings() > 0 }}>
+                        {eventCount() > 99 ? '99+' : eventCount()}
+                      </span>
+                    </Show>
+                  </button>
+                )}
+              </For>
+            </nav>
+            {/* Full-screen toggle: grows the drawer to fill the canvas so the active tab gets the whole
+                width (and, when expanded, the summary collapses to its title row — see drawer.css). The
+                4-corner glyph points outward to "maximize" and inward to "restore" — a familiar
+                window-control idiom; paired with a word so it isn't an icon-only control. */}
+            <button
+              class="drawer-fullscreen"
+              type="button"
+              classList={{ active: expanded() }}
+              aria-pressed={expanded()}
+              title={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
+              aria-label={expanded() ? 'Restore panel size' : 'Expand to fill the canvas'}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+                <ExpandGlyph expanded={expanded()} />
+              </svg>
+              {expanded() ? 'restore' : 'full screen'}
+            </button>
+          </div>
 
           <Show when={loggable()}>
             {/* Kept mounted (hidden, not unmounted) so the log stream and scrollback survive a
@@ -448,8 +457,6 @@ export default function DetailDrawer(props: Props) {
                   (node().active ?? 0) === 0
                 }
                 visible={tab() === 'logs'}
-                expanded={expanded()}
-                onToggleExpand={() => setExpanded((v) => !v)}
               />
             </div>
           </Show>

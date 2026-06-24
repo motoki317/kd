@@ -1,6 +1,5 @@
 import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSignal } from 'solid-js'
 import LogViewer from './LogViewer'
 
 // LogViewer opens an EventSource on mount; a no-op stub keeps it from touching the network. The
@@ -133,30 +132,6 @@ describe('LogViewer', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('false') // off → not wrapping
     expect(localStorage.getItem('kd:logsWrap')).toBe('0')
     localStorage.removeItem('kd:logsWrap')
-  })
-
-  // The full-screen control (expands the drawer to fill the canvas) lives in the logs toolbar, next to
-  // the logs it grows — driving the SAME expanded state as the drawer-header expand button. It only
-  // renders when the parent wires onToggleExpand, and its label/aria flip with the expanded prop.
-  it('offers a full-screen control wired to onToggleExpand, reflecting the expanded state', () => {
-    const [expanded, setExpanded] = createSignal(false)
-    const { container } = render(() => (
-      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} expanded={expanded()} onToggleExpand={() => setExpanded((v) => !v)} />
-    ))
-    const btn = container.querySelector('.logs-fullscreen') as HTMLButtonElement
-    expect(btn).toBeTruthy()
-    expect(btn.textContent).toContain('full screen')
-    expect(btn.getAttribute('aria-pressed')).toBe('false')
-    btn.click()
-    // When expanded, the same control reads as "restore" (label + pressed state) — surgically, the
-    // signal drives it without remounting.
-    expect(btn.textContent).toContain('restore')
-    expect(btn.getAttribute('aria-pressed')).toBe('true')
-  })
-
-  it('omits the full-screen control when no onToggleExpand is wired', () => {
-    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
-    expect(container.querySelector('.logs-fullscreen')).toBeNull()
   })
 
   it('hides the line filter until there are log lines', () => {

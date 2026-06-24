@@ -209,20 +209,23 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Manifest')
   })
 
-  it('toggles an expanded (canvas-filling) mode via the expand button (cycle 311)', () => {
+  it('toggles an expanded (canvas-filling) mode via the tab-bar full-screen button (cycle 311)', () => {
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer') as HTMLElement
-    const btn = container.querySelector('.drawer-expand') as HTMLButtonElement
+    // The full-screen toggle lives in the tab bar (not the header), so every tab can expand.
+    const btn = container.querySelector('.drawer-fullscreen') as HTMLButtonElement
     expect(btn).toBeTruthy()
     // Starts compact.
     expect(drawer.classList.contains('expanded')).toBe(false)
     expect(btn.getAttribute('aria-pressed')).toBe('false')
+    expect(btn.textContent).toContain('full screen')
     // Click expands.
     btn.click()
     expect(drawer.classList.contains('expanded')).toBe(true)
     expect(btn.getAttribute('aria-pressed')).toBe('true')
+    expect(btn.textContent).toContain('restore')
     // Click again restores.
     btn.click()
     expect(drawer.classList.contains('expanded')).toBe(false)
@@ -265,7 +268,7 @@ describe('DetailDrawer', () => {
     handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
     expect(calls.resets).toBe(1)
     // Expanding the panel hides the handle — it fills the canvas, so there's no edge to drag.
-    ;(container.querySelector('.drawer-expand') as HTMLButtonElement).click()
+    ;(container.querySelector('.drawer-fullscreen') as HTMLButtonElement).click()
     expect(container.querySelector('.drawer-resizer')).toBeNull()
   })
 
@@ -611,23 +614,24 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-age')?.textContent).toContain('3d')
   })
 
-  it('goes full screen from the logs toolbar, driving the same expanded state as the header button', () => {
-    // The full-screen control lives in the logs panel (proximity), so it only exists on a loggable
-    // resource's logs tab. Clicking it toggles the SAME `expanded` class the drawer-header expand
-    // button drives — one affordance, two reachable places.
-    const pod: KNode = { ...configMap, id: 'p1', kind: 'Pod', name: 'api-0', status: 'Running' }
+  it('expands to full screen from the tab bar on any tab, not just Logs (cycle 311, relocated)', () => {
+    // The full-screen toggle moved out of the logs toolbar / drawer header into the tab bar, so every
+    // tab can expand — here a ConfigMap, which has no Logs tab at all (only Events + Manifest).
     const { container } = render(() => (
-      <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />
+      <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
     const drawer = container.querySelector('.drawer')!
+    const toggle = container.querySelector('.drawer-fullscreen') as HTMLButtonElement
+    expect(toggle).toBeTruthy()
+    // It sits in the tab bar — outside any tab panel (so it stays put across tab switches) and outside
+    // the tablist (so a screen reader doesn't hear it as a fourth tab).
+    expect(toggle.closest('.drawer-tabbar')).toBeTruthy()
+    expect(toggle.closest('[role="tabpanel"]')).toBeNull()
+    expect(toggle.closest('[role="tablist"]')).toBeNull()
     expect(drawer.classList.contains('expanded')).toBe(false)
-    const toggle = container.querySelector('.logs-fullscreen') as HTMLButtonElement
-    expect(toggle.closest('.logs-panel')).toBeTruthy() // it's inside the logs panel
     toggle.click()
     expect(drawer.classList.contains('expanded')).toBe(true)
-    // The header expand button reflects the shared state too (both now read "Restore panel size").
-    expect(container.querySelector('.drawer-expand')!.getAttribute('aria-pressed')).toBe('true')
-    toggle.click() // same control, now in restore state
+    toggle.click()
     expect(drawer.classList.contains('expanded')).toBe(false)
   })
 

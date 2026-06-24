@@ -4,7 +4,6 @@ import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
 import { defaultLogContainer, filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
-import { ExpandGlyph } from '../icons'
 import CopyButton from './CopyButton'
 
 interface Props {
@@ -32,12 +31,6 @@ interface Props {
   // stream survives; flipping this back to true asks the viewer to snap to the tail (so coming
   // back to Logs from Manifest lands on the newest line, not a stale scroll position).
   visible?: boolean
-  // Whether the drawer is expanded to fill the whole canvas. A full-screen control lives here (next to
-  // the logs it enlarges — proximity) and drives the SAME expanded state as the drawer-header expand
-  // button, so an operator reading logs can go full-screen without reaching for the far corner. Absent
-  // ⇒ no full-screen control (e.g. embedded use).
-  expanded?: boolean
-  onToggleExpand?: () => void
 }
 
 // LogViewer tails a resource's logs over SSE, auto-scrolling to the newest line. For workloads the
@@ -486,25 +479,6 @@ export default function LogViewer(props: Props) {
               // whole buffer (cycle 318; extended to level/source filters so all three read alike).
               title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
-          </Show>
-          {/* Full screen: expand the drawer to fill the canvas so the logs get the whole width. Drives
-              the SAME expanded state as the drawer-header expand button, placed here next to the logs it
-              grows (proximity). The 4-corner glyph points outward to "expand" and inward to "restore" —
-              the same window-control idiom the header button uses, so they read as one affordance. */}
-          <Show when={props.onToggleExpand}>
-            <button
-              class="logs-fullscreen"
-              classList={{ active: props.expanded }}
-              aria-pressed={props.expanded}
-              title={props.expanded ? 'Restore panel size' : 'Expand to fill the canvas'}
-              aria-label={props.expanded ? 'Restore panel size' : 'Expand to fill the canvas'}
-              onClick={() => props.onToggleExpand!()}
-            >
-              <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
-                <ExpandGlyph expanded={!!props.expanded} />
-              </svg>
-              {props.expanded ? 'restore' : 'full screen'}
-            </button>
           </Show>
         </span>
       </div>

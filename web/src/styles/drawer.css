@@ -95,8 +95,17 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Expanded mode trades the resource summary for reading space: keep only the hero (the one-line
+   identity + health tint that keeps the operator oriented and is the drawer's only health signal), and
+   hand the freed height to the active tab panel — logs/events/manifest are growing flex children, so
+   they fill it. The gauges, meta, kind facts, container cards and labels return on restore. */
 .drawer.expanded .drawer-summary {
-  max-height: 30vh;
+  max-height: none;
+  overflow: visible;
+  gap: 0;
+}
+.drawer.expanded .drawer-summary > :not(.drawer-hero) {
+  display: none;
 }
 @keyframes drawer-in {
   from { transform: translateX(32px); opacity: 0; }
@@ -939,8 +948,7 @@ summary.container-group-head::before,
    ("get out", "send"). Subtler default state until hover; flashes green for ~1s on a successful
    copy via the .copied class. */
 .drawer-share,
-.drawer-back,
-.drawer-expand {
+.drawer-back {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -954,21 +962,14 @@ summary.container-group-head::before,
   transition: background-color 120ms, color 120ms;
 }
 .drawer-share:hover,
-.drawer-back:hover,
-.drawer-expand:hover {
+.drawer-back:hover {
   background: var(--surface-2);
   color: var(--accent);
 }
 .drawer-share:focus-visible,
-.drawer-back:focus-visible,
-.drawer-expand:focus-visible {
+.drawer-back:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-}
-/* Pressed (expanded) state reads as "active mode" via the accent tint, like the legend pills. */
-.drawer-expand[aria-pressed='true'] {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .drawer-share.copied {
   color: var(--health-healthy);
@@ -977,13 +978,58 @@ summary.container-group-head::before,
 /* (.drawer-section + h3 styles removed: no markup ever used them — the drawer's sections are
    class-based with implicit spacing.) */
 
-/* Pod drawers tab between Logs and Manifest; underline marks the active tab. */
-.drawer-tabs {
+/* Tab bar: the tablist plus the full-screen toggle on one row. The bottom keyline lives here so it
+   spans the whole row (toggle included), not just the tabs. */
+.drawer-tabbar {
   flex: 0 0 auto;
   display: flex;
-  gap: 2px;
-  padding: 0 16px;
+  align-items: stretch;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid var(--keyline);
+}
+/* Pod drawers tab between Logs and Manifest; underline marks the active tab. */
+.drawer-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Full-screen toggle: right-aligned action in the tab bar, available on every tab. Borderless to sit
+   cleanly beside the borderless tabs; icon + word (never icon-only). Accent-tinted when active so the
+   "expanded" mode badges its own state. */
+.drawer-fullscreen {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-caps);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, background-color 0.12s;
+}
+.drawer-fullscreen svg {
+  flex: 0 0 auto;
+}
+.drawer-fullscreen:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.drawer-fullscreen.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.drawer-fullscreen:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .drawer-tabs button {
   border: 0;
