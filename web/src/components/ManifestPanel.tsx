@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, on, Show, Suspense } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Index, on, Show, Suspense } from 'solid-js'
 import { fetchResource, isForbidden, type ManifestFormat } from '../api'
 import { splitByMatch } from '../logs'
 import { computeFolds, mergeMatchRuns, splitManifestLines, type FoldRegion, type ManifestLine, type MatchRun, type Span } from '../manifestSyntax'
@@ -261,27 +261,34 @@ export default function ManifestPanel(props: {
             {/* One row per visible line: a fold gutter + the syntax-colored line. A collapsed header
                 shows a "⋯ N lines" affordance in place of its hidden body. Search hits wrap their spans
                 in a <mark> whose index drives the "current" emphasis. */}
-            <For each={rows()}>
+            {/* <Index>, not <For>: rows() is one entry per source line with a stable length (a collapsed
+                region's body rows stay in the DOM, clipped, rather than being dropped), so keying by
+                POSITION reuses every .mf-row node and only updates each row's reactive props on a fold
+                toggle. A reference-keyed <For> rebuilt all rows on every toggle (rows() yields fresh
+                objects), which destroyed the scroll container's children and snapped scrollTop to the
+                top mid-scroll. Reusing the nodes holds the operator's scroll position and keeps focus on
+                the clicked chevron. The list is rebuilt only when lines() changes (new resource/format). */}
+            <Index each={rows()}>
               {(row) => (
                 <div
                   class="mf-row"
-                  classList={{ 'mf-collapsed': row.collapsed, 'mf-hidden': row.hidden }}
-                  aria-hidden={row.hidden || undefined}
-                  style={{ '--mf-indent': row.indent }}
+                  classList={{ 'mf-collapsed': row().collapsed, 'mf-hidden': row().hidden }}
+                  aria-hidden={row().hidden || undefined}
+                  style={{ '--mf-indent': row().indent }}
                 >
                   <button
                     class="mf-fold"
-                    classList={{ 'mf-fold-leaf': !row.foldable }}
+                    classList={{ 'mf-fold-leaf': !row().foldable }}
                     tabindex={-1}
-                    aria-hidden={!row.foldable}
-                    aria-label={row.collapsed ? 'Expand field' : 'Collapse field'}
-                    aria-expanded={row.foldable ? !row.collapsed : undefined}
-                    onClick={() => row.foldable && toggleFold(row.line)}
+                    aria-hidden={!row().foldable}
+                    aria-label={row().collapsed ? 'Expand field' : 'Collapse field'}
+                    aria-expanded={row().foldable ? !row().collapsed : undefined}
+                    onClick={() => row().foldable && toggleFold(row().line)}
                   >
-                    {row.foldable ? (row.collapsed ? '▸' : '▾') : ''}
+                    {row().foldable ? (row().collapsed ? '▸' : '▾') : ''}
                   </button>
                   <span class="mf-line-content">
-                    <For each={row.runs}>
+                    <For each={row().runs}>
                       {(run) =>
                         run.match ? (
                           <mark class="manifest-match" classList={{ current: run.matchIndex === manifestMatchIdx() }}>
@@ -292,15 +299,15 @@ export default function ManifestPanel(props: {
                         )
                       }
                     </For>
-                    <Show when={row.collapsed}>
-                      <button class="mf-more" tabindex={-1} title={`${row.hiddenCount} lines hidden`} onClick={() => toggleFold(row.line)}>
-                        {`⋯ ${row.hiddenCount} lines`}
+                    <Show when={row().collapsed}>
+                      <button class="mf-more" tabindex={-1} title={`${row().hiddenCount} lines hidden`} onClick={() => toggleFold(row().line)}>
+                        {`⋯ ${row().hiddenCount} lines`}
                       </button>
                     </Show>
                   </span>
                 </div>
               )}
-            </For>
+            </Index>
           </pre>
         </Show>
       </Suspense>
