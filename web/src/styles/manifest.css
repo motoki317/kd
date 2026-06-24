@@ -91,6 +91,11 @@
   font-size: var(--fs-body);
 }
 .manifest {
+  /* The fold chevron lives in a left gutter (--mf-gutter, the .mf-fold width and .mf-line-content
+     padding). To keep the text visually centered — equal margin left and right — the manifest's own
+     left padding is reduced by the gutter so gutter + padding-left == the 12px on the right. */
+  --mf-gutter: 10px;
+  position: relative; /* containing block for the out-of-flow (sr-only) collapsed-body rows */
   margin: 0;
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
@@ -98,8 +103,117 @@
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  padding: 12px;
+  padding: 12px 12px 12px calc(12px - var(--mf-gutter));
+}
+/* The manifest is a column of per-line rows (so fields can fold). The fold chevron is absolutely
+   positioned so it can step right with each line's indentation; a fixed left padding on the content
+   reserves the indent-0 chevron's slot, and the content keeps its own leading whitespace so a
+   select-copy still carries indentation. */
+.mf-row {
+  position: relative;
+}
+/* Fold chevron: sits in the leading whitespace just before the field it folds — left is driven by the
+   line's leading-space count (--mf-indent, set per row), and the manifest's mono font makes 1ch one
+   space wide, so the chevron lands exactly at the field's indent. Quiet at rest; surfaces when the
+   pointer enters the manifest (a discoverable column) or stays put once a region is collapsed so the
+   "⋯ N lines" chip reads as re-expandable. Pointer-only (tabindex -1): the keyboard surface is the four
+   global bindings, and default-expanded means a keyboard-only user sees the whole manifest regardless. */
+.mf-fold {
+  position: absolute;
+  top: 0;
+  left: calc(var(--mf-indent, 0) * 1ch);
+  width: var(--mf-gutter); /* equals the content's padding-left, so the chevron's right edge meets the field */
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  line-height: inherit;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  /* Keep the chevron glyph out of a drag-select of the manifest: selecting a YAML/JSON region and
+     copying must yield the raw text, not "▾"/"▸" markers interleaved between lines. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.manifest:hover .mf-fold,
+.mf-row.mf-collapsed .mf-fold {
+  opacity: 1;
+}
+.mf-fold:hover {
+  color: var(--text);
+}
+.mf-fold-leaf {
+  cursor: default;
+  visibility: hidden; /* non-foldable line: hide the chevron (content padding holds the gutter) */
+}
+.mf-line-content {
+  display: block;
+  min-width: 0;
+  min-height: 1.5em; /* keep blank lines (a block scalar's interior) a full line tall */
+  padding-left: var(--mf-gutter); /* base gutter: room for the indent-0 chevron, left of the line's own whitespace */
   white-space: pre-wrap;
   word-break: break-word;
+}
+/* A collapsed field's body lines stay in the DOM rather than being removed, so a drag-select spanning
+   the fold still copies the hidden YAML/JSON. They use the visually-hidden ("sr-only") clip technique:
+   pulled out of flow (so the gap closes) but kept at a real 1px box that the browser's copy
+   serialization still walks — text serialization drops display:none/visibility:hidden and zero-height
+   clipped content, but a 1px clip-path box is preserved (the same reason sr-only labels copy into the
+   clipboard). aria-hidden on the row (set in the markup) keeps a screen reader from announcing the
+   clipped body as if it were shown. */
+.mf-row.mf-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Collapsed-body placeholder: a dim, sharp-cornered chip carrying the hidden-line count (explicit over
+   a bare "…"). Clicking it re-expands, same as the gutter chevron. */
+.mf-more {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-caps);
+  cursor: pointer;
+  user-select: none; /* the "⋯ N lines" chip is chrome; a drag-select must not copy it */
+  -webkit-user-select: none;
+}
+.mf-more:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+/* Manifest syntax coloring. Each token role gets a dedicated ink (tokens.css); plain tokens render
+   unwrapped and inherit the body's --text. The colors must stay legible where a search <mark> washes
+   accent behind them, so the wash is kept translucent (manifest.css .manifest-match) rather than
+   recoloring the text. */
+.mf-key {
+  color: var(--syntax-key);
+}
+.mf-string {
+  color: var(--syntax-string);
+}
+.mf-number {
+  color: var(--syntax-number);
+}
+.mf-keyword {
+  color: var(--syntax-keyword);
+}
+.mf-punct {
+  color: var(--text-dim);
+}
+/* Under the strong "current match" wash, drop the syntax ink to the high-contrast body color: the 65%
+   accent wash is a mid-tone a bright token (a light-blue key on dark) would vanish into (measured
+   ~1.7:1). Non-current matches keep their syntax colors — their 32% wash stays legible. Restores the
+   pre-syntax contrast exactly where the operator is looking. */
+.manifest-match.current :is(.mf-key, .mf-string, .mf-number, .mf-keyword, .mf-punct) {
+  color: var(--text);
 }
 

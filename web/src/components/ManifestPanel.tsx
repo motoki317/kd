@@ -1,8 +1,35 @@
 import { createEffect, createMemo, createResource, createSignal, For, on, Show, Suspense } from 'solid-js'
 import { fetchResource, isForbidden, type ManifestFormat } from '../api'
 import { splitByMatch } from '../logs'
+import { computeFolds, mergeMatchRuns, splitManifestLines, type FoldRegion, type ManifestLine, type MatchRun, type Span } from '../manifestSyntax'
 import { nextRovingIndex } from '../rovingFocus'
 import CopyButton from './CopyButton'
+
+// Above this many characters, skip syntax tokenization and render each line as one uncolored token —
+// a giant bundled CRD must never trade interactivity for coloring (folding and find still work).
+const SYNTAX_MAX = 200_000
+// A match run with its 0-based position, so the "current" <mark> is chosen from data rather than a
+// render-time counter (a keyed <For> reuses rows across query edits and would not reset one).
+interface IndexedRun extends MatchRun {
+  matchIndex: number
+}
+// One rendered manifest line: its fold role, its leading-space depth (so the chevron steps right with
+// the field it folds), whether a collapsed ancestor hides it, and its search overlay. A hidden line
+// stays in the DOM (clipped to zero height) rather than removed, so a drag-select spanning a fold still
+// copies the collapsed YAML/JSON.
+interface Row {
+  line: number
+  foldable: boolean
+  collapsed: boolean
+  hidden: boolean
+  hiddenCount: number
+  indent: number
+  runs: IndexedRun[]
+}
+const EMPTY_FOLDS: ReadonlySet<number> = new Set()
+function renderSpan(s: Span) {
+  return s.type === 'plain' ? s.text : <span class={`mf-${s.type}`}>{s.text}</span>
+}
 
 // ManifestPanel is the drawer's Manifest tab: the server-rendered YAML/JSON text with a format
 // radiogroup and a within-manifest find. It owns the whole fetch+find state cluster (format, the
@@ -32,6 +59,16 @@ export default function ManifestPanel(props: {
   // find field scrolls to the next match and bumps this index; the matching <mark> gets a stronger
   // styling so the operator can tell "this is where you are" vs the other matches.
   const [manifestMatchIdx, setManifestMatchIdx] = createSignal(0)
+  // Collapsed fold headers (by line index). Declared above the nodeId effect so that eager effect can
+  // reset it without hitting the temporal dead zone. A line index only means something for one
+  // (resource, format) pairing, so both resets clear it (see the format effect below).
+  const [collapsed, setCollapsed] = createSignal<ReadonlySet<number>>(EMPTY_FOLDS)
+  const toggleFold = (line: number) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      next.has(line) ? next.delete(line) : next.add(line)
+      return next
+    })
   let sectionEl: HTMLElement | undefined
   createEffect(
     on(
@@ -39,6 +76,7 @@ export default function ManifestPanel(props: {
       () => {
         setManifestQuery('')
         setManifestMatchIdx(0)
+        setCollapsed(EMPTY_FOLDS)
         // Scroll back to the top too — a scrolled-down manifest must not carry the operator's prior
         // position into a fresh resource.
         const mp = sectionEl?.querySelector('.manifest') as HTMLElement | null
@@ -46,6 +84,9 @@ export default function ManifestPanel(props: {
       },
     ),
   )
+  // YAML and JSON line up differently, so a fold (keyed by line index) cannot carry across a format
+  // flip. defer: true keeps the initial render — collapsed already starts empty.
+  createEffect(on(format, () => setCollapsed(EMPTY_FOLDS), { defer: true }))
   // The manifest body read WITHOUT suspending. This memo is EAGER (created at panel init, outside the
   // <Suspense> below), so reading the suspending detail() here would register the suspend with the
   // drawer's OUTER boundary (App wraps the whole drawer) — and every manifest refetch would then detach
@@ -54,11 +95,59 @@ export default function ManifestPanel(props: {
   // suspends. The genuine first-load fallback still belongs to the INNER <Suspense>, whose <pre> body
   // reads detail() directly.
   const manifestText = createMemo(() => (detail.state === 'ready' || detail.state === 'refreshing' ? detail.latest ?? '' : ''))
-  const manifestSegments = createMemo(() => {
-    if (detail.error) return []
-    return splitByMatch(manifestText(), manifestQuery())
+  // One entry per source line, syntax-tokenized. Keyed on (text, format) only, so typing in find or
+  // toggling a fold never re-tokenizes. Above the size ceiling each line keeps a single plain token
+  // (no coloring) — folding and find need only the line text, not its colors.
+  const lines = createMemo<ManifestLine[]>(() => {
+    const text = manifestText()
+    if (text === '') return []
+    if (text.length > SYNTAX_MAX) return text.split('\n').map((t) => ({ text: t, tokens: [{ text: t, type: 'plain' as const }] }))
+    return splitManifestLines(text, format())
   })
-  const manifestMatchCount = createMemo(() => (manifestQuery() ? manifestSegments().filter((s) => s.match).length : 0))
+  const foldByHeader = createMemo(() => {
+    const m = new Map<number, FoldRegion>()
+    for (const r of computeFolds(lines().map((l) => l.text))) m.set(r.header, r)
+    return m
+  })
+  // Every source line becomes a row; a line inside a collapsed region's body is marked hidden (clipped
+  // to zero height by CSS) rather than dropped, so a drag-select across a fold still copies the
+  // collapsed text. An active query force-expands everything (eff is empty) so no hit hides behind a
+  // fold — the way the browser's own find reveals folded text. Each row's match index is precomputed
+  // (not a render-time counter a keyed <For> would not reset). Match indices only matter under a query,
+  // and a query un-hides every row, so assigning them across hidden rows too is consistent.
+  const rows = createMemo<Row[]>(() => {
+    if (detail.error) return []
+    const ls = lines()
+    const fbh = foldByHeader()
+    const q = manifestQuery()
+    const eff = q ? EMPTY_FOLDS : collapsed()
+    const out: Row[] = []
+    let mi = 0
+    // The furthest line index still hidden by an active collapse. Regions nest by indent, so a single
+    // furthest-end marker covers nested folds (an inner region's end never exceeds its parent's).
+    let hiddenUntil = -1
+    for (let i = 0; i < ls.length; i++) {
+      const region = fbh.get(i)
+      const hidden = i <= hiddenUntil
+      const isCollapsed = !!region && eff.has(i)
+      if (isCollapsed && !hidden) hiddenUntil = Math.max(hiddenUntil, region.end)
+      const text = ls[i].text
+      const runs = mergeMatchRuns(ls[i].tokens, splitByMatch(text, q)).map((r) => ({ ...r, matchIndex: r.match ? mi++ : -1 }))
+      out.push({
+        line: i,
+        foldable: !!region,
+        collapsed: isCollapsed,
+        hidden,
+        hiddenCount: region?.hiddenCount ?? 0,
+        indent: text.length - text.trimStart().length,
+        runs,
+      })
+    }
+    return out
+  })
+  // Counted over the whole text: the find query never spans a newline, so per-line and whole-text
+  // match totals are identical, and the count must stay stable regardless of what is folded.
+  const manifestMatchCount = createMemo(() => (manifestQuery() ? splitByMatch(manifestText(), manifestQuery()).filter((s) => s.match).length : 0))
   let manifestPre: HTMLPreElement | undefined
   function scrollManifestMatch(idx: number) {
     if (!manifestPre) return
@@ -169,31 +258,49 @@ export default function ManifestPanel(props: {
           }
         >
           <pre class="manifest" ref={manifestPre} tabindex="0">
-            <Show when={manifestQuery()} fallback={detail()}>
-              {(() => {
-                // Per-segment render: each match gets a sequential index so the "current"
-                // mark can be styled differently from the others. Counter lives outside the
-                // For loop because Solid doesn't expose the running match index naturally.
-                let mi = -1
-                return (
-                  <For each={manifestSegments()}>
-                    {(p) => {
-                      if (!p.match) return <>{p.text}</>
-                      mi++
-                      const idx = mi
-                      return (
-                        <mark
-                          class="manifest-match"
-                          classList={{ current: idx === manifestMatchIdx() }}
-                        >
-                          {p.text}
-                        </mark>
-                      )
-                    }}
-                  </For>
-                )
-              })()}
-            </Show>
+            {/* One row per visible line: a fold gutter + the syntax-colored line. A collapsed header
+                shows a "⋯ N lines" affordance in place of its hidden body. Search hits wrap their spans
+                in a <mark> whose index drives the "current" emphasis. */}
+            <For each={rows()}>
+              {(row) => (
+                <div
+                  class="mf-row"
+                  classList={{ 'mf-collapsed': row.collapsed, 'mf-hidden': row.hidden }}
+                  aria-hidden={row.hidden || undefined}
+                  style={{ '--mf-indent': row.indent }}
+                >
+                  <button
+                    class="mf-fold"
+                    classList={{ 'mf-fold-leaf': !row.foldable }}
+                    tabindex={-1}
+                    aria-hidden={!row.foldable}
+                    aria-label={row.collapsed ? 'Expand field' : 'Collapse field'}
+                    aria-expanded={row.foldable ? !row.collapsed : undefined}
+                    onClick={() => row.foldable && toggleFold(row.line)}
+                  >
+                    {row.foldable ? (row.collapsed ? '▸' : '▾') : ''}
+                  </button>
+                  <span class="mf-line-content">
+                    <For each={row.runs}>
+                      {(run) =>
+                        run.match ? (
+                          <mark class="manifest-match" classList={{ current: run.matchIndex === manifestMatchIdx() }}>
+                            <For each={run.spans}>{(s) => renderSpan(s)}</For>
+                          </mark>
+                        ) : (
+                          <For each={run.spans}>{(s) => renderSpan(s)}</For>
+                        )
+                      }
+                    </For>
+                    <Show when={row.collapsed}>
+                      <button class="mf-more" tabindex={-1} title={`${row.hiddenCount} lines hidden`} onClick={() => toggleFold(row.line)}>
+                        {`⋯ ${row.hiddenCount} lines`}
+                      </button>
+                    </Show>
+                  </span>
+                </div>
+              )}
+            </For>
           </pre>
         </Show>
       </Suspense>

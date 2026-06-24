@@ -70,6 +70,17 @@
      icon and the small kind label — never the health border/tint. */
   --pod-accent: #5b6cf0;
 
+  /* Manifest syntax palette (drawer YAML/JSON tab). A dedicated set — not the health hues — because
+     these carry a different meaning (code token roles), and the "one visual language per meaning"
+     rule forbids reusing degraded-red for a string. Four roles + dim punctuation; tuned to clear the
+     4.5:1 text bar on the manifest's --surface-2 ground (this is DATA an operator reads, not chrome).
+     Keys lead (deep blue), values/strings sit calm (green), numbers and the true/false/null keywords
+     get their own hues so a bare scalar never reads as a number. */
+  --syntax-key: #0a4f7a;
+  --syntax-string: #1d6b2f;
+  --syntax-number: #9a4a00;
+  --syntax-keyword: #7a3aa0;
+
   /* Typography. IBM Plex — engineering-heritage type with real character at dashboard sizes —
      replaces the anonymous system stack: Sans for chrome, Mono for everything an operator might
      read into a terminal (names, values, statuses, logs, manifests). The pairing is the design
@@ -127,6 +138,11 @@
   --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff);
   --edge-color: #21424f;
   --pod-accent: #8593f5;
+  /* Brighter syntax inks the dark manifest ground can carry (light variants would vanish on it). */
+  --syntax-key: #6fb6e6;
+  --syntax-string: #84cf8e;
+  --syntax-number: #e6a96b;
+  --syntax-keyword: #c79cf0;
   --caution-text: #f0a92a; /* on dark, the vivid hues read fine as text */
   --degraded-text: #e5544b;
   --progressing-text: #2f86eb;
