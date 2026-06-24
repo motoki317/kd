@@ -185,12 +185,20 @@ func eventsFor(objs []runtime.Object, uids map[string]bool, rootKind, rootName s
 			Source:  io.Kind + "/" + io.Name,
 		})
 	}
-	// Newest first; Warnings break ties ahead of Normal so problems sit at the top.
+	// Newest first; Warnings break ties ahead of Normal so problems sit at the top. The remaining
+	// fields are tiebreakers only to make this a TOTAL order: two events sharing a last-seen second
+	// and type would otherwise compare equal, and pdqsort (slices.SortFunc is not stable) could swap
+	// them between List calls — the event stream's diff would read that swap as a change and push on an
+	// otherwise-idle connection, defeating the point of streaming.
 	slices.SortFunc(out, func(a, b eventEntry) int {
-		if a.Last != b.Last {
-			return -cmp.Compare(a.Last, b.Last)
-		}
-		return typeRank(b.Type) - typeRank(a.Type)
+		return cmp.Or(
+			-cmp.Compare(a.Last, b.Last),
+			typeRank(b.Type)-typeRank(a.Type),
+			cmp.Compare(a.Reason, b.Reason),
+			cmp.Compare(a.Source, b.Source),
+			cmp.Compare(a.Message, b.Message),
+			cmp.Compare(b.Count, a.Count),
+		)
 	})
 	return out
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -80,6 +81,27 @@ func TestEventsForTieBreaksWarningFirst(t *testing.T) {
 	got := eventsFor(objs, map[string]bool{"pod-uid": true}, "Pod", "web-1")
 	if len(got) != 2 || got[0].Reason != "BackOff" {
 		t.Errorf("tie-break order = %v, want the Warning (BackOff) first", reasons(got))
+	}
+}
+
+// Events that tie on BOTH last-seen second and type must still sort into one stable order regardless
+// of the input order: the event stream re-lists from the apiserver and pushes only when the list
+// differs, so a non-total order (which slices.SortFunc, being unstable, could permute between calls)
+// would make the diff see a phantom change and push on an otherwise-idle connection.
+func TestEventsForTotalOrderIsInputIndependent(t *testing.T) {
+	at := metav1.NewTime(time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC))
+	mk := func(reason string) *corev1.Event {
+		return &corev1.Event{
+			ObjectMeta:     metav1.ObjectMeta{Name: reason, Namespace: "shop"},
+			InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "web-1", UID: types.UID("pod-uid")},
+			Reason:         reason, Type: corev1.EventTypeWarning, Count: 1, LastTimestamp: at,
+		}
+	}
+	uids := map[string]bool{"pod-uid": true}
+	forward := reasons(eventsFor([]runtime.Object{mk("BackOff"), mk("FailedMount"), mk("Unhealthy")}, uids, "Pod", "web-1"))
+	reversed := reasons(eventsFor([]runtime.Object{mk("Unhealthy"), mk("FailedMount"), mk("BackOff")}, uids, "Pod", "web-1"))
+	if !slices.Equal(forward, reversed) {
+		t.Errorf("sort order depends on input: forward=%v reversed=%v", forward, reversed)
 	}
 }
 
