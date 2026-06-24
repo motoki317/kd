@@ -74,6 +74,37 @@ export function mergeNamespaceHealth(
   })
 }
 
+// NsPick is decideNamespacePick's verdict: which namespace to select instead of the current one, and
+// whether the swap warrants the "couldn't open <current>" fallback notice.
+export interface NsPick {
+  name: string
+  notify: boolean
+}
+
+// decideNamespacePick chooses where to land when a freshly loaded namespace list doesn't contain the
+// current selection. Returns null to KEEP the current one — so a selection still present in the new
+// list is held even across a context switch (carry the same-named namespace from cluster to cluster,
+// for "compare this namespace across clusters"). On a miss the landing is ALWAYS the most troubled
+// namespace — the same place a first load picks, so a context switch and a fresh open behave
+// identically — and only the notice differs by reason:
+//   - Context switch (resolvedCtx is set and differs from currentCtx): the previous cluster's
+//     namespace simply isn't in the new one — expected, not a failure, so NO notice.
+//   - Otherwise (a ?ns= seeded for THIS context that's forbidden/deleted, or a first load where
+//     resolvedCtx is null): ASK the caller to explain via the notice, lest a shared link strand the
+//     operator on someone else's view with no reason given.
+// `list` must be non-empty (the caller selects nothing from an empty list). The `?? list[0]` guards
+// the all-cluster-scope list, where mostTroubled — which excludes the sentinel — yields undefined.
+export function decideNamespacePick(
+  list: NamespaceInfo[],
+  currentNs: string | null,
+  currentCtx: string | null,
+  resolvedCtx: string | null,
+): NsPick | null {
+  if (list.some((n) => n.name === currentNs)) return null
+  const switching = resolvedCtx !== null && resolvedCtx !== currentCtx
+  return { name: (mostTroubled(list) ?? list[0]).name, notify: !switching }
+}
+
 // nextTroubled steps through the troubled set from the current selection: the first jump (current
 // isn't troubled, or isn't selected) lands on the worst, and each repeat advances to the next-worst,
 // wrapping at the end. This makes the trouble badge a triage CYCLE — reach all N troubled

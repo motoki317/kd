@@ -8,7 +8,7 @@ import { createEffect, createMemo, createResource, createSignal, onCleanup, untr
 import { ApiError, fetchContexts, fetchKinds, streamNamespaces, type NamespaceInfo } from './api'
 import { createLiveHealth } from './liveHealth'
 import { setServerShortNames } from './names'
-import { mostTroubled, namespaceLabel, nextTroubled } from './ns'
+import { decideNamespacePick, namespaceLabel, nextTroubled } from './ns'
 
 export type ConnState = 'connecting' | 'live' | 'offline'
 
@@ -164,9 +164,10 @@ export function createClusterSession(deps: {
     return false
   }
 
-  // A URL-seeded namespace that can't be opened (RBAC-denied, deleted, or absent from a newly
-  // switched context) gets silently replaced by the fallback below — say so, or a shared link
-  // lands the operator on someone else's view with zero explanation. Auto-clears; dismissible.
+  // A ?ns= seeded for THIS context that can't be opened (RBAC-denied or deleted) gets silently
+  // replaced by the fallback below — say so, or a shared link lands the operator on someone else's
+  // view with zero explanation. A namespace merely absent from a newly switched context does NOT
+  // trigger this (it's expected, not a failure — see decideNamespacePick). Auto-clears; dismissible.
   const [nsNotice, setNsNotice] = createSignal<string | null>(null)
   let nsNoticeTimer: ReturnType<typeof setTimeout> | undefined
   const noteNsFallback = (wanted: string) => {
@@ -175,18 +176,28 @@ export function createClusterSession(deps: {
     nsNoticeTimer = setTimeout(() => setNsNotice(null), 10_000)
   }
 
-  // Pick a namespace once the list loads: keep a valid URL-seeded one, else open the most troubled
-  // one (the sidebar's top item), so kd lands on "what's wrong" rather than the alphabetical first —
-  // and a stale/forbidden ?ns= doesn't strand the user on an empty graph.
+  // The context the current namespace selection was last resolved against. NOT reactive — a plain cell
+  // read by the picker effect to distinguish a stale ?ns= seeded for THIS context (explain the
+  // fallback) from a namespace carried over from a PREVIOUS context on a switch (don't — see
+  // decideNamespacePick). Updated only after a non-empty resolution, so it holds the OLD context
+  // through the switch's transient empty-list window and the picker reads the switch correctly.
+  let nsResolvedCtx: string | null = null
+  // Pick a namespace once the list loads: keep a valid selection (incl. a same-named one carried
+  // across a context switch), else land on the most troubled namespace per decideNamespacePick — the
+  // same place a first open picks, so a switch and a fresh load behave identically — with a notice
+  // only for a stale/forbidden ?ns= (not a context switch). Never strands the operator on an empty graph.
   createEffect(() => {
     const list = namespaceList()
     if (list.length === 0) return
-    if (!list.some((n) => n.name === namespace())) {
-      const wanted = namespace()
-      if (wanted) noteNsFallback(wanted) // null = no target was asked for; nothing to explain
-      setNamespace(mostTroubled(list)!.name)
+    const c = untrack(ctx)
+    const wanted = namespace()
+    const pick = decideNamespacePick(list, wanted, c, nsResolvedCtx)
+    if (pick) {
+      if (pick.notify && wanted) noteNsFallback(wanted) // null wanted = nothing was asked for; nothing to explain
+      setNamespace(pick.name)
       setNsFlash((t) => t + 1)
     }
+    nsResolvedCtx = c
   })
 
   return {

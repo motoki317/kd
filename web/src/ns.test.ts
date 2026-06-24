@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareNamespaces, mergeNamespaceHealth, mostTroubled, namespaceLabel, nextTroubled, troubledNamespaces } from './ns'
+import { compareNamespaces, decideNamespacePick, mergeNamespaceHealth, mostTroubled, namespaceLabel, nextTroubled, troubledNamespaces } from './ns'
 import { CLUSTER_SCOPE, type NamespaceInfo } from './api'
 import type { LiveHealth } from './ns'
 
@@ -63,6 +63,36 @@ describe('nextTroubled', () => {
   it('returns undefined when nothing is troubled', () => {
     expect(nextTroubled([{ name: 'a', health: 'Healthy' }], null)).toBeUndefined()
     expect(nextTroubled([], null)).toBeUndefined()
+  })
+})
+
+describe('decideNamespacePick', () => {
+  // A list that offers continuity (gamma), a cluster overview, and degraded namespaces to land on.
+  const withCluster: NamespaceInfo[] = [{ name: CLUSTER_SCOPE, health: 'Healthy' }, ...list]
+
+  it('keeps the current selection when it is still in the list (no-op)', () => {
+    expect(decideNamespacePick(list, 'gamma', 'ctxA', 'ctxA')).toBeNull()
+  })
+
+  it('keeps a same-named namespace carried across a context switch — continuity wins over switching', () => {
+    // currentCtx changed (ctxA→ctxB) but the new cluster also has a 'gamma'; hold it, do not jump.
+    expect(decideNamespacePick(withCluster, 'gamma', 'ctxB', 'ctxA')).toBeNull()
+  })
+
+  it('lands on the most troubled namespace WITHOUT a notice when the carried-over namespace is absent on a switch', () => {
+    // The bug this fixes: switching to a context that lacks the old namespace must not read as a
+    // failure — and the landing matches a first open (most troubled), never the cluster sentinel.
+    expect(decideNamespacePick(withCluster, 'ghost', 'ctxB', 'ctxA')).toEqual({ name: 'gamma', notify: false })
+    expect(decideNamespacePick(list, 'ghost', 'ctxB', 'ctxA')).toEqual({ name: 'gamma', notify: false })
+  })
+
+  it('lands on the most troubled namespace WITH a notice for a stale ?ns= on first load (no prior context)', () => {
+    // resolvedCtx null = bootstrap, not a switch: a forbidden/typo shared link must still be explained.
+    expect(decideNamespacePick(withCluster, 'ghost', 'ctxA', null)).toEqual({ name: 'gamma', notify: true })
+  })
+
+  it('notifies for a namespace deleted in place (same context, not a switch)', () => {
+    expect(decideNamespacePick(list, 'ghost', 'ctxA', 'ctxA')).toEqual({ name: 'gamma', notify: true })
   })
 })
 
