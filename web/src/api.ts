@@ -19,12 +19,21 @@ export interface ContextInfo {
   error?: string
 }
 
+// BuildInfo is the running binary's identity, shown in the About card. version is git-describe
+// output ("v0.3.0" on a tag, "v0.3.0-5-gabc1234[-dirty]" off it); commit is the full SHA.
+export interface BuildInfo {
+  version: string
+  commit: string
+}
+
 export interface ContextsResponse {
   // enabled is false in in-cluster mode (only one cache, no kubeconfig) — the UI hides the
   // switcher in that case so deployed kd looks identical to the pre-multi-context UX.
   enabled: boolean
   default: string
   contexts: ContextInfo[]
+  // Rides the bootstrap response so the About card needs no extra request (server piggybacks it).
+  build: BuildInfo
 }
 
 export async function fetchContexts(): Promise<ContextsResponse> {

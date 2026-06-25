@@ -627,6 +627,10 @@ func TestContextsHandlerInClusterMode(t *testing.T) {
 			Name   string `json:"name"`
 			Status string `json:"status"`
 		} `json:"contexts"`
+		Build struct {
+			Version string `json:"version"`
+			Commit  string `json:"commit"`
+		} `json:"build"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, body)
@@ -639,6 +643,11 @@ func TestContextsHandlerInClusterMode(t *testing.T) {
 	}
 	if len(out.Contexts) != 1 || out.Contexts[0].Name != registry.InClusterContext || out.Contexts[0].Status != "ready" {
 		t.Errorf("contexts = %+v, want one ready %q entry", out.Contexts, registry.InClusterContext)
+	}
+	// Build identity rides the bootstrap response (the About card reads it). The test binary has no
+	// ldflags stamp, so version.Get falls back to dev/unknown or the VCS stamp — never empty.
+	if out.Build.Version == "" || out.Build.Commit == "" {
+		t.Errorf("build = %+v, want non-empty version and commit", out.Build)
 	}
 }
 

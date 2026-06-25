@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -33,6 +34,7 @@ import (
 	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 	"github.com/motoki317/kd/internal/server"
+	"github.com/motoki317/kd/internal/version"
 )
 
 func main() {
@@ -61,6 +63,12 @@ func run() error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if cfg.Version {
+		info := version.Get()
+		fmt.Printf("kd %s\ncommit %s\n", info.Version, info.Commit)
+		return nil
 	}
 
 	started := time.Now()

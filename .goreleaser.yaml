@@ -4,6 +4,13 @@ version: 2
 
 project_name: kd
 
+# The chart releases on its own chart-vX.Y.Z tags, which often sit on different commits than the app
+# vX.Y.Z tags but can share one. Ignore them so GoReleaser never resolves .Tag/.Version (the version
+# stamp + image label) — or the changelog's previous-tag range — to a chart tag.
+git:
+  ignore_tags:
+    - "chart-*"
+
 before:
   hooks:
     # The binary embeds the web client (embed_web tag), so the client must be built first.
@@ -20,10 +27,14 @@ builds:
       - embed_web
     flags:
       - -trimpath
-    # Plain -s -w: the GoReleaser default ldflags stamp main.version/commit vars
-    # that kd doesn't declare.
+    # Stamp internal/version so the About card and `kd --version` report the release. .Tag keeps the
+    # leading v (matching git describe on the just/Docker paths); .FullCommit is the full SHA. (The
+    # GoReleaser default ldflags target main.version/commit, which kd doesn't declare — hence the
+    # explicit -X into the internal/version package.)
     ldflags:
       - -s -w
+      - -X github.com/motoki317/kd/internal/version.version={{ .Tag }}
+      - -X github.com/motoki317/kd/internal/version.commit={{ .FullCommit }}
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     mod_timestamp: "{{ .CommitTimestamp }}"

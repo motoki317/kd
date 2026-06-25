@@ -23,7 +23,11 @@
         # go.mod pins go 1.26.x; build with the matching toolchain.
         buildGoModule = pkgs.buildGoModule.override { go = pkgs.go_1_26; };
 
+        # Flakes can't see git tags in pure eval, so the Nix build stamps the commit (no semver tag):
+        # the short rev as version, the full rev as commit. A release's authoritative semver comes from
+        # the GoReleaser path; Nix is the dev / CI-validation build.
         version = self.shortRev or self.dirtyShortRev or "dev";
+        commit = self.rev or self.dirtyRev or "unknown";
 
         # The Solid client built by `vite build`. vite emits into
         # ../internal/server/webdist (see web/vite.config.ts) so the Go server can
@@ -109,7 +113,12 @@
             vendorHash = "sha256-DF+xnVskF0VgBzzblID85+1iHFd1F8Bc/pO+Uirzy2s=";
             subPackages = [ "cmd/kd" ];
             tags = [ "embed_web" ];
-            ldflags = [ "-s" "-w" ];
+            ldflags = [
+              "-s"
+              "-w"
+              "-X github.com/motoki317/kd/internal/version.version=${version}"
+              "-X github.com/motoki317/kd/internal/version.commit=${commit}"
+            ];
             env.CGO_ENABLED = 0;
 
             # webdist is gitignored, so the flake source omits it; populate the

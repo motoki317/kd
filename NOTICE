@@ -1,7 +1,15 @@
 kd
 Copyright (c) 2026 motoki317
 
-This product includes artwork from the following third-party source:
+This product includes artwork from the following third-party sources:
+
+GitHub mark
+  Source:    https://github.com/logos (the official GitHub Invertocat mark)
+  Copyright: GitHub, Inc.
+  Usage:     Embedded as path data in web/src/App.tsx to link the help card
+             to the project repository, per GitHub's logo usage guidelines.
+             Recoloured to currentColor; otherwise unmodified.
+  Trademark: GitHub and the GitHub mark are trademarks of GitHub, Inc.
 
 Argo CD resource icons
   Source:    https://github.com/argoproj/argo-cd

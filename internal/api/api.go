@@ -21,6 +21,7 @@ import (
 	"github.com/motoki317/kd/internal/kube/registry"
 	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
+	"github.com/motoki317/kd/internal/version"
 )
 
 // ClusterScopeNamespace is the sentinel namespace value used in API URLs for cluster-scoped
@@ -178,6 +179,9 @@ type contextsResponse struct {
 	Enabled  bool           `json:"enabled"`
 	Default  string         `json:"default"`
 	Contexts []contextEntry `json:"contexts"`
+	// Build rides the bootstrap response (already fetched on load) so the About card shows the
+	// running binary's identity without a second request — see version.Get.
+	Build version.Info `json:"build"`
 }
 
 // handleContexts reports the available contexts so the client can render (or hide) the
@@ -189,7 +193,7 @@ func (a *API) handleContexts(w http.ResponseWriter, r *http.Request) {
 	for _, info := range infos {
 		entries = append(entries, contextEntry{Name: info.Name, Status: string(info.Status), Error: info.Error})
 	}
-	writeJSON(w, contextsResponse{Enabled: a.contexts.Enabled(), Default: a.contexts.Default(), Contexts: entries})
+	writeJSON(w, contextsResponse{Enabled: a.contexts.Enabled(), Default: a.contexts.Default(), Contexts: entries, Build: version.Get()})
 }
 
 type namespacesResponse struct {

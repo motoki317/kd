@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, lazy, Match, onCleanup, onMount, Show, Suspense, Switch } from 'solid-js'
 import { createStore } from 'solid-js/store'
 import { CLUSTER_SCOPE } from './api'
+import { showCommitChip } from './buildInfo'
 import { hasDescendantPod } from './loggable'
 import { emptyState, type GraphState } from './graphState'
 import { matchSel } from './nav'
@@ -638,10 +639,59 @@ export default function App() {
       <Show when={showHelp()}>
         <div class="help-backdrop" onClick={() => setShowHelp(false)}>
           <div class="help-panel" role="dialog" aria-label="Help" onClick={(e) => e.stopPropagation()}>
-            {/* Deliberately tiny: the four keys and the edge legend, one column, no internal
-                scroll. Everything else in kd is a visible, clickable control — if this card ever
-                needs columns or sections again, the key surface has regrown past what an operator
-                can hold in their head (see appKeyboard.ts). */}
+            {/* About: logo, name, one-line description, and the running binary's build identity
+                (version + commit). Reference, not interactive surface — a new operator opening this
+                card sees what kd is and which build is live. The card stays one column with no
+                internal scroll; the keyboard surface below is still the four bindings — if THAT
+                regrows past what an operator can hold in their head, trim it (see appKeyboard.ts). */}
+            <div class="help-about">
+              <svg class="help-logo" viewBox="0 0 16 16" width="30" height="30" aria-hidden="true">
+                <rect x="5" y="2" width="6" height="2.4" rx="1" />
+                <rect x="3" y="6.6" width="10" height="2.4" rx="1" />
+                <rect x="1" y="11.2" width="14" height="2.4" rx="1" />
+              </svg>
+              <div class="help-about-body">
+                <div class="help-about-name">
+                  kd
+                  {/* Official GitHub mark beside the title, sized to it; links to the repo in a new
+                      tab. Icon-only by user direction — the adjacent title + the title tooltip carry
+                      the meaning. */}
+                  <a
+                    class="help-gh"
+                    href="https://github.com/motoki317/kd"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="kd on GitHub (opens in a new tab)"
+                    title="kd on GitHub"
+                  >
+                    <svg class="help-gh-icon" viewBox="0 0 16 16" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+                      />
+                    </svg>
+                  </a>
+                </div>
+                <p class="help-about-desc">
+                  A human-friendly, read-only, live Kubernetes dashboard for cluster operators and
+                  application developers.
+                </p>
+                <Show when={contextsInfo()?.build}>
+                  {(build) => (
+                    // version + commit are DATA (Plex Mono). The commit chip is shown only when the
+                    // version doesn't already carry the SHA (a clean tag) — see showCommitChip.
+                    <div class="help-build">
+                      <span class="help-build-version">{build().version}</span>
+                      <Show when={showCommitChip(build())}>
+                        <span class="help-build-commit" title={build().commit}>
+                          {build().commit.slice(0, 9)}
+                        </span>
+                      </Show>
+                    </div>
+                  )}
+                </Show>
+              </div>
+            </div>
             <h3>Keyboard</h3>
             <ul class="help-keys">
               <li>

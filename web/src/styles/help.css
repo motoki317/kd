@@ -6,9 +6,10 @@
   place-items: center;
   z-index: 20;
 }
-/* One small card, one column, no internal scroll — the whole point of the minimal key surface is
-   that help fits in a glance. If this card ever needs columns or a scrollbar again, the content
-   has regrown past what an operator can hold (see appKeyboard.ts). */
+/* One small card, one column, no internal scroll — help fits in a glance. Top to bottom: an About
+   block (logo, name, description, build identity — reference content, see App.tsx) then the keyboard
+   surface. If this card ever needs COLUMNS or a scrollbar, the interactive surface has regrown past
+   what an operator can hold (see appKeyboard.ts); the About block is reference, exempt from that. */
 .help-panel {
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -71,4 +72,80 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* About block: logo + name + one-line description + build identity, separated from the keyboard
+   section by a hairline rule. One column, no scroll. */
+.help-about {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.help-logo {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+/* Same tiered-accent fill as the topbar brand mark — one visual language for the kd glyph. */
+.help-logo rect {
+  fill: var(--accent);
+  opacity: 0.92;
+}
+.help-logo rect:nth-child(1) { opacity: 0.55; }
+.help-logo rect:nth-child(2) { opacity: 0.78; }
+.help-about-body {
+  min-width: 0;
+}
+/* Brand name — prose/chrome, so sans (not the mono used for data below). The repo link sits beside
+   it, its GitHub mark sized to the title text (1em). */
+.help-about-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+}
+.help-about-desc {
+  margin: 6px 0 0;
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+/* Repo link beside the title — kd's only external link. Dim at rest so the title stays the focus;
+   brightens to accent on hover/focus to read as interactive. The mark is sized to the title text. */
+.help-gh {
+  display: inline-flex;
+  color: var(--text-dim);
+}
+.help-gh:hover,
+.help-gh:focus-visible {
+  color: var(--accent);
+}
+.help-gh-icon {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
+/* Build identity is DATA → mono. Version leads at full ink; the short commit sits dim beside it
+   (full SHA on hover, in the title attribute). The commit chip shows only on a clean tag (see
+   showCommitChip) — off-tag the version already carries the SHA. */
+.help-build {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+}
+.help-build-version {
+  color: var(--text);
+  font-weight: 600;
+}
+.help-build-commit {
+  color: var(--text-dim);
 }

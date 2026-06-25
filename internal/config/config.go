@@ -26,6 +26,10 @@ const AutoDevUser = "dev"
 type Config struct {
 	Addr string // listen address, e.g. ":9123"
 
+	// Version, when set via --version, makes kd print its build identity and exit before any
+	// server setup. A diagnostic short-circuit, not a server setting.
+	Version bool
+
 	// Proxy authentication.
 	UserHeader      string
 	GroupsHeader    string
@@ -70,6 +74,7 @@ func Load(args []string) (Config, error) {
 		logLevel       string
 		logFormat      string
 	)
+	fs.BoolVar(&c.Version, "version", false, "print the build version and commit, then exit")
 	fs.StringVar(&c.Addr, "addr", envOr("KD_ADDR", ":9123"), "HTTP listen address")
 	fs.StringVar(&c.UserHeader, "user-header", envOr("KD_USER_HEADER", DefaultUserHeader), "request header carrying the authenticated username")
 	fs.StringVar(&c.GroupsHeader, "groups-header", envOr("KD_GROUPS_HEADER", ""), "optional request header carrying the user's groups")

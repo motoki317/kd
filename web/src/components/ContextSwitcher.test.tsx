@@ -36,6 +36,7 @@ describe('ContextSwitcher', () => {
       { name: 'prod-cluster', status: 'pending' },
       { name: 'docker-desktop', status: 'ready' },
     ],
+    build: { version: 'v0.0.0-test', commit: 'testsha' },
   })
 
   it('keeps the CURRENT context selectable and selected even after it turns error', () => {

@@ -19,9 +19,18 @@ dev-server:
 dev-web:
     cd web && npm run dev
 
-# Build the client, embed it, and build the kd binary into ./kd.
+# Build the client, embed it, and build the kd binary into ./kd. Stamps internal/version via
+# -ldflags so the About card and `kd --version` report the build. --match 'v[0-9]*' picks the APP
+# tag (vX.Y.Z), never the chart-v* tags that share the commit; --always --dirty keep it non-empty
+# and mark a modified tree.
 build: build-web
-    CGO_ENABLED=0 go build -tags embed_web -o kd ./cmd/kd
+    #!/usr/bin/env bash
+    set -euo pipefail
+    v="$(git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)"
+    c="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    CGO_ENABLED=0 go build -tags embed_web \
+      -ldflags="-s -w -X github.com/motoki317/kd/internal/version.version=${v} -X github.com/motoki317/kd/internal/version.commit=${c}" \
+      -o kd ./cmd/kd
 
 # Build the client into the embed directory (internal/server/webdist).
 build-web:
