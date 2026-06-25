@@ -134,22 +134,31 @@ export default function App() {
     document.body.classList.add('resizing-col')
   }
   // Tunable drawer (resource-detail panel) width — the mirror of the sidebar resizer on the right
-  // edge. Operators reading logs/manifests want a wider panel; those who want canvas drag it narrow.
-  // Persisted like the sidebar width; clamped, and capped further by the drawer's max-width:70vw in
-  // CSS. Drives the --drawer-w token on .body (which .drawer already reads).
-  const DRAWER_MIN = 360
-  const DRAWER_MAX = 760
-  const DRAWER_DEFAULT = 520
-  const clampDrawer = (w: number) => Math.max(DRAWER_MIN, Math.min(DRAWER_MAX, Math.round(w)))
-  const [drawerWidth, setDrawerWidth] = createSignal(clampDrawer(Number(readRawPref('kd:drawerWidth')) || DRAWER_DEFAULT))
-  createEffect(() => writePref('kd:drawerWidth', String(drawerWidth())))
+  // edge. Sized RELATIVE TO THE VIEWPORT (vw) rather than a fixed pixel count: a fixed-px panel reads
+  // tiny beside the canvas on a wide monitor, so the width tracks viewport width. Default 45vw,
+  // draggable 15–50vw — operators reading logs/manifests want a wide panel, up to half the viewport. A
+  // 360px FLOOR keeps logs/manifests readable where 15vw would be too narrow on a small screen; the
+  // drawer's own max-width:calc(100% - --canvas-min) (drawer.css) still reserves the canvas floor at
+  // the top end. Persisted as the vw percentage (kd:drawerPct); the resizer retunes it. Drives the
+  // --drawer-w token on .body (which .drawer reads); the vw range is clamped so a stray drag (or stale
+  // persisted value) can't strand the panel off-screen.
+  const DRAWER_MIN_PX = 360
+  const DRAWER_MIN_PCT = 15
+  const DRAWER_MAX_PCT = 50
+  const DRAWER_DEFAULT_PCT = 45
+  const clampDrawer = (p: number) => Math.max(DRAWER_MIN_PCT, Math.min(DRAWER_MAX_PCT, p))
+  const [drawerPct, setDrawerPct] = createSignal(clampDrawer(Number(readRawPref('kd:drawerPct')) || DRAWER_DEFAULT_PCT))
+  createEffect(() => writePref('kd:drawerPct', String(drawerPct())))
   // The drawer sits at the right, so it grows LEFTWARD: dragging its left-edge handle left widens it
-  // (opposite sign from the sidebar). Same window-level listeners + body class as the sidebar drag.
+  // (opposite sign from the sidebar). The pointer's pixel delta is converted to vw (via innerWidth, the
+  // unit --drawer-w resolves against) so the drag stays 1:1 with the cursor. Same window-level
+  // listeners + body class as the sidebar drag.
   const startDrawerResize = (e: PointerEvent) => {
     e.preventDefault()
     const startX = e.clientX
-    const startW = drawerWidth()
-    const onMove = (ev: PointerEvent) => setDrawerWidth(clampDrawer(startW - (ev.clientX - startX)))
+    const startPct = drawerPct()
+    const pxPerVw = window.innerWidth / 100
+    const onMove = (ev: PointerEvent) => setDrawerPct(clampDrawer(startPct - (ev.clientX - startX) / pxPerVw))
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -490,7 +499,7 @@ export default function App() {
         </div>
       </Show>
 
-      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }} style={{ '--sidebar-w': `${sidebarWidth()}px`, '--drawer-w': `${drawerWidth()}px` }}>
+      <div class="body" classList={{ 'sidebar-collapsed': sidebarHidden() }} style={{ '--sidebar-w': `${sidebarWidth()}px`, '--drawer-w': `clamp(${DRAWER_MIN_PX}px, ${drawerPct()}vw, ${DRAWER_MAX_PCT}vw)` }}>
         <Sidebar
           namespaces={sidebarNs}
           selected={namespace()}
@@ -607,12 +616,12 @@ export default function App() {
             onBack={goBackSelection}
             onClose={() => setSelectedId(null)}
             hasPods={(id) => hasDescendantPod(id, nodes())}
-            resizeWidth={drawerWidth()}
-            resizeMin={DRAWER_MIN}
-            resizeMax={DRAWER_MAX}
+            resizeWidth={Math.round(drawerPct())}
+            resizeMin={DRAWER_MIN_PCT}
+            resizeMax={DRAWER_MAX_PCT}
             onResizeStart={startDrawerResize}
-            onResizeTo={(w) => setDrawerWidth(clampDrawer(w))}
-            onResizeReset={() => setDrawerWidth(DRAWER_DEFAULT)}
+            onResizeTo={(p) => setDrawerPct(clampDrawer(p))}
+            onResizeReset={() => setDrawerPct(DRAWER_DEFAULT_PCT)}
           />
           </Suspense>
           </Show>

@@ -249,27 +249,29 @@ describe('DetailDrawer', () => {
         ctx="test-ctx"
         node={configMap}
         onClose={() => {}}
-        resizeWidth={520}
-        resizeMin={360}
-        resizeMax={760}
+        resizeWidth={45}
+        resizeMin={15}
+        resizeMax={50}
         onResizeStart={() => {}}
-        onResizeTo={(w) => calls.to.push(w)}
+        onResizeTo={(p) => calls.to.push(p)}
         onResizeReset={() => (calls.resets += 1)}
       />
     ))
     const handle = container.querySelector('.drawer-resizer') as HTMLElement
     expect(handle).toBeTruthy()
     expect(handle.getAttribute('role')).toBe('separator')
-    expect(handle.getAttribute('aria-valuenow')).toBe('520')
-    expect(handle.getAttribute('aria-valuemin')).toBe('360')
-    expect(handle.getAttribute('aria-valuemax')).toBe('760')
+    // Values are viewport PERCENTAGES (App sizes the drawer as a vw fraction so it scales on wide
+    // screens), so the keyboard nudge steps in percentage points.
+    expect(handle.getAttribute('aria-valuenow')).toBe('45')
+    expect(handle.getAttribute('aria-valuemin')).toBe('15')
+    expect(handle.getAttribute('aria-valuemax')).toBe('50')
     // Handle is on the LEFT edge → ← widens, → narrows; Home/End jump to min/max (each computed from
-    // the static 520 prop, since App — not the component — owns the width signal).
+    // the static 45 prop, since App — not the component — owns the width signal).
     handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
     handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
     handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
-    expect(calls.to).toEqual([528, 512, 360, 760])
+    expect(calls.to).toEqual([46, 44, 15, 50])
     // Double-click resets to the default width.
     handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
     expect(calls.resets).toBe(1)

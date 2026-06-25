@@ -48,14 +48,16 @@ interface Props {
   // to the replacement.
   deleted?: boolean
   // Drag-to-resize the panel (mirrors the sidebar resizer). App owns the width signal + persistence;
-  // the drawer just renders the left-edge handle and reports drags. Omitted by callers that don't
-  // wire resizing (and unit tests) — the handle then doesn't render. The handle is suppressed in
-  // expanded mode (the panel fills the canvas; there is no edge to drag).
+  // the drawer just renders the left-edge handle and reports drags. The values are VIEWPORT PERCENTAGES
+  // (vw), not pixels — App sizes the drawer as a fraction of the viewport so it scales on wide screens,
+  // so the keyboard nudge below steps in percentage points. Omitted by callers that don't wire resizing
+  // (and unit tests) — the handle then doesn't render. The handle is suppressed in expanded mode (the
+  // panel fills the canvas; there is no edge to drag).
   resizeWidth?: number
   resizeMin?: number
   resizeMax?: number
   onResizeStart?: (e: PointerEvent) => void
-  onResizeTo?: (width: number) => void
+  onResizeTo?: (pct: number) => void
   onResizeReset?: () => void
 }
 
@@ -297,7 +299,7 @@ export default function DetailDrawer(props: Props) {
               onPointerDown={props.onResizeStart}
               onDblClick={() => props.onResizeReset?.()}
               onKeyDown={(e) => {
-                const step = e.shiftKey ? 32 : 8
+                const step = e.shiftKey ? 4 : 1 // percentage points (resizeWidth is a vw fraction)
                 const w = props.resizeWidth ?? 0
                 if (e.key === 'ArrowLeft') { e.preventDefault(); props.onResizeTo?.(w + step) }
                 else if (e.key === 'ArrowRight') { e.preventDefault(); props.onResizeTo?.(w - step) }

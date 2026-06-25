@@ -107,7 +107,10 @@
 
   --topbar-h: 52px;
   --sidebar-w: 230px;
-  --drawer-w: 520px;
+  /* Viewport-relative fallback (mirrors App's DRAWER_* defaults: 45vw, floored 360px, ceiling 50vw);
+     App overrides this inline on .body with the persisted vw percentage. The drawer isn't painted
+     pre-hydration, so this only keeps the token consistent with the vw model. */
+  --drawer-w: clamp(360px, 45vw, 50vw);
 
   color-scheme: light;
   font-family: var(--font-ui);
