@@ -1282,7 +1282,7 @@ func TestLastTerminatedString(t *testing.T) {
 		State:                corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 		LastTerminationState: term("OOMKilled", 137),
 	}
-	got := containerStat(cs, false, corev1.ResourceRequirements{})
+	got := containerStat(cs, false, corev1.ResourceRequirements{}, "")
 	if got.State != "Running" || got.LastTerminated != "OOMKilled (exit 137)" {
 		t.Errorf("containerStat = %+v, want State=Running LastTerminated=%q", got, "OOMKilled (exit 137)")
 	}
@@ -1293,7 +1293,7 @@ func TestLastTerminatedString(t *testing.T) {
 	}
 	timed := cs
 	timed.LastTerminationState.Terminated.FinishedAt = metav1.NewTime(time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC))
-	if g := containerStat(timed, false, corev1.ResourceRequirements{}); g.LastRestartAt != "2026-06-10T12:00:00Z" {
+	if g := containerStat(timed, false, corev1.ResourceRequirements{}, ""); g.LastRestartAt != "2026-06-10T12:00:00Z" {
 		t.Errorf("containerStat.LastRestartAt = %q, want the lastState finish time", g.LastRestartAt)
 	}
 
@@ -1321,6 +1321,26 @@ func TestLastTerminatedString(t *testing.T) {
 		t.Errorf("sidecar bounds = %+v, want all zeros (none declared)", stats[1])
 	}
 
+	// The card shows the SPEC image (the manifest's tag), not status.Image: a node that already cached a
+	// different tag for the running digest reports THAT alias in status, naming an image never deployed.
+	// An ephemeral container has no spec entry, so it falls back to its status image.
+	imgPod := &corev1.Pod{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{
+			{Name: "app", Image: "ghcr.io/example/app:v2"},
+		}},
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+			{Name: "app", Image: "ghcr.io/example/app:cached-alias"},  // status names a digest-alias tag
+			{Name: "debugger", Image: "ghcr.io/example/debug:latest"}, // no spec container → keep status
+		}},
+	}
+	imgStats := containerStatuses(imgPod)
+	if imgStats[0].Image != "ghcr.io/example/app:v2" {
+		t.Errorf("app image = %q, want the spec tag ghcr.io/example/app:v2 (not the status alias)", imgStats[0].Image)
+	}
+	if imgStats[1].Image != "ghcr.io/example/debug:latest" {
+		t.Errorf("ephemeral image = %q, want the status image as fallback", imgStats[1].Image)
+	}
+
 	// A container caught currently Terminated (e.g. mid-crashloop) must NOT also carry LastTerminated:
 	// the current State already shows the exit, so repeating an identical "last exit" is redundant.
 	crashing := corev1.ContainerStatus{
@@ -1329,7 +1349,7 @@ func TestLastTerminatedString(t *testing.T) {
 		State:                corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 1}},
 		LastTerminationState: term("Error", 1),
 	}
-	if g := containerStat(crashing, false, corev1.ResourceRequirements{}); g.State != "Terminated: Error (exit 1)" || g.LastTerminated != "" {
+	if g := containerStat(crashing, false, corev1.ResourceRequirements{}, ""); g.State != "Terminated: Error (exit 1)" || g.LastTerminated != "" {
 		t.Errorf("containerStat(crashing) = %+v, want State=%q LastTerminated empty", g, "Terminated: Error (exit 1)")
 	}
 }

@@ -153,7 +153,7 @@ type ContainerStatus struct {
 	Restarts int32  `json:"restarts,omitempty"`
 	State    string `json:"state"`           // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
 	Init     bool   `json:"init,omitempty"`  // an init container (runs to completion before the app ones)
-	Image    string `json:"image,omitempty"` // the actually-running image, so the drawer pairs each container with its image
+	Image    string `json:"image,omitempty"` // the container's SPEC image (what the manifest declared), not status.Image — see containerStat
 	// LastTerminated is why the container PREVIOUSLY exited (e.g. "OOMKilled (exit 137)"), from
 	// lastState.terminated. Empty unless the container restarted at least once — it answers "why did
 	// this restart" for a now-Running container, the actionable signal otherwise buried in the manifest.

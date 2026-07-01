@@ -71,21 +71,25 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	if !ok {
 		return nil
 	}
-	// Requests/limits live on the spec containers, statuses on the status side — join by name so
-	// each card can show its own declared bounds (and gauge usage against its own limit).
+	// Requests/limits AND the declared image live on the spec containers, statuses on the status side —
+	// join both by name so each card shows its own declared bounds (and gauges usage against its own
+	// limit) and the image the manifest actually asked for.
 	resources := map[string]corev1.ResourceRequirements{}
+	images := map[string]string{}
 	for _, c := range p.Spec.InitContainers {
 		resources[c.Name] = c.Resources
+		images[c.Name] = c.Image
 	}
 	for _, c := range p.Spec.Containers {
 		resources[c.Name] = c.Resources
+		images[c.Name] = c.Image
 	}
 	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses))
 	for _, cs := range p.Status.InitContainerStatuses {
-		out = append(out, containerStat(cs, true, resources[cs.Name]))
+		out = append(out, containerStat(cs, true, resources[cs.Name], images[cs.Name]))
 	}
 	for _, cs := range p.Status.ContainerStatuses {
-		out = append(out, containerStat(cs, false, resources[cs.Name]))
+		out = append(out, containerStat(cs, false, resources[cs.Name], images[cs.Name]))
 	}
 	if len(out) == 0 {
 		return nil
@@ -93,7 +97,7 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	return out
 }
 
-func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequirements) ContainerStatus {
+func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequirements, specImage string) ContainerStatus {
 	// LastTerminated explains why a container that has since RESTARTED is now Running/Waiting — so it is
 	// only additive when the CURRENT state isn't itself a termination. A currently-Terminated container
 	// (e.g. caught mid-crashloop) already shows its exit in State; repeating the identical "last exit"
@@ -102,7 +106,17 @@ func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequ
 	if cs.State.Terminated == nil {
 		last = lastTerminatedString(cs.LastTerminationState)
 	}
-	st := ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: cs.Image, LastTerminated: last}
+	// Show the SPEC image (what the manifest declared), not status.Image. status.Image reports whatever
+	// tag the node's image cache aliases the running DIGEST to, so a node that already pulled a different
+	// tag for the same digest names an image the operator never deployed (e.g. spec ":v2" shown as an
+	// older ":latest" the node still had cached). The spec tag matches the manifest and the node-level
+	// Images field, keeping one pod's cards consistent with each other; fall back to status only when a
+	// status container has no spec entry (an ephemeral container).
+	image := specImage
+	if image == "" {
+		image = cs.Image
+	}
+	st := ContainerStatus{Name: cs.Name, Ready: cs.Ready, Restarts: cs.RestartCount, State: containerStateString(cs.State), Init: init, Image: image, LastTerminated: last}
 	if cpu, ok := res.Limits[corev1.ResourceCPU]; ok {
 		st.CPULimitMilli = cpu.MilliValue()
 	}
