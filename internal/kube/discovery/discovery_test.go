@@ -70,47 +70,6 @@ func TestStatic(t *testing.T) {
 	}
 }
 
-func TestCachedDelegates(t *testing.T) {
-	res := []Resource{
-		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
-	}
-	c := NewCached(Static(res))
-	got, err := c.Discover(context.Background())
-	if err != nil {
-		t.Fatalf("Discover: %v", err)
-	}
-	if !reflect.DeepEqual(got, res) {
-		t.Errorf("Discover() = %v, want %v", got, res)
-	}
-}
-
-func TestCachedSerializes(t *testing.T) {
-	// Two concurrent Discover calls on the same Cached must not race in the underlying
-	// discoverer; the mutex serializes them. We assert by observing that the inner
-	// discoverer's call counter increments cleanly under -race.
-	var calls int
-	c := NewCached(counterDiscoverer{calls: &calls})
-	done := make(chan struct{}, 2)
-	for i := 0; i < 2; i++ {
-		go func() {
-			_, _ = c.Discover(context.Background())
-			done <- struct{}{}
-		}()
-	}
-	<-done
-	<-done
-	if calls != 2 {
-		t.Errorf("Cached.Discover should delegate each call: got %d, want 2", calls)
-	}
-}
-
-type counterDiscoverer struct{ calls *int }
-
-func (c counterDiscoverer) Discover(context.Context) ([]Resource, error) {
-	*c.calls++
-	return nil, nil
-}
-
 // isSubresource keys solely on a "/" in the resource name — "pods/status", "deployments/scale" are
 // subresources kd must not list/watch as top-level objects; a bare name is a real resource.
 func TestIsSubresource(t *testing.T) {

@@ -12,6 +12,18 @@ import (
 // file. The ride-along policy that pulls referenced cluster-scoped objects into a namespace snapshot
 // lives here too (see appendRideAlong).
 
+// listResources returns a stable copy of the registered resources, snapshotted under the lock so a
+// caller can iterate their informers without holding c.mu.
+func (c *Cache) listResources() []Resource {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]Resource, 0, len(c.resources))
+	for _, r := range c.resources {
+		out = append(out, r)
+	}
+	return out
+}
+
 // SnapshotNamespace returns every cached object in the given namespace, plus the
 // cluster-scoped objects associated with it: those a namespaced object references (one hop via
 // ownerReferences or a spec-field reference) and the ClusterRoleBindings that grant a ClusterRole
@@ -23,12 +35,7 @@ func (c *Cache) SnapshotNamespace(namespace string) []runtime.Object {
 	if namespace == ClusterScope {
 		return c.SnapshotCluster()
 	}
-	c.mu.Lock()
-	resources := make([]Resource, 0, len(c.resources))
-	for _, r := range c.resources {
-		resources = append(resources, r)
-	}
-	c.mu.Unlock()
+	resources := c.listResources()
 
 	var out []runtime.Object
 	for _, r := range resources {
@@ -51,15 +58,8 @@ func (c *Cache) SnapshotNamespace(namespace string) []runtime.Object {
 
 // SnapshotCluster returns every cluster-scoped cached object.
 func (c *Cache) SnapshotCluster() []runtime.Object {
-	c.mu.Lock()
-	resources := make([]Resource, 0, len(c.resources))
-	for _, r := range c.resources {
-		resources = append(resources, r)
-	}
-	c.mu.Unlock()
-
 	var out []runtime.Object
-	for _, r := range resources {
+	for _, r := range c.listResources() {
 		if r.Namespaced {
 			continue
 		}

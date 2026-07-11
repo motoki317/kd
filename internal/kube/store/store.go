@@ -134,6 +134,11 @@ type Cache struct {
 	mu        sync.Mutex
 	resources map[schema.GroupVersionResource]Resource  // by GVR; updated on CRD add/remove
 	failedAt  map[schema.GroupVersionResource]time.Time // last WARN time per GVR (throttle)
+	// wired records GVRs whose informer has already been configured (transform, indexer, watch-error
+	// + change handler). It deliberately survives a CRD delete — which drops the c.resources entry but
+	// NOT the factory's retained, still-running informer — so a reinstall restores the metadata without
+	// re-configuring (and double-wiring) that same informer.
+	wired map[schema.GroupVersionResource]bool
 
 	// reconcileMu serializes CRD-triggered reconciles and coalesces bursts: while one is
 	// running, additional triggers set `reconcilePending` instead of stacking goroutines.
@@ -155,19 +160,14 @@ type Resource struct {
 }
 
 // New constructs an unstarted Cache. Start must be called before snapshots/subscriptions are
-// served. disc may be nil; New defaults to discovery.FromClient(client.Discovery()) in that
-// case, which is the production wiring. opts.Discoverer takes precedence over disc when set.
-// metrics may be nil when metrics-server is unavailable; the usage feed degrades to a no-op.
-func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metricsversioned.Interface, disc discovery.Discoverer, opts Options) *Cache {
-	if opts.Discoverer != nil {
-		disc = opts.Discoverer
-	}
+// served. opts.Discoverer may be nil; New then defaults to discovery.FromClient(client.Discovery()),
+// the production wiring (only tests inject a static discoverer). metrics may be nil when
+// metrics-server is unavailable; the usage feed degrades to a no-op.
+func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metricsversioned.Interface, opts Options) *Cache {
+	disc := opts.Discoverer
 	if disc == nil {
 		disc = discovery.FromClient(client.Discovery())
 	}
-	// Wrap with Cached so the startup path and the CRD-watcher reconciler don't issue
-	// concurrent ServerPreferredResources round-trips on the apiserver.
-	disc = discovery.NewCached(disc)
 	if opts.Resync == 0 {
 		opts.Resync = 10 * time.Minute
 	}
@@ -181,6 +181,7 @@ func New(client kubernetes.Interface, dynClient dynamic.Interface, metrics metri
 		stopCh:    make(chan struct{}),
 		resources: map[schema.GroupVersionResource]Resource{},
 		failedAt:  map[schema.GroupVersionResource]time.Time{},
+		wired:     map[schema.GroupVersionResource]bool{},
 	}
 }
 
@@ -211,23 +212,6 @@ func (c *Cache) Start(ctx context.Context) error {
 		<-ctx.Done()
 		c.stop() // idempotent close so manual Shutdown + ctx-cancel both work
 	}()
-
-	// Wire change handlers BEFORE starting informers so a viewer who connects mid-sync watches the
-	// graph fill in progressively rather than seeing one frozen partial snapshot. Initial-population
-	// events can't flood subscribers: notify() coalesces into a depth-1 channel and the SSE layer
-	// debounces rebuilds over a fixed window, so a burst of Adds collapses to one rebuild per tick.
-	handler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(any) { c.notify() },
-		UpdateFunc: func(any, any) { c.notify() },
-		DeleteFunc: func(any) { c.notify() },
-	}
-	c.mu.Lock()
-	for gvr, r := range c.resources {
-		if _, err := r.Informer.AddEventHandler(handler); err != nil {
-			slog.Warn("store: add event handler failed", "gvr", gvr.String(), "err", err)
-		}
-	}
-	c.mu.Unlock()
 
 	c.factory.Start(c.stopCh)
 
@@ -262,28 +246,47 @@ func (c *Cache) registerEager(resources []discovery.Resource) {
 	}
 }
 
-// registerLocked adds an informer for one resource. Called under c.mu.
+// registerLocked adds an informer for one resource. Called under c.mu. Configuration (transform,
+// indexer, watch-error, change handler) runs exactly once per informer: a CRD delete+reinstall calls
+// this again for the SAME retained, already-started informer (factory.ForResource dedups by GVR), and
+// re-configuring a started informer errors and double-wires the handler — so `wired` gates it while
+// the c.resources metadata below is always (re)stored.
 func (c *Cache) registerLocked(r discovery.Resource) {
 	inf := c.factory.ForResource(r.GVR).Informer()
-	// Trim cache-only-dead weight (managedFields, CRD OpenAPI schemas, …) before objects enter
-	// the shared store — the single largest lever on resident memory. Must precede factory.Start;
-	// registerLocked runs before it (initial Start) or before the reconcile's Start (CRD add).
-	if err := inf.SetTransform(stripForCache); err != nil {
-		slog.Warn("store: set transform failed", "gvr", r.GVR.String(), "err", err)
+	if !c.wired[r.GVR] {
+		// Everything below must precede factory.Start, which registerLocked always runs before (initial
+		// Start, or the reconcile's Start for a CRD add).
+		// Trim cache-only-dead weight (managedFields, CRD OpenAPI schemas, …) before objects enter the
+		// shared store — the single largest lever on resident memory.
+		if err := inf.SetTransform(stripForCache); err != nil {
+			slog.Warn("store: set transform failed", "gvr", r.GVR.String(), "err", err)
+		}
+		// Add a UID secondary index so appendRideAlong can resolve ownerReferences in O(refs) instead
+		// of scanning every cluster-scoped object.
+		if err := inf.AddIndexers(cache.Indexers{uidIndex: uidIndexFunc}); err != nil {
+			slog.Warn("store: add UID indexer failed", "gvr", r.GVR.String(), "err", err)
+		}
+		// Suppress noisy reflector errors (RBAC-denied watches, gone CRDs) — throttle to once per
+		// (GVR, hour). Without this, a single missing-permission kind floods stderr with the default
+		// ERROR every few seconds.
+		gvr := r.GVR
+		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+			c.recordWatchErr(gvr, err)
+		})
+		// The change handler is wired here — the single registration point for every informer, whether
+		// added at startup or by a later CRD reconcile — so every watched kind wakes SSE subscribers on
+		// change. A viewer connecting mid-sync thus watches the graph fill in progressively; the
+		// initial-population Add burst can't flood anyone, since notify() coalesces into a depth-1
+		// channel and the SSE layer debounces rebuilds over a fixed window.
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    func(any) { c.notify() },
+			UpdateFunc: func(any, any) { c.notify() },
+			DeleteFunc: func(any) { c.notify() },
+		}); err != nil {
+			slog.Warn("store: add event handler failed", "gvr", r.GVR.String(), "err", err)
+		}
+		c.wired[r.GVR] = true
 	}
-	// Add a UID secondary index so appendRideAlong can resolve ownerReferences in O(refs)
-	// instead of scanning every cluster-scoped object. Must happen before the informer
-	// starts; registerLocked runs before factory.Start, so this is safe.
-	if err := inf.AddIndexers(cache.Indexers{uidIndex: uidIndexFunc}); err != nil {
-		slog.Warn("store: add UID indexer failed", "gvr", r.GVR.String(), "err", err)
-	}
-	// Suppress noisy reflector errors (RBAC-denied watches, gone CRDs) — throttle to once
-	// per (GVR, hour). Without this, a single missing-permission kind floods stderr with
-	// the default ERROR every few seconds.
-	gvr := r.GVR
-	_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
-		c.recordWatchErr(gvr, err)
-	})
 	c.resources[r.GVR] = Resource{GVR: r.GVR, Kind: r.Kind, Namespaced: r.Namespaced, ShortNames: r.ShortNames, Informer: inf}
 }
 
@@ -426,7 +429,8 @@ func (c *Cache) startCRDWatcher(ctx context.Context) {
 //
 // Matching is by group + plural (the resource name); the cached preferred version may differ from
 // any single CRD spec version, so version is not compared. Tombstones (DeletedFinalStateUnknown,
-// delivered when the watch missed the live delete) are unwrapped first.
+// delivered when the watch missed the live delete) are unwrapped first. `wired` is deliberately left
+// intact: the factory keeps the (now-404ing) informer, and a reinstall reuses it as-is.
 func (c *Cache) removeResourcesForCRD(obj any) {
 	if tomb, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = tomb.Obj
@@ -441,12 +445,22 @@ func (c *Cache) removeResourcesForCRD(obj any) {
 		return // not a CRD shape we recognize; nothing to remove
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	var removed bool
 	for gvr := range c.resources {
 		if gvr.Group == group && gvr.Resource == plural {
 			delete(c.resources, gvr)
 			delete(c.failedAt, gvr) // drop the watch-error throttle so a re-install starts clean
+			removed = true
 		}
+	}
+	c.mu.Unlock()
+	// Wake SSE subscribers so the deleted CRD's custom resources leave live clients now. The next
+	// snapshot already omits them (snapshots iterate c.resources), but the live feed only re-snapshots
+	// on a change signal — and this informer's own deletes may never arrive (its watch just 404s), so
+	// without this the ghost nodes linger until some other watched kind churns. notify() takes c.mu,
+	// so it runs after the unlock.
+	if removed {
+		c.notify()
 	}
 }
 

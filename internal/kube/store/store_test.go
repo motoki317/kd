@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -128,7 +129,7 @@ func startTestStore(t *testing.T, objs ...runtime.Object) *Cache {
 	t.Helper()
 	// Use the cluster scheme so the dynamic fake knows how to list/watch each GVR.
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, objs...)
-	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources), Options{})
+	c := New(fake.NewSimpleClientset(), dynClient, nil, Options{Discoverer: discovery.Static(fixedResources)})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	if err := c.Start(ctx); err != nil {
@@ -321,7 +322,7 @@ func TestStoreSnapshotRideAlongClusterScopedRBACStaysOut(t *testing.T) {
 
 func TestStoreSubscribeReceivesChange(t *testing.T) {
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, ns("alpha"))
-	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources), Options{})
+	c := New(fake.NewSimpleClientset(), dynClient, nil, Options{Discoverer: discovery.Static(fixedResources)})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	if err := c.Start(ctx); err != nil {
@@ -348,14 +349,146 @@ func TestStoreSubscribeReceivesChange(t *testing.T) {
 	}
 }
 
+// growingDiscoverer returns `first` on the initial Discover and `rest` on every later call, so a
+// test can register a kind through the CRD-reconcile path (which re-runs Discover) instead of eager
+// startup.
+type growingDiscoverer struct {
+	mu    sync.Mutex
+	first []discovery.Resource
+	rest  []discovery.Resource
+	done  bool
+}
+
+func (d *growingDiscoverer) Discover(context.Context) ([]discovery.Resource, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.done {
+		return d.rest, nil
+	}
+	d.done = true
+	return d.first, nil
+}
+
+// TestStoreReconcileRegisteredKindNotifies pins the invariant that an informer added AFTER startup
+// (the CRD-reconcile path) wakes SSE subscribers on change, exactly like an eager one — so the notify
+// handler belongs in registerLocked, the single registration point both paths share, not only in
+// Start's initial loop. Before that fix a runtime-installed CRD's object changes triggered a rebuild
+// only incidentally, when some other watched kind happened to churn.
+func TestStoreReconcileRegisteredKindNotifies(t *testing.T) {
+	configmaps := discovery.Resource{GVR: schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true}
+	disc := &growingDiscoverer{first: fixedResources, rest: append(slices.Clone(fixedResources), configmaps)}
+
+	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, ns("alpha"))
+	c := New(fake.NewSimpleClientset(), dynClient, nil, Options{Discoverer: disc})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() { c.Shutdown() })
+	c.WaitForCacheSync(ctx)
+
+	// Reconcile re-discovers (now including configmaps) and registers + starts its informer via
+	// registerLocked — the second registration path that must also wire the notify handler.
+	c.reconcile(ctx)
+	c.WaitForCacheSync(ctx)
+
+	ch, unsubscribe := c.Subscribe()
+	defer unsubscribe()
+
+	cmGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+	cm := uns("v1", "ConfigMap", "alpha", "cfg", "cm-cfg", nil)
+	if _, err := dynClient.Resource(cmGVR).Namespace("alpha").Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create configmap: %v", err)
+	}
+	select {
+	case <-ch:
+	case <-time.After(3 * time.Second):
+		t.Fatal("a reconcile-registered kind's change did not wake the subscriber")
+	}
+}
+
+// drainSignal clears any pending coalesced signal so a following receive tests a fresh one.
+func drainSignal(ch <-chan struct{}) {
+	select {
+	case <-ch:
+	default:
+	}
+}
+
+// awaitSignal reports whether a change signal arrives within a short window.
+func awaitSignal(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	case <-time.After(3 * time.Second):
+		return false
+	}
+}
+
+// TestStoreCRDDeleteAndReinstall exercises the CRD delete/reinstall lifecycle around the notify
+// handler: deleting a CRD wakes subscribers so its now-unsnapshotted custom resources leave live
+// clients, and reinstalling the same GVR reuses the retained informer WITHOUT re-wiring it — a
+// subsequent change still fires through the single handler (a double-wire regressed this).
+func TestStoreCRDDeleteAndReinstall(t *testing.T) {
+	configmaps := discovery.Resource{GVR: schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true}
+	disc := &growingDiscoverer{first: fixedResources, rest: append(slices.Clone(fixedResources), configmaps)}
+
+	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, ns("alpha"))
+	c := New(fake.NewSimpleClientset(), dynClient, nil, Options{Discoverer: disc})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() { c.Shutdown() })
+	c.WaitForCacheSync(ctx)
+
+	// Register configmaps through the reconcile path, then subscribe.
+	c.reconcile(ctx)
+	c.WaitForCacheSync(ctx)
+	ch, unsubscribe := c.Subscribe()
+	defer unsubscribe()
+
+	// Deleting the CRD backing configmaps must wake the subscriber (ghost removal) while leaving the
+	// informer wired (so the reinstall doesn't re-configure the retained, still-running informer).
+	drainSignal(ch)
+	c.removeResourcesForCRD(crd("", "configmaps"))
+	if !awaitSignal(ch) {
+		t.Fatal("a CRD delete did not wake the subscriber (ghost nodes would linger)")
+	}
+	c.mu.Lock()
+	_, present := c.resources[configmaps.GVR]
+	stillWired := c.wired[configmaps.GVR]
+	c.mu.Unlock()
+	if present {
+		t.Error("configmaps should be gone from resources after its CRD delete")
+	}
+	if !stillWired {
+		t.Error("wired must survive a CRD delete so a reinstall reuses the retained informer as-is")
+	}
+
+	// Reinstall: reconcile re-registers configmaps against the SAME informer. A change must still fire.
+	c.reconcile(ctx)
+	c.WaitForCacheSync(ctx)
+	drainSignal(ch)
+	cm := uns("v1", "ConfigMap", "alpha", "cfg2", "cm-cfg2", nil)
+	if _, err := dynClient.Resource(configmaps.GVR).Namespace("alpha").Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create configmap: %v", err)
+	}
+	if !awaitSignal(ch) {
+		t.Fatal("a change after a CRD reinstall did not wake the subscriber")
+	}
+}
+
 func TestStoreSkipKindsExcludesFromEager(t *testing.T) {
 	// Resources whose name appears in SkipKinds (on top of DefaultSkipKinds) do not get
 	// an informer at startup, so their objects are absent from snapshots.
 	dynClient := dynamicfake.NewSimpleDynamicClient(scheme.Scheme,
 		ns("alpha"), deployment("alpha", "web"),
 	)
-	c := New(fake.NewSimpleClientset(), dynClient, nil, discovery.Static(fixedResources),
-		Options{SkipKinds: []string{"deployments"}},
+	c := New(fake.NewSimpleClientset(), dynClient, nil,
+		Options{Discoverer: discovery.Static(fixedResources), SkipKinds: []string{"deployments"}},
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -399,7 +532,7 @@ func TestDefaultSkipKindsHidesKyvernoEphemeralReports(t *testing.T) {
 // doesn't know about the synthetic evil.example.com Pod GVR, and the property under test
 // is independent of informer wiring.
 func TestStoreGroupForKindDeterministic(t *testing.T) {
-	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, discovery.Static(nil), Options{})
+	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, Options{Discoverer: discovery.Static(nil)})
 	for _, gvr := range []schema.GroupVersionResource{
 		{Group: "evil.example.com", Version: "v1", Resource: "pods"},
 		{Group: "", Version: "v1", Resource: "pods"},
@@ -421,7 +554,7 @@ func TestStoreGroupForKindDeterministic(t *testing.T) {
 // the lexicographically smallest group like GroupForKind. Populated directly for the same reason
 // as the determinism test — the property is independent of informer wiring.
 func TestStoreKindShortNames(t *testing.T) {
-	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, discovery.Static(nil), Options{})
+	c := New(fake.NewSimpleClientset(), dynamicfake.NewSimpleDynamicClient(scheme.Scheme), nil, Options{Discoverer: discovery.Static(nil)})
 	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}] =
 		Resource{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", ShortNames: []string{"cm"}}
 	c.resources[schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}] =

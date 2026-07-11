@@ -264,7 +264,7 @@ func (r *Registry) runBuild(name string, e *entry) {
 	opts.Resync = r.resync
 	// nil disc → store.New defaults to discovery.FromClient(clients.Typed.Discovery()), so the
 	// default wiring lives in exactly one place.
-	c := store.New(clients.Typed, clients.Dynamic, clients.Metrics, nil, opts)
+	c := store.New(clients.Typed, clients.Dynamic, clients.Metrics, opts)
 	// Cache lifetime is tied to the process — once started, informers run until the kd
 	// process exits. A dedicated context keeps Start() independent of any single HTTP request.
 	startCtx := context.Background()

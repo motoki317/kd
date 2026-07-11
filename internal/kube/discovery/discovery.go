@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -130,23 +129,3 @@ func Static(res []Resource) Discoverer { return staticDiscoverer{res: slices.Clo
 type staticDiscoverer struct{ res []Resource }
 
 func (s staticDiscoverer) Discover(context.Context) ([]Resource, error) { return s.res, nil }
-
-// Cached wraps a Discoverer and serializes concurrent Discover calls under a mutex, so the
-// store's startup path and the CRD watcher's reconcile don't race to issue duplicate
-// ServerPreferredResources round-trips on the apiserver. The wrapper itself implements
-// Discoverer so callers don't know they're going through a cache.
-type Cached struct {
-	inner Discoverer
-	mu    sync.Mutex
-}
-
-// NewCached wraps the given Discoverer. The returned value implements Discoverer.
-func NewCached(d Discoverer) *Cached { return &Cached{inner: d} }
-
-// Discover serializes against other concurrent Discover calls on the same Cached and then
-// delegates to the inner discoverer. Calls happen on the caller's goroutine.
-func (c *Cached) Discover(ctx context.Context) ([]Resource, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.inner.Discover(ctx)
-}
