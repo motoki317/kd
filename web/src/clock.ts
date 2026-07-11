@@ -22,8 +22,8 @@ function ensureTicking() {
   timer = setInterval(() => setNow(new Date()), 1_000)
 }
 
-// useNow returns the current shared clock value and subscribes the caller to the 30s tick, so any age
-// derived from it re-renders in place. Call it inside a reactive scope (a memo/JSX), like any signal.
+// useNow returns the current shared clock value and subscribes the caller to the per-second tick, so any
+// age derived from it re-renders in place. Call it inside a reactive scope (a memo/JSX), like any signal.
 export function useNow(): Date {
   ensureTicking()
   return now()

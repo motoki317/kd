@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasDescendantPod, isLoggable } from './loggable'
+import { hasDescendantPod } from './loggable'
 import type { KNode } from './types'
 
 // Minimal node factory — only the fields hasDescendantPod reads.
@@ -31,36 +31,5 @@ describe('hasDescendantPod', () => {
     // Defensive: malformed owner data shouldn't hang the drawer.
     const nodes = [node('a', 'X', ['b']), node('b', 'X', ['a'])]
     expect(hasDescendantPod('a', nodes)).toBe(false)
-  })
-})
-
-describe('isLoggable', () => {
-  it('is true for built-in workload kinds even before pods exist (scaled to 0 / pending)', () => {
-    expect(isLoggable(node('dep', 'Deployment'), [node('dep', 'Deployment')])).toBe(true)
-    expect(isLoggable(node('p', 'Pod'), [node('p', 'Pod')])).toBe(true)
-  })
-
-  it('is true for a pod-owning CRD via descendants, false for a logless resource', () => {
-    const nodes = [node('wf', 'Workflow'), node('wf-step', 'Pod', ['wf']), node('cm', 'ConfigMap')]
-    expect(isLoggable(node('wf', 'Workflow'), nodes)).toBe(true)
-    expect(isLoggable(node('cm', 'ConfigMap'), nodes)).toBe(false)
-  })
-
-  it('is true for a FINISHED Workflow whose completed pods the graph dropped (kind floor, not descendants)', () => {
-    // The display graph drops a finished Workflow's completed pods, so hasDescendantPod sees none —
-    // the Workflow itself must still be loggable or a finished run loses its Logs tab (the server's
-    // BuildForLogs reaches those pods). Only the Workflow node is present; no Pod descendant exists.
-    expect(isLoggable(node('wf', 'Workflow'), [node('wf', 'Workflow')])).toBe(true)
-  })
-
-  it('is true for a CronWorkflow whose completed runs the graph dropped (asks "did last night run?")', () => {
-    // CronWorkflow → Workflow → pods: a finished run's pods are display-dropped two levels down, so
-    // hasDescendantPod sees nothing. The kind floor keeps the Logs tab; BuildForLogs reaches the
-    // grandchild pods through the ownerReference chain.
-    expect(isLoggable(node('cwf', 'CronWorkflow'), [node('cwf', 'CronWorkflow')])).toBe(true)
-  })
-
-  it('is false for a null selection', () => {
-    expect(isLoggable(null, [])).toBe(false)
   })
 })

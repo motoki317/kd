@@ -117,14 +117,14 @@ export default function App() {
   const clampSidebar = (w: number) => Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(w)))
   const [sidebarWidth, setSidebarWidth] = createSignal(clampSidebar(Number(readRawPref('kd:sidebarWidth')) || 230))
   createEffect(() => writePref('kd:sidebarWidth', String(sidebarWidth())))
-  // Drag the divider between the sidebar and canvas. Pointer events (not mouse) so it works under
-  // touch/pen; window-level listeners so a fast drag that outruns the 6px handle keeps tracking. The
-  // body class suppresses text selection + sets the col-resize cursor for the whole drag.
-  const startSidebarResize = (e: PointerEvent) => {
+  // Shared pointer-drag scaffolding for both edge resizers. Pointer events (not mouse) so it works under
+  // touch/pen; window-level listeners so a fast drag that outruns the 6px handle keeps tracking; the body
+  // class suppresses text selection + sets the col-resize cursor for the whole drag. onDelta receives the
+  // signed pixel delta from the drag start; each resizer maps it to its own value + clamp.
+  const startDrag = (e: PointerEvent, onDelta: (dx: number) => void) => {
     e.preventDefault()
     const startX = e.clientX
-    const startW = sidebarWidth()
-    const onMove = (ev: PointerEvent) => setSidebarWidth(clampSidebar(startW + (ev.clientX - startX)))
+    const onMove = (ev: PointerEvent) => onDelta(ev.clientX - startX)
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -133,6 +133,11 @@ export default function App() {
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     document.body.classList.add('resizing-col')
+  }
+  // Drag the divider between the sidebar and canvas: the pixel delta widens the sidebar 1:1.
+  const startSidebarResize = (e: PointerEvent) => {
+    const startW = sidebarWidth()
+    startDrag(e, (dx) => setSidebarWidth(clampSidebar(startW + dx)))
   }
   // Tunable drawer (resource-detail panel) width — the mirror of the sidebar resizer on the right
   // edge. Sized RELATIVE TO THE VIEWPORT (vw) rather than a fixed pixel count: a fixed-px panel reads
@@ -152,22 +157,11 @@ export default function App() {
   createEffect(() => writePref('kd:drawerPct', String(drawerPct())))
   // The drawer sits at the right, so it grows LEFTWARD: dragging its left-edge handle left widens it
   // (opposite sign from the sidebar). The pointer's pixel delta is converted to vw (via innerWidth, the
-  // unit --drawer-w resolves against) so the drag stays 1:1 with the cursor. Same window-level
-  // listeners + body class as the sidebar drag.
+  // unit --drawer-w resolves against) so the drag stays 1:1 with the cursor.
   const startDrawerResize = (e: PointerEvent) => {
-    e.preventDefault()
-    const startX = e.clientX
     const startPct = drawerPct()
     const pxPerVw = window.innerWidth / 100
-    const onMove = (ev: PointerEvent) => setDrawerPct(clampDrawer(startPct - (ev.clientX - startX) / pxPerVw))
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      document.body.classList.remove('resizing-col')
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    document.body.classList.add('resizing-col')
+    startDrag(e, (dx) => setDrawerPct(clampDrawer(startPct - dx / pxPerVw)))
   }
   // REACTIVE phone-width signal for overlay gating (isNarrowScreen is a one-shot read): while the
   // sidebar OVERLAYS the canvas, the covered surface must leave the Tab order (inert below) — a

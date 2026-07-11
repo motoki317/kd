@@ -8,8 +8,8 @@ import { byName, type Layout, type PositionedNode } from './layout'
 // A length-encoded "bullet bar" visualization (see docs/ADR/20260603-nodes-capacity-usage-
 // visualization.md): each node is a horizontal TRACK whose length ∝ its allocatable capacity (on a
 // GLOBAL px-per-unit scale, so node sizes are comparable across the canvas — the "feel the size"
-// goal), and pods are SEGMENTS sized by their actual usage. Reserved (request) vs actual (usage) is
-// shown either as two stacked sub-bars ('split') or one usage bar with a Σrequest marker ('overlay').
+// goal), and pods are SEGMENTS sized by their actual usage. Reserved vs actual is shown as two stacked
+// bars per node — a usage bar (pods sized by live usage) above a requested bar (pods sized by request).
 // Expanding a node unfolds per-pod bullet rows (usage fill + request/limit ticks + overshoot). A
 // single resource is shown at a time (CPU or memory), so the two metrics never fight for one channel.
 
@@ -75,7 +75,8 @@ const CAP_BULLET_CARD_H = CAP_BULLET_PAD + CAP_BULLET_NAME_H + CAP_BULLET_H + CA
 
 // resourceOf reads the active resource's quantity (CPU millicores or memory bytes) off a Resources
 // object, returning undefined when that resource is unset (the absent-request case the view marks).
-const resourceOf = (r: { cpuMilli?: number; memBytes?: number } | undefined, res: CapResource): number | undefined =>
+// Exported so the drawer's resourceBars reads the same field the same way (one CPU/mem accessor).
+export const resourceOf = (r: { cpuMilli?: number; memBytes?: number } | undefined, res: CapResource): number | undefined =>
   !r ? undefined : res === 'cpu' ? r.cpuMilli : r.memBytes
 
 // CapSeg is one of the SELECTED namespace's pods rendered as a bar segment (or, in the expanded
@@ -541,16 +542,24 @@ export function formatPair(
     const f = (v: number | undefined) => (v === undefined ? '—' : cores ? `${+(v / 1000).toFixed(2)}` : `${Math.round(v)}m`)
     return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
   }
-  const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
+  const { div, unit, decimals } = binaryUnit(ref)
+  const f = (v: number | undefined) => (v === undefined ? '—' : `${+(v / div).toFixed(decimals)}${unit}`)
+  return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
+}
+
+// binaryUnit picks the binary memory unit to render `ref` in — the largest 1024-step unit that keeps the
+// value ≥ 1 (B→Ki→Mi→…→Pi). Returns the divisor, the unit suffix, and how many decimals to show (whole
+// numbers below Ki, one decimal above — "512Mi" but "8.5Gi"). Shared by formatPair (whole group keyed off
+// one ref, so its bars read in one unit) and formatQuantity (per-value).
+const MEM_UNITS = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
+function binaryUnit(ref: number): { div: number; unit: string; decimals: number } {
   let i = 0
   let n = ref
-  while (n >= 1024 && i < units.length - 1) {
+  while (n >= 1024 && i < MEM_UNITS.length - 1) {
     n /= 1024
     i++
   }
-  const div = 1024 ** i
-  const f = (v: number | undefined) => (v === undefined ? '—' : `${+(v / div).toFixed(i > 0 ? 1 : 0)}${units[i]}`)
-  return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
+  return { div: 1024 ** i, unit: MEM_UNITS[i], decimals: i > 0 ? 1 : 0 }
 }
 
 // formatQuantity renders a canonical-unit resource value for the capacity view's labels: CPU
@@ -563,12 +572,6 @@ export function formatQuantity(v: number | undefined, res: CapResource): string 
     return `${+(v / 1000).toFixed(2)}` // cores, trailing zeros dropped (1500 → "1.5", 2000 → "2")
   }
   if (v === 0) return '0'
-  const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
-  let i = 0
-  let n = v
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024
-    i++
-  }
-  return `${+n.toFixed(i > 0 ? 1 : 0)}${units[i]}` // "8Gi" not "8.0Gi", "8.5Gi" kept
+  const { div, unit, decimals } = binaryUnit(v)
+  return `${+(v / div).toFixed(decimals)}${unit}` // "8Gi" not "8.0Gi", "8.5Gi" kept
 }

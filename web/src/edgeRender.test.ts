@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DASHED, edgePath, edgeTitle } from './edgeRender'
+import { isDashedEdge, edgePath, edgeTitle } from './edgeRender'
 import type { KEdge, KNode } from './types'
 
 const node = (id: string, kind: string, name: string, namespace?: string): KNode =>
@@ -50,10 +50,10 @@ describe('edgeTitle', () => {
   })
 })
 
-describe('DASHED', () => {
-  it('marks non-ownership edges dashed and leaves ownerReference solid', () => {
-    expect(DASHED.ownerReference).toBeUndefined()
-    expect(DASHED.selects).toBe(true)
-    expect(DASHED.mounts).toBe(true)
+describe('isDashedEdge', () => {
+  it('dashes non-ownership edges and leaves ownerReference solid', () => {
+    expect(isDashedEdge('ownerReference')).toBe(false)
+    expect(isDashedEdge('selects')).toBe(true)
+    expect(isDashedEdge('mounts')).toBe(true)
   })
 })

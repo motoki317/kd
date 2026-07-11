@@ -208,7 +208,6 @@ export function createClusterSession(deps: {
     namespacesError,
     namespacesLoading,
     refetchNamespaces,
-    namespaceList,
     mergedNamespaces,
     recordSummary,
     noNamespaces,

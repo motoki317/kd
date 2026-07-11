@@ -35,19 +35,12 @@ export function edgePath(points: Point[]): string {
   return d
 }
 
-// DASHED marks the non-ownership edge types: the dashed stroke says "this isn't a parent→child owns
-// relationship"; the tooltip (edgeTitle) says which kind of non-ownership it is.
-export const DASHED: Partial<Record<EdgeType, boolean>> = {
-  selects: true,
-  routes: true,
-  mounts: true,
-  usesServiceAccount: true,
-  binds: true,
-  scheduledOn: true,
-  refers: true,
-  guards: true,
-  governs: true,
-  scrapes: true,
+// isDashedEdge reports whether an edge is drawn dashed: every type EXCEPT ownerReference. The dashed
+// stroke says "this isn't a parent→child owns relationship"; the tooltip (edgeTitle) says which kind of
+// non-ownership it is. Keyed off the one solid type so a newly-added edge kind is dashed by default (a
+// new relationship is non-ownership), never silently solid for want of a table entry.
+export function isDashedEdge(t: EdgeType): boolean {
+  return t !== 'ownerReference'
 }
 
 // Human-readable label for an edge type, so operators don't need to know the graph package's edge

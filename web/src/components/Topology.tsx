@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMou
 import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
 import { layoutGraphByCapacity, type CapResource, type CapRow, type CapacityLayout } from '../capacityLayout'
 import { useNow } from '../clock'
-import { DASHED, edgePath, edgeTitle } from '../edgeRender'
+import { isDashedEdge, edgePath, edgeTitle } from '../edgeRender'
 import CapacityView from './CapacityView'
 import CanvasEmpty from './topology/CanvasEmpty'
 import Toolbar from './topology/Toolbar'
@@ -191,7 +191,7 @@ export default function Topology(props: Props) {
     }
     // Nodes grouping: the capacity & usage visualization — node tracks (length ∝ allocatable) with
     // pods as usage-sized segments, reserved-vs-actual bars, expandable to per-pod bullets. Driven by
-    // the live metrics-server usage feed (props.usage) + the active resource/mode toggles.
+    // the live metrics-server usage feed (props.capacity.usage) + the active resource toggle.
     if (props.groupBy === 'nodes')
       return layoutGraphByCapacity(props.capacity?.nodes ?? [], props.capacity?.usage?.items, capResource(), props.namespace ?? '', expandedClusters())
     // Relationship grouping (default): left-to-right depth columns following the displayed
@@ -1365,7 +1365,7 @@ export default function Topology(props: Props) {
         <g transform={`translate(${tx()},${ty()}) scale(${scale()})`}>
           {/* Nodes view: the capacity & usage visualization. Each node is a horizontal track
               (length ∝ allocatable) with pods drawn as usage-sized segments; reserved-vs-actual
-              shows as stacked req/use bars (split) or one usage bar + a Σrequest marker (overlay).
+              shows as two stacked bars per node — a usage bar above a requested bar.
               Expanding a node unfolds per-pod bullets with request/limit ticks + overshoot. */}
           <Show when={props.groupBy === 'nodes'}>
             {/* The bar/segment/bullet SVG lives in CapacityView; this host keeps every signal
@@ -1488,7 +1488,7 @@ export default function Topology(props: Props) {
                     fill="none"
                     stroke="var(--edge-color)"
                     stroke-width={e.type === 'ownerReference' ? 1.8 : 1.2}
-                    stroke-dasharray={DASHED[e.type] ? '5 4' : undefined}
+                    stroke-dasharray={isDashedEdge(e.type) ? '5 4' : undefined}
                     marker-end="url(#arrow)"
                   />
                   {/* Blueprint data-flow trace: a cyan dash that travels NETWORK edges (Ingress→

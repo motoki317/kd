@@ -7,13 +7,10 @@
 // fill EXTENDS the track past that ceiling and the overshoot is hatched (the "over its request/limit"
 // signal) — exactly the Nodes-view bullet idiom, where the bar grows past its reference on a burst.
 import type { KNode, Resources, ResourceUsage } from './types'
-import type { CapResource } from './capacityLayout'
+import { resourceOf, type CapResource } from './capacityLayout'
 
 const RES: CapResource[] = ['cpu', 'memory']
 const LABEL: Record<CapResource, string> = { cpu: 'CPU', memory: 'Mem' }
-
-const pick = (r: Resources | ResourceUsage | undefined, res: CapResource): number | undefined =>
-  !r ? undefined : res === 'cpu' ? r.cpuMilli : r.memBytes
 
 export interface ResBarModel {
   key: string // 'lim' | 'req' | 'cap' | 'alloc' | 'node'
@@ -75,13 +72,13 @@ function scaleBars(bounds: Bound[], use: number | undefined): ResBarModel[] {
 export function drawerResourceBars(input: ResBarInputs): ResGroupModel[] {
   const groups: ResGroupModel[] = []
   for (const res of RES) {
-    const use = pick(input.usage, res)
+    const use = resourceOf(input.usage, res)
     let bounds: Bound[]
     if (input.isNode) {
       // A node has no limit/request — its bounds are the physical capacity and the schedulable
       // allocatable. Usage past allocatable (into kubelet/system-reserved) runs past the Alloc tick.
-      const cap = pick(input.capacity, res)
-      const alloc = pick(input.allocatable, res)
+      const cap = resourceOf(input.capacity, res)
+      const alloc = resourceOf(input.allocatable, res)
       bounds = [
         cap != null && cap > 0 ? { key: 'cap', label: 'Cap', val: cap } : null,
         alloc != null && alloc > 0 ? { key: 'alloc', label: 'Alloc', val: alloc } : null,
@@ -89,9 +86,9 @@ export function drawerResourceBars(input: ResBarInputs): ResGroupModel[] {
     } else {
       // Lim first (the larger bound → the longer track), Req below — mirroring the capacity view's
       // larger-bound-on-top stack. An unconstrained pod falls back to its node's capacity.
-      const lim = pick(input.limit, res)
-      const req = pick(input.request, res)
-      const hostCap = pick(input.hostCapacity, res)
+      const lim = resourceOf(input.limit, res)
+      const req = resourceOf(input.request, res)
+      const hostCap = resourceOf(input.hostCapacity, res)
       bounds = [
         lim != null && lim > 0 ? { key: 'lim', label: 'Lim', val: lim } : null,
         req != null && req > 0 ? { key: 'req', label: 'Req', val: req } : null,
