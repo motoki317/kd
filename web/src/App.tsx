@@ -206,6 +206,7 @@ export default function App() {
   // terminal state) — see selection.ts.
   const {
     capById,
+    selectedNode,
     selectedUsage,
     selectedWorkloadUsage,
     selectedHostCapacity,
@@ -231,7 +232,7 @@ export default function App() {
   let pendingSel = initialSel
 
   // Mirror the view state back into the URL (replace, not push) — see urlState.ts.
-  createUrlSync({ ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedId, graph, capById })
+  createUrlSync({ ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedNode })
 
   // Reflect ctx + ns + view in the tab title so operators with multiple cluster tabs can tell
   // them apart from the OS chrome (and re-find one in a tab-switcher). Format: "ns · ctx · kd"
@@ -598,9 +599,7 @@ export default function App() {
             // the resource the operator came from. The cycle-300 helper pushes the prior selection only
             // when changing to a different node — so re-selecting the same node is a no-op.
             onNavigateRef={(ref) => {
-              const [kind, ...rest] = ref.split('/')
-              const name = rest.join('/')
-              const match = Object.values(graph.nodes).find((n) => n.kind === kind && n.name === name)
+              const match = Object.values(graph.nodes).find((n) => matchSel(n, ref))
               if (match) selectAndRemember(match.id)
               return !!match
             }}

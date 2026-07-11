@@ -7,7 +7,7 @@ import { drawerResourceBars } from '../resourceBars'
 import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { KNode, Resources, ResourceUsage } from '../types'
-import type { WorkloadUsage } from '../usageAggregate'
+import type { SegBounds, WorkloadUsage } from '../usageAggregate'
 import ContainerCards from './ContainerCards'
 import CopyButton from './CopyButton'
 import ImageRef from './ImageRef'
@@ -46,7 +46,6 @@ function podShareName(pod: string, workload: string): string {
 // undercount its total when a pod reports no per-container split mid-report, so any shortfall past 2%
 // becomes an explicit dim "not yet attributed" segment — the stack must never stretch partial shares
 // to fill the whole width.
-type SegBounds = { reqCpu?: number; reqMem?: number; limCpu?: number; limMem?: number }
 function containerSegments(u: ResourceUsage | undefined, bounds?: (name: string) => SegBounds | undefined): UsageSegment[] {
   const breakdown = u?.containers
   if (!u || !breakdown || breakdown.length < 2) return []

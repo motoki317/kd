@@ -617,6 +617,15 @@ export default function Topology(props: Props) {
     return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
   }
 
+  // fitLit frames a lit node set at the standard 1.4× cap, then eases it out by ×0.92 for the same
+  // breathing room the manual Fit leaves. Most callers animate straight to it; the automatic filter-fit
+  // first checks the returned scale against the legibility floor before committing.
+  function fitLit(lit: { x: number; y: number; width: number; height: number }[]) {
+    const target = fitNodeSet(lit, 1.4)
+    target.scale *= 0.92
+    return target
+  }
+
   // Floored variants of the two above: like computeFitFor/fitNodeSet but they never zoom out past
   // MIN_FIT_SCALE — instead of shrinking a huge graph to an unreadable speck they pin to the floor and
   // frame around `focus` (the selected card for a selection, the top-left corner for a plain fit-all),
@@ -786,28 +795,23 @@ export default function Topology(props: Props) {
           pendingSelFit = null // deselect: drop any fit waiting on the drawer so it can't fire late
           return
         }
-        // Nodes view: frame the node row the selection sits in (see capRowBoxFor) — UNLESS the selection
-        // came from clicking an expanded pod card, in which case zoom to that card (the user's "click a
-        // pod box to read its bars"). capPodFitBox is consumed once so a later keyboard/search selection
-        // of the same kind still frames the whole row.
-        const capBox = capRowBoxFor(id)
-        if (capBox) {
+        // Nodes view: frame the node ROW the selection sits in — UNLESS the selection came from clicking
+        // an expanded pod card, in which case zoom to that card (the user's "click a pod box to read its
+        // bars"). capPodFitBox is consumed once so a later keyboard/search selection of the same kind
+        // still frames the whole row. Entering here means the id IS on a row (else fall through to the
+        // relationship path below).
+        const capRow = props.groupBy === 'nodes' && id ? capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id)) : undefined
+        if (capRow) {
           const podBox = capPodFitBox
           capPodFitBox = null
           if (podBox) {
             fitCapBox(podBox)
-          } else {
+          } else if (expandedClusters().has(`host:${capRow.host}`)) {
             // Selecting the node NAME (opening its drawer) frames the row exactly like CLICKING the row
             // does (toggleCapRow): width-driven + top-anchored when expanded, centred when collapsed.
-            // Framing the row's FULL height (the old fitNodeSet path) zoomed an expanded many-pod stack
-            // so far out the bars and text were unreadable — the user's report.
-            const row = capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
-            if (row && expandedClusters().has(`host:${row.host}`)) fitCapRowExpanded(row)
-            else if (row) fitCapBox({ x: row.x, y: row.y, width: row.width, height: row.height })
-            else {
-              cancelAnimationFrame(selFitFrame)
-              selFitFrame = requestAnimationFrame(() => animateTo(fitNodeSet([capBox], 1.4)))
-            }
+            fitCapRowExpanded(capRow)
+          } else {
+            fitCapBox({ x: capRow.x, y: capRow.y, width: capRow.width, height: capRow.height })
           }
           return
         }
@@ -869,8 +873,7 @@ export default function Topology(props: Props) {
       if (l.width === 0) return
       const lit = l.nodes.filter((n) => !nodeFaded(n))
       if (lit.length === 0) return // filter matched nothing laid out — don't fly to an empty box
-      const target = fitNodeSet(lit, 1.4)
-      target.scale *= 0.92 // a touch of breathing room, matching the manual Fit
+      const target = fitLit(lit)
       if (target.scale < MIN_FIT_SCALE) {
         // Scattered: framing all of them is a speck. Fall back to the single worst match so the
         // operator lands on a real result instead of faded healthy cards (see the guard comment).
@@ -1131,9 +1134,7 @@ export default function Topology(props: Props) {
       animateTo(computeFitFloored(0, 0, l.width, l.height, { maxScale: 1.4, focus: { x: 0, y: 0 } }))
       return
     }
-    const target = fitNodeSet(lit, 1.4)
-    target.scale *= 0.92
-    animateTo(target)
+    animateTo(fitLit(lit))
   }
 
   // Frame the current match set on demand — the click affordance on the "N matches" pill. Search
@@ -1149,9 +1150,7 @@ export default function Topology(props: Props) {
     if (!svg || l.width === 0) return
     const lit = l.nodes.filter((n) => !nodeFaded(n))
     if (lit.length === 0) return
-    const target = fitNodeSet(lit, 1.4)
-    target.scale *= 0.92
-    animateTo(target)
+    animateTo(fitLit(lit))
   }
 
   // fitAll: the bottom-right Fit button. Frames everything with NO legibility floor, so a dense graph
@@ -1166,9 +1165,7 @@ export default function Topology(props: Props) {
     if (!svg || l.width === 0) return
     const lit = matches() || props.healthFilter || activeKinds() ? l.nodes.filter((n) => !nodeFaded(n)) : null
     if (lit && lit.length > 0) {
-      const target = fitNodeSet(lit, 1.4)
-      target.scale *= 0.92
-      animateTo(target)
+      animateTo(fitLit(lit))
       return
     }
     animateTo(computeFitFor(0, 0, l.width, l.height, 1.4))

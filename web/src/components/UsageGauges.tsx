@@ -2,22 +2,18 @@ import { For, Show, type JSX } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { formatPair, formatQuantity } from '../capacityLayout'
 import type { ResGroupModel } from '../resourceBars'
+import type { SegBounds } from '../usageAggregate'
 
 // UsageSegment is one named share of a usage fill — the workload rollup stacks one coloured segment
-// per pod (or per container name) so "who is using it" reads visually fleet-wide.
-export interface UsageSegment {
+// per pod (or per container name) so "who is using it" reads visually fleet-wide. It carries the
+// segment's own request/limit bound (SegBounds): when the gauge is filterable, hiding the segment
+// subtracts these from the gauge's TOTAL bound — never sums the shown, so an unmetered-but-bounded
+// container the breakdown can't see still counts. The bound is absent on the synthetic rest.
+export interface UsageSegment extends SegBounds {
   name: string
   color: string
   cpuMilli: number
   memBytes: number
-  // This segment's own request/limit contribution. Present when the gauge is filterable (the pod's
-  // by-container split, a workload's by-pod/by-container split): hiding the segment subtracts these
-  // from the gauge's TOTAL bound — never sums the shown, so an unmetered-but-bounded container the
-  // breakdown can't see still counts. Absent on the synthetic "not yet attributed" rest.
-  reqCpu?: number
-  reqMem?: number
-  limCpu?: number
-  limMem?: number
   // The synthetic rest segment (unattributed usage) — drawn in the stack/legend but not toggleable
   // (it has no bound to subtract and isn't a real container).
   synthetic?: boolean

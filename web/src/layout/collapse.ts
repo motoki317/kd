@@ -149,10 +149,7 @@ export function foldSiblingSubtrees(
       // collapsed, at the bottom once expanded). placeColumns reads it to splice the pill into its
       // sibling column at the right row, instead of letting it float as its own __collapse__ group.
       pills.push({
-        id: `${COLLAPSE_KIND}:${key}`,
-        kind: COLLAPSE_KIND,
-        name: `+${hidden.length} more`,
-        health: 'Healthy',
+        ...pillNode(key, hidden.length),
         _collapse: { key, groupKind: kind, hidden, expanded: isExpanded, hiddenDescendants: descendants },
         _pillSlot: pillIndex,
         collapseGroup: key,
@@ -174,18 +171,19 @@ export function foldSiblingSubtrees(
   return { nodes: [...keptNodes, ...pills], edges: [...keptEdges, ...pillEdges] }
 }
 
+// pillNode is the identity of a synthetic "+N more" fold affordance — the fields every pill shares no
+// matter where in the pipeline it's minted (its id format and the "+N more" label live here once).
+// Callers attach the collapse meta themselves: `_collapse` for a pre-layout pill the placer lifts onto
+// `collapse`, or `collapse` directly on an already-placed cell — plus any placement extras.
+export function pillNode(key: string, hiddenCount: number): KNode {
+  return { id: `${COLLAPSE_KIND}:${key}`, kind: COLLAPSE_KIND, name: `+${hiddenCount} more`, health: 'Healthy' }
+}
+
 // pillCell builds the synthetic KNode for a "+N older" affordance, tagged with its CollapseMeta so
 // the placement loop can lift it onto the resulting PositionedNode. `host` is set for host-group
 // pills so hostGroups() attributes the pill to the right container.
 export function pillCell(meta: CollapseMeta, host?: string): KNode & { _collapse: CollapseMeta } {
-  return {
-    id: `${COLLAPSE_KIND}:${meta.key}`,
-    kind: COLLAPSE_KIND,
-    name: `+${meta.hidden.length} more`,
-    health: 'Healthy',
-    ...(host ? { host } : {}),
-    _collapse: meta,
-  }
+  return { ...pillNode(meta.key, meta.hidden.length), ...(host ? { host } : {}), _collapse: meta }
 }
 
 // connGroups returns one bounding rect per per-kind leaf block (Services, Secrets, …) under a hub, so

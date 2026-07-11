@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cardKindLabel, cardName, cardStatus, cardTitle, kindLabel, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, selectionLabel, setServerShortNames, shortNodeName } from './names'
+import { cardKindLabel, cardName, cardStatus, cardTitle, kindShortLabel, middleTruncate, pluralizeKind, prefixParentNames, relativeName, selectionLabel, setServerShortNames, shortNodeName } from './names'
 import type { KNode } from './types'
 
 describe('relativeName', () => {
@@ -28,16 +28,6 @@ describe('shortNodeName', () => {
   })
   it('does not strip a leading-dot edge case into an empty string', () => {
     expect(shortNodeName('.hidden')).toBe('.hidden') // indexOf('.')===0, not >0 → unchanged
-  })
-})
-
-describe('kindLabel', () => {
-  it('abbreviates verbose kinds that would overflow the node header', () => {
-    expect(kindLabel('PersistentVolumeClaim')).toBe('PVC')
-  })
-  it('leaves kinds that already fit unchanged', () => {
-    expect(kindLabel('Deployment')).toBe('Deployment')
-    expect(kindLabel('Pod')).toBe('Pod')
   })
 })
 

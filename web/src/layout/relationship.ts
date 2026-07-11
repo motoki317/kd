@@ -36,7 +36,7 @@ import {
   type PositionedEdge,
   type PositionedNode,
 } from './core'
-import { foldSiblingSubtrees, splitForFold } from './collapse'
+import { foldSiblingSubtrees, pillNode, splitForFold } from './collapse'
 import { blockDims, findHubs, type Hub, hubArea, type LeafBlock } from './hubs'
 import { type KindGroup, kindGroups, layoutGraphByKind } from './kind'
 
@@ -61,17 +61,14 @@ function orphanBlock(kind: string, list: KNode[], expanded: ReadonlySet<string>,
   const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
   if (split.hidden.length) {
     const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
-    cells.splice(split.pillIndex, 0, { id: `${COLLAPSE_KIND}:${key}`, kind: COLLAPSE_KIND, name: `+${split.hidden.length} more`, health: 'Healthy', collapse: meta })
+    cells.splice(split.pillIndex, 0, { ...pillNode(key, split.hidden.length), collapse: meta })
   }
-  const dims = blockDims(cells.length)
-  const nodes: PositionedNode[] = cells.map((cell, i) => ({
-    ...cell,
-    collapseGroup: key, // frame the whole block via connGroups, like a hub's per-kind leaf block
-    x: Math.floor(i / dims.rows) * (NODE_WIDTH + LEAF_GAP_X) + NODE_WIDTH / 2,
-    y: (i % dims.rows) * (NODE_HEIGHT + LEAF_GAP_Y) + NODE_HEIGHT / 2,
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
-  }))
+  // Tag every cell with the block's collapseGroup so connGroups frames it (like a hub's per-kind leaf
+  // block), then lay them out on the shared column-major grid in the block's own (0,0) space.
+  const tagged = cells.map((c) => ({ ...c, collapseGroup: key }))
+  const dims = blockDims(tagged.length)
+  const nodes: PositionedNode[] = []
+  placeBlockCells({ kind, cells: tagged, ...dims }, 0, 0, nodes)
   return { nodes, edges: [], width: dims.w, height: dims.h }
 }
 

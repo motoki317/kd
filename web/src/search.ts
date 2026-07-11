@@ -1,9 +1,9 @@
-import { kindAliases, kindLabel } from './names'
+import { kindAliases } from './names'
 import type { KNode } from './types'
 
 // nodeMatches reports whether a node should stay lit for the given query. Matches anything an
-// operator might use to locate a resource: what it's called (name), what it is (kind, plus the
-// shown short label like "PVC"), where it lives (host, cluster/external IP), how it's tagged
+// operator might use to locate a resource: what it's called (name), what it is (kind, plus short-name
+// aliases like "pvc"/"svc"), where it lives (host, cluster/external IP), how it's tagged
 // (labels), what it runs (images), and its current state (status — so "CrashLoopBackOff" spotlights
 // every troubled pod). Case-insensitive substring match; callers pass the query pre-trimmed.
 //
@@ -36,7 +36,6 @@ export function nodeMatches(n: KNode, query: string): boolean {
     const kindOk =
       !kindQ ||
       n.kind.toLowerCase().startsWith(kindQ) ||
-      kindLabel(n.kind).toLowerCase().startsWith(kindQ) ||
       kindAliases(n.kind).some((a) => a.startsWith(kindQ))
     const nameOk = !nameQ || n.name.toLowerCase().includes(nameQ)
     if (kindOk && nameOk) return true
@@ -48,7 +47,6 @@ export function nodeMatches(n: KNode, query: string): boolean {
   }
   if (n.name.toLowerCase().includes(q)) return true
   if (n.kind.toLowerCase().includes(q)) return true
-  if (kindLabel(n.kind).toLowerCase().includes(q)) return true
   if (kindAliases(n.kind).some((a) => a.includes(q))) return true
   if (n.status?.toLowerCase().includes(q)) return true
   if (n.host?.toLowerCase().includes(q)) return true

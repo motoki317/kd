@@ -14,7 +14,7 @@ import {
   NODE_HEIGHT,
   NODE_WIDTH,
 } from './core'
-import { splitForFold } from './collapse'
+import { pillNode, splitForFold } from './collapse'
 
 // blockDims lays a per-kind block's m cells column-major into a vertical-first grid: rows fill down
 // to LEAF_COL_MAX before a second column starts, so a collapsed block (m ≤ COLLAPSE_VISIBLE+1) is one
@@ -96,7 +96,7 @@ function collapseHubLeaves(
       const id = `${COLLAPSE_KIND}:${key}`
       // Splice the pill into its slot in the column — between the first and last cards while collapsed,
       // at the bottom once expanded — so the kind reads in one stable natural order whichever way.
-      cells.splice(split.pillIndex, 0, { id, kind: COLLAPSE_KIND, name: `+${split.hidden.length} more`, health: 'Healthy', collapse: meta })
+      cells.splice(split.pillIndex, 0, { ...pillNode(key, split.hidden.length), collapse: meta })
       // Bundle the hub's edges to the hidden siblings into one hub→pill edge — but only while
       // collapsed. Expanded, the siblings are drawn as real leaves with their own hub edges, so the
       // pill is a bare re-collapse toggle with no edge.

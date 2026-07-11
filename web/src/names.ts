@@ -27,18 +27,6 @@ export function shortNodeName(name: string): string {
   return dot > 0 ? name.slice(0, dot) : name
 }
 
-// Compact labels for verbose kinds in the dense topology header, where the full kind would collide
-// with the right-aligned status (e.g. PERSISTENTVOLUMECLAIM over "Bound 10Gi"). The drawer still
-// shows the full kind; these are kubectl's well-known abbreviations.
-const KIND_LABELS: Record<string, string> = {
-  PersistentVolumeClaim: 'PVC',
-}
-
-// kindLabel returns the compact topology label for a kind, or the kind unchanged when it fits.
-export function kindLabel(kind: string): string {
-  return KIND_LABELS[kind] ?? kind
-}
-
 // Server-discovered kind → API short name ("cm", "pdb", …), populated once per context from
 // /kinds (see App.tsx). A Solid signal so a late-arriving fetch re-renders the cards that already
 // drew with the fallback. This is the authoritative source — it tracks the cluster (CRD shorts
@@ -93,6 +81,7 @@ export function cardKindLabel(kind: string): string {
 const KIND_ALIASES: Record<string, string[]> = {
   Service: ['svc'],
   StatefulSet: ['sts'],
+  PersistentVolumeClaim: ['pvc'], // "pvc" isn't a contiguous substring of the kind
   // Cluster-scope kinds not matched by substring of their full name.
   CustomResourceDefinition: ['crd'],
   PersistentVolume: ['pv'],
@@ -105,8 +94,8 @@ const KIND_ALIASES: Record<string, string[]> = {
   ValidatingWebhookConfiguration: ['vwhk', 'vwc'],
 }
 
-// kindAliases returns extra search-only synonyms for a kind. The full kind and the kindLabel are
-// already matched by nodeMatches; this fills the gaps left by non-substring short names.
+// kindAliases returns extra search-only synonyms for a kind. The full kind is already matched by
+// nodeMatches; this fills the gaps left by short names that aren't a substring of it.
 export function kindAliases(kind: string): string[] {
   return KIND_ALIASES[kind] ?? []
 }
@@ -167,12 +156,19 @@ export function prefixParentNames(nodes: KNode[], edges: KEdge[]): Map<string, s
 // hover after ~700ms. It mirrors the card's visible facts (kind, full name, status) plus the
 // detail the card runs out of room for at small zoom (age, host, restarts), so an operator can
 // inspect a node without selecting it.
+// nodeHead is the identity triple every node summary leads with: "Kind name", then the status, then
+// the failure reason. The reason (server-set only for unhealthy nodes) sits right under the status it
+// explains, so a reader takes in the WHY next to the WHAT. Shared by the card tooltip and the aria-live
+// selection announcement so the two can't drift on what a node's summary says.
+function nodeHead(n: KNode): string[] {
+  const parts = [`${n.kind} ${n.name}`]
+  if (n.status) parts.push(n.status)
+  if (n.message) parts.push(n.message)
+  return parts
+}
+
 export function cardTitle(n: KNode, now: Date): string {
-  const lines = [`${n.kind} ${n.name}`]
-  if (n.status) lines.push(n.status)
-  // The failure reason (server-set only for unhealthy nodes) sits right under the status it explains,
-  // so an operator triaging a wall of degraded cards reads the WHY on hover — zero-click, no drawer.
-  if (n.message) lines.push(n.message)
+  const lines = nodeHead(n)
   const meta: string[] = []
   if (n.createdAt) meta.push(`${relativeAge(n.createdAt, now)} old`)
   if (n.host) meta.push(`on ${n.host}`)
@@ -187,10 +183,7 @@ export function cardTitle(n: KNode, now: Date): string {
 // prefixed "Selected " for context. Empty when nothing is selected, so the region stays silent.
 export function selectionLabel(n: KNode | null | undefined): string {
   if (!n) return ''
-  const parts = [`${n.kind} ${n.name}`]
-  if (n.status) parts.push(n.status)
-  if (n.message) parts.push(n.message)
-  return `Selected ${parts.join(', ')}`
+  return `Selected ${nodeHead(n).join(', ')}`
 }
 
 // cardStatus end-truncates a long status to its own row's width. End (not middle) keeps the leading

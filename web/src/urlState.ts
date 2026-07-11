@@ -8,7 +8,6 @@ import type { ContextsResponse } from './api'
 import type { CapResource } from './resource'
 import { GROUP_OPTIONS } from './components/Topology'
 import { toggleInSet } from './filterToggle'
-import type { GraphState } from './graphState'
 import { readPref, readRawPref, writePref } from './prefs'
 import { parseRels } from './relationships'
 import type { GroupBy, KNode, RelCategory } from './types'
@@ -97,11 +96,9 @@ export function createUrlSync(deps: {
   capResource: Accessor<CapResource>
   showOrphaned: Accessor<boolean>
   kindFilter: Accessor<Set<string>>
-  selectedId: Accessor<string | null>
-  graph: GraphState
-  capById: Accessor<Map<string, KNode>>
+  selectedNode: Accessor<KNode | null>
 }): void {
-  const { ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedId, graph, capById } = deps
+  const { ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedNode } = deps
   // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
   // ctx is included only when the switcher is enabled (kubeconfig mode); in-cluster keeps URLs clean.
   // Kind filter (cycle 217) is included so a filtered view ("pods only") is shareable via URL.
@@ -120,12 +117,11 @@ export function createUrlSync(deps: {
     // shared capacity-view link restores the resource. Omitted at the 'cpu' default to keep URLs clean.
     if (capResource() !== 'cpu') p.set('capRes', capResource())
     if (showOrphaned()) p.set('orphans', '1')
-    // Resolve the selection from the SAME fallback the drawer uses (graph, then the cluster-wide
-    // capacity feed) so a Nodes-view pod from another namespace — present only in capById — still
-    // writes a `sel`, instead of the Share link silently dropping it. Carry the namespace when it
-    // differs from the viewed scope (the cluster-scope Nodes case) so the ref round-trips unambiguously.
-    const id = selectedId()
-    const n = id ? (graph.nodes[id] ?? capById().get(id)) : null
+    // selectedNode resolves through the SAME graph→capacity fallback the drawer uses, so a Nodes-view
+    // pod from another namespace — present only in the capacity feed — still writes a `sel` instead of
+    // the Share link silently dropping it. Carry the namespace when it differs from the viewed scope
+    // (the cluster-scope Nodes case) so the ref round-trips unambiguously.
+    const n = selectedNode()
     if (n) p.set('sel', n.namespace && n.namespace !== namespace() ? `${n.kind}/${n.namespace}/${n.name}` : `${n.kind}/${n.name}`)
     if (kindFilter().size > 0) p.set('kinds', [...kindFilter()].sort().join(','))
     history.replaceState(null, '', `${location.pathname}?${p}`)
