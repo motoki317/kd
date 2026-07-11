@@ -64,58 +64,64 @@ func conditionStatuses(u *unstructured.Unstructured) map[string]string {
 // (cert-manager, Crossplane, Flux, KEDA, ExternalSecret, …) that follow the conventional Ready
 // condition, while being honest about a CR carrying only signals kd can't interpret.
 func crHealthFromConditions(u *unstructured.Unstructured) Health {
+	// No conditions at all → Healthy by existence (matching ConfigMap/Service). This is distinct from
+	// "has conditions but none Ready/Available" (Unknown, below), so the empty check stays here — the
+	// shared selector can't tell the two apart.
 	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
 	if err != nil || !found || len(conds) == 0 {
 		return HealthHealthy
 	}
-	// First Ready/Available decides; if neither is present, the CR has conditions but none kd
-	// interprets, so report Unknown rather than glossing as Healthy.
+	m, ok := readyOrAvailableCondition(u)
+	if !ok {
+		return HealthUnknown // conditions present but none kd interprets
+	}
+	switch s, _ := m["status"].(string); s {
+	case "True":
+		return HealthHealthy
+	case "False":
+		return HealthDegraded
+	default:
+		return HealthUnknown
+	}
+}
+
+// readyOrAvailableCondition returns the first status.conditions[] entry of type Ready or Available — the
+// conventional controller health signal — or false when the CR has no such condition. The single source
+// of which condition is authoritative, so crHealthFromConditions' verdict and crConditionMessage's "why"
+// stay on the same condition instead of two hand-synced scans.
+func readyOrAvailableCondition(u *unstructured.Unstructured) (map[string]any, bool) {
+	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
+	if err != nil || !found {
+		return nil, false
+	}
 	for _, c := range conds {
 		m, ok := c.(map[string]any)
 		if !ok {
 			continue
 		}
-		typ, _ := m["type"].(string)
-		if typ != "Ready" && typ != "Available" {
-			continue
-		}
-		switch s, _ := m["status"].(string); s {
-		case "True":
-			return HealthHealthy
-		case "False":
-			return HealthDegraded
-		default:
-			return HealthUnknown
+		if typ, _ := m["type"].(string); typ == "Ready" || typ == "Available" {
+			return m, true
 		}
 	}
-	return HealthUnknown
+	return nil, false
 }
 
 // crConditionMessage returns the message of the CR's Ready/Available condition when that condition isn't
 // True — the "why" behind a degraded CR (a Certificate's "Issuing certificate…", an ExternalSecret's
 // provider error), which most controllers put in conditions[].message rather than a top-level
-// status.message (the only place statusMessage looked before). Mirrors crHealthFromConditions' condition
-// selection so the surfaced message matches the health verdict. Empty when absent or the condition is True.
+// status.message (the only place statusMessage looked before). Reads the same condition
+// readyOrAvailableCondition selects for the health verdict, so message and color match. Empty when
+// absent or the condition is True.
 func crConditionMessage(u *unstructured.Unstructured) string {
-	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
-	if err != nil || !found {
+	m, ok := readyOrAvailableCondition(u)
+	if !ok {
 		return ""
 	}
-	for _, c := range conds {
-		m, ok := c.(map[string]any)
-		if !ok {
-			continue
-		}
-		if typ, _ := m["type"].(string); typ != "Ready" && typ != "Available" {
-			continue
-		}
-		if s, _ := m["status"].(string); s == "True" {
-			return "" // healthy condition carries no "why"
-		}
-		msg, _ := m["message"].(string)
-		return msg
+	if s, _ := m["status"].(string); s == "True" {
+		return "" // healthy condition carries no "why"
 	}
-	return ""
+	msg, _ := m["message"].(string)
+	return msg
 }
 
 // crStatusSummary is the human status string for a custom resource — the CR equivalent of

@@ -144,9 +144,8 @@ func (a *API) authorize(w http.ResponseWriter, r *http.Request, namespace, resou
 // Used by the kind-named endpoints (resource, events) to allow EITHER the legacy class
 // (pods/nodes/workloads/…) or the GVR group rule to authorize.
 func (a *API) authorizeAny(w http.ResponseWriter, r *http.Request, namespace string, resources []string, action string) (auth.Identity, bool) {
-	id, ok := auth.FromContext(r.Context())
+	id, ok := a.requireIdentity(w, r)
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return id, false
 	}
 	if namespace == ClusterScopeNamespace {
@@ -165,6 +164,18 @@ func (a *API) authorizeAny(w http.ResponseWriter, r *http.Request, namespace str
 func (a *API) authorizeKind(w http.ResponseWriter, r *http.Request, s Store, namespace, kind, action string) (auth.Identity, bool) {
 	group, _ := s.GroupForKind(kind)
 	return a.authorizeAny(w, r, namespace, resourceClasses(kind, group), action)
+}
+
+// requireIdentity returns the authenticated identity, writing a 401 and reporting false when the
+// proxy-auth middleware attached none. The single "identity or 401" gate for handlers that need the
+// caller's identity but do their own authorization (namespace listing) or none — authorizeAny layers
+// the enforcer check on top of it.
+func (a *API) requireIdentity(w http.ResponseWriter, r *http.Request) (auth.Identity, bool) {
+	id, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}
+	return id, ok
 }
 
 type contextEntry struct {
@@ -212,9 +223,8 @@ type namespaceEntry struct {
 }
 
 func (a *API) handleNamespaces(w http.ResponseWriter, r *http.Request) {
-	id, ok := auth.FromContext(r.Context())
+	id, ok := a.requireIdentity(w, r)
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	store, ok := a.resolveStore(w, r)

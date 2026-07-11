@@ -3,7 +3,6 @@ package api
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -120,7 +119,7 @@ func (a *API) handleResourceEventStream(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+			if !writeHeartbeat(w) {
 				return
 			}
 			flusher.Flush()

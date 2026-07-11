@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -142,7 +141,7 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case <-heartbeat.C:
 			// Keep the connection open through proxies even while idle (e.g. no pods yet).
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+			if !writeHeartbeat(w) {
 				return
 			}
 			flusher.Flush()

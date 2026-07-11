@@ -6,10 +6,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -209,58 +206,6 @@ func describe(obj runtime.Object) (kind, apiVersion string, m metav1.Object, ok 
 		kind, apiVersion = kindFromType(obj)
 	}
 	return kind, apiVersion, m, kind != ""
-}
-
-// kindFromType recovers kind/apiVersion from the concrete Go type when TypeMeta is empty.
-func kindFromType(obj runtime.Object) (kind, apiVersion string) {
-	switch obj.(type) {
-	case *corev1.Pod:
-		return "Pod", "v1"
-	case *corev1.Service:
-		return "Service", "v1"
-	case *corev1.Node:
-		return "Node", "v1"
-	case *corev1.Namespace:
-		return "Namespace", "v1"
-	case *corev1.ConfigMap:
-		return "ConfigMap", "v1"
-	case *corev1.Secret:
-		return "Secret", "v1"
-	case *corev1.PersistentVolumeClaim:
-		return "PersistentVolumeClaim", "v1"
-	case *corev1.PersistentVolume:
-		return "PersistentVolume", "v1"
-	case *corev1.ServiceAccount:
-		return "ServiceAccount", "v1"
-	case *corev1.Endpoints:
-		return "Endpoints", "v1"
-	case *corev1.Event:
-		return "Event", "v1"
-	case *appsv1.Deployment:
-		return "Deployment", "apps/v1"
-	case *appsv1.ReplicaSet:
-		return "ReplicaSet", "apps/v1"
-	case *appsv1.StatefulSet:
-		return "StatefulSet", "apps/v1"
-	case *appsv1.DaemonSet:
-		return "DaemonSet", "apps/v1"
-	case *batchv1.Job:
-		return "Job", "batch/v1"
-	case *batchv1.CronJob:
-		return "CronJob", "batch/v1"
-	case *networkingv1.Ingress:
-		return "Ingress", "networking.k8s.io/v1"
-	case *rbacv1.Role:
-		return "Role", "rbac.authorization.k8s.io/v1"
-	case *rbacv1.RoleBinding:
-		return "RoleBinding", "rbac.authorization.k8s.io/v1"
-	case *rbacv1.ClusterRole:
-		return "ClusterRole", "rbac.authorization.k8s.io/v1"
-	case *rbacv1.ClusterRoleBinding:
-		return "ClusterRoleBinding", "rbac.authorization.k8s.io/v1"
-	default:
-		return "", ""
-	}
 }
 
 // sortGraph orders nodes by (kind, namespace, name, id) and edges by (type, from, to) so the

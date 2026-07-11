@@ -1,6 +1,9 @@
 package graph
 
 import (
+	"reflect"
+	"strings"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +54,32 @@ var typedFactories = map[string]func() runtime.Object{
 	"rbac.authorization.k8s.io/v1/RoleBinding": func() runtime.Object { return &rbacv1.RoleBinding{} },
 	"rbac.authorization.k8s.io/v1/ClusterRole": func() runtime.Object { return &rbacv1.ClusterRole{} },
 	"rbac.authorization.k8s.io/v1/ClusterRoleBinding": func() runtime.Object { return &rbacv1.ClusterRoleBinding{} },
+}
+
+// typeToGVKKey reverses typedFactories: a concrete Go pointer type → its "gv/Kind" key. Built once from
+// typedFactories so the kind↔type mapping has ONE source of truth — kindFromType used to hand-maintain
+// the inverse as a type switch and had already drifted (missing NetworkPolicy/PodDisruptionBudget/
+// ResourceQuota, all kinds with real Node logic).
+var typeToGVKKey = func() map[reflect.Type]string {
+	m := make(map[reflect.Type]string, len(typedFactories))
+	for key, factory := range typedFactories {
+		m[reflect.TypeOf(factory())] = key
+	}
+	return m
+}()
+
+// kindFromType recovers kind/apiVersion from a typed object's concrete Go type, for the describe() path
+// where TypeMeta is empty. Derived from typedFactories via typeToGVKKey so it cannot drift from the
+// factory list. Returns "","" for a type kd has no typed factory for.
+func kindFromType(obj runtime.Object) (kind, apiVersion string) {
+	key, ok := typeToGVKKey[reflect.TypeOf(obj)]
+	if !ok {
+		return "", ""
+	}
+	// key is gvkKey's "apiVersion/Kind"; apiVersion itself may contain a slash ("apps/v1"), so the Kind
+	// is the final segment and apiVersion is everything before it.
+	i := strings.LastIndex(key, "/")
+	return key[i+1:], key[:i]
 }
 
 // AsTyped converts a runtime.Object to its typed-struct form when the object is

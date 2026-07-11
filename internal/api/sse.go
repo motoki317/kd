@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/graph"
 )
 
@@ -28,9 +27,8 @@ const namespacesRefreshInterval = 15 * time.Second
 // full list on connect, then again whenever the rolled-up health changes. Replaces the client's 15s
 // /namespaces poll. See docs/ADR/20260527-realtime-transport-sse.md.
 func (a *API) handleNamespacesStream(w http.ResponseWriter, r *http.Request) {
-	id, ok := auth.FromContext(r.Context())
+	id, ok := a.requireIdentity(w, r)
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	store, ok := a.resolveStore(w, r)
@@ -92,7 +90,7 @@ func (a *API) handleNamespacesStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+			if !writeHeartbeat(w) {
 				return
 			}
 			flusher.Flush()
@@ -101,8 +99,8 @@ func (a *API) handleNamespacesStream(w http.ResponseWriter, r *http.Request) {
 }
 
 // sseHeartbeatInterval is how often an idle SSE stream emits a `: heartbeat` comment, so a proxy
-// or browser doesn't drop a connection that simply has no events to send. Shared by both SSE
-// handlers (graph + log stream).
+// or browser doesn't drop a connection that simply has no events to send. Shared by every SSE
+// handler (namespaces, graph, events, log stream).
 const sseHeartbeatInterval = 15 * time.Second
 
 // handleGraphStream streams the namespace graph: an initial `snapshot` event with the full
@@ -244,7 +242,7 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
+			if !writeHeartbeat(w) {
 				return
 			}
 			flusher.Flush()
@@ -328,5 +326,12 @@ func writeSSE(w http.ResponseWriter, event string, data any) bool {
 		return false
 	}
 	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, payload)
+	return err == nil
+}
+
+// writeHeartbeat emits an SSE comment line to hold an idle stream open through proxies; like
+// writeSSE it reports success so the caller can stop on a broken connection. The caller flushes.
+func writeHeartbeat(w http.ResponseWriter) bool {
+	_, err := fmt.Fprint(w, ": heartbeat\n\n")
 	return err == nil
 }

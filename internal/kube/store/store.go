@@ -255,24 +255,14 @@ func (c *Cache) registerLocked(r discovery.Resource) {
 	inf := c.factory.ForResource(r.GVR).Informer()
 	if !c.wired[r.GVR] {
 		// Everything below must precede factory.Start, which registerLocked always runs before (initial
-		// Start, or the reconcile's Start for a CRD add).
-		// Trim cache-only-dead weight (managedFields, CRD OpenAPI schemas, …) before objects enter the
-		// shared store — the single largest lever on resident memory.
-		if err := inf.SetTransform(stripForCache); err != nil {
-			slog.Warn("store: set transform failed", "gvr", r.GVR.String(), "err", err)
-		}
+		// Start, or the reconcile's Start for a CRD add). The transform + watch-error base is shared with
+		// the CRD meta-informer (startCRDWatcher); the UID indexer + change handler are registerLocked-only.
+		c.wireInformerBase(inf, r.GVR)
 		// Add a UID secondary index so appendRideAlong can resolve ownerReferences in O(refs) instead
 		// of scanning every cluster-scoped object.
 		if err := inf.AddIndexers(cache.Indexers{uidIndex: uidIndexFunc}); err != nil {
 			slog.Warn("store: add UID indexer failed", "gvr", r.GVR.String(), "err", err)
 		}
-		// Suppress noisy reflector errors (RBAC-denied watches, gone CRDs) — throttle to once per
-		// (GVR, hour). Without this, a single missing-permission kind floods stderr with the default
-		// ERROR every few seconds.
-		gvr := r.GVR
-		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
-			c.recordWatchErr(gvr, err)
-		})
 		// The change handler is wired here — the single registration point for every informer, whether
 		// added at startup or by a later CRD reconcile — so every watched kind wakes SSE subscribers on
 		// change. A viewer connecting mid-sync thus watches the graph fill in progressively; the
@@ -290,6 +280,19 @@ func (c *Cache) registerLocked(r discovery.Resource) {
 		c.wired[r.GVR] = true
 	}
 	c.resources[r.GVR] = Resource{GVR: r.GVR, Kind: r.Kind, Namespaced: r.Namespaced, ShortNames: r.ShortNames, Informer: inf}
+}
+
+// wireInformerBase applies the setup every kd informer shares: strip cache-only dead weight before
+// objects enter the store (the biggest lever on resident memory), and throttle noisy reflector watch
+// errors (RBAC-denied watches, gone CRDs) to once per (GVR, hour). registerLocked layers the UID indexer
+// + change handler on top; the CRD meta-informer (startCRDWatcher) takes only this base.
+func (c *Cache) wireInformerBase(inf cache.SharedIndexInformer, gvr schema.GroupVersionResource) {
+	if err := inf.SetTransform(stripForCache); err != nil {
+		slog.Warn("store: set transform failed", "gvr", gvr.String(), "err", err)
+	}
+	_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
+		c.recordWatchErr(gvr, err)
+	})
 }
 
 // waitForSync blocks up to a soft deadline waiting for every started informer to sync. A
@@ -396,14 +399,10 @@ func (c *Cache) startCRDWatcher(ctx context.Context) {
 		// startup path. We wait for the initial sync before attaching handlers so the replay
 		// of every existing CRD doesn't fire N consecutive reconcile rounds.
 		inf := c.factory.ForResource(crdsGVR).Informer()
-		// Apply the same setup as registerLocked but without adding to c.resources — CRD
-		// objects remain invisible in topology snapshots (graph.Build never draws edges to
-		// them, so they'd appear only as orphan cards; operators can re-enable via
-		// --eager-kinds=customresourcedefinitions).
-		_ = inf.SetTransform(stripForCache)
-		_ = inf.SetWatchErrorHandler(func(_ *cache.Reflector, err error) {
-			c.recordWatchErr(crdsGVR, err)
-		})
+		// Base wiring only — no UID indexer or change handler, and not added to c.resources: CRD objects
+		// stay invisible in topology snapshots (graph.Build never draws edges to them, so they'd appear
+		// only as orphan cards; operators can re-enable via --eager-kinds=customresourcedefinitions).
+		c.wireInformerBase(inf, crdsGVR)
 		c.factory.Start(c.stopCh)
 		// Block until the CRD informer's initial LIST completes (or 30s elapses). The
 		// initial Add replay fires during this window; our handler is not attached yet, so
