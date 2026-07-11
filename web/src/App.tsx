@@ -125,13 +125,18 @@ export default function App() {
     e.preventDefault()
     const startX = e.clientX
     const onMove = (ev: PointerEvent) => onDelta(ev.clientX - startX)
+    // End on pointercancel as well as pointerup: on touch/pen the OS can steal the gesture (a system
+    // swipe, a long-press menu) and fire ONLY pointercancel — without it the move/up listeners leak and
+    // the body keeps `resizing-col` (global text-select suppression + a stuck col-resize cursor).
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       document.body.classList.remove('resizing-col')
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     document.body.classList.add('resizing-col')
   }
   // Drag the divider between the sidebar and canvas: the pixel delta widens the sidebar 1:1.
