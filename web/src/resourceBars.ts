@@ -7,7 +7,7 @@
 // fill EXTENDS the track past that ceiling and the overshoot is hatched (the "over its request/limit"
 // signal) — exactly the Nodes-view bullet idiom, where the bar grows past its reference on a burst.
 import type { KNode, Resources, ResourceUsage } from './types'
-import { resourceOf, type CapResource } from './capacityLayout'
+import { resourceOf, type CapResource } from './resource'
 
 const RES: CapResource[] = ['cpu', 'memory']
 const LABEL: Record<CapResource, string> = { cpu: 'CPU', memory: 'Mem' }

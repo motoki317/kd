@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show } from 'solid-js'
-import { type CapResource } from '../../capacityLayout'
+import type { CapResource } from '../../resource'
 import { healthColor } from '../../health'
 import { kindIcon } from '../../icons'
 import { kindShortLabel } from '../../names'

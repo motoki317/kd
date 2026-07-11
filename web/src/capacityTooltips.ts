@@ -2,7 +2,8 @@
 // the normalization logic — which fields a segment / fold / overhead slice contributes — is testable in
 // isolation and the view component stays focused on rendering + reactivity. The renderer passes the
 // active resource (cpu|memory) so these stay free of Solid signals.
-import { formatQuantity, type CapAggregate, type CapResource, type CapRow, type CapSeg } from './capacityLayout'
+import { formatQuantity, type CapAggregate, type CapRow, type CapSeg } from './capacityLayout'
+import type { CapResource } from './resource'
 
 // CapTipData is the normalized hover-tooltip payload for the capacity bars — built from either a single
 // pod segment, a folded aggregate, or the node-usage backdrop, so the tooltip renders one shape.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasDescendantPod } from './loggable'
+import { hasDescendantPod, LOGGABLE_KINDS } from './loggable'
 import type { KNode } from './types'
 
 // Minimal node factory — only the fields hasDescendantPod reads.
@@ -31,5 +31,16 @@ describe('hasDescendantPod', () => {
     // Defensive: malformed owner data shouldn't hang the drawer.
     const nodes = [node('a', 'X', ['b']), node('b', 'X', ['a'])]
     expect(hasDescendantPod('a', nodes)).toBe(false)
+  })
+})
+
+describe('LOGGABLE_KINDS', () => {
+  // The "kind floor": a finished Workflow/CronWorkflow owns only completed pods the display graph drops,
+  // so hasDescendantPod sees none — membership here is what keeps its Logs tab (the server's BuildForLogs
+  // still reaches those pods). The drawer's gate is LOGGABLE_KINDS.has(kind) || hasPods, so this set is
+  // load-bearing for finished runs.
+  it('includes Argo Workflow and CronWorkflow so a finished run keeps its Logs tab', () => {
+    expect(LOGGABLE_KINDS.has('Workflow')).toBe(true)
+    expect(LOGGABLE_KINDS.has('CronWorkflow')).toBe(true)
   })
 })

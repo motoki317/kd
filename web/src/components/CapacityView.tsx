@@ -6,10 +6,10 @@ import {
   CAP_BULLET_PAD,
   formatPair,
   formatQuantity,
-  type CapResource,
   type CapRow,
   type CapSeg,
 } from '../capacityLayout'
+import type { CapResource } from '../resource'
 import { tipFromAgg, tipFromNodeUse, tipFromSeg, type CapTipData } from '../capacityTooltips'
 import type { KNode } from '../types'
 

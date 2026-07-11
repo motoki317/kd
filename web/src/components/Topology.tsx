@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
 import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
-import { layoutGraphByCapacity, type CapResource, type CapRow, type CapacityLayout } from '../capacityLayout'
+import { layoutGraphByCapacity, type CapRow, type CapacityLayout } from '../capacityLayout'
+import type { CapResource } from '../resource'
 import { useNow } from '../clock'
 import { isDashedEdge, edgePath, edgeTitle } from '../edgeRender'
 import CapacityView from './CapacityView'

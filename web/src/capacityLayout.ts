@@ -4,6 +4,7 @@
 // length-encoded bullet-bar geometry, its CAP_* constants, and the CapSeg/CapAggregate/CapRow shapes.
 import type { KNode } from './types'
 import { byName, type Layout, type PositionedNode } from './layout'
+import { resourceOf, type CapResource } from './resource'
 
 // A length-encoded "bullet bar" visualization (see docs/ADR/20260603-nodes-capacity-usage-
 // visualization.md): each node is a horizontal TRACK whose length ∝ its allocatable capacity (on a
@@ -12,8 +13,6 @@ import { byName, type Layout, type PositionedNode } from './layout'
 // bars per node — a usage bar (pods sized by live usage) above a requested bar (pods sized by request).
 // Expanding a node unfolds per-pod bullet rows (usage fill + request/limit ticks + overshoot). A
 // single resource is shown at a time (CPU or memory), so the two metrics never fight for one channel.
-
-export type CapResource = 'cpu' | 'memory'
 
 // CLUSTER_SCOPE_NS mirrors api.ts CLUSTER_SCOPE — the sentinel namespace under which the capacity
 // view treats every pod as "own" (no dimming), since a cluster-scoped view spans all namespaces.
@@ -72,12 +71,6 @@ const CAP_BULLET_CHAR_W = 6.2 // ~px/char of the 11px expanded-bullet pod-name f
 // label always fits, reserved by the node's own CAP_BAR_VALUE_W), and is CAP_BULLET_CARD_H tall.
 const CAP_BULLET_NAME_H = 14 // pod-name header line above its two bars (mirrors the node header)
 const CAP_BULLET_CARD_H = CAP_BULLET_PAD + CAP_BULLET_NAME_H + CAP_BULLET_H + CAP_BULLET_PAD
-
-// resourceOf reads the active resource's quantity (CPU millicores or memory bytes) off a Resources
-// object, returning undefined when that resource is unset (the absent-request case the view marks).
-// Exported so the drawer's resourceBars reads the same field the same way (one CPU/mem accessor).
-export const resourceOf = (r: { cpuMilli?: number; memBytes?: number } | undefined, res: CapResource): number | undefined =>
-  !r ? undefined : res === 'cpu' ? r.cpuMilli : r.memBytes
 
 // CapSeg is one of the SELECTED namespace's pods rendered as a bar segment (or, in the expanded
 // detail, a per-pod bullet). It carries the raw values so the renderer can draw the usage fill, the
@@ -547,10 +540,9 @@ export function formatPair(
   return { value: truthful(value, f(value)), cap: truthful(cap, f(cap)) }
 }
 
-// binaryUnit picks the binary memory unit to render `ref` in — the largest 1024-step unit that keeps the
-// value ≥ 1 (B→Ki→Mi→…→Pi). Returns the divisor, the unit suffix, and how many decimals to show (whole
-// numbers below Ki, one decimal above — "512Mi" but "8.5Gi"). Shared by formatPair (whole group keyed off
-// one ref, so its bars read in one unit) and formatQuantity (per-value).
+// binaryUnit resolves the binary memory unit (B→Ki→…→Pi) for `ref`: its divisor, suffix, and decimals
+// ("512Mi" vs "8.5Gi"). Shared by formatPair (keyed off ONE group ref, so all its bars read in a single
+// unit) and formatQuantity (per-value) — one ladder, so the two format identically.
 const MEM_UNITS = ['B', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi']
 function binaryUnit(ref: number): { div: number; unit: string; decimals: number } {
   let i = 0

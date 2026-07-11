@@ -5,7 +5,7 @@
 
 import { createEffect, createSignal, type Accessor } from 'solid-js'
 import type { ContextsResponse } from './api'
-import type { CapResource } from './capacityLayout'
+import type { CapResource } from './resource'
 import { GROUP_OPTIONS } from './components/Topology'
 import { toggleInSet } from './filterToggle'
 import type { GraphState } from './graphState'
