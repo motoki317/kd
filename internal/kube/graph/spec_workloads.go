@@ -142,7 +142,7 @@ func hpaMetricSide(m map[string]any) string {
 	if m == nil {
 		return ""
 	}
-	if v, ok := nestedNumber(m, "averageUtilization"); ok {
+	if v, ok := nestedNum(m, "averageUtilization"); ok {
 		return fmt.Sprintf("%d%%", v)
 	}
 	if s, ok := m["averageValue"].(string); ok {

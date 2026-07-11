@@ -41,11 +41,8 @@ func policyReportStatus(u *unstructured.Unstructured) string {
 // against real cluster data — the live-vs-unit-test gap dogfooding caught.
 func summaryCount(u *unstructured.Unstructured, key string) int64 {
 	for _, base := range [][]string{{"spec", "summary", key}, {"summary", key}} {
-		if v, ok, _ := unstructured.NestedInt64(u.Object, base...); ok {
+		if v, ok := nestedNum(u.Object, base...); ok {
 			return v
-		}
-		if v, ok, _ := unstructured.NestedFloat64(u.Object, base...); ok {
-			return int64(v)
 		}
 	}
 	return 0

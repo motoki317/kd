@@ -318,12 +318,9 @@ func TestAsConventionRef(t *testing.T) {
 	if ref, ok := asConventionRef(map[string]any{"name": "db"}); !ok || ref.name != "db" {
 		t.Errorf("bare name = (%+v, %v), want a ref named db", ref, ok)
 	}
-	// apiGroup wins; group is the fallback spelling.
-	if ref, _ := asConventionRef(map[string]any{"name": "db", "kind": "Secret", "apiGroup": "v1", "namespace": "ns"}); ref.apiGroup != "v1" || ref.kind != "Secret" || ref.namespace != "ns" {
-		t.Errorf("full ref = %+v, want apiGroup/kind/namespace populated", ref)
-	}
-	if ref, _ := asConventionRef(map[string]any{"name": "db", "group": "apps"}); ref.apiGroup != "apps" {
-		t.Errorf("group fallback = %+v, want apiGroup=apps", ref)
+	// A full ref populates kind and namespace (apiGroup in the map is ignored — kd resolves by name/kind).
+	if ref, _ := asConventionRef(map[string]any{"name": "db", "kind": "Secret", "apiGroup": "v1", "namespace": "ns"}); ref.kind != "Secret" || ref.namespace != "ns" {
+		t.Errorf("full ref = %+v, want kind/namespace populated", ref)
 	}
 	// A name+value pair with no kind is a parameter (e.g. a Workflow argument), not a ref.
 	if _, ok := asConventionRef(map[string]any{"name": "p", "value": "literal"}); ok {

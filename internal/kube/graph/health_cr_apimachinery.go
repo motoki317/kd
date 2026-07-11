@@ -31,7 +31,7 @@ func crdHealth(u *unstructured.Unstructured) Health {
 // only condition is Dangling (not Ready/Available), so the catch-all called every FlowSchema Unknown. A
 // PriorityLevelConfiguration carries no conditions and is healthy by existence.
 func flowControlHealth(u *unstructured.Unstructured, kind string) Health {
-	if kind == "FlowSchema" && conditionStatuses(u)["Dangling"] == "True" {
+	if kind == "FlowSchema" && crConditionStatus(u, "Dangling") == "True" {
 		return HealthDegraded
 	}
 	return HealthHealthy

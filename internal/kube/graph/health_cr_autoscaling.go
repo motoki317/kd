@@ -26,23 +26,9 @@ func hpaHealth(u *unstructured.Unstructured) Health {
 // cpu…"), which lives in neither Ready nor Available — the only types the generic
 // crConditionMessage reads — so a broken autoscaler was a red card with no words.
 func hpaConditionMessage(u *unstructured.Unstructured) string {
-	conds, found, err := unstructured.NestedSlice(u.Object, "status", "conditions")
-	if err != nil || !found {
-		return ""
-	}
-	for _, want := range []string{"ScalingActive", "AbleToScale"} {
-		for _, c := range conds {
-			m, ok := c.(map[string]any)
-			if !ok {
-				continue
-			}
-			if typ, _ := m["type"].(string); typ != want {
-				continue
-			}
-			if s, _ := m["status"].(string); s == "False" {
-				msg, _ := m["message"].(string)
-				return msg
-			}
+	for _, typ := range []string{"ScalingActive", "AbleToScale"} {
+		if crConditionStatus(u, typ) == "False" {
+			return crConditionField(u, typ, "message")
 		}
 	}
 	return ""

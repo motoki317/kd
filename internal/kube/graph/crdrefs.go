@@ -175,12 +175,13 @@ func (b *edgeBuilder) conventionRefEdges(fromID string, u *unstructured.Unstruct
 	walk(spec, 0)
 }
 
-// asConventionRef detects a {name [, kind, apiGroup, namespace]} map. Requires "name" to be
-// a non-empty string; kind/apiGroup/namespace are optional. Returns false for maps that
-// happen to have a "name" field but also carry non-ref fields (presence of "spec"/"status"/
-// "metadata"/"data" rules out a leaf ref — it's a top-level object inside the CR), so we
-// don't mistake an embedded workload spec for a reference.
-type conventionRef struct{ kind, name, namespace, apiGroup string }
+// asConventionRef detects a {name [, kind, namespace]} map. Requires "name" to be a non-empty
+// string; kind/namespace are optional. Returns false for maps that happen to have a "name" field
+// but also carry non-ref fields (presence of "spec"/"status"/"metadata"/"data" rules out a leaf
+// ref — it's a top-level object inside the CR), so we don't mistake an embedded workload spec for a
+// reference. (The convention's optional apiGroup is ignored: kd resolves refs by name/kind, so
+// storing it was dead — re-add when group-aware disambiguation is actually needed.)
+type conventionRef struct{ kind, name, namespace string }
 
 func asConventionRef(m map[string]any) (conventionRef, bool) {
 	name, _ := m["name"].(string)
@@ -195,11 +196,6 @@ func asConventionRef(m map[string]any) (conventionRef, bool) {
 	ref := conventionRef{name: name}
 	if k, ok := m["kind"].(string); ok {
 		ref.kind = k
-	}
-	if g, ok := m["apiGroup"].(string); ok {
-		ref.apiGroup = g
-	} else if g, ok := m["group"].(string); ok {
-		ref.apiGroup = g
 	}
 	if ns, ok := m["namespace"].(string); ok {
 		ref.namespace = ns

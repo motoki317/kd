@@ -291,8 +291,14 @@ func nodeAllocatable(obj runtime.Object) *Resources {
 	if !ok {
 		return nil
 	}
-	alloc := n.Status.Allocatable
-	cpu, mem, pods := alloc.Cpu(), alloc.Memory(), alloc.Pods()
+	return nodeResources(n.Status.Allocatable)
+}
+
+// nodeResources converts a Node ResourceList (Allocatable or Capacity) to structured canonical-unit
+// quantities, or nil when neither cpu nor mem is reported yet (a just-registered node) — the shared
+// zero-guard + unit conversion behind nodeAllocatable and nodeTotalCapacity.
+func nodeResources(rl corev1.ResourceList) *Resources {
+	cpu, mem, pods := rl.Cpu(), rl.Memory(), rl.Pods()
 	if cpu.IsZero() && mem.IsZero() {
 		return nil // capacity not reported yet
 	}
@@ -310,13 +316,7 @@ func nodeTotalCapacity(obj runtime.Object) *Resources {
 	if !ok {
 		return nil
 	}
-	total := n.Status.Capacity
-	cpu, mem, pods := total.Cpu(), total.Memory(), total.Pods()
-	if cpu.IsZero() && mem.IsZero() {
-		return nil
-	}
-	cpuMilli, memBytes, podCount := cpu.MilliValue(), mem.Value(), pods.Value()
-	return &Resources{CPUMilli: &cpuMilli, MemBytes: &memBytes, Pods: &podCount}
+	return nodeResources(n.Status.Capacity)
 }
 
 // podRequests sums a Pod's per-container resource requests into canonical units (nil for non-pods).

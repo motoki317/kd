@@ -400,23 +400,21 @@ func pdbStatus(p *policyv1.PodDisruptionBudget) string {
 // pvcStatus shows the claim phase plus the bound capacity when known (e.g. "Bound 10Gi"), the
 // at-a-glance answer to "did my storage actually provision, and how big?".
 func pvcStatus(p *corev1.PersistentVolumeClaim) string {
-	phase := string(p.Status.Phase)
-	if phase == "" {
-		return ""
-	}
-	if q, ok := p.Status.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
-		return phase + " " + q.String()
-	}
-	return phase
+	return phaseWithCapacity(string(p.Status.Phase), p.Status.Capacity)
 }
 
 // pvStatus shows the volume phase plus its capacity (e.g. "Bound 10Gi"), symmetric to pvcStatus.
 func pvStatus(p *corev1.PersistentVolume) string {
-	phase := string(p.Status.Phase)
+	return phaseWithCapacity(string(p.Status.Phase), p.Spec.Capacity)
+}
+
+// phaseWithCapacity renders a phase plus a storage capacity quantity when present and non-zero (e.g.
+// "Bound 10Gi"), the shared PVC/PV formatter. Empty phase yields "".
+func phaseWithCapacity(phase string, capacity corev1.ResourceList) string {
 	if phase == "" {
 		return ""
 	}
-	if q, ok := p.Spec.Capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
+	if q, ok := capacity[corev1.ResourceStorage]; ok && !q.IsZero() {
 		return phase + " " + q.String()
 	}
 	return phase

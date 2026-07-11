@@ -274,12 +274,8 @@ func traefikMiddlewareSummary(obj runtime.Object) string {
 		return s
 	}
 	num := func(path ...string) int64 {
-		full := append([]string{"spec", typ}, path...)
-		if v, ok, _ := unstructured.NestedInt64(u.Object, full...); ok {
-			return v
-		}
-		v, _, _ := unstructured.NestedFloat64(u.Object, full...)
-		return int64(v)
+		v, _ := nestedNum(u.Object, append([]string{"spec", typ}, path...)...)
+		return v
 	}
 	switch typ {
 	case "rateLimit":

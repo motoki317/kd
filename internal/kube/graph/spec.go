@@ -63,13 +63,14 @@ func asUnstructuredKind(obj runtime.Object, kinds ...string) *unstructured.Unstr
 	return nil
 }
 
-// nestedNumber reads a numeric field from an unstructured map, tolerating both JSON decodings —
-// int64 from the API server, float64 after a JSON round-trip (the wgpolicy summary lesson).
-func nestedNumber(m map[string]any, key string) (int64, bool) {
-	switch v := m[key].(type) {
-	case int64:
+// nestedNum reads a numeric field at path from an unstructured map, tolerating both JSON decodings —
+// int64 from the API server, float64 after a round-trip (the wgpolicy summary lesson). Returns
+// (0, false) when the path is absent or not a number.
+func nestedNum(obj map[string]any, path ...string) (int64, bool) {
+	if v, ok, _ := unstructured.NestedInt64(obj, path...); ok {
 		return v, true
-	case float64:
+	}
+	if v, ok, _ := unstructured.NestedFloat64(obj, path...); ok {
 		return int64(v), true
 	}
 	return 0, false
