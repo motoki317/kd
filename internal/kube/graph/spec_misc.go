@@ -80,7 +80,7 @@ func priorityClassSummary(obj runtime.Object) string {
 	if u == nil {
 		return ""
 	}
-	val, found, _ := unstructured.NestedInt64(u.Object, "value")
+	val, found := nestedNum(u.Object, "value")
 	if !found {
 		return ""
 	}

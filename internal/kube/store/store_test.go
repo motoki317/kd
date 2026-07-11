@@ -339,7 +339,7 @@ func TestStoreSubscribeReceivesChange(t *testing.T) {
 	}
 	select {
 	case <-ch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(signalWait):
 		t.Fatal("did not receive change signal after pod creation")
 	}
 
@@ -403,10 +403,15 @@ func TestStoreReconcileRegisteredKindNotifies(t *testing.T) {
 	}
 	select {
 	case <-ch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(signalWait):
 		t.Fatal("a reconcile-registered kind's change did not wake the subscriber")
 	}
 }
+
+// signalWait is the window a test allows for a coalesced change signal to arrive (or to confirm none
+// does). Generous against a fake client so timing is never the flake; kept in one place so every
+// notify assertion uses the same budget.
+const signalWait = 3 * time.Second
 
 // drainSignal clears any pending coalesced signal so a following receive tests a fresh one.
 func drainSignal(ch <-chan struct{}) {
@@ -416,20 +421,50 @@ func drainSignal(ch <-chan struct{}) {
 	}
 }
 
-// awaitSignal reports whether a change signal arrives within a short window.
+// awaitSignal reports whether a change signal arrives within signalWait.
 func awaitSignal(ch <-chan struct{}) bool {
 	select {
 	case <-ch:
 		return true
-	case <-time.After(3 * time.Second):
+	case <-time.After(signalWait):
 		return false
 	}
 }
 
-// TestStoreCRDDeleteAndReinstall exercises the CRD delete/reinstall lifecycle around the notify
-// handler: deleting a CRD wakes subscribers so its now-unsnapshotted custom resources leave live
-// clients, and reinstalling the same GVR reuses the retained informer WITHOUT re-wiring it — a
-// subsequent change still fires through the single handler (a double-wire regressed this).
+// snapshotHasName reports whether the namespace snapshot currently contains an object of the given
+// name — the observable "does this custom resource surface as a node" contract, used to prove ghost
+// removal (and its inverse).
+func snapshotHasName(c *Cache, namespace, name string) bool {
+	for _, obj := range c.SnapshotNamespace(namespace) {
+		if u, ok := obj.(*unstructured.Unstructured); ok && u.GetName() == name {
+			return true
+		}
+	}
+	return false
+}
+
+// waitForSnapshotName blocks until the named object appears in the namespace snapshot, failing after
+// signalWait. An informer delivers a create asynchronously, so a fresh object is only eventually
+// snapshot-visible — polling the observable is more robust than treating one change signal as "this
+// object is now queryable" (a slow background informer sync can satisfy the signal first).
+func waitForSnapshotName(t *testing.T, c *Cache, namespace, name string) {
+	t.Helper()
+	deadline := time.Now().Add(signalWait)
+	for time.Now().Before(deadline) {
+		if snapshotHasName(c, namespace, name) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("object %q never appeared in the %q snapshot", name, namespace)
+}
+
+// TestStoreCRDDeleteAndReinstall exercises the CRD delete/reinstall lifecycle around the notify handler.
+// Deleting a CRD wakes subscribers and drops its custom resources from the snapshot (ghost removal); the
+// informer is retained (the `wired` flag survives) so reinstalling the same GVR reuses it rather than
+// re-registering, with the change feed still live afterward. The retained-informer reuse is pinned by the
+// `wired` assertion, NOT the post-reinstall signal: a double-wire would still coalesce to one signal, so
+// that path can't observe it.
 func TestStoreCRDDeleteAndReinstall(t *testing.T) {
 	configmaps := discovery.Resource{GVR: schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}, Kind: "ConfigMap", Namespaced: true}
 	disc := &growingDiscoverer{first: fixedResources, rest: append(slices.Clone(fixedResources), configmaps)}
@@ -450,12 +485,22 @@ func TestStoreCRDDeleteAndReinstall(t *testing.T) {
 	ch, unsubscribe := c.Subscribe()
 	defer unsubscribe()
 
-	// Deleting the CRD backing configmaps must wake the subscriber (ghost removal) while leaving the
-	// informer wired (so the reinstall doesn't re-configure the retained, still-running informer).
+	// A custom resource of the freshly-registered kind surfaces in the namespace snapshot as a node.
+	cm := uns("v1", "ConfigMap", "alpha", "cfg", "cm-cfg", nil)
+	if _, err := dynClient.Resource(configmaps.GVR).Namespace("alpha").Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create configmap: %v", err)
+	}
+	waitForSnapshotName(t, c, "alpha", "cfg")
+
+	// Deleting the CRD backing configmaps must wake the subscriber AND drop the object from the snapshot
+	// (ghost removal), while leaving the informer wired so the reinstall reuses it rather than re-wiring.
 	drainSignal(ch)
 	c.removeResourcesForCRD(crd("", "configmaps"))
 	if !awaitSignal(ch) {
 		t.Fatal("a CRD delete did not wake the subscriber (ghost nodes would linger)")
+	}
+	if snapshotHasName(c, "alpha", "cfg") {
+		t.Error("a deleted CRD's object must vanish from the snapshot (else it lingers as a ghost node)")
 	}
 	c.mu.Lock()
 	_, present := c.resources[configmaps.GVR]
@@ -468,12 +513,21 @@ func TestStoreCRDDeleteAndReinstall(t *testing.T) {
 		t.Error("wired must survive a CRD delete so a reinstall reuses the retained informer as-is")
 	}
 
-	// Reinstall: reconcile re-registers configmaps against the SAME informer. A change must still fire.
+	// An unrelated CRD delete matches nothing registered, so its `removed` guard must keep it from waking
+	// subscribers — an over-eager notify would fire a needless SSE rebuild on every irrelevant CRD churn.
+	drainSignal(ch)
+	c.removeResourcesForCRD(crd("other.io", "widgets"))
+	if awaitSignal(ch) {
+		t.Error("an unrelated CRD delete must not wake subscribers")
+	}
+
+	// Reinstall: reconcile re-registers configmaps against the SAME retained informer (the wired guard
+	// skips re-wiring). A subsequent change must still fire through the handler.
 	c.reconcile(ctx)
 	c.WaitForCacheSync(ctx)
 	drainSignal(ch)
-	cm := uns("v1", "ConfigMap", "alpha", "cfg2", "cm-cfg2", nil)
-	if _, err := dynClient.Resource(configmaps.GVR).Namespace("alpha").Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+	cm2 := uns("v1", "ConfigMap", "alpha", "cfg2", "cm-cfg2", nil)
+	if _, err := dynClient.Resource(configmaps.GVR).Namespace("alpha").Create(ctx, cm2, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("create configmap: %v", err)
 	}
 	if !awaitSignal(ch) {

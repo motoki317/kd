@@ -408,8 +408,8 @@ func pvStatus(p *corev1.PersistentVolume) string {
 	return phaseWithCapacity(string(p.Status.Phase), p.Spec.Capacity)
 }
 
-// phaseWithCapacity renders a phase plus a storage capacity quantity when present and non-zero (e.g.
-// "Bound 10Gi"), the shared PVC/PV formatter. Empty phase yields "".
+// phaseWithCapacity is the shared PVC/PV formatter. Zero capacity is dropped — an unbound claim reports
+// 0, and "Pending" alone reads truer than "Pending 0"; an empty phase yields "" (no status known yet).
 func phaseWithCapacity(phase string, capacity corev1.ResourceList) string {
 	if phase == "" {
 		return ""

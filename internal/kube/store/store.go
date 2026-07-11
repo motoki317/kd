@@ -285,6 +285,8 @@ func (c *Cache) registerLocked(r discovery.Resource) {
 		}); err != nil {
 			slog.Warn("store: add event handler failed", "gvr", r.GVR.String(), "err", err)
 		}
+		// Marked wired unconditionally: the setup calls above only error on an already-stopped informer
+		// (client-go), unreachable here since factory.ForResource yields a freshly-created, unstarted one.
 		c.wired[r.GVR] = true
 	}
 	c.resources[r.GVR] = Resource{GVR: r.GVR, Kind: r.Kind, Namespaced: r.Namespaced, ShortNames: r.ShortNames, Informer: inf}

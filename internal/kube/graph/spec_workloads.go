@@ -94,8 +94,8 @@ func hpaScale(obj runtime.Object) string {
 	if u == nil {
 		return ""
 	}
-	cur, hasCur, _ := unstructured.NestedInt64(u.Object, "status", "currentReplicas")
-	des, hasDes, _ := unstructured.NestedInt64(u.Object, "status", "desiredReplicas")
+	cur, hasCur := nestedNum(u.Object, "status", "currentReplicas")
+	des, hasDes := nestedNum(u.Object, "status", "desiredReplicas")
 	if !hasCur && !hasDes {
 		return "" // status not populated yet (freshly created) — nothing to show
 	}
@@ -125,11 +125,11 @@ func hpaRange(obj runtime.Object) string {
 	if u == nil {
 		return ""
 	}
-	maxR, hasMax, _ := unstructured.NestedInt64(u.Object, "spec", "maxReplicas")
+	maxR, hasMax := nestedNum(u.Object, "spec", "maxReplicas")
 	if !hasMax {
 		return ""
 	}
-	minR, hasMin, _ := unstructured.NestedInt64(u.Object, "spec", "minReplicas")
+	minR, hasMin := nestedNum(u.Object, "spec", "minReplicas")
 	if !hasMin {
 		minR = 1
 	}
@@ -211,9 +211,9 @@ func hpaMetrics(obj runtime.Object) string {
 		parts = append(parts, fmt.Sprintf("%s %s / %s", name, cur, target))
 	}
 	if len(parts) == 0 {
-		if t, ok, _ := unstructured.NestedInt64(u.Object, "spec", "targetCPUUtilizationPercentage"); ok {
+		if t, ok := nestedNum(u.Object, "spec", "targetCPUUtilizationPercentage"); ok {
 			cur := "—"
-			if c, ok2, _ := unstructured.NestedInt64(u.Object, "status", "currentCPUUtilizationPercentage"); ok2 {
+			if c, ok2 := nestedNum(u.Object, "status", "currentCPUUtilizationPercentage"); ok2 {
 				cur = fmt.Sprintf("%d%%", c)
 			}
 			parts = append(parts, fmt.Sprintf("cpu %s / %d%%", cur, t))
