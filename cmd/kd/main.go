@@ -112,7 +112,7 @@ func run() error {
 		})
 	}
 
-	devUser, _ := cfg.EffectiveDevUser(inCluster)
+	devUser := cfg.EffectiveDevUser(inCluster)
 	authCfg := auth.Config{
 		UserHeader:      cfg.UserHeader,
 		GroupsHeader:    cfg.GroupsHeader,

@@ -111,19 +111,19 @@ func Load(args []string) (Config, error) {
 	return c, nil
 }
 
-// EffectiveDevUser resolves the dev identity for this run and reports whether it was auto-enabled.
-// An explicit -dev-user always wins. Otherwise, when kd is not running in-cluster AND no proxy
-// auth was configured, it auto-enables local dev mode (AutoDevUser, true) so the dashboard is
-// reachable without a forward-auth proxy. Any explicit auth setting suppresses auto-mode, so a
-// non-cluster host sitting behind a real proxy never silently loses authentication.
-func (c Config) EffectiveDevUser(inCluster bool) (user string, autoEnabled bool) {
+// EffectiveDevUser resolves the dev identity for this run, or "" when auth is active. An explicit
+// -dev-user always wins. Otherwise, when kd is not running in-cluster AND no proxy auth was
+// configured, it auto-enables local dev mode (AutoDevUser) so the dashboard is reachable without a
+// forward-auth proxy. Any explicit auth setting suppresses auto-mode, so a non-cluster host sitting
+// behind a real proxy never silently loses authentication.
+func (c Config) EffectiveDevUser(inCluster bool) string {
 	if c.DevUser != "" {
-		return c.DevUser, false
+		return c.DevUser
 	}
 	if inCluster || c.authConfigured() {
-		return "", false
+		return ""
 	}
-	return AutoDevUser, true
+	return AutoDevUser
 }
 
 // authConfigured reports whether any proxy-auth setting was explicitly provided, judged by value:
@@ -145,10 +145,7 @@ func splitCSV(s string) []string {
 
 func parsePrefixes(csv string) ([]netip.Prefix, error) {
 	var out []netip.Prefix
-	for _, part := range strings.Split(csv, ",") {
-		if part = strings.TrimSpace(part); part == "" {
-			continue
-		}
+	for _, part := range splitCSV(csv) {
 		p, err := netip.ParsePrefix(part)
 		if err != nil {
 			return nil, fmt.Errorf("config: invalid trusted-proxy CIDR %q: %w", part, err)
