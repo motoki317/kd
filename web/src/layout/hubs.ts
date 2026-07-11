@@ -14,7 +14,7 @@ import {
   NODE_HEIGHT,
   NODE_WIDTH,
 } from './core'
-import { pillNode, splitForFold } from './collapse'
+import { pillId, pillNode, splitForFold } from './collapse'
 
 // blockDims lays a per-kind block's m cells column-major into a vertical-first grid: rows fill down
 // to LEAF_COL_MAX before a second column starts, so a collapsed block (m ≤ COLLAPSE_VISIBLE+1) is one
@@ -93,7 +93,7 @@ function collapseHubLeaves(
     const cells: Array<KNode & { collapse?: CollapseMeta; collapseGroup?: string }> = [...split.visible]
     if (split.hidden.length) {
       const meta: CollapseMeta = { key, groupKind: kind, hidden: split.hidden, expanded: isExpanded }
-      const id = `${COLLAPSE_KIND}:${key}`
+      const id = pillId(key) // the bundled hub→pill edge below must target the same id pillNode mints
       // Splice the pill into its slot in the column — between the first and last cards while collapsed,
       // at the bottom once expanded — so the kind reads in one stable natural order whichever way.
       cells.splice(split.pillIndex, 0, { ...pillNode(key, split.hidden.length), collapse: meta })

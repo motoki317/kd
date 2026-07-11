@@ -60,7 +60,7 @@ describe('nodeMatches', () => {
     expect(nodeMatches(svc, '203.0.113.7')).toBe(true)
   })
 
-  it('matches the displayed kind label so searching "PVC" finds a PersistentVolumeClaim', () => {
+  it('matches the "pvc" short-name alias so searching "PVC" finds a PersistentVolumeClaim', () => {
     const pvc: KNode = { id: '6', kind: 'PersistentVolumeClaim', name: 'data', health: 'Healthy' }
     expect(nodeMatches(pvc, 'pvc')).toBe(true)
   })

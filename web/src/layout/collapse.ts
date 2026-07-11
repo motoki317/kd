@@ -154,7 +154,7 @@ export function foldSiblingSubtrees(
         _pillSlot: pillIndex,
         collapseGroup: key,
       })
-      pillEdges.push({ from: parentId, to: `${COLLAPSE_KIND}:${key}`, type: group[0].type })
+      pillEdges.push({ from: parentId, to: pillId(key), type: group[0].type })
       for (const n of visible) framed.set(n.id, key)
       if (!isExpanded) {
         for (const n of hidden) removed.add(n.id)
@@ -171,12 +171,20 @@ export function foldSiblingSubtrees(
   return { nodes: [...keptNodes, ...pills], edges: [...keptEdges, ...pillEdges] }
 }
 
+// pillId is the synthetic node id of a fold's "+N more" pill, keyed by the fold's collapse key. The
+// pill NODE (pillNode) and the hub/sibling edge that bundles into it (the pillEdges below,
+// collapseHubLeaves' pill bundle) MUST share this exact id or the edge dangles to a nonexistent node,
+// so every one of them derives the id here.
+export function pillId(key: string): string {
+  return `${COLLAPSE_KIND}:${key}`
+}
+
 // pillNode is the identity of a synthetic "+N more" fold affordance — the fields every pill shares no
-// matter where in the pipeline it's minted (its id format and the "+N more" label live here once).
+// matter where in the pipeline it's minted (id via pillId, plus the "+N more" label, here once).
 // Callers attach the collapse meta themselves: `_collapse` for a pre-layout pill the placer lifts onto
 // `collapse`, or `collapse` directly on an already-placed cell — plus any placement extras.
 export function pillNode(key: string, hiddenCount: number): KNode {
-  return { id: `${COLLAPSE_KIND}:${key}`, kind: COLLAPSE_KIND, name: `+${hiddenCount} more`, health: 'Healthy' }
+  return { id: pillId(key), kind: COLLAPSE_KIND, name: `+${hiddenCount} more`, health: 'Healthy' }
 }
 
 // pillCell builds the synthetic KNode for a "+N older" affordance, tagged with its CollapseMeta so
