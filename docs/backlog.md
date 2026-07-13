@@ -166,6 +166,22 @@ spotlight — see the PVC-spotlight row in Rejected).
 
 ## Open
 
+- **Graph stream: extend the SSE silent-stall watchdog to it** — *deferred 2026-07-13, alongside the
+  sidebar-desync fix.* The namespaces stream now self-heals from a silent proxy/NAT half-close via
+  `watchedEventSource` (web/src/api.ts) + the visible `ping` heartbeat (internal/api/sse.go). The graph
+  stream is the OTHER long-lived stream (it stays open while an operator is parked on one namespace),
+  so the same silent stall would freeze the open namespace's topology + summary while the conn pill
+  still reads LIVE. It can adopt the same wrapper, but NOT as-is: `handleGraphStream`'s select loop
+  services the heartbeat ticker in the same goroutine as `buildCapacity`→`BuildUsage(r.Context(), …)`,
+  which has no short per-call timeout — a slow metrics-server can legitimately delay pings past a tight
+  window and false-trigger a reconnect storm that re-runs the same slow call. Prereq: bound the metrics
+  call with a short timeout (or give the graph watchdog a deliberately looser 60–90s threshold) first.
+  Do NOT extend the watchdog to the log stream (reconnect replays lines).
+  - *Known transient:* during a rolling upgrade a new-JS tab pinned (no session affinity) to a
+    still-running OLD pod gets `: heartbeat` comments the watchdog can't see, so it reconnects the
+    namespaces stream ~every 40s until the old pod drains. Self-healing, correctness preserved — not
+    worth code; noted so the deploy-window churn isn't mistaken for a bug.
+
 - **Process memory — remaining levers** — *measured 2026-06-14 (b36); deferred, diminishing returns.*
   After the b36 transform + GOGC pass, idle heap is ~39 MiB (≈21 MiB legitimate cached objects + ≈14 MiB
   client-go per-watch machinery across ~150 informers — decoder/refill/ring buffers). An alloc profile

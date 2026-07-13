@@ -98,9 +98,10 @@ func (a *API) handleNamespacesStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// sseHeartbeatInterval is how often an idle SSE stream emits a `: heartbeat` comment, so a proxy
-// or browser doesn't drop a connection that simply has no events to send. Shared by every SSE
-// handler (namespaces, graph, events, log stream).
+// sseHeartbeatInterval is how often an idle SSE stream emits a `ping` event, so a proxy or browser
+// doesn't drop a connection that simply has no events to send — and so the client can tell a live
+// connection from a silently stalled one (see writeHeartbeat). Shared by every SSE handler
+// (namespaces, graph, events, log stream).
 const sseHeartbeatInterval = 15 * time.Second
 
 // handleGraphStream streams the namespace graph: an initial `snapshot` event with the full
@@ -329,9 +330,13 @@ func writeSSE(w http.ResponseWriter, event string, data any) bool {
 	return err == nil
 }
 
-// writeHeartbeat emits an SSE comment line to hold an idle stream open through proxies; like
-// writeSSE it reports success so the caller can stop on a broken connection. The caller flushes.
+// writeHeartbeat emits a `ping` event to hold an idle stream open through proxies AND to give the
+// client a liveness signal it can act on: an SSE COMMENT (`: heartbeat`) keeps the connection warm
+// but EventSource never surfaces it to JS, so a client can't tell a quiet-but-alive stream from one a
+// proxy has silently half-closed (which fires no `error`). A dispatched event can. The `data: {}` is
+// required — the SSE spec dispatches an event only when its data buffer is non-empty, so a bare
+// `event: ping` would be parsed and silently dropped. Like writeSSE it reports success so the caller
+// can stop on a broken connection. The caller flushes.
 func writeHeartbeat(w http.ResponseWriter) bool {
-	_, err := fmt.Fprint(w, ": heartbeat\n\n")
-	return err == nil
+	return writeSSE(w, "ping", struct{}{})
 }

@@ -341,5 +341,29 @@ func TestStoppedPod(t *testing.T) {
 	}
 }
 
+// TestWriteHeartbeatEmitsDispatchablePing guards the sidebar-desync fix: the SSE keep-alive must be a
+// dispatchable `ping` EVENT, not a comment. EventSource never surfaces comment lines to JS, so a
+// comment keep-alive can't let the client tell a silently-stalled connection from a quiet one. The
+// event MUST carry a `data:` line — the SSE spec dispatches an event only when its data buffer is
+// non-empty, so a bare `event: ping` would be parsed and silently dropped.
+func TestWriteHeartbeatEmitsDispatchablePing(t *testing.T) {
+	rec := httptest.NewRecorder()
+	if !writeHeartbeat(rec) {
+		t.Fatal("writeHeartbeat reported failure")
+	}
+	got := rec.Body.String()
+	if !strings.Contains(got, "event: ping\n") {
+		t.Errorf("heartbeat missing `event: ping` line: %q", got)
+	}
+	// Dispatchability: a data line with a NON-EMPTY buffer. A `data: \n` (empty value) parses but does
+	// not dispatch, so pin the exact `{}` payload — a regression that empties the buffer must fail here.
+	if !strings.Contains(got, "\ndata: {}\n") {
+		t.Errorf("heartbeat lacks a non-empty `data:` line, so EventSource would not dispatch it: %q", got)
+	}
+	if strings.HasPrefix(strings.TrimSpace(got), ":") {
+		t.Errorf("heartbeat is an SSE comment, which EventSource never surfaces to JS: %q", got)
+	}
+}
+
 func boolp(b bool) *bool    { return &b }
 func int32p(i int32) *int32 { return &i }

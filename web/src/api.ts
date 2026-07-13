@@ -56,17 +56,93 @@ export interface NamespacesStreamHandlers {
   error?: () => void
 }
 
+// A silently stalled SSE connection — a proxy or NAT half-closing a long-lived stream — delivers no
+// data AND fires no `error`, so EventSource's built-in reconnection never triggers and readyState
+// stays OPEN forever. The sidebar's namespaces stream is the one long-lived stream navigation does not
+// re-create, so a silent stall froze every non-open namespace's health until one was re-opened (a
+// fresh graph stream refreshed only that one).
+//
+// watchedEventSource is the backstop: the server sends a `ping` event every ~15s, so if NOTHING (ping,
+// data, or open) arrives within SSE_STALE_MS the connection is presumed dead and the EventSource is
+// transparently re-created in place — no app-state reset; the server re-sends its authoritative
+// snapshot on reconnect. A native `error` is left to EventSource's own retry (the detectable case);
+// the timer stays armed as a backstop in case that retry itself silently stalls.
+const SSE_STALE_MS = 40_000 // ~2.5 heartbeat intervals: survives two missed 15s pings before giving up
+const SSE_BACKOFF_MAX_MS = 120_000 // ceiling on the gap between reconnect attempts during an outage
+
+function watchedEventSource(
+  url: string,
+  handlers: { events: Record<string, (e: MessageEvent) => void>; onError?: () => void },
+): () => void {
+  let es: EventSource | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let gen = 0 // bumped per (re)connect; guards a late handler from a superseded source
+  let backoff = SSE_STALE_MS
+  let closed = false
+
+  const arm = (ms: number) => {
+    clearTimeout(timer)
+    timer = setTimeout(reconnect, ms)
+  }
+  // A real signal proves the connection is alive: reset backoff and the staleness deadline.
+  const alive = () => {
+    backoff = SSE_STALE_MS
+    arm(SSE_STALE_MS)
+  }
+  function reconnect() {
+    if (closed) return
+    backoff = Math.min(backoff * 1.5, SSE_BACKOFF_MAX_MS)
+    // Jitter within the cap (so the ceiling stays literal) and re-arm as a backstop for the fresh
+    // connection: if the replacement is also silent this fires again with the grown backoff.
+    arm(Math.min(backoff * (0.8 + Math.random() * 0.4), SSE_BACKOFF_MAX_MS))
+    connect()
+  }
+  function connect() {
+    const myGen = ++gen
+    es?.close()
+    const src = new EventSource(url)
+    es = src
+    const fresh = () => !closed && myGen === gen
+    src.addEventListener('open', () => fresh() && alive())
+    src.addEventListener('ping', () => fresh() && alive())
+    for (const [name, fn] of Object.entries(handlers.events)) {
+      src.addEventListener(name, (e) => {
+        if (!fresh()) return
+        alive()
+        fn(e as MessageEvent)
+      })
+    }
+    src.onerror = () => fresh() && handlers.onError?.() // leave the timer armed; EventSource retries
+  }
+  // Background tabs throttle timers and may suspend the connection; re-arm on refocus so we grant a
+  // fresh grace window instead of reconnecting the instant the tab returns.
+  const onVisible = () => {
+    if (!closed && document.visibilityState === 'visible') arm(SSE_STALE_MS)
+  }
+  document.addEventListener('visibilitychange', onVisible)
+
+  connect()
+  arm(SSE_STALE_MS)
+  return () => {
+    closed = true
+    clearTimeout(timer)
+    document.removeEventListener('visibilitychange', onVisible)
+    es?.close()
+  }
+}
+
 // streamNamespaces tails the cluster's per-namespace health over SSE, returning a function that closes
 // the stream. The server rolls up every visible namespace's worst health and pushes the (small) list
 // on connect and whenever it changes — so the sidebar holds one quiet connection instead of polling
-// /namespaces every 15s.
+// /namespaces every 15s. Wrapped in watchedEventSource because this is the one long-lived stream that
+// navigation doesn't re-create, so it needs the silent-stall backstop.
 export function streamNamespaces(ctx: string, h: NamespacesStreamHandlers): () => void {
-  const es = new EventSource(`${ctxBase(ctx)}/namespaces/stream`)
-  es.addEventListener('namespaces', (e) =>
-    h.namespaces(((JSON.parse((e as MessageEvent).data) as { namespaces?: NamespaceInfo[] }).namespaces) ?? []),
-  )
-  es.onerror = () => h.error?.()
-  return () => es.close()
+  return watchedEventSource(`${ctxBase(ctx)}/namespaces/stream`, {
+    events: {
+      namespaces: (e) => h.namespaces((JSON.parse(e.data) as { namespaces?: NamespaceInfo[] }).namespaces ?? []),
+    },
+    onError: () => h.error?.(),
+  })
 }
 
 // fetchKinds returns the cluster's kind → API short-name map (kubectl's SHORTNAMES, e.g.
