@@ -7,9 +7,11 @@ import LogViewer from './LogViewer'
 // drop, and supports message dispatch for tests that exercise filtering / highlight rendering.
 let eventSources: NoopEventSource[] = []
 class NoopEventSource {
+  url: string
   onerror: (() => void) | null = null
   listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
-  constructor() {
+  constructor(url: string | URL) {
+    this.url = String(url)
     eventSources.push(this)
   }
   addEventListener(name: string, fn: (e: MessageEvent) => void) {
@@ -260,6 +262,27 @@ describe('LogViewer', () => {
     // column ON (toggle reflects it) — every line shows its time, the anchor explaining the interleave.
     expect(container.querySelector('.logs-ts')?.getAttribute('aria-pressed')).toBe('true')
     expect(lines.every((l) => l.querySelector('.log-time'))).toBe(true)
+  })
+
+  it('orders aggregated pod logs by emission time without showing timestamps by default', async () => {
+    const { container, findByText } = render(() => (
+      <LogViewer ctx="test-ctx" namespace="shop" kind="Deployment" name="web" aggregated={true} containers={['app']} restarts={0} status="Running" />
+    ))
+    const es = eventSources[0]
+    es.emit('log', { pod: 'pod-b', time: '2021-05-21T12:00:02Z', line: 'pod b ready' })
+    es.emit('log', { pod: 'pod-a', time: '2021-05-21T12:00:01Z', line: 'pod a boot' })
+    es.emit('log', { pod: 'pod-a', time: '2021-05-21T12:00:03Z', line: 'pod a ready' })
+    await findByText('pod a boot', { exact: false })
+    const lines = [...container.querySelectorAll('.log-line')]
+    expect(lines.map((l) => l.textContent?.match(/pod a boot|pod b ready|pod a ready/)?.[0])).toEqual([
+      'pod a boot',
+      'pod b ready',
+      'pod a ready',
+    ])
+    expect(lines.map((l) => l.querySelector('.log-pod')?.textContent)).toEqual(['pod-a', 'pod-b', 'pod-a'])
+    expect(new URL(es.url, window.location.origin).searchParams.get('timestamps')).toBe('true')
+    expect(container.querySelector('.logs-ts')?.getAttribute('aria-pressed')).toBe('false')
+    expect(container.querySelector('.log-time')).toBeNull()
   })
 
   it('lets the operator turn the combined-mode timestamps back off', async () => {

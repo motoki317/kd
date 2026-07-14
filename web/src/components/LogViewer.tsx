@@ -161,10 +161,10 @@ export default function LogViewer(props: Props) {
   const visibleLines = createMemo(() => {
     const hg = hiddenGroups()
     let base = hg.size ? lines().filter((l) => !hg.has(groupKey(l))) : lines()
-    // The merged all-container view forces server-side timestamps (see the stream effect), so order by
-    // emission time to interleave the per-container tail dumps that otherwise arrive container-grouped.
+    // Grouped streams need emission-time order because each source's historical tail dump arrives as
+    // a batch, while followed lines already interleave live.
     // RFC3339Nano sorts correctly as a string; a copy keeps the source buffer in arrival order.
-    if (combined()) base = [...base].sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
+    if (grouped()) base = [...base].sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
     return filterLogLines(base, filter(), caseSensitive(), hiddenLevels())
   })
   // Any filter is active — text grep, a dimmed level chip, or a hidden source. Drives the "shown/total"
@@ -269,10 +269,9 @@ export default function LogViewer(props: Props) {
     const name = props.name
     const c = container()
     const prev = previous()
-    // The merged all-container view needs per-line timestamps to interleave the containers' tail dumps,
-    // so fetch them even when the operator hasn't toggled the (visible) timestamp column — the column's
-    // display stays gated on timestamps(), the ordering uses the time field regardless.
-    const ts = timestamps() || combined()
+    // Grouped streams need per-line timestamps to realign source-batched history with the live
+    // interleave. Fetch them even while the visible column remains gated on timestamps().
+    const ts = timestamps() || grouped()
     setLines([])
     setError(false)
     setCompleted(false)
