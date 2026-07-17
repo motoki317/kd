@@ -1,0 +1,35 @@
+# OOMKilled crash loop — the container card reads "last exit: OOMKilled (exit 137)".
+apiVersion: v1
+kind: Namespace
+metadata: { name: diag-oom }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom
+  namespace: diag-oom
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: oom }
+  template:
+    metadata:
+      labels: { app: oom }
+    spec:
+      volumes:
+        - name: mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+      containers:
+        - name: app
+          # dd is PID 1, writing into a memory-backed emptyDir charged to the
+          # container's cgroup; 500MiB into a 32Mi limit -> cgroup OOM kills it.
+          image: busybox:1.36
+          command: ["dd", "if=/dev/zero", "of=/mem/fill", "bs=1M", "count=500"]
+          volumeMounts:
+            - name: mem
+              mountPath: /mem
+          resources:
+            limits:
+              memory: 32Mi

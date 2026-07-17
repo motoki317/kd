@@ -1,0 +1,32 @@
+# Quota-blocked rollout — no child pod ever exists; the ReplicaSet's FailedCreate event is the only
+# actionable signal (the "no pod to diagnose" failure class).
+apiVersion: v1
+kind: Namespace
+metadata: { name: diag-quota }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: block-pods
+  namespace: diag-quota
+spec:
+  hard:
+    pods: "0"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quota
+  namespace: diag-quota
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: quota }
+  template:
+    metadata:
+      labels: { app: quota }
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh", "-c", "sleep 3600"]

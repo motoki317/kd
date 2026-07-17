@@ -1,0 +1,23 @@
+# Exit-0 crash loop (a batch script run as a Deployment) — CrashLoopBackOff in ~40s; the card must
+# explain the contradiction in words ("last exit: Completed — run one-shot work as a Job").
+apiVersion: v1
+kind: Namespace
+metadata: { name: diag-exit0 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exit0
+  namespace: diag-exit0
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: exit0 }
+  template:
+    metadata:
+      labels: { app: exit0 }
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh", "-c", "echo done; exit 0"]

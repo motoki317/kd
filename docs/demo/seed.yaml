@@ -1,18 +1,8 @@
-# Demo dataset for the README screenshots (docs/images/kd_*.png).
-#
-# Fictional names only (shop/blog/team-a, api/web/cache) — never a real cluster's resources.
-# Apply to a THROWAWAY local cluster so the namespace sidebar and context picker stay clean (the
-# originals show a single context "kd ▸ shop" — only reproducible with one context loaded):
-#
-#   k3d cluster create demo --servers-memory 6GB --kubeconfig-update-default=false --wait
-#   k3d kubeconfig get demo > /tmp/demo.kubeconfig
-#   KUBECONFIG=/tmp/demo.kubeconfig kubectl apply -f docs/demo/seed.yaml
-#   KUBECONFIG=/tmp/demo.kubeconfig ./kd -dev-user dev -addr :8099
-#
-# --servers-memory 6GB caps the node's reported capacity so the Nodes-view usage bars register
-# (an unbounded k3d node reports the whole host's RAM, shrinking every bar to a sliver). Wait for
-# `kubectl top pods -n shop` to return values before shooting — the Nodes view and the pod gauge
-# both need live metrics. Tear down with `k3d cluster delete demo` when done.
+# Healthy demo dataset for the README screenshots (docs/images/kd_*.png) and the live-debug
+# cluster. Fictional names only (shop/blog/team-a, api/web/cache) — never a real cluster's
+# resources. Apply via `just demo-up` (throwaway k3d cluster; recipe + rationale in
+# docs/live-debug.md). Screenshots: wait for `kubectl top pods -n shop` to return values first —
+# the Nodes view and the pod gauge need live metrics.
 apiVersion: v1
 kind: Namespace
 metadata: { name: shop }

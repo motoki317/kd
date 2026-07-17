@@ -1,0 +1,21 @@
+# ImagePullBackOff — the waiting reason carries the pull error; the Events tab shows the Failed pulls.
+apiVersion: v1
+kind: Namespace
+metadata: { name: diag-badimage }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: badimage
+  namespace: diag-badimage
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: badimage }
+  template:
+    metadata:
+      labels: { app: badimage }
+    spec:
+      containers:
+        - name: app
+          image: registry.invalid/does-not-exist:nope

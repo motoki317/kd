@@ -86,3 +86,17 @@ fmt:
 # Install client dependencies.
 setup:
     cd web && npm install
+
+# Throwaway k3d demo cluster (kubeconfig at /tmp/kd-demo.kubeconfig), seeded with the healthy demo
+# namespaces. For broken shapes, apply docs/demo/diagnostics/ — see docs/live-debug.md.
+# --servers-memory 6GB caps reported node capacity so the Nodes-view usage bars register.
+[script]
+demo-up:
+    k3d cluster create kd-demo --servers-memory 6GB --kubeconfig-update-default=false --wait
+    k3d kubeconfig get kd-demo > /tmp/kd-demo.kubeconfig
+    KUBECONFIG=/tmp/kd-demo.kubeconfig kubectl apply -f docs/demo/seed.yaml
+    echo "run: KUBECONFIG=/tmp/kd-demo.kubeconfig ./kd -dev-user dev -addr :8099"
+
+# Tear the demo cluster down.
+demo-down:
+    k3d cluster delete kd-demo

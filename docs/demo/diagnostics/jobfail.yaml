@@ -1,0 +1,23 @@
+# Terminally-failed Job — the headline says it gave up retrying; the Logs tab keeps the migration error (completed pods stay loggable).
+apiVersion: v1
+kind: Namespace
+metadata: { name: diag-jobfail }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: diag-jobfail
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels: { app: jobfail }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - 'echo "running migration 0042_add_users..."; echo "ERROR: relation \"users\" already exists" >&2; exit 2'
