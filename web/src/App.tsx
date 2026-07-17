@@ -2,7 +2,6 @@ import { createEffect, createMemo, createSignal, lazy, Match, onCleanup, onMount
 import { createStore } from 'solid-js/store'
 import { CLUSTER_SCOPE } from './api'
 import { showCommitChip } from './buildInfo'
-import { hasDescendantPod } from './loggable'
 import { emptyState, type GraphState } from './graphState'
 import { matchSel } from './nav'
 import { namespaceLabel } from './ns'
@@ -615,7 +614,6 @@ export default function App() {
             canBack={selectionHistory().length > 0}
             onBack={goBackSelection}
             onClose={() => setSelectedId(null)}
-            hasPods={(id) => hasDescendantPod(id, nodes())}
             resizeWidth={Math.round(drawerPct())}
             resizeMin={DRAWER_MIN_PCT}
             resizeMax={DRAWER_MAX_PCT}

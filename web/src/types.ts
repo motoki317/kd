@@ -85,6 +85,7 @@ export interface KNode {
   namespace?: string
   name: string
   health: Health
+  loggable?: boolean
   status?: string
   message?: string // the WHY behind an unhealthy resource (failure reason); empty for healthy ones
   createdAt?: string
