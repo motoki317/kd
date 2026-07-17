@@ -2,10 +2,14 @@
 default:
     @just --list
 
+# Multi-line recipes use [script] (bash reads the temp file as an argument), NOT shebangs (kernel
+# exec of the temp file) — shebang recipes die with EACCES when just's tempdir (XDG_RUNTIME_DIR on
+# Linux) is mounted noexec, as WSL2 mounts /run/user.
+set script-interpreter := ['bash', '-euo', 'pipefail']
+
 # Run the Go API (:9123) and the Vite dev server (:5173) together.
+[script]
 dev:
-    #!/usr/bin/env bash
-    set -euo pipefail
     trap 'kill 0' EXIT
     go run ./cmd/kd &
     (cd web && npm run dev) &
@@ -23,9 +27,8 @@ dev-web:
 # -ldflags so the About card and `kd --version` report the build. --match 'v[0-9]*' picks the APP
 # tag (vX.Y.Z), never the chart-v* tags that share the commit; --always --dirty keep it non-empty
 # and mark a modified tree.
+[script]
 build: build-web
-    #!/usr/bin/env bash
-    set -euo pipefail
     v="$(git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)"
     c="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
     CGO_ENABLED=0 go build -tags embed_web \
