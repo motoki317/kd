@@ -153,17 +153,18 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 // tests can shorten it.
 var logResolveInterval = 3 * time.Second
 
-// superviseLogStreams keeps a follow stream's set of pod streamers in sync with the resource's live
-// descendant pods. It re-resolves on a short interval and starts a streamer for any pod not already
-// being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted StatefulSet
-// member) join the merged stream without the client reconnecting. Each streamer removes itself when
-// its pod's log ends. Runs until ctx is cancelled; never closes out. When the RESOURCE itself
-// disappears from the snapshot (deleted while tailing), it signals `gone` once per transition — a
-// zero-pod gap with the resource still present stays silent (the mid-rollout tolerance) — so the
+// superviseLogStreams keeps a follow stream's per-container streamers in sync with the resource's
+// live descendant pods. It re-resolves on a short interval and starts a streamer for any target not
+// already being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted
+// StatefulSet member) join the merged stream without the client reconnecting. Each streamer removes
+// itself when its target's log ends. Runs until ctx is cancelled; never closes out. When the RESOURCE
+// itself disappears from the snapshot (deleted while tailing), it signals `gone` once per transition
+// — a zero-pod gap with the resource still present stays silent (the mid-rollout tolerance) — so the
 // viewer can say "stream ended" instead of "waiting for log output…" forever.
 func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, canReadPodLogs func(string) bool, out chan<- logLine, gone chan<- struct{}) {
 	var mu sync.Mutex
 	streaming := make(map[string]bool)
+	drained := make(map[string]bool)
 
 	wasGone := false
 	resolve := func() {
@@ -180,20 +181,30 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 		}
 		wasGone = false
 		for _, pod := range pods {
-			key := logStreamKey(pod)
-			mu.Lock()
-			if streaming[key] {
-				mu.Unlock()
-				continue
-			}
-			streaming[key] = true
-			mu.Unlock()
-			go func(pod *corev1.Pod, key string) {
-				streamPodLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
+			terminalAtAttach := pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
+			for _, target := range targetContainers(pod, container) {
+				key := logStreamKey(pod, target)
 				mu.Lock()
-				delete(streaming, key)
+				// A terminal pod's follow stream dumps its existing log and immediately EOFs; once
+				// drained, re-attaching it on every resolution would append the full log forever.
+				if streaming[key] || drained[key] {
+					mu.Unlock()
+					continue
+				}
+				streaming[key] = true
 				mu.Unlock()
-			}(pod, key)
+				go func(pod *corev1.Pod, container, key string, terminalAtAttach bool) {
+					opened, cleanEOF := streamContainerLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
+					mu.Lock()
+					// Running-at-attach may restart before becoming terminal, while open or scan
+					// failures may leave unread logs. Neither is proof that the final log was drained.
+					if terminalAtAttach && opened && cleanEOF {
+						drained[key] = true
+					}
+					delete(streaming, key)
+					mu.Unlock()
+				}(pod, target, key, terminalAtAttach)
+			}
 		}
 	}
 
@@ -210,7 +221,9 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 	}
 }
 
-func logStreamKey(pod *corev1.Pod) string { return pod.Namespace + "/" + pod.Name }
+func logStreamKey(pod *corev1.Pod, container string) string {
+	return string(pod.UID) + "/" + container
+}
 
 // logSnapshot returns the objects pod resolution runs over. For a namespace that is the namespace's
 // own snapshot; for the cluster scope it merges in every pod cluster-wide, because a cluster-scoped
@@ -264,47 +277,57 @@ func podsForResource(objs []runtime.Object, kind, name string) ([]*corev1.Pod, b
 // the stream ends or ctx is cancelled. A pod that fails to open is skipped, not fatal, so one bad
 // pod never aborts the rest of an aggregate.
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
-	// allContainers fans out one streamer per app container, merged into the same channel; the client
-	// timestamp-orders them. The supervisor keys dedup on namespace/name, so a pod is followed once and
-	// this single call owns all its container streams.
-	if container == allContainers {
-		var wg sync.WaitGroup
-		for _, ct := range pod.Spec.Containers {
-			wg.Add(1)
-			go func(name string) {
-				defer wg.Done()
-				streamContainerLogs(ctx, client, pod, name, follow, previous, timestamps, tail, out)
-			}(ct.Name)
-		}
-		wg.Wait()
+	containers := targetContainers(pod, container)
+	if len(containers) == 1 {
+		streamContainerLogs(ctx, client, pod, containers[0], follow, previous, timestamps, tail, out)
 		return
 	}
-	c := container
-	if c == "" {
-		c = defaultLogContainer(pod)
+	// allContainers fans out one streamer per app container, merged into the same channel; the client
+	// timestamp-orders them.
+	var wg sync.WaitGroup
+	for _, target := range containers {
+		wg.Add(1)
+		go func(container string) {
+			defer wg.Done()
+			streamContainerLogs(ctx, client, pod, container, follow, previous, timestamps, tail, out)
+		}(target)
 	}
-	streamContainerLogs(ctx, client, pod, c, follow, previous, timestamps, tail, out)
+	wg.Wait()
+}
+
+func targetContainers(pod *corev1.Pod, container string) []string {
+	if container != allContainers {
+		if container == "" {
+			container = defaultLogContainer(pod)
+		}
+		return []string{container}
+	}
+	containers := make([]string, 0, len(pod.Spec.Containers))
+	for _, ct := range pod.Spec.Containers {
+		containers = append(containers, ct.Name)
+	}
+	return containers
 }
 
 // streamContainerLogs follows one container of one pod, tagging each line with both names so the client
 // can label by pod (aggregated workload) or by container (a single pod's merged all-container view).
-func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
+func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) (opened, cleanEOF bool) {
 	opts := &corev1.PodLogOptions{Container: container, Follow: follow, Previous: previous, Timestamps: timestamps}
 	if tail != nil {
 		opts.TailLines = tail
 	}
 	stream, err := client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, opts).Stream(ctx)
 	if err != nil {
-		return
+		return false, false
 	}
 	defer stream.Close()
-	scanLogStream(ctx, stream, pod, container, timestamps, out)
+	return true, scanLogStream(ctx, stream, pod, container, timestamps, out)
 }
 
 // scanLogStream reads lines from an opened pod-log stream, tagging each with the pod and container
 // names, until the stream ends or ctx is cancelled. Split from streamContainerLogs so the read loop
 // and its end-of-stream reporting are testable over a plain io.Reader.
-func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container string, timestamps bool, out chan<- logLine) {
+func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container string, timestamps bool, out chan<- logLine) (cleanEOF bool) {
 	scanner := bufio.NewScanner(rc)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -317,7 +340,7 @@ func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container
 		select {
 		case out <- ll:
 		case <-ctx.Done():
-			return
+			return false
 		}
 	}
 	// Closing the log viewer cancels ctx, which propagates to the underlying body read and surfaces
@@ -325,9 +348,11 @@ func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container
 	// stream, not an anomaly, so it must stay quiet (else a routine close logs one WARN per tailed
 	// pod/container). Warn only on a genuine abnormal end, e.g. a line over the 1MB token cap ending
 	// the scan with bufio.ErrTooLong, so a truncated stream stays diagnosable.
-	if err := scanner.Err(); err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
+	err := scanner.Err()
+	if err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
 		slog.Warn("log stream ended early", "namespace", pod.Namespace, "pod", pod.Name, "container", container, "err", err)
 	}
+	return err == nil && ctx.Err() == nil
 }
 
 // defaultLogContainer picks which container's logs to show when the request names none. An empty
