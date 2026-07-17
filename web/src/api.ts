@@ -58,9 +58,9 @@ export interface NamespacesStreamHandlers {
 
 // A silently stalled SSE connection — a proxy or NAT half-closing a long-lived stream — delivers no
 // data AND fires no `error`, so EventSource's built-in reconnection never triggers and readyState
-// stays OPEN forever. The sidebar's namespaces stream is the one long-lived stream navigation does not
-// re-create, so a silent stall froze every non-open namespace's health until one was re-opened (a
-// fresh graph stream refreshed only that one).
+// stays OPEN forever. The namespaces and graph feeds both remain open while an operator stays in the
+// same context or namespace, so a silent stall would freeze health or topology without looking
+// disconnected. Log streams deliberately stay unwrapped because reconnecting replays tailed lines.
 //
 // watchedEventSource is the backstop: the server sends a `ping` event every ~15s, so if NOTHING (ping,
 // data, or open) arrives within SSE_STALE_MS the connection is presumed dead and the EventSource is
@@ -134,8 +134,8 @@ function watchedEventSource(
 // streamNamespaces tails the cluster's per-namespace health over SSE, returning a function that closes
 // the stream. The server rolls up every visible namespace's worst health and pushes the (small) list
 // on connect and whenever it changes — so the sidebar holds one quiet connection instead of polling
-// /namespaces every 15s. Wrapped in watchedEventSource because this is the one long-lived stream that
-// navigation doesn't re-create, so it needs the silent-stall backstop.
+// /namespaces every 15s. The watched wrapper recovers this quiet, context-long connection from a
+// silent stall.
 export function streamNamespaces(ctx: string, h: NamespacesStreamHandlers): () => void {
   return watchedEventSource(`${ctxBase(ctx)}/namespaces/stream`, {
     events: {
@@ -246,13 +246,15 @@ export interface GraphStreamHandlers {
 // streamGraph opens the SSE graph feed and returns a function that closes it. The server streams
 // the full graph; the client projects relationship subsets and grouping itself.
 export function streamGraph(ctx: string, ns: string, h: GraphStreamHandlers): () => void {
-  const es = new EventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream`)
-  es.addEventListener('snapshot', (e) => h.snapshot(JSON.parse((e as MessageEvent).data)))
-  es.addEventListener('patch', (e) => h.patch(JSON.parse((e as MessageEvent).data)))
-  es.addEventListener('summary', (e) => h.summary?.(JSON.parse((e as MessageEvent).data) as NamespaceSummary))
-  es.addEventListener('capacity', (e) => h.capacity?.(JSON.parse((e as MessageEvent).data) as Capacity))
-  es.onerror = () => h.error?.()
-  return () => es.close()
+  return watchedEventSource(`${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns)}/graph/stream`, {
+    events: {
+      snapshot: (e) => h.snapshot(JSON.parse(e.data)),
+      patch: (e) => h.patch(JSON.parse(e.data)),
+      summary: (e) => h.summary?.(JSON.parse(e.data) as NamespaceSummary),
+      capacity: (e) => h.capacity?.(JSON.parse(e.data) as Capacity),
+    },
+    onError: () => h.error?.(),
+  })
 }
 
 export interface LogEntry {
