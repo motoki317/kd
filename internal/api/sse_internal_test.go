@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+	metricsversioned "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +25,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 
 	"github.com/motoki317/kd/internal/auth"
 	"github.com/motoki317/kd/internal/kube/discovery"
@@ -31,6 +33,110 @@ import (
 	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 )
+
+func TestGraphStreamMetricsTimeoutKeepsEventsFlowing(t *testing.T) {
+	metricsRequested := make(chan struct{}, 1)
+	hangSrv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case metricsRequested <- struct{}{}:
+		default:
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(hangSrv.Close)
+	metricsClient, err := metricsversioned.NewForConfig(&rest.Config{Host: hangSrv.URL})
+	if err != nil {
+		t.Fatalf("create metrics client: %v", err)
+	}
+
+	seed := []runtime.Object{&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}}}
+	typed := fake.NewSimpleClientset(seed...)
+	dyn := dynamicfake.NewSimpleDynamicClient(scheme.Scheme, seed...)
+	resources := []discovery.Resource{
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, Kind: "Namespace", Namespaced: false},
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}, Kind: "Node", Namespaced: false},
+		{GVR: schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, Kind: "Pod", Namespaced: true},
+	}
+	reg := registry.NewInCluster(
+		registry.Clients{Typed: typed, Dynamic: dyn, Metrics: metricsClient},
+		0,
+		store.Options{Discoverer: discovery.Static(resources)},
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	if err := reg.Prewarm(ctx, registry.InClusterContext); err != nil {
+		t.Fatalf("prewarm registry: %v", err)
+	}
+	p, err := rbac.Parse(nil)
+	if err != nil {
+		t.Fatalf("parse policy: %v", err)
+	}
+	a := New(FromRegistry(reg), rbac.NewEnforcer(p))
+	a.usageTimeout = 50 * time.Millisecond
+	a.heartbeatInterval = 50 * time.Millisecond
+	srv := httptest.NewServer(auth.Config{UserHeader: "X-Forwarded-User"}.Middleware(a.Routes()))
+	t.Cleanup(srv.Close)
+
+	reqCtx, reqCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer reqCancel()
+	req, err := http.NewRequestWithContext(
+		reqCtx,
+		http.MethodGet,
+		srv.URL+"/api/v1/contexts/"+registry.InClusterContext+"/namespaces/shop/graph/stream",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create graph stream request: %v", err)
+	}
+	req.Header.Set("X-Forwarded-User", "alice")
+	started := time.Now()
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("open graph stream: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var event string
+	sawSnapshot, sawCapacity, sawPing := false, false, false
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		line := sc.Text()
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			event = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			data := strings.TrimPrefix(line, "data: ")
+			switch event {
+			case "snapshot":
+				sawSnapshot = true
+			case "capacity":
+				if !sawCapacity && time.Since(started) > 2*time.Second {
+					t.Errorf("initial capacity arrived after %v, want under 2s", time.Since(started))
+				}
+				sawCapacity = true
+				if strings.Contains(data, `"usage"`) {
+					t.Errorf("timed-out capacity payload includes usage: %s", data)
+				}
+			case "ping":
+				sawPing = true
+			}
+		}
+		if sawSnapshot && sawCapacity && sawPing {
+			break
+		}
+	}
+	if err := sc.Err(); err != nil && reqCtx.Err() == nil {
+		t.Fatalf("read graph stream: %v", err)
+	}
+	select {
+	case <-metricsRequested:
+	default:
+		t.Error("graph stream never called the hanging metrics server")
+	}
+	if !sawSnapshot || !sawCapacity || !sawPing {
+		t.Errorf("graph stream events: snapshot=%v capacity=%v ping=%v, want all", sawSnapshot, sawCapacity, sawPing)
+	}
+}
 
 func TestSplitLogTimestamp(t *testing.T) {
 	tests := map[string]struct {

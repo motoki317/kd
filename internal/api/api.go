@@ -75,11 +75,23 @@ type API struct {
 	enforcer *rbac.Enforcer
 	// debounce coalesces a burst of cache changes before recomputing a stream's graph.
 	debounce time.Duration
+	// heartbeatInterval lets the hanging-metrics test observe a resumed graph loop without waiting
+	// for the production heartbeat cadence.
+	heartbeatInterval time.Duration
+	// usageTimeout keeps a slow metrics call from blocking graph events: one 15s heartbeat interval
+	// plus this 10s bound remains below the client's shared 40s stale-stream threshold.
+	usageTimeout time.Duration
 }
 
 // New constructs an API over the given context registry and authorization enforcer.
 func New(contexts Contexts, enforcer *rbac.Enforcer) *API {
-	return &API{contexts: contexts, enforcer: enforcer, debounce: 300 * time.Millisecond}
+	return &API{
+		contexts:          contexts,
+		enforcer:          enforcer,
+		debounce:          300 * time.Millisecond,
+		heartbeatInterval: sseHeartbeatInterval,
+		usageTimeout:      10 * time.Second,
+	}
 }
 
 // FromRegistry adapts *registry.Registry to Contexts. Registry.Get returns the concrete
