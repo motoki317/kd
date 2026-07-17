@@ -160,19 +160,19 @@ status:
 	}
 }
 
-func TestDescendantPodNames(t *testing.T) {
+func TestDescendantPods(t *testing.T) {
 	g := Build(decodeFixture(t, ownershipFixture)) // Deployment(dep-uid) -> RS(rs-uid) -> 2 pods
-	bothPods := []string{"web-abc-1", "web-abc-2"}
+	bothPods := []PodIdentity{{Namespace: "shop", Name: "web-abc-1"}, {Namespace: "shop", Name: "web-abc-2"}}
 
-	tests := map[string][]string{
-		"dep-uid":    bothPods,      // Deployment aggregates every pod under its ReplicaSets
-		"rs-uid":     bothPods,      // ReplicaSet aggregates its own pods
-		"pod1-uid":   {"web-abc-1"}, // a Pod resolves to just itself
-		"absent-uid": nil,           // unknown node owns nothing
+	tests := map[string][]PodIdentity{
+		"dep-uid":    bothPods,                                 // Deployment aggregates every pod under its ReplicaSets
+		"rs-uid":     bothPods,                                 // ReplicaSet aggregates its own pods
+		"pod1-uid":   {{Namespace: "shop", Name: "web-abc-1"}}, // a Pod resolves to just itself
+		"absent-uid": nil,                                      // unknown node owns nothing
 	}
 	for id, want := range tests {
-		if got := g.DescendantPodNames(id); !slices.Equal(got, want) {
-			t.Errorf("DescendantPodNames(%q) = %v, want %v", id, got, want)
+		if got := g.DescendantPods(id); !slices.Equal(got, want) {
+			t.Errorf("DescendantPods(%q) = %v, want %v", id, got, want)
 		}
 	}
 }
@@ -197,11 +197,12 @@ metadata:
 status: { phase: Succeeded }
 `
 	objs := decodeFixture(t, fixture)
-	if got := Build(objs).DescendantPodNames("job-uid"); len(got) != 0 {
-		t.Errorf("Build should drop the completed pod; DescendantPodNames = %v", got)
+	if got := Build(objs).DescendantPods("job-uid"); len(got) != 0 {
+		t.Errorf("Build should drop the completed pod; DescendantPods = %v", got)
 	}
-	if got := BuildForLogs(objs).DescendantPodNames("job-uid"); !slices.Equal(got, []string{"migrate-xyz"}) {
-		t.Errorf("BuildForLogs should keep the completed pod; DescendantPodNames = %v, want [migrate-xyz]", got)
+	want := []PodIdentity{{Namespace: "shop", Name: "migrate-xyz"}}
+	if got := BuildForLogs(objs).DescendantPods("job-uid"); !slices.Equal(got, want) {
+		t.Errorf("BuildForLogs should keep the completed pod; DescendantPods = %v, want %v", got, want)
 	}
 }
 
@@ -235,14 +236,14 @@ metadata:
 status: { phase: Succeeded }
 `
 	objs := decodeFixture(t, fixture)
-	if got := BuildForLogs(objs).DescendantPodNames("dep-uid"); len(got) != 0 {
+	if got := BuildForLogs(objs).DescendantPods("dep-uid"); len(got) != 0 {
 		t.Errorf("BuildForLogs must not reach a pod under a superseded ReplicaSet; got %v", got)
 	}
 }
 
 // DescendantIDs (used by the events handler to aggregate a controller's events across its whole
 // subtree) returns the node itself plus every owner-edge-reachable descendant, sorted. Distinct from
-// DescendantPodNames: it yields the controllers/ReplicaSets too, by id, not just leaf pod names.
+// DescendantPods: it yields the controllers/ReplicaSets too, by id, not just leaf pod identities.
 func TestDescendantIDs(t *testing.T) {
 	g := Build(decodeFixture(t, ownershipFixture)) // Deployment(dep-uid) -> RS(rs-uid) -> 2 pods
 

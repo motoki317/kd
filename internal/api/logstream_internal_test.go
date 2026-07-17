@@ -9,7 +9,49 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
+
+func TestPodsForResourceMatchesDescendantsByNamespaceAndName(t *testing.T) {
+	owner := []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Node", Name: "node-a", UID: "node-a-uid", Controller: boolp(true),
+	}}
+	objs := []runtime.Object{
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", UID: "node-a-uid"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "team-a", Name: "agent", UID: types.UID("team-a-agent-uid"), OwnerReferences: owner,
+		}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Namespace: "team-b", Name: "agent", UID: types.UID("team-b-agent-uid"),
+		}},
+	}
+
+	pods, rootExists := podsForResource(objs, "Node", "node-a")
+	if !rootExists {
+		t.Fatal("node-a must resolve")
+	}
+	if len(pods) != 1 || pods[0].Namespace != "team-a" || pods[0].Name != "agent" {
+		t.Fatalf("resolved pods = %s, want only team-a/agent", podNames(pods))
+	}
+}
+
+func TestLogStreamKeyIncludesNamespace(t *testing.T) {
+	a := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "agent"}}
+	b := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-b", Name: "agent"}}
+	if logStreamKey(a) == logStreamKey(b) {
+		t.Fatalf("same-named pods in different namespaces share key %q", logStreamKey(a))
+	}
+}
+
+func podNames(pods []*corev1.Pod) []string {
+	names := make([]string, 0, len(pods))
+	for _, pod := range pods {
+		names = append(names, pod.Namespace+"/"+pod.Name)
+	}
+	return names
+}
 
 // blockUntilCancelled is a log stream that blocks on Read until ctx is cancelled, then surfaces
 // ctx.Err() — exactly how a kube GetLogs body read behaves when the client closes the viewer and the

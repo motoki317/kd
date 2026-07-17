@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"cmp"
 	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,26 +77,29 @@ func SummarizeBuilt(g *Graph, clusterScope bool) Summary {
 	return s
 }
 
-// DescendantPodNames returns the names of every Pod reachable from the node with the given id by
-// following ownerReference edges downward — or just that pod's name if the id is itself a Pod. It
-// lets the API aggregate logs for a workload across all the pods it ultimately owns (Deployment →
-// ReplicaSet → Pod, CronJob → Job → Pod, ...). Completed pods are absent under Build but present under
-// BuildForLogs, which the log aggregator uses so a finished run's logs are reachable.
-func (g *Graph) DescendantPodNames(id string) []string {
-	kind := make(map[string]string, len(g.Nodes))
-	name := make(map[string]string, len(g.Nodes))
+// PodIdentity identifies a pod across a multi-namespace snapshot.
+type PodIdentity struct {
+	Namespace string
+	Name      string
+}
+
+// DescendantPods returns every Pod reachable from the given node by following ownerReference edges
+// downward, qualified by namespace for multi-namespace snapshots. BuildForLogs keeps completed pods
+// reachable here even though the displayed graph drops them.
+func (g *Graph) DescendantPods(id string) []PodIdentity {
+	byID := make(map[string]Node, len(g.Nodes))
 	for _, n := range g.Nodes {
-		kind[n.ID], name[n.ID] = n.Kind, n.Name
+		byID[n.ID] = n
 	}
-	// DescendantIDs already walks the ownerReference subtree (cycle-guarded); narrow it to Pods so the
-	// two traversals stay one implementation. The id itself is included, so a Pod id yields its own name.
-	var pods []string
-	for _, did := range g.DescendantIDs(id) {
-		if kind[did] == "Pod" {
-			pods = append(pods, name[did])
+	var pods []PodIdentity
+	for _, descendantID := range g.DescendantIDs(id) {
+		if n := byID[descendantID]; n.Kind == "Pod" {
+			pods = append(pods, PodIdentity{Namespace: n.Namespace, Name: n.Name})
 		}
 	}
-	slices.Sort(pods)
+	slices.SortFunc(pods, func(a, b PodIdentity) int {
+		return cmp.Or(cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))
+	})
 	return pods
 }
 

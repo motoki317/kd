@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,6 +34,10 @@ import (
 	"github.com/motoki317/kd/internal/kube/store"
 	"github.com/motoki317/kd/internal/rbac"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestGraphStreamMetricsTimeoutKeepsEventsFlowing(t *testing.T) {
 	metricsRequested := make(chan struct{}, 1)
@@ -281,16 +286,94 @@ func TestFollowLogStreamPicksUpNewPods(t *testing.T) {
 	}
 }
 
-// stubLogStore satisfies just the two Store methods superviseLogStreams touches; objs() controls
-// the snapshot per call, so the test mutates the "cluster" deterministically (no informer plumbing).
+// stubLogStore satisfies the Store methods superviseLogStreams touches; objs() controls the
+// namespace snapshot per call, so tests can mutate the "cluster" deterministically without informer
+// plumbing or provide the separate cluster-wide source snapshot used by cluster-scope log resolution.
 type stubLogStore struct {
 	Store
-	objs   func() []runtime.Object
-	client kubernetes.Interface
+	objs                 func() []runtime.Object
+	snapshotNamespace    func(string) []runtime.Object
+	snapshotNodesAndPods func() []runtime.Object
+	client               kubernetes.Interface
 }
 
-func (s *stubLogStore) SnapshotNamespace(string) []runtime.Object { return s.objs() }
-func (s *stubLogStore) Client() kubernetes.Interface              { return s.client }
+func (s *stubLogStore) SnapshotNamespace(ns string) []runtime.Object {
+	if s.snapshotNamespace != nil {
+		return s.snapshotNamespace(ns)
+	}
+	return s.objs()
+}
+func (s *stubLogStore) SnapshotNodesAndPods() []runtime.Object {
+	return s.snapshotNodesAndPods()
+}
+func (s *stubLogStore) Client() kubernetes.Interface { return s.client }
+
+func TestSuperviseLogStreamsSeparatesSameNamedPodsByNamespace(t *testing.T) {
+	requests := make(chan string, 8)
+	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		requests <- r.URL.Path
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader("")),
+			Request:    r,
+		}, nil
+	})}
+
+	client, err := kubernetes.NewForConfigAndClient(&rest.Config{Host: "https://example.invalid"}, httpClient)
+	if err != nil {
+		t.Fatalf("create Kubernetes client: %v", err)
+	}
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", UID: "node-a-uid"}}
+	ownedPod := func(ns, uid string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns, Name: "agent", UID: types.UID(uid),
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1", Kind: "Node", Name: node.Name, UID: node.UID, Controller: boolp(true),
+				}},
+			},
+			Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "main"}}},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+	podA := ownedPod("team-a", "agent-a-uid")
+	podB := ownedPod("team-b", "agent-b-uid")
+	st := &stubLogStore{
+		snapshotNamespace:    func(string) []runtime.Object { return []runtime.Object{node} },
+		snapshotNodesAndPods: func() []runtime.Object { return []runtime.Object{node, podA, podB} },
+		client:               client,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	lines := make(chan logLine, 2)
+	go superviseLogStreams(ctx, st, ClusterScopeNamespace, "Node", node.Name, "", false, nil, func(string) bool { return true }, lines, nil)
+
+	want := map[string]bool{
+		"/api/v1/namespaces/team-a/pods/agent/log": false,
+		"/api/v1/namespaces/team-b/pods/agent/log": false,
+	}
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for {
+		allSeen := true
+		for _, seen := range want {
+			allSeen = allSeen && seen
+		}
+		if allSeen {
+			return
+		}
+		select {
+		case path := <-requests:
+			if _, ok := want[path]; ok {
+				want[path] = true
+			}
+		case <-timer.C:
+			t.Fatalf("log requests = %v, want both namespace-qualified paths", want)
+		}
+	}
+}
 
 // TestSuperviseLogStreamsReportsResourceGone guards the deleted-while-tailing fix: when the tailed
 // resource itself vanishes from the snapshot, the supervisor signals `gone` (once per transition) so
@@ -444,6 +527,39 @@ func TestStoppedPod(t *testing.T) {
 		if got := stoppedPod(c.obj); got != c.want {
 			t.Errorf("%s: stoppedPod = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestAuthorizedLogSourcePodsCachesNamespacePermission(t *testing.T) {
+	obj := func(kind, ns, name string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "v1", "kind": kind,
+			"metadata": map[string]any{"namespace": ns, "name": name, "uid": name + "-uid"},
+		}}
+	}
+	allowedA := obj("Pod", "team-a", "allowed-a")
+	customPod := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "example.io/v1", "kind": "Pod",
+		"metadata": map[string]any{"namespace": "team-a", "name": "custom-a", "uid": "custom-a-uid"},
+	}}
+	objs := []runtime.Object{
+		allowedA,
+		obj("Pod", "team-a", "allowed-b"),
+		customPod,
+		obj("Pod", "team-b", "denied-a"),
+		obj("Node", "", "node-a"),
+	}
+	calls := map[string]int{}
+	got := authorizedLogSourcePods(objs, func(ns string) bool {
+		calls[ns]++
+		return ns == "team-a"
+	})
+
+	if len(got) != 2 || got[0] != allowedA {
+		t.Errorf("authorized sources = %v, want the two original team-a pod objects", got)
+	}
+	if calls["team-a"] != 1 || calls["team-b"] != 1 || len(calls) != 2 {
+		t.Errorf("permission checks = %v, want one per pod namespace", calls)
 	}
 }
 
