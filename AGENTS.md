@@ -281,14 +281,12 @@ collapse, edge routing, auto-fit — moved to [docs/frontend-internals.md](docs/
     controller-pods (`Succeeded` under a Job/CronJob/Workflow) and zero-replica ReplicaSets — they
     dominate real namespaces and never reflect current state.
   - `graph.BuildForLogs` is for **anything that resolves pods to read their logs**. It keeps completed
-    pods (still drops superseded ReplicaSets). A finished Job/CronJob/Workflow has nothing BUT
-    completed pods, so resolving through `Build` aggregated zero pods and the Logs tab was silently
-    empty (e5c190c).
-  - Two twists that compound it: (1) an Argo step pod's phase is `Succeeded` even when the step
-    container exits non-zero (the `wait` sidecar completes the pod), so a FAILED workflow's failure
-    logs live in a pod `isHistorical` would drop; (2) these pods are absent from the SSE display
-    graph, so `hasDescendantPod` returns false — a finished Workflow needs `Workflow` in
-    `LOGGABLE_KINDS` to show the tab.
+    pods but still drops superseded ReplicaSets; using `Build` made finished-run logs empty (e5c190c).
+  - `graph.BuildWithLogSources` keeps topology filtering while marking each visible node's `loggable`
+    flag from viewer-authorized source pods. Sources never become graph nodes; callers must include
+    completed pods (including terminal capacity pods) and enforce `logs/get` per pod namespace.
+  - An Argo step pod can be `Succeeded` even when `main` exits non-zero, so both log resolution and
+    `loggable` marking must retain completed pods.
 - **Pod log container defaults to `main`, not the first container**: an Argo pod lists its `wait`
   executor sidecar (and `init`) BEFORE `main`, so defaulting to `pod.Spec.Containers[0]` streamed pure
   executor noise. Both server (`defaultLogContainer` in `logstream.go`) and client (`defaultLogContainer`

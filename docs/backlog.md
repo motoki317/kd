@@ -72,18 +72,6 @@ spotlight — see the PVC-spotlight row in Rejected).
   re-anchored on resize, or confirms large-graph pan should never expose empty gutter; then split
   `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
-- **Per-node `hasLogs` — Logs tab for any workload CRD with only completed pods** — *follow-up to
-  the completed-run-logs fix (e5c190c/e792b9d).* The server (`BuildForLogs`) reaches a finished
-  resource's completed pods, but the client's Logs tab gates on `hasDescendantPod` (blind to
-  display-dropped pods) plus the hardcoded `LOGGABLE_KINDS` Argo entries — so any other pod-owning
-  workload CRD whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom operator's job CRD)
-  hides its logs. Same gap (D67): a Node selected in cluster scope shows no Logs tab (no pods in the
-  cluster-scope display graph) while the same Node in kube-system streams fine — and adding `Node` to
-  `LOGGABLE_KINDS` is wrong (a podless worker node would get a tab that waits forever). **Proper
-  fix:** the server computes per-node `hasLogs` (ownership over `BuildForLogs`) and the client gates
-  on it, retiring `LOGGABLE_KINDS` + the client-side descendant walk. **Reopen when:** a non-Argo
-  workload CRD with completed-only pods needs logs, or the special-casing gets in the way.
-
 - **GRPCRoute has routing edges but no drawer routing table** — *low value, deferred.*
   `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's `backendRefs`, but the drawer's
   `routes()` table only handles HTTPRoute; a faithful GRPCRoute table would render
@@ -194,7 +182,9 @@ ideas get refuted once a surface matures — see Status.)
 **git log is the authoritative per-change record** (Conventional Commits carry the full WHY); this
 section is only a coarse index, newest first.
 
-### 2026-07 SSE sidebar push + robustness
+### 2026-07 SSE robustness + server-computed Logs gate
+
+- Per-node `loggable` now derives from viewer-authorized server log sources, covering completed workload CRDs and cluster-scope Nodes while retiring the client kind/descendant gate.
 - Sidebar namespace health now streams over SSE, replacing the client's 15s `/namespaces` poll
   (aa91149, 7e0066d)
 - Namespaces and graph streams self-heal from silently-stalled connections through the shared
