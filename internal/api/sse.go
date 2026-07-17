@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -154,7 +155,10 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 		var usage *graph.Usage
 		if mc := store.MetricsClient(); mc != nil {
 			resolvePod, resolveNode := uidResolvers(snap)
-			if u, err := graph.BuildUsage(r.Context(), mc, "", true, resolvePod, resolveNode); err == nil {
+			ctx, cancel := context.WithTimeout(r.Context(), a.usageTimeout)
+			u, err := graph.BuildUsage(ctx, mc, "", true, resolvePod, resolveNode)
+			cancel()
+			if err == nil {
 				usage = u
 			}
 		}
@@ -182,7 +186,7 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	heartbeat := time.NewTicker(sseHeartbeatInterval)
+	heartbeat := time.NewTicker(a.heartbeatInterval)
 	defer heartbeat.Stop()
 	// The capacity view is refreshed on its own cadence: metrics-server samples ~every 15s, and a
 	// usage push is independent of graph-change debouncing.
