@@ -30,6 +30,7 @@ import (
 // stringified GVK as kd already exposes via describe().
 var typedFactories = map[string]func() runtime.Object{
 	"v1/Pod":                                   func() runtime.Object { return &corev1.Pod{} },
+	"v1/ReplicationController":                 func() runtime.Object { return &corev1.ReplicationController{} },
 	"v1/Service":                               func() runtime.Object { return &corev1.Service{} },
 	"v1/Node":                                  func() runtime.Object { return &corev1.Node{} },
 	"v1/Namespace":                             func() runtime.Object { return &corev1.Namespace{} },

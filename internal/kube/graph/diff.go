@@ -72,6 +72,7 @@ func nodeEqual(a, b Node) bool {
 		a.Namespace == b.Namespace &&
 		a.Name == b.Name &&
 		a.Health == b.Health &&
+		a.Loggable == b.Loggable && // a source pod appearing or disappearing must reconcile the Logs tab
 		a.Status == b.Status &&
 		a.Message == b.Message && // a failure reason appearing/changing must repaint the drawer
 		a.Restarts == b.Restarts &&
