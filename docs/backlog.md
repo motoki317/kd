@@ -35,26 +35,15 @@ Recent batches (newest first; **one line per batch** — `git log` carries the f
 `docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
 "Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
 
-- **b39 (2026-06-15, remote-EKS dogfooding pass, 13 rounds)** — drove kd against three real remote
-  clusters (multi-node capacity, 400+ cluster-scoped resources, dense kube-system, ~100-Workflow app
-  namespaces, real failed Argo Workflows). Two fixes, both only reproducible against remote shapes:
-  (1) the first `/namespaces` after a cold context rolled up a half-synced cache — a Service whose
-  EndpointSlices hadn't listed yet read "no endpoints", pods weren't Running — flashing many
-  namespaces a transient Degraded the 15s poll left stale; now waits briefly for the resource
-  informers too (04731c9). (2) "All containers" became the default for every multi-container pod,
-  burying an Argo step pod's `main` error under `wait`-executor noise ("no artifact sidecars to
-  kill"); now prefers `main` when present (66dbe20). Re-confirmed mature on real data: multi-node
-  capacity (0 overshoot, ip-10 node names fit), dense relationship/kind layout (0 overlaps),
-  cluster-scoped drawer, merged-log per-container color tags, the drawer-width cap (b38), and the
-  Workflow failure drill-down (`message` = "step: main: Error (exit code 1)").
-- **b38 (2026-06-15, user-directed dogfooding pass)** — multi-perspective agent-browser dogfooding
-  (beginner exploration · operator triage with induced failures · narrow/phone viewport · keyboard ·
-  light theme · kind view at 367-resource density · cluster-scoped drawer · trouble-badge jump · edge
-  tooltips · context switch) across two real clusters. One fix: the resizable drawer's `max-width`
-  was viewport-relative (`70vw`) and ignored the namespace-sidebar offset, so it overflowed the
-  viewport below ~760px (clipping its own close button) and the absolutely-positioned toolbar
-  overlapped it across ~640–1040px (incl. the common 1024px laptop / half-screen) — re-capped to
-  `.main` width minus a `--canvas-min` canvas floor (54a9bed). Every other surface re-confirmed mature.
+- **b39 (2026-06-15, remote-EKS dogfooding pass, 13 rounds)** — three real remote clusters; two fixes
+  only reproducible against remote shapes: cold-context `/namespaces` no longer rolls up a half-synced
+  cache into transient Degraded flashes (04731c9), and multi-container logs default to `main` instead
+  of "All containers" so an Argo step's error isn't buried in executor noise (66dbe20); everything
+  else re-confirmed mature on real data.
+- **b38 (2026-06-15, user-directed dogfooding pass)** — multi-perspective agent-browser passes on two
+  real clusters; one fix: the resizable drawer's viewport-relative `70vw` max-width overflowed the
+  viewport below ~760px and collided with the toolbar at ~640–1040px — re-capped to `.main` width
+  minus a `--canvas-min` floor (54a9bed). Every other surface re-confirmed mature.
 - **b37 (2026-06-15, deadcode + readability pass)** — two adversarial-verify survey passes (analyzers +
   ~47 candidates) over the post-feature-cycle tree: removed dead exports/branches (Hub.after, gridDims
   rankdir, EDGE_LABELS, `toGroup`, `breathing`), converged duplication (spec_* `asUnstructuredKind`,
@@ -206,11 +195,6 @@ spotlight — see the PVC-spotlight row in Rejected).
   **Reopen when:** a cluster reports memory pressure after b36, or many concurrent viewers of one
   namespace make the build-sharing ROI concrete.
 
-- ~~Toolbar vertical bulk at phone width~~ — **resolved by the b35 Filters disclosure** (2026-06-12):
-  the relationship/kind facets now fold behind a badged Filters button at EVERY width, closed by
-  default — the resting toolbar is one row (49px desktop, ~111px wrapped at 375px, both measured
-  live; was ~250px of 667 on a phone).
-
 - **Canvas card text under the b35 design language** — *deferred (geometry retune).* Card names/kinds
   on the topology canvas keep Plex Sans and their pre-overhaul sizes (`.node-kind` 10px caps,
   `.node-name` 13px): the sizes are zoom-coupled to fixed card geometry, and the mono data face
@@ -233,12 +217,6 @@ spotlight — see the PVC-spotlight row in Rejected).
   the dominant resize — drawer open — is owned by selection-fit). **Reopen when:** the user wants the
   graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
   split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
-
-- ~~Container / step picker for multi-container pod logs~~ — **resolved by the merged-logs work**
-  (0c767a3/b34e695, re-verified 2026-06-10): `select.logs-container` exists with init/app optgroups +
-  an "All containers" default, and the aggregated view gained per-container filter chips. The one
-  residual — a finished Workflow's display-dropped pods have no container names client-side — is the
-  same gap as the `hasLogs` item below; it lives there now.
 
 - **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
   fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
@@ -266,28 +244,12 @@ spotlight — see the PVC-spotlight row in Rejected).
   topology-level answer — already lands. Build it if a cluster here adopts GRPCRoute: add a
   `grpcRouteMatches` branch to `routes()` mirroring `httpRoutePaths`, fixture-tested.
 
-- ~~HPA: target metric + drop the "unknown state" status~~ — **shipped / refuted (2026-06-10).**
-  (1) The "metric" chip now renders each Resource metric's current/target ("cpu 200% / 90%"; v2
-  utilization + averageValue, v1 flat fields, unsampled current as "—"); dogfooded live against a real
-  mid-scale HPA on docker-desktop (metrics-server reinstalled). (2) verified stale — e629880's
-  condition rules classify a functioning HPA (status empty, health Healthy); no "unknown state" shows.
-
 ## Future / larger work — deferred (examined, not actionable now)
 
 Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
 none is a safe, clearly-felt improvement-cycle slice today. Each lists what it would take and the signal
 that should reopen it, so a future agent inherits the analysis instead of re-surveying from scratch.
 
-- **Live per-namespace health for background namespaces** — *deferred (premature).* The open namespace
-  is already live via the SSE `summary` event (cycle 201); background namespaces refresh on the 15 s
-  sidebar poll, which re-summarizes every visible namespace (`api.go` `handleNamespaces` → a full
-  `graph.Build` per namespace). A naive "cache summaries on store change" does **not** help: `notify()`
-  (`store.go:185`) is a single coalesced signal with no namespace granularity, so recompute-all-on-change
-  is *worse* than the poll for the common single-client / churny case; a correct per-namespace-dirty
-  cache is a real design change with no user-felt benefit until thousands of namespaces × many clients.
-  *Reopen when:* kd actually runs against a many-thousand-namespace cluster, or the product wants
-  background namespaces to update live — then build a cluster-wide summary SSE stream (the per-ns dirty
-  cache is one piece of it).
 - **SSE patch scaling** — *deferred (premature).* Patches recompute+diff on a 300 ms window; fine today,
   no observed pain. Field-selector informers / sharding would break the ride-along invariant the health
   rollup depends on (cross-namespace ownerRef, Pod→Node, PVC→PV), so they need an ADR, not a cycle. The
@@ -330,24 +292,13 @@ that should reopen it, so a future agent inherits the analysis instead of re-sur
   for another reason — then prefer a tiny dependency-free "dim the keys" pass over full tokenisation, and
   verify it survives the format toggle + find-highlight overlay.
 
-*Resolved this pass — "Component tests for Topology / DetailDrawer" (already done):* `Topology.test.tsx`,
-`DetailDrawer.test.tsx`, `LogViewer.test.tsx`, `Sidebar.test.tsx`, and `CopyButton.test.tsx` already ship
-~100 component tests via `@solidjs/testing-library` + `fireEvent` (227 web assertions total). The residual
-gap — cross-component selection→drawer-centering — is **not** a jsdom unit test: jsdom returns zeros for
-`getBoundingClientRect`, so a mocked test would validate the mock, not the coordinate math. It belongs to
-live Playwright verification per AGENTS.md, not the backlog.
-
-### Same-kind collapse — deferred follow-ups (shipped 2026-06-01)
-
-The "+N older" same-kind collapse shipped across all views (commits `189c839` grid views, `d444086`
-connectivity). Two scoped pieces were deliberately left out — each is real but low-value/high-risk today:
-
-- **Collapse non-leaf same-kind siblings** — *deferred (effectively absent in the model).* Connectivity
-  collapse only folds a hub's **degree-1** same-kind leaves (pods, configmaps, PVCs). Same-kind siblings
-  that *own subtrees* and number >8 under one parent don't occur in kd's graph (controllers fan out to
-  leaves), so the case is academic; pulling a subtree out of the Dagre skeleton + synthesizing
-  multi-neighbor bundle edges is real risk for no real benefit. *Reopen when:* a concrete graph shape
-  shows >8 non-leaf same-kind siblings under one parent.
+- **Collapse non-leaf same-kind siblings** (same-kind collapse follow-up; the "+N older" collapse
+  itself shipped 2026-06-01, `189c839`/`d444086`) — *deferred (effectively absent in the model).*
+  Connectivity collapse only folds a hub's **degree-1** same-kind leaves (pods, configmaps, PVCs).
+  Same-kind siblings that *own subtrees* and number >8 under one parent don't occur in kd's graph
+  (controllers fan out to leaves), so the case is academic; pulling a subtree out of the Dagre skeleton
+  + synthesizing multi-neighbor bundle edges is real risk for no real benefit. *Reopen when:* a
+  concrete graph shape shows >8 non-leaf same-kind siblings under one parent.
 
 ## Rejected — do not re-propose
 
@@ -411,6 +362,7 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | Shrink the ~61 KB latin-font payload (subset glyphs / drop a weight) | rejected (2026-06-14 perf pass) — fonts are `font-display: swap`, so they never gate LCP (measured); shrinking them only trims background bandwidth. Glyph-subsetting is unsafe (mono renders arbitrary log/manifest text — needs full coverage), and dropping a weight regresses the fixed 400/500/600 design language. Switching to latin-only `@fontsource` subset CSS would trim the embedded binary + ~1 KB gz CSS but moves no runtime metric. Not worth it |
 | Brotli (vs gzip) for static assets; inline critical CSS to drop an RTT | deferred (2026-06-14 perf pass) — both are <0.1 s wins on top of the gzip middleware. Brotli needs a non-stdlib dep or build-time precompression; CSS inlining needs a Vite plugin and de-caches the stylesheet. Revisit only if the Slow4G LCP (2.2 s, RTT-bound) becomes a real ask — on a not-slow link LCP is already 0.7 s |
 | Code-split CapacityView (Nodes view) like the drawer | deferred (2026-06-14 perf pass) — `capacityLayout` is referenced synchronously in Topology's `layout` memo (not just inside the component), so the layout math can't follow the component into a lazy chunk; only the ~26 KB-src render component would split, for a smaller win than the drawer and a Suspense flash on a one-click view switch |
+| Component tests for Topology / DetailDrawer | already-done (2026-05-29 re-examination) — ~100 component tests ship via `@solidjs/testing-library` + `fireEvent`; the residual cross-component selection→drawer-centering gap is live-verification territory (jsdom `getBoundingClientRect` returns zeros — a mocked test validates the mock), not a unit test |
 
 ## Done
 
@@ -418,6 +370,21 @@ Shipped improvements, newest first. **git log is the authoritative per-change re
 Commits carry the full WHY); these one-liners are just the index — the verbose rationale that used to
 live here was redundant with the commits and is trimmed (2026-06-06 condensation). Hashes shown where a
 single commit maps cleanly; otherwise search the title in git log.
+
+### 2026-07 SSE sidebar push + robustness
+- Sidebar namespace health now streams over SSE, replacing the client's 15s `/namespaces` poll —
+  background namespaces update live on a coarse server cadence; this also closes the former
+  "live per-namespace health for background namespaces" Future item (aa91149, 7e0066d)
+- Namespaces stream self-heals from a silently-stalled connection: `watchedEventSource` client
+  watchdog + visible `ping` heartbeat (051484b); the graph stream still needs it — see Open
+- Idle events stream stays silent (total-order events sort, 1a675e0); aggregated logs time-sort
+  from the first line (ec44793); late-registered CRD kinds wake store subscribers (54c07bd)
+- Drawer sized viewport-relative (191af3f); manifest fold holds scroll (5c6f409); container image
+  shows the spec image, not a node's cached-tag alias (fc04107); context switch without the selected
+  namespace no longer flags a false error (660d4c1); edge-drag ends on pointercancel (bbe2c9f);
+  help card shows kd identity/build info (596770e)
+- Duplication/dead-code refactor passes across client + server (7629ee9 … b751279); app 0.3.x +
+  chart releases (see git log / release tags)
 
 ### 2026-06-14 frontend + network perf pass
 - gzip middleware for text responses — the static server compressed nothing; this was the dominant
