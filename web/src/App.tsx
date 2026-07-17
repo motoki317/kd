@@ -293,6 +293,7 @@ export default function App() {
     graph,
     setGraph,
     recordSummary,
+    capacity,
     setCapacity,
     connState,
     setConnState,
