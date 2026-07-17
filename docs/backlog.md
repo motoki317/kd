@@ -1,21 +1,17 @@
 # kd — Improvement backlog
 
-Persistent, **git-tracked** backlog of improvement ideas, tech debt, and longer-term tasks — so they
-survive across agent sessions and are visible to human contributors. This is the durable home for
-such tasks; `docs/plans/` is gitignored single-session scratch and must **not** hold the backlog.
-
-How to work it: the **`improvement-cycle`** skill (`.claude/skills/improvement-cycle/`) describes how
-to discover, adversarially verify, and ship items; the **`backlog-management`** skill describes the
-format and lifecycle of this file. The per-item evidence (`file:line`) and the verdicts are what make
-an entry actionable — keep them.
-
+Persistent, **git-tracked** backlog of improvement ideas, tech debt, and longer-term tasks, so they
+survive across agent sessions and stay visible to human contributors. `docs/plans/` is gitignored
+single-session scratch and must **not** hold the backlog. How to work it: the **`improvement-cycle`**
+skill (discover → adversarially verify → ship) and the **`backlog-management`** skill (format +
+lifecycle). The per-item `file:line` evidence and verdicts are what make an entry actionable — keep them.
 
 **Status (2026-06-10):** The UX and server surfaces are **mature** — delegated re-surveys now refute
-~94% of generated candidates. Source new work from real user feedback or a new feature area, not filler
-re-surveys; do NOT re-dogfood a surface marked mature below unless its code changed. The durable
-techniques live in the `improvement-cycle` skill (`dogfooding-kd-ui.md`), the recurring traps in
-AGENTS.md. **Current focus (user-set, 2026-06-10): beginner-first** — short UI texts, prune excess
-features/docs, structural cleanup over micro-edits.
+~94% of generated candidates. Source new work from real user feedback or a new feature area, not
+filler re-surveys; do NOT re-dogfood a surface marked mature below unless its code changed. Durable
+techniques live in the `improvement-cycle` skill (`dogfooding-kd-ui.md`), recurring traps in AGENTS.md.
+**Current focus (user-set, 2026-06-10): beginner-first** — short UI texts, prune excess features/docs,
+structural cleanup over micro-edits.
 
 **Verified mature (don't re-survey without code changes):** Events tab · Logs panel (incl. phone width)
 · search + keyboard flows · help overlay · manifest find (term/marks survive format toggle) · Network +
@@ -31,122 +27,12 @@ not-signed-in, each live-verified) · auth+rbac (security-lens survey, 0 real) �
 (logs/names/search/ansi/favicon/health/usageAggregate/resourceBars, surveyed 0/8) · beginner
 emergency shapes (unschedulable, ImagePullBackOff, OOM crashloop, failed Workflow).
 
-Recent batches (newest first; **one line per batch** — `git log` carries the full WHY per commit, the
-`docs(backlog)` commits hold each batch's original narrative, walked-surface evidence lives in
-"Verified mature" above, refuted ideas live in Rejected below — do not regrow prose here):
+Batch history: ~39 dogfooding/refactor batches (2026-05-29 → 2026-06-15) shipped through this file.
+Their narratives live in the `docs(backlog)` commits and the git log; their walked-surface evidence
+is in "Verified mature" above; their refuted ideas are in Rejected below. Do not regrow a batch list
+here.
 
-- **b39 (2026-06-15, remote-EKS dogfooding pass, 13 rounds)** — three real remote clusters; two fixes
-  only reproducible against remote shapes: cold-context `/namespaces` no longer rolls up a half-synced
-  cache into transient Degraded flashes (04731c9), and multi-container logs default to `main` instead
-  of "All containers" so an Argo step's error isn't buried in executor noise (66dbe20); everything
-  else re-confirmed mature on real data.
-- **b38 (2026-06-15, user-directed dogfooding pass)** — multi-perspective agent-browser passes on two
-  real clusters; one fix: the resizable drawer's viewport-relative `70vw` max-width overflowed the
-  viewport below ~760px and collided with the toolbar at ~640–1040px — re-capped to `.main` width
-  minus a `--canvas-min` floor (54a9bed). Every other surface re-confirmed mature.
-- **b37 (2026-06-15, deadcode + readability pass)** — two adversarial-verify survey passes (analyzers +
-  ~47 candidates) over the post-feature-cycle tree: removed dead exports/branches (Hub.after, gridDims
-  rankdir, EDGE_LABELS, `toGroup`, `breathing`), converged duplication (spec_* `asUnstructuredKind`,
-  `edgeBuilder.add`, store `resourceForKind`, `worstNonHealthy`, LogViewer `Highlighted`, capacity
-  `segW`), idiomatic Go (`slices`/sets), condensed AGENTS/backlog/comment bloat. 13 commits, behavior-
-  preserving; canvas/capacity/relationship surfaces live-verified. Analyzers now clean but for the
-  tracked Endpoints→EndpointSlice deprecation (Future).
-- **b36 (2026-06-14, process-memory pass)** — informer SetTransform drops CRD OpenAPI schemas +
-  managedFields before objects enter the cache (drawer fetches CRDs live via `Cache.GetLive`), `GOGC=50`,
-  off-by-default `--pprof-addr`: live heap 175→39 MiB, peak RSS 368→92 MiB. Remaining levers in Open.
-- **b35 (2026-06-12, user-directed de-AI-slop design overhaul)** — keyboard cut to FOUR bindings, help to
-  one card, a fixed design language (Plex Sans/Mono, 4-step type scale, sharp 2/4px radii — all
-  token-driven), toolbar folded to one row + badged Filters disclosure. Codified in AGENTS.md "Design
-  language"; each slice live-verified.
-- **b34 (2026-06-11, whole-codebase structure pass)** — pure file-structure refactor, zero behavior
-  change: split `spec.go`/`health_cr.go`/`index.css`/`layout.ts` into domain siblings, App.tsx +
-  Topology.tsx into factory/seam modules. Each surface re-verified live; docs references updated.
-- **b33 (2026-06-11, dogfooding D130–D150)** — light-theme a11y (small health TEXT moved to darker
-  `healthText*` inks ≥4.5:1) + k8s-name `overflow-wrap: anywhere`; light-theme triage flow verified mature.
-- **b32 (2026-06-11, dogfooding D121–D129)** — EKS-shape pass: Fargate `pods=1` cap guard (cap > 1 falls
-  back to a bare count); 6 diverse CRD namespaces classify with 0-Unknown; storage chain + context switch
-  clean.
-- **b31 (2026-06-11, dogfooding D107–D120)** — breadth across k3s + EKS: pod-cap validated on real
-  ENI-based caps (incl. a node ambered at its ceiling); 0-pod-cap fallback; mostly confirmed mature.
-- **b30 (2026-06-11, dogfooding D101–D106)** — Nodes view reads "N / cap pods" (denominator inverts the
-  headroom read), and a collapse pill surfaces the worst health it hides ("● 1 degraded") so trouble isn't
-  buried in a neutral fold.
-- **b29 (2026-06-11, dogfooding D91–D96)** — CronWorkflow aggregated run logs, Ingress serving address,
-  Issuer backing CA ("staging — untrusted" caution), expired-cert relative time; two CR-condition scanners
-  folded into crConditionField.
-- **b28 (2026-06-11, dogfooding D79–D90)** — dead-credentials context switch fixes (selection clears on
-  switch, native-select current option never disabled); an adversarial survey of the session caught an
-  RBAC bypass — a `__cluster__`-addressed Pod streamed any namespace's logs, now re-checked per namespace.
-- **b27 (2026-06-11, dogfooding D61–D78)** — cluster-scoped log streams (a Node's static-pod logs),
-  single-slash search fallback, never-run CronJob honesty, drag-pan text-selection suppression; backlog
-  re-condensed 713→405.
-- **b22–b26 (2026-06-10, operator-flow dogfooding D1–D60)** — sixty successive
-  human-operator walks through the live UI (landing/triage, logs, capacity, lenses, keyboard, phone,
-  deep links, rollouts, SSE churn, a11y, manifest find, folds, history). Two fixes shipped: macOS
-  Option+T composing '†' so Alt+T never fired (e.code now matched); ⌘F on the Manifest tab fell
-  through to browser find (now serves both panes). Everything else verified clean or already-handled.
-- **b21 (2026-06-10)** — survey coverage complete: client utils 0 real / 8 refuted; full segment gate
-  green (617 web tests + Go suites + `just check` + embed build).
-- **b20 (2026-06-10)** — auth/rbac security survey 0 real; canvas empty state became a live region;
-  beginner emergency shapes (unschedulable, failed Workflow) walked clean; 375px no-access state fits.
-- **b19 (2026-06-10)** — every bootstrap failure now answers: no-access, no-identity, and dead-context
-  each get a terminal state instead of "connecting…" forever (strict empty-state rung order); CLI `-h`
-  and no-kubeconfig first-contact polished; gofmt gate added to `just check`.
-- **b18 (2026-06-10)** — dead-context offline handling; nodesEqual gaps fixed (Service.Selector, Node
-  resources) + a reflective decides-every-field diff test; light-theme audit clean; client-core and
-  layout surveys clean.
-- **b17 (2026-06-10)** — gauge-attribution ADR recorded; store survey shipped a Start goroutine-leak
-  fix (watcher launched before Discover could fail); favicon/Events re-flags were probe bugs.
-- **b16 (2026-06-10)** — ManifestPanel extracted (drawer 731→567); finished-run logs read "this run
-  already finished" instead of waiting forever; internal/api survey 10/10 refuted.
-- **b15 (2026-06-10)** — KindFacts.tsx + spec_routing.go extracted (pure moves); `rels=disruption`
-  URL alias (visible label now parses); RBAC/Disruption/Monitoring projections matured.
-- **b14 (2026-06-10)** — pod summed gauge returns above the container cards; workload rollup splits
-  one segment per pod by default with a persisted by-container toggle (ef9d163).
-- **b13 (2026-06-10)** — per-container bars moved onto the cards (8ad8eb3); restart counts dated
-  (6f913a2); host-Node ceiling restored (7297211); non-zero side borrows its natural unit (26d0e2c).
-- **b12 (2026-06-10)** — saturated HPA reads "2 · at max" (3eca308); evicted pods name kubelet's
-  cause (24b912f); gauge invariants documented in frontend-internals.
-- **b11 (2026-06-10)** — workload gauge per-container segments + legend + aria (6a70c7a, f44d452,
-  253296b); sha256 digests truncate (4b895c2); chart docs: metrics RBAC rule + events-not-cacheable
-  fixed; stuck-rollout condition ranking made explicit (405ae6b).
-- **b10 (2026-06-10)** — pod gauge stacks per-container segments keyed to card swatches; cards show
-  declared bounds with every number labelled (3825567); OOM alarm in words on the at-risk card;
-  ContainerCards/ImageRef extracted.
-- **b9 (2026-06-10)** — WCAG contrast pass: `--on-accent` + `--degraded-badge` inks (b1bd510,
-  088fb42); per-container live usage joins the cards (921406f).
-- **b8 (2026-06-10)** — Released+Retain PV reads Suspended + names its stale claimRef (22f17a7); DS
-  node-selector chip (35049d4); URL-seeded namespace that can't open says so (9f03da1); morning-triage
-  and restricted-operator flows verified seamless.
-- **b7 (2026-06-10)** — broken HPA explains itself (5fa839c); logs viewer says the tailed resource was
-  deleted (e5a5a7b); API error-path survey verified handled; docs drift fixed (7ec575e, b0ff111).
-- **b6 (2026-06-10)** — typo'd named targetPort no longer reads "1/1 ready" (f209067); capacity scale
-  keys on max(capacity, demand) (839d392); cordoned node row says so (b611788); KeyValRow extracted
-  (7c5f861); event ×N hover gloss (59bb2a2).
-- **b5 (2026-06-10)** — induced-failure beginner shapes: quota-blocked rollout cause (ad07a1a,
-  206d7c2, bdfebc1), probe failure in words (b74e348), failed Job says it gave up (67d416e),
-  finalizer-stuck delete named (ab9a375), ContainersNotReady tautology suppressed (70eea09);
-  user-reported drawer header actions overlay fix (239864d).
-- **b4 (2026-06-10)** — empty namespace says so plainly (4af7105); gauge label dedup (d869e92); Kind
-  view full pod names (875a179); waiting containers carry root-cause messages (dbb5822); URL surface
-  mature; refactor survey: 0 qualifying candidates, organization verified healthy.
-- **b3 (2026-06-10)** — beginner-first structural sweep: backlog condensed 718→366 (519210e); 40+ UI
-  texts rewritten beginner-plain (a965c9c); README hero from fictional demo data (2831e75);
-  feature-surface audit verdict: already restrained — do not prune without a concrete beginner pain.
-- **b2 (2026-06-10)** — light-theme troubled-text inks ≥4.5:1 (6f46508); ExternalName service no
-  longer fakes "no endpoints" (cd61d25); "headless" address sentinel explains itself (bbe7502); long
-  chip values wrap (16b8ef9).
-- **b1 (2026-06-10, phone/touch + a11y + folds)** — phone overlays inert the canvas (890429a); drawer
-  full-width overlay (b2cb445); pinch zoom (d2654f6); sidebar toggle (d5d3489); capacity Fit frames
-  the drawn layout (14b4db3); triage-aware fold representatives (c15ab85); filtered count pill flies
-  to matches (5291ac7); plus ~10 smaller slices (see git log 2026-06-10).
-- **2026-06-06→09 (operator-dogfooding, drawer/CR legibility)** — multi-container logs, drawer
-  expand, secondary-lens folds, usage gauges, CR health mappings, Nodes-view clickable names, log
-  message-first rendering, scattered-triage framing — ~40 slices, all hashed in Done below.
-- **2026-06-05 b1–b5 + 2026-05-29** — edgeless-namespace hang, SSE capacity flood, expand-fit zoom
-  direction, ARIA sweep + rovingFocus, cluster-scope drawer 404, server-surface survey.
-
-Small deferrals from these batches (reopen on operator ask): per-line truncation for multi-KB log
+Small deferrals from those batches (reopen on operator ask): per-line truncation for multi-KB log
 lines; logs-header chip stacking at phone width; co-routed multi-type edges draw identical paths;
 drawer-overlay Tab-bleed at phone width + modal-help inert siblings; TopologyToolbar extraction;
 manifest format-toggle drops the find scroll anchor; one unreproduced ghost-clear on SSE reconnect
@@ -156,146 +42,101 @@ spotlight — see the PVC-spotlight row in Rejected).
 ## Open
 
 - **Process memory — remaining levers** — *measured 2026-06-14 (b36); deferred, diminishing returns.*
-  After the b36 transform + GOGC pass, idle heap is ~39 MiB (≈21 MiB legitimate cached objects + ≈14 MiB
-  client-go per-watch machinery across ~150 informers — decoder/refill/ring buffers). An alloc profile
-  shows `buildGraph` is ~76% of allocation churn, dominated by the unstructured→typed conversion
-  (`runtime.DefaultUnstructuredConverter.FromUnstructured`, reflection + DeepCopyJSONValue) run per
-  object per SSE rebuild. Levers, each measured-and-deferred:
-  - **Memoize the typed conversion** — *rejected for the memory goal:* caching typed forms retains BOTH
-    unstructured and typed, raising steady heap. Only worth it as a CPU/latency play, not memory.
-  - **Share one graph build across same-namespace SSE viewers** — turns N per-change builds into 1,
-    cutting the multi-viewer load peak (measured ~1.3 MiB/viewer; 23 viewers → 123 MiB). Deferred: a
-    concurrency change in the core SSE hot path; ROI is load-dependent and the idle peak is already low.
-  - **Elide informers for empty kinds** (lazy watch, periodic re-list) — would shed per-watch machinery
-    for the many zero-object kinds, but risks missing the first object of a kind until re-discovery; an
-    architecture change. Functional tradeoff.
-  - **Strip Secret data VALUES from the cache** (keep keys) — kd never shows values (`blankSecret` zeroes
-    them at render); caching them is ~0.4 MiB here AND keeps secret bytes resident (heap-dump exposure).
-    BUT not free: `dataKeys` (spec_storage.go) reads `len(v)` to surface each entry's size in the drawer,
-    so a naive blank shows "0 B" — a fix must preserve per-key sizes (compute at strip time) or accept
-    losing the size display. **Reopen when:** doing a security pass, or on a secret-heavy cluster.
-  - **Workload `spec.template`** — *NOT strippable:* `fields.go` reads it to infer workload→ConfigMap/
-    Secret/PVC edges (would silently break edges). Recorded so it isn't re-proposed.
-  **Reopen when:** a cluster reports memory pressure after b36, or many concurrent viewers of one
-  namespace make the build-sharing ROI concrete.
+  Idle heap after b36 is ~39 MiB (≈21 MiB cached objects + ≈14 MiB client-go per-watch machinery
+  across ~150 informers); alloc churn is ~76% `buildGraph`, dominated by the unstructured→typed
+  conversion run per object per SSE rebuild. Levers, each measured-and-deferred: **memoize the typed
+  conversion** (rejected for memory — retains both forms and raises steady heap; CPU-only play);
+  **share one graph build across same-namespace SSE viewers** (~1.3 MiB/viewer peak; a concurrency
+  change in the SSE hot path, ROI load-dependent); **elide informers for empty kinds** (sheds
+  per-watch machinery but risks missing a kind's first object — architecture change); **strip Secret
+  data VALUES from the cache** (kd never shows values; must compute per-key sizes at strip time or
+  `dataKeys` in spec_storage.go shows "0 B"). Workload `spec.template` is NOT strippable —
+  `fields.go` reads it for workload→ConfigMap/Secret/PVC edges. **Reopen when:** a cluster reports
+  memory pressure after b36, or many concurrent viewers of one namespace make build-sharing concrete.
 
 - **Canvas card text under the b35 design language** — *deferred (geometry retune).* Card names/kinds
-  on the topology canvas keep Plex Sans and their pre-overhaul sizes (`.node-kind` 10px caps,
-  `.node-name` 13px): the sizes are zoom-coupled to fixed card geometry, and the mono data face
-  (~7.8px/char at 13px vs sans ~6.1) would overflow the char-count-tuned card widths (`names.ts`
-  CARD_* constants, layout card boxes). Moving the canvas to mono-names needs a joint retune of card
-  width + truncation counts + fold-pill width, verified at production scale. **Reopen when:** canvas
-  card geometry is being touched anyway, or the sans/mono split on cards starts reading as
-  inconsistent in practice.
+  keep Plex Sans at pre-overhaul sizes (`.node-kind` 10px caps, `.node-name` 13px): the sizes are
+  zoom-coupled to fixed card geometry, and mono (~7.8px/char vs sans ~6.1) would overflow the
+  char-count-tuned card widths (`names.ts` CARD_* constants). Moving canvas names to mono needs a
+  joint retune of card width + truncation counts + fold-pill width, verified at production scale.
+  **Reopen when:** canvas card geometry is being touched anyway, or the sans/mono split on cards
+  starts reading as inconsistent in practice.
 
-- **Large-graph empty gutter after a window shrink** — *verified live (cycle 40, docker-desktop
-  kube-system), deferred — touches heavily-tuned pan-clamp behaviour.* Shrinking the window
-  (1280→700) correctly preserves the operator's zoom and re-clamps via `clampTranslate`
-  (`Topology.tsx`, cycle 294 resize handler + cycle 316 clamp), but for a graph **wider than the
-  viewport** the clamp's upper bound (`rect.width - margin`) permits a large empty gutter: a graph
-  fit-centred for 1050px stayed at `tx≈284` in a 470px viewport, leaving ~280px of empty canvas on the
-  left while the graph overflowed the right. The clamp guarantees only "≥60px of graph visible", not
-  "viewport covered when the graph is larger than it". **Why deferred:** the fix (for `w ≥ rect.width`,
-  clamp so the viewport stays covered — no gutter) also changes how a *large* graph pans, and pan/zoom
-  feel is user-iterated territory (many cycles). Impact is low (window resizes mid-session are rare;
-  the dominant resize — drawer open — is owned by selection-fit). **Reopen when:** the user wants the
-  graph re-anchored on resize, OR confirms the large-graph pan should never expose empty gutter; then
-  split `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
+- **Large-graph empty gutter after a window shrink** — *verified live (cycle 40), deferred — touches
+  heavily-tuned pan-clamp behaviour.* For a graph wider than the viewport, `clampTranslate`
+  (`Topology.tsx`) guarantees only "≥60px of graph visible", not "viewport covered", so a shrink
+  (1280→700) can leave a large empty gutter beside an overflowing graph. The fix (for
+  `w ≥ rect.width`, clamp so the viewport stays covered) also changes how a large graph pans, and
+  pan/zoom feel is user-iterated territory; window resizes mid-session are rare, and the dominant
+  resize (drawer open) is owned by selection-fit. **Reopen when:** the user wants the graph
+  re-anchored on resize, or confirms large-graph pan should never expose empty gutter; then split
+  `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
-- **Logs tab for any workload CRD with only completed pods** — *follow-up to the completed-run-logs
-  fix (e5c190c/e792b9d); low value, deferred.* The server (`BuildForLogs`) now reaches a finished
-  resource's completed pods, and the client shows a Logs tab for `Workflow` and `CronWorkflow` (the
-  latter via the grandchild chain, D91) via `LOGGABLE_KINDS`. But any OTHER pod-owning workload CRD
-  whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom operator's job CRD) still hides
-  its Logs tab: `hasDescendantPod` can't see the display-dropped pods and the kind isn't in the
-  hardcoded set. **Proper fix:** the server computes a per-node `hasLogs` (ownership over
-  `BuildForLogs`) and the client gates on `node.hasLogs` instead of the kind list +
-  client-side descendant walk (this would also retire the per-Argo-kind `LOGGABLE_KINDS` entries AND
-  fix the cluster-scope Node Logs-tab gap noted in b27). **Reopen when:** a non-Argo workload CRD with completed-only pods needs
-  logs, or the hardcoded `LOGGABLE_KINDS` Argo entry feels too special-cased. Same family
-  (2026-06-11, D67): a Node selected in **cluster scope** shows no Logs tab (the cluster-scope display
-  graph holds no pods, so `hasDescendantPod` is false) while the same Node in kube-system — its static
-  pods riding along — streams fine. Don't fix by adding `Node` to `LOGGABLE_KINDS`: a podless worker
-  node (every EKS node) would get a tab that waits forever; the per-node `hasLogs` is the fix here too.
+- **Per-node `hasLogs` — Logs tab for any workload CRD with only completed pods** — *follow-up to
+  the completed-run-logs fix (e5c190c/e792b9d).* The server (`BuildForLogs`) reaches a finished
+  resource's completed pods, but the client's Logs tab gates on `hasDescendantPod` (blind to
+  display-dropped pods) plus the hardcoded `LOGGABLE_KINDS` Argo entries — so any other pod-owning
+  workload CRD whose pods all completed (Tekton `PipelineRun`/`TaskRun`, a custom operator's job CRD)
+  hides its logs. Same gap (D67): a Node selected in cluster scope shows no Logs tab (no pods in the
+  cluster-scope display graph) while the same Node in kube-system streams fine — and adding `Node` to
+  `LOGGABLE_KINDS` is wrong (a podless worker node would get a tab that waits forever). **Proper
+  fix:** the server computes per-node `hasLogs` (ownership over `BuildForLogs`) and the client gates
+  on it, retiring `LOGGABLE_KINDS` + the client-side descendant walk. **Reopen when:** a non-Argo
+  workload CRD with completed-only pods needs logs, or the special-casing gets in the way.
 
-- **GRPCRoute has routing edges but no drawer routing table** — *follow-up to the 2026-06-06 routing
-  trio; low value, deferred.* `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's
-  `backendRefs` (it's in the *Route kind list), so the Network view connects it — but the drawer's
-  `routes()` table only handles HTTPRoute (path matches). A GRPCRoute matches on
-  `spec.rules[].matches[].method.{service,method}` (gRPC service/method, not a URL path), so a faithful
-  table would render e.g. `helloworld.Greeter/SayHello → svc:port`. **Deferred because** gRPC ingress is
-  rare in this deployment (no GRPCRoute instances on either reachable cluster) and the edge — the
-  topology-level answer — already lands. Build it if a cluster here adopts GRPCRoute: add a
-  `grpcRouteMatches` branch to `routes()` mirroring `httpRoutePaths`, fixture-tested.
+- **GRPCRoute has routing edges but no drawer routing table** — *low value, deferred.*
+  `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's `backendRefs`, but the drawer's
+  `routes()` table only handles HTTPRoute; a faithful GRPCRoute table would render
+  `helloworld.Greeter/SayHello → svc:port` from `spec.rules[].matches[].method`. Deferred because
+  gRPC ingress is absent on the reachable clusters and the topology edge already lands. **Reopen
+  when:** a cluster here adopts GRPCRoute — add a `grpcRouteMatches` branch mirroring
+  `httpRoutePaths`, fixture-tested.
 
 ## Future / larger work — deferred (examined, not actionable now)
 
-Re-examined on 2026-05-29 against the real code (each cites why). These are genuinely longer-horizon —
-none is a safe, clearly-felt improvement-cycle slice today. Each lists what it would take and the signal
-that should reopen it, so a future agent inherits the analysis instead of re-surveying from scratch.
+Each entry cites why it is longer-horizon and the signal that should reopen it, so a future agent
+inherits the analysis.
 
-- **SSE patch scaling** — *deferred (premature).* Patches recompute+diff on a 300 ms window; fine today,
-  no observed pain. Field-selector informers / sharding would break the ride-along invariant the health
-  rollup depends on (cross-namespace ownerRef, Pod→Node, PVC→PV), so they need an ADR, not a cycle. The
-  real large-namespace bottleneck is **client-side Dagre layout**, not the server rebuild. *Reopen when:*
-  a profiler shows server rebuild (not layout) as the bottleneck on a real workload.
-- **EndpointSlice-based `selects` edges** — *deferred (real, high regression risk).* Service→Pod edges
-  use label-selector matching (`edges.go` `serviceEdges`); EndpointSlice is the more accurate source
-  (ready endpoints, named ports, selectorless / cross-namespace, non-pod backends). Adopting it needs
-  three decisions first: (1) eager-load EndpointSlice (today skipped for cardinality — 10–100× Services
-  on big clusters) vs lazy/hybrid; (2) Endpoints v1 legacy vs EndpointSlice-only; (3) whether to add a
-  `port` dimension to the graph model (a backward-incompatible edge-shape change). *Reopen when:*
-  operators on large clusters need accurate endpoint readiness — start with an ADR answering the three
-  questions plus a cardinality cap.
-- **Timeline / history view ("where did it degrade over time")** — *deferred (different product tier).*
-  A web survey of modern k8s dashboards (cycle 59) found kd already matches their topology/UX patterns —
-  flat fewer-clicks navigation, namespace scoping, detail blades (manifest/events/related), CPU+memory
-  requests-AND-limits visualization (the Nodes capacity view), service→pod→volume dependency graphs —
-  with ONE pattern absent: a time-axis showing when a Deployment rolled out or a resource degraded.
-  kd is fundamentally a LIVE view built on informer caches (current state only); the Events tab is the
-  sole limited timeline (recent k8s events, which age out — see the cycle-44 status-message item). A real
-  timeline needs **historical-state persistence** (a time-series/event store with retention), which is a
-  new subsystem and arguably a different product, not an improvement-cycle slice. *Reopen when:* the
-  product wants historical/post-mortem analysis — then it's a design effort (storage backend + retention
-  + a time-scrubber UI), starting from an ADR, not a cycle.
-- **Last-Event-ID resume on the SSE feed** — *deferred (low value).* The server emits no SSE `id:` today
-  and the reconnect path already re-snapshots, which is **idempotent by design** (`graphState.fromSnapshot`
-  + Solid `reconcile`) and cheap (~100 ms). Real resume needs a server-side patch ring buffer with TTL +
-  overflow→snapshot fallback — a streaming-v2 design pass — for a payoff the idempotent re-snapshot
-  already delivers. exec/attach would use WebSocket (per the SSE ADR). *Reopen when:* a streaming-v2
-  effort is on the table for other reasons (e.g. exec/attach).
-
-- **Manifest syntax highlighting** — *deferred (feature with dependency/bug cost, secondary view).* The
-  Manifest tab renders raw YAML/JSON in a plain `<pre class="manifest">` (`DetailDrawer.tsx:597`), find-
-  matches wrapped in `<mark>`; no key/value/string colouring. Highlighting would aid scanning a long
-  manifest, and k9s/Lens do it — but it needs either a highlighter dependency (bundle cost on a tool that
-  ships one embedded binary) or a hand-rolled YAML+JSON tokenizer (real edge cases: values with colons,
-  block scalars, the YAML↔JSON format toggle), for a *secondary* drill-into-raw view where the existing
-  in-manifest find already locates fields and plain output matches `kubectl`. Not a safe quick slice.
-  *Reopen when:* operators report the raw manifest is hard to scan, or a highlighter is already pulled in
-  for another reason — then prefer a tiny dependency-free "dim the keys" pass over full tokenisation, and
-  verify it survives the format toggle + find-highlight overlay.
-
-- **Collapse non-leaf same-kind siblings** (same-kind collapse follow-up; the "+N older" collapse
-  itself shipped 2026-06-01, `189c839`/`d444086`) — *deferred (effectively absent in the model).*
-  Connectivity collapse only folds a hub's **degree-1** same-kind leaves (pods, configmaps, PVCs).
-  Same-kind siblings that *own subtrees* and number >8 under one parent don't occur in kd's graph
-  (controllers fan out to leaves), so the case is academic; pulling a subtree out of the Dagre skeleton
-  + synthesizing multi-neighbor bundle edges is real risk for no real benefit. *Reopen when:* a
-  concrete graph shape shows >8 non-leaf same-kind siblings under one parent.
+- **SSE patch scaling** — *premature.* Patches recompute+diff on a 300 ms window; no observed pain.
+  Field-selector informers / sharding would break the ride-along invariant the health rollup depends
+  on, so they need an ADR. The real large-namespace bottleneck is client-side Dagre layout, not the
+  server rebuild. *Reopen when:* a profiler shows the server rebuild as the bottleneck on a real
+  workload.
+- **EndpointSlice-based `selects` edges** — *real, high regression risk.* EndpointSlice is more
+  accurate than label-selector matching (ready endpoints, named ports, selectorless services), but
+  adoption needs three decisions first: eager vs lazy load (cardinality is 10–100× Services), legacy
+  Endpoints v1 support, and whether the edge model grows a `port` dimension (backward-incompatible).
+  *Reopen when:* operators on large clusters need accurate endpoint readiness — start with an ADR.
+- **Timeline / history view** — *different product tier.* kd is a LIVE view on informer caches; a
+  "when did it degrade" time axis needs historical-state persistence (store + retention + scrubber
+  UI) — a new subsystem, not a cycle. A dashboard survey (cycle 59) found this the ONE pattern kd
+  lacks vs peers. *Reopen when:* the product wants post-mortem analysis; start from an ADR.
+- **Last-Event-ID resume on the SSE feed** — *low value.* The reconnect path re-snapshots, which is
+  idempotent (`graphState.fromSnapshot` + `reconcile`) and cheap (~100 ms); real resume needs a
+  server-side patch ring buffer + overflow fallback for a payoff re-snapshot already delivers.
+  *Reopen when:* a streaming-v2 effort is on the table anyway (e.g. exec/attach over WebSocket).
+- **Manifest syntax highlighting** — *dependency/bug cost on a secondary view.* Needs a highlighter
+  dependency (bundle cost) or a hand-rolled YAML+JSON tokenizer (real edge cases), for a
+  drill-into-raw view where in-manifest find already locates fields and plain output matches
+  `kubectl`. *Reopen when:* operators report the manifest is hard to scan — then prefer a
+  dependency-free "dim the keys" pass, verified against the format toggle + find overlay.
+- **Collapse non-leaf same-kind siblings** — *effectively absent in the model.* Connectivity collapse
+  folds only degree-1 leaves; >8 subtree-owning same-kind siblings under one parent don't occur in
+  kd's graph, and synthesizing bundle edges is real risk for no benefit. *Reopen when:* a concrete
+  graph shape shows it.
 
 ## Rejected — do not re-propose
 
-These were generated and **refuted against the real code**; re-proposing them wastes a cycle. (The
-adversarial-verify step rejected ~94% of generated ideas once the surface matured — see Status above.)
+Generated and **refuted against the real code**; re-proposing them wastes a cycle. (~94% of generated
+ideas get refuted once a surface matures — see Status.)
 
 | Candidate | Verdict |
 |---|---|
-| Split LogViewer's toolbar (or panel) into its own component | rejected (2026-06-10) — the toolbar JSX reads 9+ signals owned by the stream/buffer state machine (filter, levels, groups, wrap, timestamps, previous, container, case, lines); an extraction means ~18 drilled signal/setter props that scatter one cohesive state machine across files. File length alone doesn't justify it — unlike KindFacts/ManifestPanel, there is no clean state seam |
-| Hardcoded short labels for vendor CRDs without API shortNames (e.g. a monitoring operator's kinds truncating to "VMSERV…") | rejected (2026-06-10) — those CRDs declare no shortNames, so any code would be invented: meaningless to a beginner, a per-vendor maintenance list with no canonical source, and WORSE than the truncated real prefix (which at least hints the kind; hover + drawer carry the full name). The fallback truncation is the design |
-| Collapse a container's identical Req+Lim bars into one "Req=Lim" bar (Guaranteed QoS) | rejected (2026-06-10) — the sublabel grid track is a fixed 34px ("Req=Lim" can't fit), a variable row count per card breaks the Lim/Req repetition idiom across cards, and two equal bars already say "req = lim" in the established language |
-| Flag an Unavailable APIService (broken aggregated API) | already-handled (2026-06-06) — `crHealthFromConditions` reads the `Available` condition (False → Degraded) and surfaces its message; no APIService-specific rule needed |
-| Unknown `?ctx=` "silently shows another cluster's data" (trust problem) | refuted (cycle 26) — App.tsx:96-99 validates ctx against the fetched list and `setCtx(info.default)`; verified live the breadcrumb + URL self-correct to the real fallback context (no "bogus" anywhere), so there is no mislead |
+| Split LogViewer's toolbar (or panel) into its own component | rejected (2026-06-10) — the toolbar JSX reads 9+ signals of one cohesive stream/buffer state machine; extraction means ~18 drilled props. No clean state seam, unlike KindFacts/ManifestPanel |
+| Hardcoded short labels for vendor CRDs without API shortNames | rejected (2026-06-10) — any code would be invented, a per-vendor list with no canonical source, and worse than the truncated real prefix; hover + drawer carry the full name |
+| Collapse a container's identical Req+Lim bars into one "Req=Lim" bar | rejected (2026-06-10) — the 34px sublabel track can't fit it, variable row counts break the cross-card repetition idiom, and two equal bars already read "req = lim" |
+| Flag an Unavailable APIService | already-handled (2026-06-06) — `crHealthFromConditions` reads `Available` (False → Degraded) and surfaces its message |
+| Unknown `?ctx=` "silently shows another cluster's data" | refuted (cycle 26) — App.tsx validates ctx against the fetched list and falls back to the default; breadcrumb + URL self-correct (verified live) |
 | Persist substring filter + case-toggle across resource navigation | wrong (misreads Solid reactivity — components remount) |
 | Export / download visible logs as text | low-value |
 | Scroll-position bookmark on context/container switch | wrong |
@@ -313,168 +154,68 @@ adversarial-verify step rejected ~94% of generated ideas once the surface mature
 | `aria-current='page'` on active namespace button | low-value |
 | Node CPU/mem allocation in the per-namespace graph | dead end — needs metrics-server + annotation scraping; not worth the coupling |
 | LogViewer duplicate-tail dedup on SSE reconnect | dead end — lossy for aggregated streams (drops legitimate repeated lines) |
-| Extract a `urlEnumPref` helper for the groupBy/capResource URL+localStorage init pattern | premature (cycle 55) — only 2 instances and not byte-identical (capResource validates inline, groupBy uses `GROUP_IDS.includes`); the URL-*write* half is deliberately centralized in one effect, so the helper would cover only the read half and the name would overpromise. Rule-of-three unmet. Revisit if a 3rd URL-backed enum pref lands. (Contrast: toggleInSet in cycle 50 WAS byte-identical duplication — that one was worth extracting.) |
-| Shut registry/informer caches down on SIGTERM (call `Cache.Shutdown()` / thread the signal ctx) | low-value — Go reaps background goroutines on process exit, so there is **no** slow-shutdown/forced-kill (one agent's HIGH verdict was wrong); the process-lifetime cache is intentional + documented (`registry.go:240-241`). `Shutdown()` is now exercised by the store test helper instead. |
-| Panic-recovery wrapper around SSE graph build / `superviseLogStreams` goroutines | wrong — HTTP handlers are already wrapped by `server.recoverer`; graph ops have no panic paths; a recover() would mask real bugs |
-| Log/handle `json.Marshal` failure in `writeSSE` | low-value — Patch/Summary/Graph are all primitive-typed; marshal cannot fail. Real failures are network writes, already handled |
-| `VisibleNamespaces` should gate on `*`/any-resource instead of hardcoded `pods` | already-handled — pods-as-namespace-visibility-gate is the documented RBAC design (ADR 20260527); operators grant blanket access in target namespaces |
-| Dim/disable/count log-level chips (ERR/WRN/INF/DBG) by which levels are currently present | wrong (cycle, 2026-06-05) — the chips are a **persistent HIDE-preference** (`kd:logsHideLevels`, `LogViewer.tsx:61-72`), not a content indicator: an operator sets "always hide DBG" once and it persists across pods. Logs STREAM, so a level empty now gets a line a second later; dimming/counting by transient content would flicker AND undermine the set-once-persist design. The chips are already explicit (text labels, severity colors matching the inline badges, `title="Hide X lines"`). The live "↧ N err" jump button already covers "is there an error to look at". |
-| Validate `-addr` / invalid env durations in `config.Load` (fail earlier) | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later; no operator pain |
-| Add explicit `scrollIntoView` to the Kinds-row arrow-key focus handler (`onToolbarKey`) | refuted live (2026-06-10) — drove the roving arrow path through an 18-kind overflowing row (`scrollWidth 1585 > 980`): native `.focus()` already scrolls the row (verified it scrolled back to 0 when focus wrapped to early chips; chip mid-row landed visible). The only residual is the browser's `inline:'nearest'` leaving the very LAST chip's right edge slightly clipped after a direct focus — a native-scroll nicety, not a reachability bug; every chip is focusable, readable, and reachable. jsdom can't see this (stubs scroll), so it reads as a gap on a source survey — exactly why the chip-overflow rule says verify live. |
-| Events "Warnings only" filter should show a "shown / total" readout like the Logs `X/Y` | already-mitigated (2026-06-10) — the Events TAB badge always shows the TOTAL event count (`DetailDrawer.tsx:431`, `events().length`, unaffected by the filter), and the chip shows the warning count, so an operator sees both 3 (warnings) and 33 (total) — the "this resource only had 3 events ever" misread the logs `X/Y` prevents doesn't occur here. An explicit "3 of 33" would be redundant clutter. (The Logs panel needs `X/Y` because it has no equivalent always-on total.) |
-| Events tab message search/filter box | refuted (2026-06-10) — the events list is FULLY RENDERED DOM (plain `<ul><For>`, no cap or virtualization, bounded by the ~1h event TTL), so the browser's native Cmd+F already searches every message; the Logs panel needed its own filter only because a streaming buffer + level/pod filters make native find useless there. Warnings-only + newest-first covers triage; a search box would duplicate Cmd+F as clutter. |
-| Manifest in-pane find needs a keyboard focus shortcut (e.g. `/` when the Manifest tab is active) | superseded (2026-06-12) — the user-directed minimal-keyboard overhaul cut the global surface to four bindings (`/` search, `↑↓` step, `Esc`, `?`) on the principle that every action has a visible, clickable control; adding per-pane focus shortcuts reverses that. Do not re-propose new shortcuts without removing one in trade. |
-| Sort in-cluster `List()` context order; `defer debounce.Stop()` in sse.go | low-value — in-cluster has a single context (switcher hidden); the debounce timer is GC'd and is not a race |
-| "A non-default relationship filter (e.g. RBAC) clutters the canvas with orphan cards" | working-as-designed (live-checked on a real 219-resource staging namespace, `rels=rbac`). kd shows ALL namespace resources regardless of the active rel-filter (commit `0143cea`); under RBAC only SA→RoleBinding→Role + Pod→SA edges are drawn, so non-RBAC resources become parentless — but `layoutGraph`'s `orphanBlock` folds any kind with ≥`FANOUT_MIN` (5) loose nodes into one collapsible "+N more" block (EPHR 88 / WF 48 folded → only 68 of 219 cards drawn), and sub-5 kinds stay as a short plain-card column by design. The RBAC trees render correctly (18 edges); the leftmost orphan cards are intended, not clutter. Do NOT hide nodes under a rel-filter — that re-introduces the "standalone ConfigMap vanishes" bug 0143cea fixed. |
-| Light theme renders dark toolbar chips / fails AA contrast | refuted — a measurement artifact, not a bug. Runtime theme toggle leaves the chips' `transition: background` stale under headless Chrome (getComputedStyle returns the pre-toggle colour); a fresh load in the target theme reads correctly. The "sub-AA" numbers came from a naive parser mis-reading `color(srgb …/α)` backgrounds. Both themes are AA-compliant. See dogfooding skill "Measurement pitfalls". |
-| Add a match-count / Enter-cycle hint to the topology search | already-done — the `.topology-matches` element shows "N of M"/"no matches" and the input + count titles already document Enter/Shift+Enter cycling (cycles 284–285). Verified live ("6 of 21"). The earlier probe just queried the wrong class |
-| Make graph nodes keyboard-focusable (tabindex) for keyboard selection | wrong — 33+ tabbable SVG nodes would be tab-order noise. The keyboard path is search-cycling (`/` → type → Enter/Shift+Enter steps matches → drawer tabs by click/arrow). Don't add per-node tab stops |
-| Harden / improve the multi-cluster context-switch flow | already-robust — verified live on a 5-context kubeconfig: the `.ctx-switcher` native `<select>` shows friendly cluster names from ARNs (aria-label "Kubernetes context"), preserves the namespace across clusters, shows a clean Connecting→loaded transition (no hang on a ~15s EKS first sync), and a non-existent `?ns=` gracefully falls back to a real namespace (URL self-corrects, no empty strand). No change needed |
-| "Drawer overflows the viewport / the × close button is clipped & unreachable at a 1280px width" | **harness artifact, NOT a real bug** (cycle 81). The drawer enters via `@keyframes drawer-in` (`translateX(32px)→0`, 0.28s, no fill-mode); the headless agent-browser compositor freezes it at the `from` frame, so a freshly-opened drawer measures `transform: translateX(32px)` and its right edge + × button sit 32px off-screen. Forcing the resting state (`drawer.style.animation='none'`) snapped it flush: `right == innerWidth (1280)`, gap to topology = 0, close button fully visible. In a real browser the 0.28s animation completes and the drawer rests flush. Same frozen-compositor root as the rAF entry. Do NOT "fix" the layout/keyframe. To check geometry of an animated-in element, kill its animation first (see dogfooding skill "Measurement pitfalls" #6). |
-| "Selecting a PVC in the Volumes view lights ~11 unrelated pods, not just its mounter" | NOT a bug — the selection spotlight is `spotlightSubtree` (graphState.ts:16), which walks the whole UNDIRECTED connected component over the *displayed* edges, by deliberate design ("lights its whole related subtree"). In Volumes, pods share ConfigMaps/Secrets, so the component legitimately spans many pods. Verified the PVC's DIRECT connections are present (its mounter pod `sts-pod-0` + its bound PV are both lit, edges traceable). Connected-component is the right choice for the PRIMARY ownership view (where the subtree IS the answer) and is applied uniformly for consistency; do NOT special-case it to 1-hop/directional — that's heavily-tuned, user-iterated territory and would regress ownership. (2026-06-06, live docker-desktop app-ns.) |
-| "An empty-selector PDB lights up / draws guard edges to unrelated pods" (Scheduling view, selecting pdb-wide-a PDB lit api-svc & ui-svc pods + a second PDB) | NOT a bug — working as designed (2026-06-06, live docker-desktop app-ns). pdb-wide-a AND pdb-wide-b both have `spec.selector: {}` (the namespace-wide "protect everything" PDB pattern), so each genuinely guards EVERY pod in the namespace — the `EdgeGuards` edges to all those pods are correct (and empty-selector-guards-all is the deliberate fix for the pdb-empty-sel dead-end; do NOT re-skip empty selectors). The two broad PDBs form a dense pod↔PDB guard mesh; the relationship spotlight then lights the connected neighborhood and the layout folds the crowded pods, so only the unfolded ones show. Verified the guard edges + drawer policy/can-disrupt chips render correctly. Density is inherent to the cluster's config, managed by folding. |
-| Give long CRD kinds (e.g. `WorkflowTaskResult` → "WORKFLOW…") an unambiguous kind-chip short label / CamelCase-acronym fallback | low-value + risky (2026-06-06, live on staging app-ns). The truncated KINDS-row chip already carries a disambiguating `title`/`aria-label` ("Click to toggle WorkflowTaskResult"), and the kind itself is a high-cardinality Argo-internal type operators rarely filter on. A broad `kind.toUpperCase()`→acronym fallback (the tempting general fix) REGRESSES single-word kinds (Workflow→"W", Secret→"S") and risks acronym collisions; curated `KIND_SHORT_LABELS` entries are for built-in k8s kinds, not cluster-specific CRDs. Not worth a broad label-scheme change for one rarely-filtered chip. |
-| Make the HEALTH filter multi-select (like KINDS) / "spotlight all non-healthy at once" for consistency | low-value + risky (2026-06-06). The apparent inconsistency is **principled**: health is an *ordinal* severity ladder (Healthy<Progressing<Degraded) where triage focuses on ONE level — the worst — so single-select fits; KINDS is *nominal*/categorical, where wanting several at once is natural, so it's multi-select. `aria-pressed` (a toggle that can be all-off → no spotlight) is also more correct for health than a radiogroup (which implies one-always-selected). A multi-select refactor would touch the signal type (`Health|null`→`Set`), `navCandidates`, `nodeFaded`, `filterMatchCount`, the Esc-clear, and the pill aria across App+Topology — moderate regression risk on the core spotlight — for the niche "mixed-severity spotlight" value the Degraded spotlight already mostly covers (and colored dots already mark all trouble without any filter). Don't pursue without a concrete operator ask. Edge legibility (same investigation): confirmed mature — solid=owns / dashed=other is a deliberate calm-canvas choice, each edge's type is hover-disclosed via a clear `<title>` verb ("pdb guards pod-x", "pod mounts cm"), and the filter isolates a category; "type-based edge opacity" was already rejected (above). |
-| Surface a failed container's terminated reason+exit (e.g. "main: Error (exit 1)") as the **Pod's hero `message`** when no blocking-condition message exists | refuted via live dogfooding (2026-06-06, **staging** 354-node app-ns, a real `Error` migrate pod: main exit 1, all pod conditions message-empty, so `statusMessage`→""). NOT buried: the failed container card is **red-tinted with a red left accent** (contrast), sits high in the drawer right under the hero (init/main/wait — the bad one stands out, no scan), and shows "Terminated: Error (exit 1)" + the image. `statusMessage`'s comment deliberately scopes the Pod message to "the Unschedulable detail the per-container statuses *can't* carry" — container termination IS carried by the (emphasized) container cards, so a hero message would duplicate the prominent red card. Don't add it. |
-| Also surface the DisruptionAllowed reason on a **Healthy** PDB that reports `disruptionsAllowed: 0` (above its floor but blocked by SyncFailed) | low-value + risky (2026-06-06, live docker-desktop app-ns: `pdb-wide-a` 10/8, `pdb-wide-b` 11/8, both `disruptionsAllowed=0` SyncFailed). The high-value case (a *Degraded* PDB's why) shipped in e84f8f6; extending it to Healthy PDBs would route an alarm-styled `.drawer-message` onto a **green** resource, fighting `statusMessage`'s deliberate "a healthy resource has no why worth the payload" gate. The blocked state is already flagged by the caution-coloured "can disrupt 0" chip, and the `CalculateExpectedPodCountFailed` warning is one click away in the Events tab. A drain-planning operator is already inspecting the PDB; not worth alarming every green at-floor PDB (where 0 is *correct* protective behaviour) to catch the rare above-floor-SyncFailed case. Do NOT extend the message gate to Healthy PDBs. |
-| "An ECK `Elasticsearch` CR uses a non-standard `status.health: green/yellow/red` field, so kd falls through to Unknown" | already-handled (2026-06-06, live docker-desktop + kubectl). `crHealth` (`health_cr.go:221`) has a dedicated stack-health switch reading `status.health`: green→Healthy, yellow→Progressing, red→Degraded, unknown→Unknown, with `crHealthFromConditions` as the default fallback. `crStatusSummary` combines it with `crPhase` into "Ready · yellow" — the *same* "explain a non-green dot on an otherwise-Ready resource" pattern as the node-status pressure suffix. Confirmed against a real yellow Elasticsearch (`health=yellow phase=Ready` → kd shows `Progressing`, status "Ready · yellow"). Complete across all three colours; do NOT re-investigate the "stack CR health = Unknown?" hypothesis. |
-| "Expanding a busy node in the Nodes view doesn't bring its pods into view" (viewport stays put, ~6/46 cards visible) | **harness artifact, NOT a real bug** (cycle 78, a remote staging cluster, a 46-pod node). Root-caused by instrumented logging: **`requestAnimationFrame` callbacks never fire in the headless agent-browser session** (proven: `requestAnimationFrame(cb)` leaves `cb` unrun after 3s while `document.visibilityState === 'visible'` and `setTimeout` works). EVERY non-initial viewport move in kd is rAF-driven (`animateTo`'s tick loop; `fitCapRowExpanded`/`fitCapBox`/selection-fit all `requestAnimationFrame(() => animateTo(...))`), so when an expand is driven via `agent-browser eval`-dispatched clicks the viewport CANNOT move — the only fit that lands is the very first one, because `firstFit` sets `scale/tx/ty` DIRECTLY (Topology.tsx, not via `animateTo`). The expand logic itself is correct (synchronous `capRows().find` returns fresh geometry; `fitCapRowExpanded` top-anchors a tall stack). Do NOT "fix" `toggleCapRow` with rAF deferrals — that was tried and reverted (equally invisible to the harness, and unnecessary). To verify any pan/zoom/fit/animation behaviour, assert the *computed target* in a unit test, or use a HEADED browser — never an agent-browser viewport measurement. See dogfooding skill "Measurement pitfalls" (rAF). |
-| Click-to-solo on log level chips (click ERR = show only errors) | rejected (2026-06-10 b22 D2) — would break the app-wide multi-toggle chip idiom (every chip row composes via independent toggles) for a 2-click saving; the "↧ N err" jump button already covers "take me to the errors" |
-| Reorder relationship chips by edge count (busiest lens first) | rejected (2026-06-10 b22 D16) — stable chip order is muscle memory; a count-driven reorder makes the toolbar shuffle between namespaces and sessions for no triage gain |
-| Drawer open at a ~800px window crushes the canvas to a sliver | working-as-designed (2026-06-10 b25 D46) — deliberate priority-ordered degradation: the just-opened drawer keeps readable width (the operator's focus is the drawer), ⌘B or closing recovers the canvas, and ≤640px switches to full-width overlays. Don't add a mid-width breakpoint |
-| Dedicated icons for vendor CRD kinds (cert-manager Certificate/Order, Argo Workflow, ArgoCD Application, …) | rejected (2026-06-11 D88) — the deliberate line in `icons.tsx` is built-in kinds only; every CRD gets the fallback square + its kind label (CERT, WF, APP), which already identifies it. One vendor icon opens per-vendor sprawl with no canonical source for the glyphs, and tiny-size legibility is the constraint that killed acronym labels too |
-| Shrink the ~61 KB latin-font payload (subset glyphs / drop a weight) | rejected (2026-06-14 perf pass) — fonts are `font-display: swap`, so they never gate LCP (measured); shrinking them only trims background bandwidth. Glyph-subsetting is unsafe (mono renders arbitrary log/manifest text — needs full coverage), and dropping a weight regresses the fixed 400/500/600 design language. Switching to latin-only `@fontsource` subset CSS would trim the embedded binary + ~1 KB gz CSS but moves no runtime metric. Not worth it |
-| Brotli (vs gzip) for static assets; inline critical CSS to drop an RTT | deferred (2026-06-14 perf pass) — both are <0.1 s wins on top of the gzip middleware. Brotli needs a non-stdlib dep or build-time precompression; CSS inlining needs a Vite plugin and de-caches the stylesheet. Revisit only if the Slow4G LCP (2.2 s, RTT-bound) becomes a real ask — on a not-slow link LCP is already 0.7 s |
-| Code-split CapacityView (Nodes view) like the drawer | deferred (2026-06-14 perf pass) — `capacityLayout` is referenced synchronously in Topology's `layout` memo (not just inside the component), so the layout math can't follow the component into a lazy chunk; only the ~26 KB-src render component would split, for a smaller win than the drawer and a Suspense flash on a one-click view switch |
-| Component tests for Topology / DetailDrawer | already-done (2026-05-29 re-examination) — ~100 component tests ship via `@solidjs/testing-library` + `fireEvent`; the residual cross-component selection→drawer-centering gap is live-verification territory (jsdom `getBoundingClientRect` returns zeros — a mocked test validates the mock), not a unit test |
+| Extract a `urlEnumPref` helper for the groupBy/capResource init pattern | premature (cycle 55) — only 2 non-identical instances, and the URL-write half is deliberately centralized. Rule-of-three unmet; revisit on a 3rd URL-backed enum pref |
+| Shut registry/informer caches down on SIGTERM | low-value — Go reaps goroutines on exit (no slow-shutdown exists); the process-lifetime cache is intentional and documented (`registry.go:240-241`). `Shutdown()` is exercised by the store test helper |
+| Panic-recovery wrapper around SSE graph build / log-stream goroutines | wrong — handlers are already wrapped by `server.recoverer`; graph ops have no panic paths; a recover() would mask real bugs |
+| Log/handle `json.Marshal` failure in `writeSSE` | low-value — payloads are primitive-typed; marshal cannot fail. Real failures are network writes, already handled |
+| `VisibleNamespaces` should gate on `*` instead of hardcoded `pods` | already-handled — pods-as-visibility-gate is the documented RBAC design (ADR 20260527) |
+| Dim/disable/count log-level chips by which levels are present | wrong (2026-06-05) — the chips are a persistent HIDE-preference (`kd:logsHideLevels`), not a content indicator; streaming content would flicker and undermine set-once-persist. The "↧ N err" jump covers "is there an error" |
+| Validate `-addr` / env durations in `config.Load` | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later |
+| Explicit `scrollIntoView` in the Kinds-row arrow-key handler | refuted live (2026-06-10) — native `.focus()` already scrolls the overflowing row; the only residual is the LAST chip's slightly-clipped right edge, a nicety. jsdom stubs scroll, so source surveys re-flag this — verify live |
+| Events "Warnings only" filter needs a "shown / total" readout | already-mitigated (2026-06-10) — the tab badge always shows the total (`DetailDrawer.tsx`) and the chip shows the warning count; both numbers are visible |
+| Events tab message search/filter box | refuted (2026-06-10) — the list is fully-rendered DOM bounded by the ~1h event TTL, so native Cmd+F searches it; Logs needed its own filter only because of the streaming buffer |
+| Manifest in-pane find keyboard shortcut | superseded (2026-06-12) — the minimal-keyboard overhaul fixed the surface at FOUR bindings; do not add a shortcut without removing one in trade |
+| Sort in-cluster `List()` context order; `defer debounce.Stop()` | low-value — in-cluster has a single context; the debounce timer is GC'd and not a race |
+| "A non-default relationship filter clutters the canvas with orphan cards" | working-as-designed (live-checked, 219-resource namespace) — kd shows ALL resources under any rel-filter (0143cea); `orphanBlock` folds kinds with ≥5 loose nodes into "+N more". Do NOT hide nodes under a rel-filter — that re-introduces the vanishing-standalone-ConfigMap bug 0143cea fixed |
+| Light theme renders dark toolbar chips / fails AA contrast | refuted — measurement artifact: a runtime theme toggle leaves `transition: background` stale under headless Chrome, and a naive parser misread `color(srgb …/α)`. Fresh loads in each theme are AA-compliant. See dogfooding "Measurement pitfalls" |
+| Add a match-count / Enter-cycle hint to the topology search | already-done — `.topology-matches` shows "N of M" and the titles document Enter/Shift+Enter cycling (verified live); the probe queried the wrong class |
+| Make graph nodes keyboard-focusable (tabindex) | wrong — 33+ tab stops would be tab-order noise; the keyboard path is search-cycling (`/` → Enter/Shift+Enter) |
+| Harden / improve the multi-cluster context-switch flow | already-robust — verified live on a 5-context kubeconfig: friendly names from ARNs, namespace preserved across clusters, clean Connecting transition, bad `?ns=` self-corrects |
+| "Drawer overflows the viewport / × unreachable at 1280px" | harness artifact (cycle 81) — the frozen headless compositor holds the `drawer-in` keyframe at its `from` frame, so a fresh drawer measures 32px off-screen; killing the animation snaps it flush. Do NOT "fix" the layout — kill animations before measuring (dogfooding "Measurement pitfalls" #6) |
+| "Selecting a PVC in Volumes lights ~11 unrelated pods" | NOT a bug — `spotlightSubtree` deliberately walks the whole undirected component over displayed edges; pods sharing ConfigMaps/Secrets legitimately join. Do NOT special-case to 1-hop/directional — would regress the ownership spotlight |
+| "An empty-selector PDB draws guard edges to unrelated pods" | NOT a bug — `spec.selector: {}` genuinely guards every pod in the namespace (the deliberate fix for the pdb-empty-sel dead-end; do NOT re-skip empty selectors); density is the cluster's config, managed by folding |
+| Give long CRD kinds an acronym short-label fallback | low-value + risky (2026-06-06) — the truncated chip already carries a disambiguating title/aria-label; a CamelCase-acronym fallback regresses single-word kinds (Workflow→"W") and risks collisions. Curated labels are for built-in kinds only |
+| Make the HEALTH filter multi-select like KINDS | low-value + risky (2026-06-06) — health is an ordinal severity ladder where triage focuses on ONE level, so single-select is principled (KINDS is nominal, hence multi); the refactor touches the core spotlight across App+Topology for niche value. Edge legibility confirmed mature at the same time (solid=owns / dashed=other, hover-disclosed `<title>` verbs) |
+| Surface a failed container's exit as the Pod's hero `message` | refuted live (2026-06-06) — the failed container card is red-tinted directly under the hero and reads "Terminated: Error (exit 1)"; a hero message would duplicate it. `statusMessage` deliberately carries only what container statuses can't |
+| Surface DisruptionAllowed reason on a **Healthy** at-floor PDB | low-value + risky (2026-06-06) — the Degraded case shipped (e84f8f6); alarming a green PDB (where 0 is correct protective behaviour) fights the "healthy has no why" gate, and the caution "can disrupt 0" chip + Events already flag it. Do NOT extend the message gate to Healthy |
+| "ECK Elasticsearch `status.health` falls through to Unknown" | already-handled (2026-06-06) — `crHealth` has a dedicated green/yellow/red switch; verified live against a yellow cluster ("Ready · yellow" → Progressing) |
+| "Expanding a busy node in the Nodes view doesn't bring its pods into view" | harness artifact (cycle 78) — `requestAnimationFrame` callbacks never fire in headless agent-browser and every non-initial viewport move is rAF-driven, so the viewport cannot move under eval-driven clicks; the expand logic is correct. Do NOT add rAF deferrals (tried, reverted). Assert computed targets in unit tests or use a headed browser (dogfooding "Measurement pitfalls", rAF) |
+| Click-to-solo on log level chips | rejected (2026-06-10) — breaks the app-wide multi-toggle chip idiom for a 2-click saving; "↧ N err" already jumps to errors |
+| Reorder relationship chips by edge count | rejected (2026-06-10) — stable chip order is muscle memory; a count-driven shuffle gains no triage |
+| Drawer open at ~800px crushes the canvas to a sliver | working-as-designed (2026-06-10) — deliberate priority-ordered degradation (drawer keeps readable width; ⌘B recovers; ≤640px switches to overlays). Don't add a mid-width breakpoint |
+| Dedicated icons for vendor CRD kinds | rejected (2026-06-11) — the deliberate line in `icons.tsx` is built-in kinds only; the fallback square + kind label already identifies a CRD, and one vendor icon opens per-vendor sprawl |
+| Shrink the ~61 KB latin-font payload | rejected (2026-06-14 perf pass) — `font-display: swap` keeps fonts off LCP (measured); glyph-subsetting is unsafe for arbitrary log/manifest text; dropping a weight regresses the design language |
+| Brotli for static assets; inline critical CSS | deferred (2026-06-14 perf pass) — both <0.1 s on top of gzip, each with a dependency/build cost; revisit only if the RTT-bound Slow4G LCP (2.2 s) becomes a real ask |
+| Code-split CapacityView like the drawer | deferred (2026-06-14 perf pass) — `capacityLayout` is referenced synchronously in Topology's layout memo, so only the render component would split; smaller win than the drawer plus a Suspense flash on a one-click switch |
+| Component tests for Topology / DetailDrawer | already-done (2026-05-29) — ~100 component tests ship via `@solidjs/testing-library`; the residual selection→drawer-centering gap is live-verification territory (jsdom rects are zeros — a mocked test validates the mock) |
 
 ## Done
 
-Shipped improvements, newest first. **git log is the authoritative per-change record** (Conventional
-Commits carry the full WHY); these one-liners are just the index — the verbose rationale that used to
-live here was redundant with the commits and is trimmed (2026-06-06 condensation). Hashes shown where a
-single commit maps cleanly; otherwise search the title in git log.
+**git log is the authoritative per-change record** (Conventional Commits carry the full WHY); this
+section is only a coarse index, newest first.
 
 ### 2026-07 SSE sidebar push + robustness
-- Sidebar namespace health now streams over SSE, replacing the client's 15s `/namespaces` poll —
-  background namespaces update live on a coarse server cadence; this also closes the former
-  "live per-namespace health for background namespaces" Future item (aa91149, 7e0066d)
+- Sidebar namespace health now streams over SSE, replacing the client's 15s `/namespaces` poll
+  (aa91149, 7e0066d)
 - Namespaces and graph streams self-heal from silently-stalled connections through the shared
   `watchedEventSource` 40s watchdog; graph metrics calls are capped at 10s so they cannot starve the
   15s heartbeat loop (051484b, 8e7aab6, de45502). *Known rolling-upgrade transient:* a new-JS tab
-  pinned to an old pod without session affinity sees only legacy heartbeat comments, so the wrapped
-  streams reconnect about every 40s until that pod drains. Recovery remains correct; the temporary
-  churn is not worth a compatibility path.
-- Idle events stream stays silent (total-order events sort, 1a675e0); aggregated logs time-sort
-  from the first line (ec44793); late-registered CRD kinds wake store subscribers (54c07bd)
-- Drawer sized viewport-relative (191af3f); manifest fold holds scroll (5c6f409); container image
-  shows the spec image, not a node's cached-tag alias (fc04107); context switch without the selected
-  namespace no longer flags a false error (660d4c1); edge-drag ends on pointercancel (bbe2c9f);
-  help card shows kd identity/build info (596770e)
-- Duplication/dead-code refactor passes across client + server (7629ee9 … b751279); app 0.3.x +
-  chart releases (see git log / release tags)
+  pinned to an old pod without session affinity reconnects about every 40s until that pod drains;
+  recovery stays correct, so no compatibility path
+- Idle events stream stays silent (1a675e0); aggregated logs time-sort from the first line (ec44793);
+  late-registered CRD kinds wake store subscribers (54c07bd); drawer sized viewport-relative
+  (191af3f); container image shows the spec image (fc04107); plus smaller fixes + refactor passes —
+  see git log
 
 ### 2026-06-14 frontend + network perf pass
-- gzip middleware for text responses — the static server compressed nothing; this was the dominant
-  first-paint win (Slow4G LCP 3.5→2.5 s, total transfer 596→202 KB, SSE graph 204→43 KB) (7b1023a)
-- Code-split the drawer subtree off the entry chunk via lazy() + latching idle-mount (entry
-  84→69 KB gz, Slow4G LCP 2.5→2.2 s; few-Mbps LCP 0.7 s — meets the ~1 s target on a not-slow link) (61e794b)
-- Measured non-issues (do not chase): graph render/update (the "+N more" folding caps visible DOM —
-  ~36 cards even at cluster scope, 0 long tasks); fonts are the byte floor (~61 KB latin woff2) but
-  `font-display: swap` means they don't gate LCP. Levers deliberately NOT taken — see Rejected.
+- gzip middleware was the dominant first-paint win (Slow4G LCP 3.5→2.5 s, transfer 596→202 KB)
+  (7b1023a); drawer subtree code-split (entry 84→69 KB gz, LCP →2.2 s; 0.7 s on a not-slow link)
+  (61e794b)
+- Measured non-issues (do not chase): graph render/update (folding caps visible DOM, 0 long tasks);
+  fonts are the byte floor but `font-display: swap` keeps them off LCP. Rejected levers above
 
-### 2026-06-06 operator-dogfooding campaign
-(Condensed 2026-06-10 — the per-item narrative was redundant with the commits; hashes are the record.)
-- Usage gauges with escalating overshoot laps (c87185a → 82b3655)
-- Nodes view: clickable node names, full FQDN kept (749be8e, 8177eb8)
-- Service drawer pod selector, caution-tinted at 0 endpoints (c453dae)
-- Legacy core/v1 Endpoints kind skipped like EndpointSlices (4315b4a)
-- Combined "All containers" log view defaults the time column on (b34e695)
-- Scattered triage filter frames the single most-troubled match (24e231d)
-- kube-root-ca.crt ConfigMap dropped from the graph entirely (df5ad8d)
-- Workload drawer rolls up live usage from its replicas (badaf12)
-- Kyverno/wgpolicy policy reports classify by result summary (0cb87b8)
-- Traefik Middleware card says what it does (c810a3b)
-- NetworkPolicy lists each rule's real peers + ports (2bf0d78)
-- Satisfied PDB reads "2 healthy", not the impossible "2/1" (171949f)
-- IngressRoute routing row shows its middleware chain (7cf1c7d)
-- Drawer "Labels · N" disclosure actually collapses (c508760)
-- Nodes view floats this namespace's nodes to the top (7e98d66)
-- Failed Workflow ranks the primary step's failure over its exit-handler's (d3ed4c9)
-- Kind-view health filter floats matching cards into visible slots (9d4438c)
-- Terminating namespace reads Progressing · "Terminating" (d3c5536); nodesEqual Scrapes test gap (1b830e1)
-- An IngressClass card/drawer now shows its controller + default marker ("traefik.io/ingress-controller · default") — "which controller serves my Ingress" — completing the cluster-scoped legibility set with CRD + PriorityClass (7ea29b0)
-- A PriorityClass card/drawer now shows its value (comma-grouped) + globalDefault + never-preempts, the preemption-debugging facts, instead of just age (9a20ff0)
-- Persisted the display-vs-logs graph split (Build drops completed pods; use BuildForLogs) + main-container default in AGENTS.md "Common surprises" (36df784)
-- A CRD's card/drawer now shows what it defines ("Kind · Scope · servedVersions", e.g. "Workflow · Namespaced · v1alpha1") instead of just its age — a cluster-scope CRD sweep now reads as what each operator enables (719bedf)
-- The client log container picker now also prefers `main` (shared `defaultLogContainer` with the server), so a directly-selected step pod streams the same container as the aggregated workflow view — no longer `wait` vs `main` depending on how you reached it (59e3537)
-- Pod logs now default to the `main` container instead of the `wait` executor sidecar, so an Argo Workflow run's logs show the step's real output (was 459/510 lines of executor noise) (bc94db7)
-- Completed-run logs are now viewable: a finished Job/CronJob/Workflow's Logs tab aggregated zero pods (Build drops completed controller-pods) — added BuildForLogs that keeps them while still dropping superseded ReplicaSets (e5c190c), and Workflow now always offers a Logs tab since its finished pods are display-dropped (e792b9d)
-- Collapse pills now fade during health/search triage when they hide zero matches, so only match-bearing pills ("● N match") stay bright — the empty folds no longer bury the one worth expanding (Contrast) (e4e3d71)
-- ServiceMonitors/VMServiceScrapes now connect to the Services they scrape (EdgeScrapes, honoring namespaceSelector) under a new composable "Monitoring" relationship category — they were floating islands (8e3c3c1)
-- A ServiceMonitor/VMServiceScrape drawer now shows its scrape target (selected services + endpoint port/path/interval) — "what does this scrape, how often", reusing the route-row idiom for both CRDs (4f01788)
-- nodesEqual now repaints on NetworkPolicy-rule and Node-taint edits (the NetPol/Taints fields were added without a diff-compare, so the open drawer kept stale data) (7835c37)
-- An Argo CronWorkflow's status text is now its schedule + timezone, and the CronJob "last run" chip is reused for status.lastScheduledTime — one visual language for both scheduled kinds, no new model fields (a174c88)
-- Node headers (capacity view + drawer host) show the short hostname, dropping the repeated DNS domain; full FQDN on hover (d68f01a)
-- Init-container restarts now count in a pod's restart total, so an init-crashloop shows the crash signal + gets the "previous logs" button (bed6cf4)
-- A JSON log's level badge/filter/jump-to-error now works even when `level` trails a long message (message-first loggers like pino/bunyan) (6a5c5f3)
-- Init-container logs are now reachable in the pod log picker (labelled optgroup) — the place a stuck-in-Init pod records WHY (e22c47f)
-- JSON-object log lines (ES/zap/logrus/…) render message-first with dimmed extras instead of raw blobs; copy/grep stay on the raw line (6e353b9)
-- Help overlay (`?`) flows into 2 columns ≥740px wide so the full reference card fits without an undiscoverable internal scroll (91986b4)
-- Search match-count is now a button that flies to the matches on click (mouse path beside Enter; search doesn't auto-fit while typing) (e5c71f3)
-- Dropped redundant pod→Node tree from the Relationship view; category relabelled "Disruption" (PDB-only) — pod↔node lives in the Nodes group-by (0f94f83)
-- Error/warn log lines get a faint left-edge severity accent (2a3dee4)
-- Health stripe floors its segments so trouble can't vanish at scale (7b91d33)
-- Drawer hero now explains its health tint (the gray "Unknown" ambiguity) (d58dd63)
-- Breadcrumb showed the raw `__cluster__` sentinel instead of `[cluster]` (c5bade5)
-- A degraded PDB now surfaces its DisruptionAllowed reason inline, not just "0/3 healthy" (e84f8f6)
-- Drawer offers aggregated Logs for any pod-owning resource, not just built-in workloads (f34bee8)
-- Node status text now explains its Degraded dot (e6b9290)
-- Nodes capacity view: a node's Use/Req CPU bars no longer clash units
-- Cluster-scope health tally: CRDs + FlowSchemas no longer falsely "Unknown"
-- StorageClass drawer shows provisioner, reclaim, binding, expansion
-- A degraded CR now explains itself — surface its condition message
-- PodDisruptionBudget → guarded-pods edges
-- PodDisruptionBudget drawer shows its policy + allowed disruptions
-- HPA drawer shows replica state + min/max bounds
-- Job/CronJob drawer shows last-run, active, and failed counts
-- PVC/PV drawer shows access modes + storage class
-- ConfigMap/Secret drawer lists its data keys + a Secret's type
-- Traefik IngressRoute routing table + Service edges, like Ingress
-- Gateway API route → Service edges join the Network relationship
-- Gateway API HTTPRoute drawer shows its routing table, like Ingress
-- Logs empty-state names the hidden count + offers a one-click reset
-- Image references emphasise the tag, dim the registry prefix
-- `y`-yank threw an uncaught TypeError in a non-secure context
-- Structured search `Kind/name` matches the kind by prefix, not substring
-- Manifest find scrolls to the first match on type
-- Trouble badge / Alt+T now CYCLE through troubled namespaces
-- Log line-count readout now covers level + pod filters, not just text
-- Navigation now reaches folded matches — count unified + auto-expand-on-select
-- Surfaced a degraded resource's failure reason in the drawer
-- Capacity node labels mixed units within one pair
-- A failed Argo Workflow's drawer shows the leaf step's real error, not the child-node pointer
-- A card's hover tooltip now carries the failure reason — zero-click triage of a degraded wall
-- An aria-live region announces the current selection (kind/name/status/reason) as j/k steps
-- logfmt log lines render message-first (msg emphasised, time/level dimmed) — like JSON
-- Node drawer surfaces scheduling taints (caution chip) — why pods won't land here
-- Empty events list explains the ~1h Kubernetes event TTL (aged-out ≠ never-happened)
-- Wildcard-verb RBAC rules flagged (caution "wildcard" tag) — over-privilege stands out
-- NetworkPolicy drawer summarizes target + per-direction rules (+ registered it in typedFactories)
-- NetworkPolicy → pods "governs" edge (Network category) — no longer a disconnected island
-- Light-mode caution TEXT readable (--caution-text, 4.71:1) — amber was ~1.85:1 on white
-- O(1) edge endpoint lookup (memoized node map) — was O(edges×nodes) per render in fade+title
-
-### Earlier cycles (2026-05 and before — see git log for detail)
-- Filter count undercounted when matches were folded
-- PodDisruptionBudgets read "Unknown" health — noise that hid violated budgets
-- Drawer dropped the status string the card showed
-- Overflowing Kinds row had no scroll affordance
-- Restarted container hid WHY it restarted
-- The Events tab was empty for EVERY resource in production (f80bab1)
-- Buried container/scheduling triage info surfaced
-- Cluster-scoped resource drawer fetched an empty namespace
-- A11y focus-ring sweep
-- CRD-removal ghost cleanup
-- Keyboard-operable collapse pills
-- Server-side survey
+### 2026-05-29 → 2026-06-15 (batches b1–b39 + earlier cycles)
+~200 shipped slices: operator-dogfooding campaigns (drawer/CR legibility, logs pipeline, usage
+gauges, capacity view, a11y, phone/touch, light theme, beginner emergency shapes), the b35 design
+overhaul, the b34 structure pass, the b36 memory pass, SSE robustness. The git log over that range
+and each batch's `docs(backlog)` commit are the record.
