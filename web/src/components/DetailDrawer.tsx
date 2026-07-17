@@ -6,7 +6,6 @@ import { relativeAge } from '../time'
 import { useNow } from '../clock'
 import type { KNode, Resources, ResourceUsage } from '../types'
 import type { WorkloadUsage } from '../usageAggregate'
-import { LOGGABLE_KINDS } from '../loggable'
 import LogViewer from './LogViewer'
 import ManifestPanel from './ManifestPanel'
 import ResourceSummary from './ResourceSummary'
@@ -38,10 +37,6 @@ interface Props {
   canBack?: boolean
   onBack?: () => void
   onClose: () => void
-  // Reports whether a node id owns Pods in the current graph, so a pod-owning CRD (Argo Workflow, a
-  // custom workload controller) the kind list can't enumerate still offers the aggregated Logs tab.
-  // A predicate (not a boolean) so the check follows displayNode through the drawer's exit animation.
-  hasPods?: (nodeId: string) => boolean
   // The inspected resource vanished from the live graph (deleted/replaced mid-investigation). The
   // drawer stays open on its last-known data with an explicit banner instead of silently closing —
   // see App's drawerNode. Tabs keep their normal empty/error states; owner chips remain the path
@@ -129,20 +124,29 @@ export default function DetailDrawer(props: Props) {
   })
 
   const isPod = createMemo(() => displayNode()?.kind === 'Pod')
-  // A node is loggable by built-in kind OR because it owns Pods in the graph (Argo Workflow, custom
-  // workload CRDs) — the latter asked of the parent, which holds the graph. Keyed on displayNode so the
-  // tab set stays correct through the exit animation (props.node clears first).
-  const loggable = createMemo(() => {
-    const n = displayNode()
-    if (!n) return false
-    return LOGGABLE_KINDS.has(n.kind) || (props.hasPods?.(n.id) ?? false)
-  })
+  // The server computes this from the viewer's authorized log-source pods, including sources omitted
+  // from the displayed graph. Keyed on displayNode so it remains correct through the exit animation.
+  const loggable = createMemo(() => !!displayNode()?.loggable)
   const tabs = createMemo<Tab[]>(() => (loggable() ? ['logs', 'events', 'manifest'] : ['events', 'manifest']))
 
   const [tab, setTab] = createSignal<Tab>('logs')
 
   // Tab element refs, so the tablist's arrow keys can move DOM focus to follow the roving tabindex.
   const tabRefs: Partial<Record<Tab, HTMLButtonElement>> = {}
+  // Removing the focused Logs tab/panel sends focus to <body> before the availability effect runs.
+  // Remember the last focus location while the drawer owns focus so the fallback can preserve the
+  // operator's place after Solid has reconciled the shorter tab list.
+  let focusWasInLogs = false
+  const onDrawerFocusIn = (e: FocusEvent) => {
+    const target = e.target
+    focusWasInLogs =
+      target instanceof Element &&
+      (target === tabRefs.logs || !!target.closest('#drawer-tabpanel-logs'))
+  }
+  const onDrawerFocusOut = (e: FocusEvent) => {
+    const next = e.relatedTarget
+    if (!(next instanceof Node) || !asideEl?.contains(next)) focusWasInLogs = false
+  }
   // WAI-ARIA tabs keyboard model (scoped to focus inside the tablist, unlike the global [ / ]):
   // ←/→ move to the previous/next tab (wrapping), Home/End jump to the first/last. Activation
   // follows focus (the APG "automatic activation" variant) — cheap here since switching just toggles
@@ -155,20 +159,20 @@ export default function DetailDrawer(props: Props) {
     setTab(list[next])
     tabRefs[list[next]]?.focus()
   }
-  // On selection change, keep the current tab if the new resource has it — so triaging the same tab
-  // (e.g. Events) across several resources doesn't reset each click — falling back to the kind's
-  // default only when the tab isn't available (e.g. Logs → a non-loggable resource).
+  // On selection or availability change, keep the current tab if the resource still has it. This
+  // preserves an operator's tab across navigation and only falls back when the active tab disappears.
   // Tab panel scroll container — reset to the top whenever the displayed resource changes so a
   // long previous events list doesn't carry the operator's prior position into a fresh resource
   // (cycle 272). The manifest's matching reset lives in ManifestPanel.
   let eventsPanelEl: HTMLDivElement | undefined
   createEffect(
     on(
-      () => displayNode()?.id,
-      (id) => {
+      [() => displayNode()?.id, loggable],
+      ([id], previous) => {
         // Nothing shown — don't default the tab, or the effect (which also runs on creation while
         // the drawer is empty) would latch a loggable resource onto Manifest before it even opens.
         if (!id) return
+        const restoreTabFocus = !loggable() && tab() === 'logs' && focusWasInLogs
         // Fresh open → the kind's default (Logs for loggable, else Manifest). Navigating between
         // resources keeps the current tab when the new resource supports it, falling back to the
         // default only when it doesn't (e.g. Logs → a ConfigMap that has no Logs tab).
@@ -178,7 +182,8 @@ export default function DetailDrawer(props: Props) {
         } else {
           setTab((cur) => (tabs().includes(cur) ? cur : loggable() ? 'logs' : 'manifest'))
         }
-        if (eventsPanelEl) eventsPanelEl.scrollTop = 0
+        if (restoreTabFocus) queueMicrotask(() => tabRefs.manifest?.focus())
+        if (eventsPanelEl && id !== previous?.[0]) eventsPanelEl.scrollTop = 0
       },
     ),
   )
@@ -278,6 +283,8 @@ export default function DetailDrawer(props: Props) {
           class="drawer"
           classList={{ exiting: exiting(), expanded: expanded() }}
           onKeyDown={onDrawerKeyDown}
+          onFocusIn={onDrawerFocusIn}
+          onFocusOut={onDrawerFocusOut}
           // Name the complementary landmark by the resource it describes, so a screen reader's
           // landmark/rotor list reads "Pod web-0 details" instead of an anonymous "complementary".
           aria-label={`${node().kind} ${node().name} details`}

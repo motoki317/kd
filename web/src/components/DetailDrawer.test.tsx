@@ -1,6 +1,7 @@
 import { cleanup, render } from '@solidjs/testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSignal, Suspense } from 'solid-js'
+import { createStore } from 'solid-js/store'
 import DetailDrawer from './DetailDrawer'
 import type { KNode } from '../types'
 
@@ -122,6 +123,20 @@ describe('DetailDrawer', () => {
     expect(tabs).toEqual(['Events', 'Manifest'])
   })
 
+  it('shows Logs if and only if the server marks the node loggable', () => {
+    const enabled = render(() => (
+      <DetailDrawer ctx="test-ctx" node={{ ...configMap, loggable: true }} onClose={() => {}} />
+    ))
+    expect([...enabled.container.querySelectorAll('.drawer-tabs button')].map((b) => b.textContent?.trim())).toContain('Logs')
+    enabled.unmount()
+
+    const pod: KNode = {
+      id: 'pod-a', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy', loggable: false,
+    }
+    const disabled = render(() => <DetailDrawer ctx="test-ctx" node={pod} onClose={() => {}} />)
+    expect([...disabled.container.querySelectorAll('.drawer-tabs button')].map((b) => b.textContent?.trim())).not.toContain('Logs')
+  })
+
   it('names the complementary landmark by the resource so it is identifiable in a landmark list', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const aside = container.querySelector('aside.drawer')!
@@ -182,7 +197,7 @@ describe('DetailDrawer', () => {
   })
 
   it('opens a loggable resource on the Logs tab on a fresh open (was latching to Manifest, cycle 312)', async () => {
-    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', namespace: 'shop', health: 'Healthy', containers: ['web'] }
+    const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['web'] }
     const [node, setNode] = createSignal<KNode | null>(null)
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />
@@ -196,8 +211,8 @@ describe('DetailDrawer', () => {
   })
 
   it('preserves the active tab when navigating between resources while open (cycle 312)', async () => {
-    const podA: KNode = { id: 'a', kind: 'Pod', name: 'a', namespace: 'shop', health: 'Healthy', containers: ['c'] }
-    const podB: KNode = { id: 'b', kind: 'Pod', name: 'b', namespace: 'shop', health: 'Healthy', containers: ['c'] }
+    const podA: KNode = { id: 'a', kind: 'Pod', name: 'a', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['c'] }
+    const podB: KNode = { id: 'b', kind: 'Pod', name: 'b', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['c'] }
     const [node, setNode] = createSignal<KNode | null>(podA)
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />
@@ -593,13 +608,37 @@ describe('DetailDrawer', () => {
   })
 
   it('falls back to the default tab when the new resource lacks the current one', () => {
-    const pod: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy' }
+    const pod: KNode = { id: 'pa', kind: 'Pod', name: 'pod-a', namespace: 'shop', health: 'Healthy', loggable: true }
     const [node, setNode] = createSignal<KNode>(pod)
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
     const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
     // Pod defaults to Logs; switching to a non-loggable ConfigMap (no Logs tab) must fall back.
     expect(activeTab()).toBe('Logs')
     setNode(configMap)
+    expect(activeTab()).toBe('Manifest')
+  })
+
+  it('reconciles Logs availability for the same node without switching back when it returns', async () => {
+    const available: KNode = {
+      id: 'resource-a', kind: 'PipelineRun', name: 'build-a', namespace: 'team-a', health: 'Healthy', loggable: true,
+    }
+    const [node, setNode] = createStore<KNode>(available)
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node} onClose={() => {}} />)
+    const activeTab = () => container.querySelector('.drawer-tabs button.active')?.textContent?.trim()
+
+    expect(activeTab()).toBe('Logs')
+    const logsTab = [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim() === 'Logs') as HTMLButtonElement
+    logsTab.focus()
+    expect(document.activeElement).toBe(logsTab)
+    setNode('loggable', false)
+    expect(activeTab()).toBe('Manifest')
+    const manifestTab = [...container.querySelectorAll('.drawer-tabs button')].find((b) => b.textContent?.trim() === 'Manifest') as HTMLButtonElement
+    // Focus restoration runs after Solid reconciles the disappearing Logs tab/panel. Wait for that
+    // observable contract instead of coupling the test to an implementation-specific microtask count.
+    await vi.waitFor(() => expect(document.activeElement).toBe(manifestTab))
+
+    setNode('loggable', true)
+    await Promise.resolve()
     expect(activeTab()).toBe('Manifest')
   })
 
