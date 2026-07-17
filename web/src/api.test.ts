@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { streamNamespaces, type NamespaceInfo } from './api'
+import { streamGraph, streamNamespaces, type NamespaceInfo } from './api'
 
 // A minimal EventSource stand-in: jsdom ships none, so tests drive the watchdog by constructing these
 // and firing events by hand. Instances accumulate so a reconnect is observable as a second instance.
@@ -40,18 +40,18 @@ class MockEventSource {
 
 const nsPayload = (list: NamespaceInfo[]) => JSON.stringify({ namespaces: list })
 
-describe('streamNamespaces watchdog', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    MockEventSource.reset()
-    vi.stubGlobal('EventSource', MockEventSource)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks() // undo any Math.random spy
-    vi.useRealTimers()
-  })
+beforeEach(() => {
+  vi.useFakeTimers()
+  MockEventSource.reset()
+  vi.stubGlobal('EventSource', MockEventSource)
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks() // undo any Math.random spy
+  vi.useRealTimers()
+})
 
+describe('streamNamespaces watchdog', () => {
   it('stays on one connection while pings keep arriving (no false reconnect)', () => {
     const close = streamNamespaces('ctx', { namespaces: () => {} })
     MockEventSource.last.emit('open')
@@ -180,5 +180,58 @@ describe('streamNamespaces watchdog', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     vi.advanceTimersByTime(120_000)
     expect(MockEventSource.count).toBe(1)
+  })
+})
+
+describe('streamGraph watchdog', () => {
+  it('reconnects to the same graph stream after the staleness window', () => {
+    const close = streamGraph('ctx', 'shop', { snapshot: () => {}, patch: () => {} })
+    const first = MockEventSource.last
+    first.emit('open')
+    vi.advanceTimersByTime(41_000)
+    expect(MockEventSource.count).toBe(2)
+    expect(MockEventSource.last.url).toBe(first.url)
+    close()
+  })
+
+  it('treats graph data as liveness', () => {
+    const close = streamGraph('ctx', 'shop', { snapshot: () => {}, patch: () => {} })
+    MockEventSource.last.emit('open')
+    vi.advanceTimersByTime(30_000)
+    MockEventSource.last.emit('capacity', '{"nodes":[]}')
+    vi.advanceTimersByTime(30_000)
+    expect(MockEventSource.count).toBe(1)
+    close()
+  })
+
+  it('re-attaches every graph handler on reconnect', () => {
+    const seen: string[] = []
+    const close = streamGraph('ctx', 'shop', {
+      snapshot: () => seen.push('snapshot'),
+      patch: () => seen.push('patch'),
+      summary: () => seen.push('summary'),
+      capacity: () => seen.push('capacity'),
+      error: () => seen.push('error'),
+    })
+    MockEventSource.last.emit('open')
+    vi.advanceTimersByTime(41_000)
+    const replacement = MockEventSource.last
+    replacement.emit('snapshot', '{}')
+    replacement.emit('patch', '{}')
+    replacement.emit('summary', '{}')
+    replacement.emit('capacity', '{}')
+    replacement.error()
+    expect(seen).toEqual(['snapshot', 'patch', 'summary', 'capacity', 'error'])
+    close()
+  })
+
+  it('stops watching after close', () => {
+    const close = streamGraph('ctx', 'shop', { snapshot: () => {}, patch: () => {} })
+    const source = MockEventSource.last
+    source.emit('open')
+    close()
+    vi.advanceTimersByTime(120_000)
+    expect(MockEventSource.count).toBe(1)
+    expect(source.closed).toBe(true)
   })
 })
