@@ -54,12 +54,14 @@ const (
 
 // Node is one resource in the graph.
 type Node struct {
-	ID         string   `json:"id"` // object UID, or a derived stable id for synthetic nodes
-	Kind       string   `json:"kind"`
-	APIVersion string   `json:"apiVersion,omitempty"`
-	Namespace  string   `json:"namespace,omitempty"`
-	Name       string   `json:"name"`
-	Health     Health   `json:"health"`
+	ID         string `json:"id"` // object UID, or a derived stable id for synthetic nodes
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+	Name       string `json:"name"`
+	Health     Health `json:"health"`
+	// Loggable is computed server-side because the displayed graph can omit completed or cross-scope pods.
+	Loggable   bool     `json:"loggable,omitempty"`
 	Status     string   `json:"status,omitempty"`     // short human-readable status, e.g. "Running", "2/2"
 	Message    string   `json:"message,omitempty"`    // the WHY behind an unhealthy resource (status.message / a blocking condition); empty for healthy ones
 	CreatedAt  string   `json:"createdAt,omitempty"`  // RFC3339 creation time, for age display

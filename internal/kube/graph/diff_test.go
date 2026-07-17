@@ -1,10 +1,33 @@
 package graph
 
 import (
+	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
+
+func TestNodeLoggableWireContract(t *testing.T) {
+	typ := reflect.TypeOf(Node{})
+	field, ok := typ.FieldByName("Loggable")
+	if !ok {
+		t.Fatal("Node must expose Loggable")
+	}
+	if got := field.Tag.Get("json"); got != "loggable,omitempty" {
+		t.Fatalf("Node.Loggable json tag = %q, want loggable,omitempty", got)
+	}
+
+	node := reflect.New(typ).Elem()
+	node.FieldByName("Loggable").SetBool(true)
+	data, err := json.Marshal(node.Interface())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); !strings.Contains(got, `"loggable":true`) {
+		t.Fatalf("true Loggable must marshal on the wire, got %s", got)
+	}
+}
 
 func TestDiff(t *testing.T) {
 	prev := &Graph{
@@ -91,6 +114,7 @@ var changedFieldCases = []struct {
 	{"Namespace", func(n *Node) { n.Namespace = "ns2" }},
 	{"Name", func(n *Node) { n.Name = "n2" }},
 	{"Health", func(n *Node) { n.Health = HealthDegraded }},
+	{"Loggable", func(n *Node) { n.Loggable = true }},
 	{"Status", func(n *Node) { n.Status = "CrashLoopBackOff" }},
 	{"Restarts", func(n *Node) { n.Restarts = 2 }},
 	{"Host", func(n *Node) { n.Host = "node-2" }},
