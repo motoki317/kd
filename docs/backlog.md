@@ -155,22 +155,6 @@ spotlight — see the PVC-spotlight row in Rejected).
 
 ## Open
 
-- **Graph stream: extend the SSE silent-stall watchdog to it** — *deferred 2026-07-13, alongside the
-  sidebar-desync fix.* The namespaces stream now self-heals from a silent proxy/NAT half-close via
-  `watchedEventSource` (web/src/api.ts) + the visible `ping` heartbeat (internal/api/sse.go). The graph
-  stream is the OTHER long-lived stream (it stays open while an operator is parked on one namespace),
-  so the same silent stall would freeze the open namespace's topology + summary while the conn pill
-  still reads LIVE. It can adopt the same wrapper, but NOT as-is: `handleGraphStream`'s select loop
-  services the heartbeat ticker in the same goroutine as `buildCapacity`→`BuildUsage(r.Context(), …)`,
-  which has no short per-call timeout — a slow metrics-server can legitimately delay pings past a tight
-  window and false-trigger a reconnect storm that re-runs the same slow call. Prereq: bound the metrics
-  call with a short timeout (or give the graph watchdog a deliberately looser 60–90s threshold) first.
-  Do NOT extend the watchdog to the log stream (reconnect replays lines).
-  - *Known transient:* during a rolling upgrade a new-JS tab pinned (no session affinity) to a
-    still-running OLD pod gets `: heartbeat` comments the watchdog can't see, so it reconnects the
-    namespaces stream ~every 40s until the old pod drains. Self-healing, correctness preserved — not
-    worth code; noted so the deploy-window churn isn't mistaken for a bug.
-
 - **Process memory — remaining levers** — *measured 2026-06-14 (b36); deferred, diminishing returns.*
   After the b36 transform + GOGC pass, idle heap is ~39 MiB (≈21 MiB legitimate cached objects + ≈14 MiB
   client-go per-watch machinery across ~150 informers — decoder/refill/ring buffers). An alloc profile
@@ -375,8 +359,12 @@ single commit maps cleanly; otherwise search the title in git log.
 - Sidebar namespace health now streams over SSE, replacing the client's 15s `/namespaces` poll —
   background namespaces update live on a coarse server cadence; this also closes the former
   "live per-namespace health for background namespaces" Future item (aa91149, 7e0066d)
-- Namespaces stream self-heals from a silently-stalled connection: `watchedEventSource` client
-  watchdog + visible `ping` heartbeat (051484b); the graph stream still needs it — see Open
+- Namespaces and graph streams self-heal from silently-stalled connections through the shared
+  `watchedEventSource` 40s watchdog; graph metrics calls are capped at 10s so they cannot starve the
+  15s heartbeat loop (051484b, 8e7aab6, de45502). *Known rolling-upgrade transient:* a new-JS tab
+  pinned to an old pod without session affinity sees only legacy heartbeat comments, so the wrapped
+  streams reconnect about every 40s until that pod drains. Recovery remains correct; the temporary
+  churn is not worth a compatibility path.
 - Idle events stream stays silent (total-order events sort, 1a675e0); aggregated logs time-sort
   from the first line (ec44793); late-registered CRD kinds wake store subscribers (54c07bd)
 - Drawer sized viewport-relative (191af3f); manifest fold holds scroll (5c6f409); container image
@@ -490,4 +478,3 @@ single commit maps cleanly; otherwise search the title in git log.
 - CRD-removal ghost cleanup
 - Keyboard-operable collapse pills
 - Server-side survey
-
