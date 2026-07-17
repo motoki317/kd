@@ -163,7 +163,7 @@ var logResolveInterval = 3 * time.Second
 // viewer can say "stream ended" instead of "waiting for log output…" forever.
 func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, canReadPodLogs func(string) bool, out chan<- logLine, gone chan<- struct{}) {
 	var mu sync.Mutex
-	streaming := make(map[string]bool) // pod names with a live streamer, so we never double-stream
+	streaming := make(map[string]bool)
 
 	wasGone := false
 	resolve := func() {
@@ -180,19 +180,20 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 		}
 		wasGone = false
 		for _, pod := range pods {
+			key := logStreamKey(pod)
 			mu.Lock()
-			if streaming[pod.Name] {
+			if streaming[key] {
 				mu.Unlock()
 				continue
 			}
-			streaming[pod.Name] = true
+			streaming[key] = true
 			mu.Unlock()
-			go func(pod *corev1.Pod) {
+			go func(pod *corev1.Pod, key string) {
 				streamPodLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
 				mu.Lock()
-				delete(streaming, pod.Name)
+				delete(streaming, key)
 				mu.Unlock()
-			}(pod)
+			}(pod, key)
 		}
 	}
 
@@ -209,6 +210,8 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 	}
 }
 
+func logStreamKey(pod *corev1.Pod) string { return pod.Namespace + "/" + pod.Name }
+
 // logSnapshot returns the objects pod resolution runs over. For a namespace that is the namespace's
 // own snapshot; for the cluster scope it merges in every pod cluster-wide, because a cluster-scoped
 // root's descendant pods (a control-plane Node's static pods, whose ownerReferences point at the
@@ -221,8 +224,8 @@ func logSnapshot(store Store, ns string, canReadPodLogs func(string) bool) []run
 	if ns != ClusterScopeNamespace {
 		return snap
 	}
-	for _, obj := range graph.AsTypedSlice(store.SnapshotNodesAndPods()) {
-		if p, ok := obj.(*corev1.Pod); ok && canReadPodLogs(p.Namespace) {
+	for _, obj := range graph.AsTypedSlice(authorizedLogSourcePods(store.SnapshotNodesAndPods(), canReadPodLogs)) {
+		if _, ok := obj.(*corev1.Pod); ok {
 			snap = append(snap, obj)
 		}
 	}
@@ -244,13 +247,13 @@ func podsForResource(objs []runtime.Object, kind, name string) ([]*corev1.Pod, b
 	if rootID == "" {
 		return nil, false
 	}
-	want := make(map[string]bool)
-	for _, p := range g.DescendantPodNames(rootID) {
+	want := make(map[graph.PodIdentity]bool)
+	for _, p := range g.DescendantPods(rootID) {
 		want[p] = true
 	}
 	var pods []*corev1.Pod
 	for _, obj := range objs {
-		if p, ok := obj.(*corev1.Pod); ok && want[p.Name] {
+		if p, ok := obj.(*corev1.Pod); ok && want[graph.PodIdentity{Namespace: p.Namespace, Name: p.Name}] {
 			pods = append(pods, p)
 		}
 	}
@@ -262,7 +265,7 @@ func podsForResource(objs []runtime.Object, kind, name string) ([]*corev1.Pod, b
 // pod never aborts the rest of an aggregate.
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
 	// allContainers fans out one streamer per app container, merged into the same channel; the client
-	// timestamp-orders them. The supervisor still keys dedup on pod.Name, so a pod is followed once and
+	// timestamp-orders them. The supervisor keys dedup on namespace/name, so a pod is followed once and
 	// this single call owns all its container streams.
 	if container == allContainers {
 		var wg sync.WaitGroup

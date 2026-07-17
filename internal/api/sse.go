@@ -9,6 +9,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -110,7 +111,8 @@ const sseHeartbeatInterval = 15 * time.Second
 // docs/ADR/20260527-realtime-transport-sse.md.
 func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	ns := r.PathValue("ns")
-	if _, ok := a.authorize(w, r, ns, "pods", "list"); !ok {
+	id, ok := a.authorize(w, r, ns, "pods", "list")
+	if !ok {
 		return
 	}
 	store, ok := a.resolveStore(w, r)
@@ -128,12 +130,22 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 
 	clusterScope := ns == ClusterScopeNamespace
+	canReadPodLogs := func(podNS string) bool {
+		return a.enforcer.Enforce(id.User, id.Groups, podNS, "logs", "get")
+	}
+	// Loggable makes graph payloads viewer-dependent. This is safe while each stream builds its own
+	// graph; any future build sharing must keep this authorization annotation per viewer.
 	// Stream the full graph: the client now projects relationship subsets and groups them itself
 	// (relationship filters + group-by replaced the server's per-view Filter), so there is no
 	// server-side view to pick. The same graph drives the namespace rollup — the sidebar's "is this
 	// ns healthy?" always sees every kind, so e.g. a Service with no endpoints can't look healthy.
 	build := func() (*graph.Graph, graph.Summary) {
-		full := graph.Build(store.SnapshotNamespace(ns))
+		display := store.SnapshotNamespace(ns)
+		sourceSnapshot := display
+		if clusterScope {
+			sourceSnapshot = store.SnapshotNodesAndPods()
+		}
+		full := graph.BuildWithLogSources(display, authorizedLogSourcePods(sourceSnapshot, canReadPodLogs))
 		return full, graph.SummarizeBuilt(full, clusterScope)
 	}
 
@@ -145,13 +157,14 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 	// pod metrics resolve. metrics-server absence leaves Usage nil (bars fall back to requests).
 	buildCapacity := func() capacityPayload {
 		snap := store.SnapshotNodesAndPods()
+		sourcePods := authorizedLogSourcePods(snap, canReadPodLogs)
 		// The capacity view shows LIVE utilization, so drop terminal (Succeeded/Failed) pods: a
 		// finished or errored pod holds no reservation and consumes nothing, yet would otherwise pad a
 		// node's request/usage bars. Filtering the snapshot itself keeps the node geometry and the
 		// usage feed consistent (both built from the same set). (The topology graph deliberately keeps
 		// Failed pods — they're actionable there; capacity is about what's running now.)
 		snap = slices.DeleteFunc(snap, stoppedPod)
-		g := graph.Build(snap)
+		g := graph.BuildWithLogSources(snap, sourcePods)
 		var usage *graph.Usage
 		if mc := store.MetricsClient(); mc != nil {
 			resolvePod, resolveNode := uidResolvers(snap)
@@ -253,6 +266,30 @@ func (a *API) handleGraphStream(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func authorizedLogSourcePods(objs []runtime.Object, canRead func(string) bool) []runtime.Object {
+	permissions := make(map[string]bool)
+	var pods []runtime.Object
+	for _, obj := range objs {
+		apiVersion, kind := graph.GVKOf(obj)
+		if apiVersion != "v1" || kind != "Pod" {
+			continue
+		}
+		m, err := meta.Accessor(obj)
+		if err != nil {
+			continue
+		}
+		allowed, checked := permissions[m.GetNamespace()]
+		if !checked {
+			allowed = canRead(m.GetNamespace())
+			permissions[m.GetNamespace()] = allowed
+		}
+		if allowed {
+			pods = append(pods, obj)
+		}
+	}
+	return pods
 }
 
 // uidResolvers builds (namespace, name) → UID lookups over a cache snapshot for the usage feed:

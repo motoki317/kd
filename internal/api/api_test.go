@@ -107,6 +107,40 @@ func get(t *testing.T, srv *httptest.Server, path, user string) (*http.Response,
 	return resp, body
 }
 
+func readSSEEvent[T any](t *testing.T, srv *httptest.Server, path, user, wantEvent string) T {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+path, nil)
+	req.Header.Set("X-Forwarded-User", user)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("stream request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	event := ""
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		line := sc.Text()
+		if strings.HasPrefix(line, "event: ") {
+			event = strings.TrimPrefix(line, "event: ")
+			continue
+		}
+		if event != wantEvent || !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var out T
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &out); err != nil {
+			t.Fatalf("unmarshal %s event: %v", wantEvent, err)
+		}
+		return out
+	}
+	t.Fatalf("%s event missing", wantEvent)
+	var zero T
+	return zero
+}
+
 var fixtureObjs = []runtime.Object{
 	&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
 	&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "secret-ns"}},
@@ -390,6 +424,154 @@ func TestGraphStreamSendsSnapshot(t *testing.T) {
 	}
 	if !sawSummary {
 		t.Error("expected a 'summary' event on the graph stream")
+	}
+}
+
+func TestClusterScopeGraphStreamMarksLoggableNodePerViewer(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", UID: "node-a-uid"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "team-a", Name: "agent-a", UID: "agent-a-uid",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1", Kind: "Node", Name: "node-a", UID: "node-a-uid", Controller: ptr(true),
+				}},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+	}
+	srv := newServer(t, `
+roles:
+  no-team-a-logs:
+    deny:
+      - namespaces: [team-a]
+        resources: [logs]
+        actions: [get]
+users:
+  dev: [no-team-a-logs]
+`, objs...)
+
+	readNode := func(user string) graph.Node {
+		t.Helper()
+		g := readSSEEvent[graph.Graph](t, srv,
+			ctxPath+"/namespaces/"+api.ClusterScopeNamespace+"/graph/stream", user, "snapshot")
+		for _, n := range g.Nodes {
+			if n.Kind == "Node" && n.Name == "node-a" {
+				return n
+			}
+		}
+		t.Fatal("node-a missing from cluster snapshot")
+		return graph.Node{}
+	}
+
+	if n := readNode("alice"); !n.Loggable {
+		t.Errorf("allowed viewer node = %+v, want loggable", n)
+	}
+	if n := readNode("dev"); n.Loggable {
+		t.Errorf("logs-denied viewer node = %+v, want unmarked", n)
+	}
+}
+
+func TestNamespaceGraphStreamMarksLoggableOwnerPerViewer(t *testing.T) {
+	owner := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "build-a", UID: "build-a-uid"}}
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}},
+		owner,
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "team-a", Name: "finished-a", UID: "finished-a-uid",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1", Kind: "ConfigMap", Name: owner.Name, UID: owner.UID, Controller: ptr(true),
+				}},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+		},
+	}
+	srv := newServer(t, `
+roles:
+  no-team-a-logs:
+    deny:
+      - namespaces: [team-a]
+        resources: [logs]
+        actions: [get]
+users:
+  dev: [no-team-a-logs]
+`, objs...)
+
+	readOwner := func(user string) graph.Node {
+		t.Helper()
+		g := readSSEEvent[graph.Graph](t, srv,
+			ctxPath+"/namespaces/team-a/graph/stream", user, "snapshot")
+		for _, n := range g.Nodes {
+			if n.Kind == "ConfigMap" && n.Name == owner.Name {
+				return n
+			}
+		}
+		t.Fatalf("%s missing from namespace snapshot", owner.Name)
+		return graph.Node{}
+	}
+
+	if n := readOwner("alice"); !n.Loggable {
+		t.Errorf("allowed viewer owner = %+v, want loggable", n)
+	}
+	if n := readOwner("dev"); n.Loggable {
+		t.Errorf("logs-denied viewer owner = %+v, want unmarked", n)
+	}
+}
+
+func TestGraphStreamCapacityKeepsTerminalPodAsLogSource(t *testing.T) {
+	objs := []runtime.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", UID: "node-a-uid"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-b", UID: "node-b-uid"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "team-a", Name: "finished-a", UID: "finished-a-uid",
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: "v1", Kind: "Node", Name: "node-a", UID: "node-a-uid", Controller: ptr(true),
+				}},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+		},
+	}
+	srv := newServer(t, `
+roles:
+  no-team-a-logs:
+    deny:
+      - namespaces: [team-a]
+        resources: [logs]
+        actions: [get]
+users:
+  dev: [no-team-a-logs]
+`, objs...)
+
+	type capacityNodes struct {
+		Nodes []graph.Node `json:"nodes"`
+	}
+	readCapacity := func(user string) map[string]graph.Node {
+		t.Helper()
+		payload := readSSEEvent[capacityNodes](t, srv,
+			ctxPath+"/namespaces/team-a/graph/stream", user, "capacity")
+		seen := map[string]graph.Node{}
+		for _, n := range payload.Nodes {
+			seen[n.Name] = n
+			if n.Kind == "Pod" {
+				t.Errorf("terminal pod must be absent from capacity nodes, got %+v", n)
+			}
+		}
+		return seen
+	}
+
+	allowed := readCapacity("alice")
+	if n, ok := allowed["node-a"]; !ok || !n.Loggable {
+		t.Errorf("terminal-pod owner = %+v, want loggable", n)
+	}
+	if n, ok := allowed["node-b"]; !ok || n.Loggable {
+		t.Errorf("node without a source pod = %+v, want unmarked", n)
+	}
+	if n := readCapacity("dev")["node-a"]; n.Loggable {
+		t.Errorf("logs-denied terminal-pod owner = %+v, want unmarked", n)
 	}
 }
 
