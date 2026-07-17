@@ -73,6 +73,19 @@ spotlight — see the PVC-spotlight row in Rejected).
   re-anchored on resize, or confirms large-graph pan should never expose empty gutter; then split
   `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
 
+- **Crashloop-pod logs re-dump each resolve tick while in backoff** — *real, live-verified
+  2026-07-18; deferred — needs restart-generation tracking.* The completed-pod fix (per-target
+  `drained` in `superviseLogStreams`, `internal/api/logstream.go`) suppresses re-dumps only for
+  TERMINAL pods. A crashlooping pod in `CrashLoopBackOff` is `Running`, its waiting container's
+  follow stream dumps the last attempt and EOFs, and the supervisor re-attaches every 3s tick:
+  measured 17 copies of the fixture's one FATAL line over 50s (~3 genuine attempts). Same violated
+  invariant ("re-attach only when new output is possible"), but the safe fix must not miss a NEW
+  attempt's logs — re-attach a drained non-terminal target only when its container's restartCount
+  (or containerID) changes. Cross-model review judged the extension out of scope for the
+  completed-pod fix. **Reopen when:** an operator reports duplicate lines while triaging a
+  crashloop, or logstream.go is touched again — then key drains by (UID, container, restart
+  generation) with the demo `crashloop` fixture as the live check.
+
 - **GRPCRoute has routing edges but no drawer routing table** — *low value, deferred.*
   `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's `backendRefs`, but the drawer's
   `routes()` table only handles HTTPRoute; a faithful GRPCRoute table would render
