@@ -5,13 +5,18 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func TestPodsForResourceMatchesDescendantsByNamespaceAndName(t *testing.T) {
@@ -37,11 +42,361 @@ func TestPodsForResourceMatchesDescendantsByNamespaceAndName(t *testing.T) {
 	}
 }
 
-func TestLogStreamKeyIncludesNamespace(t *testing.T) {
-	a := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "agent"}}
-	b := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-b", Name: "agent"}}
-	if logStreamKey(a) == logStreamKey(b) {
-		t.Fatalf("same-named pods in different namespaces share key %q", logStreamKey(a))
+func TestLogStreamKeyIncludesPodUIDAndContainer(t *testing.T) {
+	a := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "agent", UID: "agent-a-uid"}}
+	b := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "agent", UID: "agent-b-uid"}}
+	if logStreamKey(a, "main") == logStreamKey(b, "main") {
+		t.Fatalf("same-named pods with different UIDs share key %q", logStreamKey(a, "main"))
+	}
+	if logStreamKey(a, "main") == logStreamKey(a, "sidecar") {
+		t.Fatalf("different containers share key %q", logStreamKey(a, "main"))
+	}
+}
+
+func useFastLogResolveInterval(t *testing.T) {
+	t.Helper()
+	saved := logResolveInterval
+	logResolveInterval = 20 * time.Millisecond
+	t.Cleanup(func() { logResolveInterval = saved })
+}
+
+func newLogStreamTestClient(t *testing.T, transport roundTripFunc) kubernetes.Interface {
+	t.Helper()
+	client, err := kubernetes.NewForConfigAndClient(
+		&rest.Config{Host: "https://example.invalid"},
+		&http.Client{Transport: transport},
+	)
+	if err != nil {
+		t.Fatalf("create Kubernetes client: %v", err)
+	}
+	return client
+}
+
+func testLogPod(uid types.UID, phase corev1.PodPhase, containers ...string) *corev1.Pod {
+	specContainers := make([]corev1.Container, 0, len(containers))
+	for _, name := range containers {
+		specContainers = append(specContainers, corev1.Container{Name: name})
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "shop-0", UID: uid},
+		Spec:       corev1.PodSpec{Containers: specContainers},
+		Status:     corev1.PodStatus{Phase: phase},
+	}
+}
+
+func startSupervisedPodLogs(t *testing.T, st Store, pod *corev1.Pod, container string) <-chan logLine {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	lines := make(chan logLine, 8)
+	go superviseLogStreams(ctx, st, pod.Namespace, "Pod", pod.Name, container, false, nil, func(string) bool { return true }, lines, nil)
+	return lines
+}
+
+func waitForFreshLogResolves(t *testing.T, resolved <-chan struct{}, count int) {
+	t.Helper()
+	for {
+		select {
+		case <-resolved:
+			continue
+		default:
+		}
+		break
+	}
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for range count {
+		select {
+		case <-resolved:
+		case <-timer.C:
+			t.Fatalf("timed out waiting for %d fresh log resolutions", count)
+		}
+	}
+}
+
+func TestSuperviseLogStreamsDoesNotRedumpCompletedPod(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	var mu sync.Mutex
+	requestCount := 0
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requestCount++
+		mu.Unlock()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader("finished once\n")),
+			Request:    r,
+		}, nil
+	}))
+	pod := testLogPod("shop-0-uid", corev1.PodSucceeded, "main")
+	resolved := make(chan struct{}, 16)
+	st := &stubLogStore{
+		objs: func() []runtime.Object {
+			resolved <- struct{}{}
+			return []runtime.Object{pod}
+		},
+		client: client,
+	}
+	lines := startSupervisedPodLogs(t, st, pod, "")
+
+	select {
+	case got := <-lines:
+		if got.Line != "finished once" {
+			t.Fatalf("first line = %q, want %q", got.Line, "finished once")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for completed pod log")
+	}
+
+	waitForFreshLogResolves(t, resolved, 5)
+	mu.Lock()
+	gotRequests := requestCount
+	mu.Unlock()
+	if gotRequests != 1 {
+		t.Fatalf("GetLogs requests = %d after repeated resolutions, want 1", gotRequests)
+	}
+	select {
+	case got := <-lines:
+		t.Fatalf("completed pod log repeated as %q", got.Line)
+	default:
+	}
+}
+
+func TestSuperviseLogStreamsStreamsSameNameReplacementPod(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	var mu sync.Mutex
+	requestCount := 0
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requestCount++
+		line := "first run\n"
+		if requestCount > 1 {
+			line = "replacement run\n"
+		}
+		mu.Unlock()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader(line)),
+			Request:    r,
+		}, nil
+	}))
+	pod := func(uid types.UID) *corev1.Pod {
+		return testLogPod(uid, corev1.PodSucceeded, "main")
+	}
+	current := pod("first-uid")
+	st := &stubLogStore{
+		objs: func() []runtime.Object {
+			mu.Lock()
+			defer mu.Unlock()
+			return []runtime.Object{current}
+		},
+		client: client,
+	}
+	lines := startSupervisedPodLogs(t, st, current, "")
+
+	select {
+	case got := <-lines:
+		if got.Line != "first run" {
+			t.Fatalf("first pod line = %q, want %q", got.Line, "first run")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first pod log")
+	}
+	mu.Lock()
+	current = pod("replacement-uid")
+	mu.Unlock()
+
+	select {
+	case got := <-lines:
+		if got.Line != "replacement run" {
+			t.Fatalf("replacement pod line = %q, want %q", got.Line, "replacement run")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for same-name replacement pod log")
+	}
+}
+
+func TestSuperviseLogStreamsReattachesRunningPodAfterCleanEOF(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader("running attempt\n")),
+			Request:    r,
+		}, nil
+	}))
+	pod := testLogPod("shop-0-uid", corev1.PodRunning, "main")
+	st := &stubLogStore{objs: func() []runtime.Object { return []runtime.Object{pod} }, client: client}
+	lines := startSupervisedPodLogs(t, st, pod, "")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		select {
+		case got := <-lines:
+			if got.Line != "running attempt" {
+				t.Fatalf("attempt %d line = %q, want %q", attempt, got.Line, "running attempt")
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for running pod log attempt %d", attempt)
+		}
+	}
+}
+
+func TestSuperviseLogStreamsRetriesCompletedPodAfterOpenFailure(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	var mu sync.Mutex
+	requestCount := 0
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requestCount++
+		attempt := requestCount
+		mu.Unlock()
+		status := http.StatusOK
+		body := "retried log\n"
+		if attempt == 1 {
+			status = http.StatusInternalServerError
+			body = "open failed"
+		}
+		return &http.Response{
+			StatusCode: status,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    r,
+		}, nil
+	}))
+	pod := testLogPod("shop-0-uid", corev1.PodFailed, "main")
+	st := &stubLogStore{objs: func() []runtime.Object { return []runtime.Object{pod} }, client: client}
+	lines := startSupervisedPodLogs(t, st, pod, "")
+
+	select {
+	case got := <-lines:
+		if got.Line != "retried log" {
+			t.Fatalf("line after retry = %q, want %q", got.Line, "retried log")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for retry after log stream open failure")
+	}
+	mu.Lock()
+	gotRequests := requestCount
+	mu.Unlock()
+	if gotRequests < 2 {
+		t.Fatalf("GetLogs requests = %d, want at least 2", gotRequests)
+	}
+}
+
+func TestSuperviseLogStreamsRetriesCompletedPodAfterScanError(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	var mu sync.Mutex
+	requestCount := 0
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requestCount++
+		attempt := requestCount
+		mu.Unlock()
+		var body io.ReadCloser
+		if attempt == 1 {
+			body = io.NopCloser(io.MultiReader(
+				strings.NewReader("truncated line\n"),
+				errReader{io.ErrUnexpectedEOF},
+			))
+		} else {
+			body = io.NopCloser(strings.NewReader("complete after scan error\n"))
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       body,
+			Request:    r,
+		}, nil
+	}))
+	pod := testLogPod("shop-0-uid", corev1.PodFailed, "main")
+	st := &stubLogStore{objs: func() []runtime.Object { return []runtime.Object{pod} }, client: client}
+	lines := startSupervisedPodLogs(t, st, pod, "")
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	retriedLine := false
+	for !retriedLine {
+		select {
+		case got := <-lines:
+			retriedLine = got.Line == "complete after scan error"
+		case <-timer.C:
+			t.Fatal("timed out waiting for retry after log stream scan error")
+		}
+	}
+	mu.Lock()
+	gotRequests := requestCount
+	mu.Unlock()
+	if gotRequests < 2 {
+		t.Fatalf("GetLogs requests = %d, want at least 2", gotRequests)
+	}
+}
+
+func TestSuperviseLogStreamsRetriesFailedAllContainerTargetIndependently(t *testing.T) {
+	useFastLogResolveInterval(t)
+
+	var mu sync.Mutex
+	requests := map[string]int{}
+	requested := make(chan struct{}, 8)
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		container := r.URL.Query().Get("container")
+		mu.Lock()
+		requests[container]++
+		attempt := requests[container]
+		mu.Unlock()
+		requested <- struct{}{}
+		status := http.StatusOK
+		body := container + " log\n"
+		if container == "sidecar" && attempt == 1 {
+			status = http.StatusInternalServerError
+			body = "open failed"
+		}
+		return &http.Response{
+			StatusCode: status,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    r,
+		}, nil
+	}))
+	pod := testLogPod("shop-0-uid", corev1.PodFailed, "main", "sidecar")
+	resolved := make(chan struct{}, 16)
+	st := &stubLogStore{
+		objs: func() []runtime.Object {
+			resolved <- struct{}{}
+			return []runtime.Object{pod}
+		},
+		client: client,
+	}
+	startSupervisedPodLogs(t, st, pod, allContainers)
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		mu.Lock()
+		retriedFailedTarget := requests["sidecar"] >= 2
+		mu.Unlock()
+		if retriedFailedTarget {
+			break
+		}
+		select {
+		case <-requested:
+		case <-timer.C:
+			t.Fatal("timed out waiting for failed sidecar log target to retry")
+		}
+	}
+	waitForFreshLogResolves(t, resolved, 5)
+	mu.Lock()
+	gotMain, gotSidecar := requests["main"], requests["sidecar"]
+	mu.Unlock()
+	if gotMain != 1 || gotSidecar != 2 {
+		t.Fatalf("GetLogs requests = main:%d sidecar:%d, want main:1 sidecar:2", gotMain, gotSidecar)
 	}
 }
 
@@ -73,33 +428,38 @@ func TestScanLogStreamEndReporting(t *testing.T) {
 	pod.Namespace, pod.Name = "team-a", "api-b-0"
 
 	cases := []struct {
-		name     string
-		reader   func(ctx context.Context) io.Reader
-		cancel   bool // cancel ctx before scanning (client closed the viewer)
-		wantWarn bool
+		name         string
+		reader       func(ctx context.Context) io.Reader
+		cancel       bool // cancel ctx before scanning (client closed the viewer)
+		wantWarn     bool
+		wantCleanEOF bool
 	}{
 		{
-			name:     "client closed viewer: context canceled stays quiet",
-			reader:   func(ctx context.Context) io.Reader { return blockUntilCancelled{ctx} },
-			cancel:   true,
-			wantWarn: false,
+			name:         "client closed viewer: context canceled stays quiet",
+			reader:       func(ctx context.Context) io.Reader { return blockUntilCancelled{ctx} },
+			cancel:       true,
+			wantWarn:     false,
+			wantCleanEOF: false,
 		},
 		{
-			name:     "normal EOF stays quiet",
-			reader:   func(context.Context) io.Reader { return strings.NewReader("line one\nline two\n") },
-			wantWarn: false,
+			name:         "normal EOF stays quiet",
+			reader:       func(context.Context) io.Reader { return strings.NewReader("line one\nline two\n") },
+			wantWarn:     false,
+			wantCleanEOF: true,
 		},
 		{
-			name:     "oversized line warns (bufio.ErrTooLong)",
-			reader:   func(context.Context) io.Reader { return strings.NewReader(strings.Repeat("x", 2*1024*1024)) },
-			wantWarn: true,
+			name:         "oversized line warns (bufio.ErrTooLong)",
+			reader:       func(context.Context) io.Reader { return strings.NewReader(strings.Repeat("x", 2*1024*1024)) },
+			wantWarn:     true,
+			wantCleanEOF: false,
 		},
 		{
 			name: "mid-stream read failure warns",
 			reader: func(context.Context) io.Reader {
 				return io.MultiReader(strings.NewReader("partial"), errReader{io.ErrUnexpectedEOF})
 			},
-			wantWarn: true,
+			wantWarn:     true,
+			wantCleanEOF: false,
 		},
 	}
 
@@ -123,13 +483,16 @@ func TestScanLogStreamEndReporting(t *testing.T) {
 				}
 				close(done)
 			}()
-			scanLogStream(ctx, c.reader(ctx), pod, "api-b", false, out)
+			gotCleanEOF := scanLogStream(ctx, c.reader(ctx), pod, "api-b", false, out)
 			close(out)
 			<-done
 
 			gotWarn := strings.Contains(buf.String(), "log stream ended early")
 			if gotWarn != c.wantWarn {
 				t.Errorf("warning emitted = %v, want %v\nlog: %s", gotWarn, c.wantWarn, buf.String())
+			}
+			if gotCleanEOF != c.wantCleanEOF {
+				t.Errorf("clean EOF = %v, want %v", gotCleanEOF, c.wantCleanEOF)
 			}
 		})
 	}
