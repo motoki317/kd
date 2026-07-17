@@ -96,14 +96,13 @@ tick, hatched (`.cap-burst-overlay`). All cards in a node share one width (the n
 Clicking a card selects the pod and fits the viewport to its **bar region** (`CapSeg.focusW`), not the
 empty-to-the-right full card.
 
-**Interaction state:** `Resource` facet (`CapResource = cpu|memory`, one at a time) is owned by App,
-persisted to `kd:capRes` + `?capRes=`. Hover-to-spotlight: `capHover` (a pod id, a `small:`/`other:`/
-`overhead:<host>` marker) drives `capSegFaded`/`capAggFaded`, falling back to `nodeFaded` when nothing
-is hovered. A cursor-following HTML tooltip (`.cap-tooltip`, payload `CapTipData = {title, sub?,
-value, hint?}`) replaces native `<title>` + inline numbers; `hint` is the view-composed action line on
-aggregate folds ("Click to expand into per-pod cards") whose click falls through to the row toggle.
-The whole node row (`.cap-node-frame`) toggles expand/collapse; segments/bullets `stopPropagation`. Card width grows to contain SVG text via char-count
-estimates (`CAP_HEADER_CHAR_W`/`CAP_BULLET_CHAR_W`).
+**Interaction state:** `Resource` facet (`CapResource = cpu|memory`) is owned by App, persisted to
+`kd:capRes` + `?capRes=`. Hover-to-spotlight: `capHover` (a pod id or `small:`/`other:`/
+`overhead:<host>` marker) drives `capSegFaded`/`capAggFaded`, falling back to `nodeFaded`. A
+cursor-following HTML tooltip (`.cap-tooltip`) replaces native `<title>` + inline numbers; its
+`hint` line on aggregate folds click-falls-through to the row toggle. The whole node row toggles
+expand/collapse; segments/bullets `stopPropagation`. Card width grows via char-count estimates
+(`CAP_HEADER_CHAR_W`/`CAP_BULLET_CHAR_W`).
 
 ## LR depth-column layout (`placeColumns`)
 
@@ -113,17 +112,14 @@ from a source; depth = column, so the most-parent resources share the leftmost c
 is its widest unit, so a large same-kind group wraps into a grid block (`blockDims`) and merely widens
 its column without breaking other columns' alignment.
 
-Vertical order within a column is *seeded* from Dagre (run on the skeleton only via `dagreSeedY`, for
-its crossing-minimized order — its x is discarded), then packed **contiguously** from the topmost unit's
-seed: same-kind neighbours separated by `COL_V_GAP`, different kinds by the wider `BLOCK_GAP`, so each
-kind reads as its own group. We anchor only the first unit to its seed and pack the rest tight (rather
-than honouring each seedY as a floor) — a skeleton child seeded at its hub's centre otherwise punched a
-tall hole into the centred block stack. TB (test/legacy) still uses `placeWithDagre`. Cross-component
-column alignment is approximate (each component normalizes independently); within a component, exact.
-
-This replaced "Dagre lays the skeleton, grids parked next to the hub card", which let a hub's reserved
-box shove its card out of its rank, stranded wrapped leaves in a private near-hub column, and dragged a
-fan-in hub's *source* parents deep next to the node they point at.
+Vertical order within a column is *seeded* from Dagre (skeleton only, via `dagreSeedY`, for its
+crossing-minimized order — its x is discarded), then packed **contiguously** from the topmost
+unit's seed: same-kind neighbours at `COL_V_GAP`, different kinds at the wider `BLOCK_GAP`. Only
+the first unit anchors to its seed — honouring each seedY as a floor punched tall holes into the
+centred block stack. TB (test/legacy) still uses `placeWithDagre`. Cross-component column
+alignment is approximate; within a component, exact. (This replaced "Dagre lays the skeleton,
+grids parked next to the hub card", which shoved hub cards out of rank and stranded wrapped
+leaves in private near-hub columns.)
 
 ## Single-column packing (`packComponents`)
 
@@ -229,21 +225,16 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
   a single-container pod's card reads the pod total as its own usage (the omitted breakdown would
   just repeat it).
 - **The legend is a filter; the recompute SUBTRACTS the hidden, never sums the shown.** Clicking a
-  segment in the legend (`onToggleSegment`) drops that container/replica from the gauge, and the fill
-  AND the ceiling regauge against the rest — so "what does this container alone draw against its own
-  request" is one click. Each `UsageSegment` carries its own req/lim (the pod joins them from
-  `containerStatuses`; the workload from per-pod `requests`/`limits` and per-container `containerBounds`),
-  and `minusUsage`/`minusBound` lift the hidden segments' usage/bound OUT of the gauge's existing total.
-  This is deliberate over summing the shown: the ceiling total is summed over every app container in the
-  SPEC (`podRequests`/`aggregateWorkloadUsage`), but segments come from the metrics-server breakdown
+  legend segment (`onToggleSegment`) drops that container/replica, and the fill AND ceiling regauge
+  against the rest — each `UsageSegment` carries its own req/lim, and `minusUsage`/`minusBound`
+  lift the hidden segments OUT of the existing totals. Subtract-not-sum is deliberate: the ceiling
+  sums every app container in the SPEC, but segments come from the metrics-server breakdown
   (metered only) — summing the shown would drop a bounded-but-unmetered container (just-started,
-  crash-looping) from the ceiling and shrink the *unfiltered* gauge below today's. Subtracting keeps
-  unfiltered byte-identical (nothing hidden → nothing subtracted) and degrades to "sum the shown" when
-  the breakdown does partition the total. The synthetic "not yet attributed" rest has no bound, so it
-  isn't toggleable; the last shown segment can't be hidden (an empty gauge is a dead end). The `hidden`
-  set and the workload split toggle (`kd:workloadGaugeBy`) live at the `ResourceSummary` TOP (not inside
-  a gauge's render scope) so the filter survives per-tick prop churn; an effect resets it when the
-  resource changes or the split flips (different name spaces: replica suffixes vs container names).
+  crash-looping) and shrink the *unfiltered* gauge. Subtracting keeps unfiltered byte-identical.
+  The synthetic "not yet attributed" rest has no bound → not toggleable; the last shown segment
+  can't be hidden. The `hidden` set + split toggle (`kd:workloadGaugeBy`) live at the
+  `ResourceSummary` TOP so the filter survives per-tick prop churn; an effect resets on resource
+  change or split flip (different name spaces: replica suffixes vs container names).
 
 ## Canvas empty-state ladder
 
@@ -322,45 +313,31 @@ Both read `capRows()` AFTER the toggle (the memo recomputes synchronously) and d
 topmost cards land hidden behind the bar. The `MIN_FIT_SCALE` overflow branch applies the same inset.
 
 **Width-primary fit + legibility floor (`MIN_FIT_SCALE`, viewport.ts `fitBoxFloored`):** the
-*floored* fits — the scope/layout fit-all effect and double-click-empty (`resetView`) — frame
-through `fitBoxFloored`, which is driven by the canvas **WIDTH**, NOT `min(width,
-height)`. Topology trees are far taller than wide and desktop canvases are wider than tall, so taking
-the height-fit (as `fitBox` does) shrank a tall tree until its text was noise. `fitBoxFloored` instead
-fits the width and lets a tall tree **overflow vertically** (top-anchored — scroll down for the tail),
-clamped to `[MIN_FIT_SCALE, 1.4]`: the floor keeps a genuinely huge/wide graph legible (below it labels
-fade), the cap stops a narrow tree zooming to absurdity. The 60px padding is the only horizontal
-margin (no breathing factor — width is spent on text size). Positioning is per-axis: an axis whose
-content fits is centred; an overflowing axis pans so a `focus` point sits at the viewport centre,
-clamped so content keeps covering the frame (no empty gutter past the first/last card). **fit-all**
-focuses the box's TOP-LEFT corner (open on the first resources, scroll down); a **selection** focuses
-the SELECTED card's centre, so a resource whose subtree overspills stays on-screen and readable with as
-much of the rest around it as fits. (With the drawer open the canvas is ~half width, so a wide subtree
-floors and the focus-clamp keeps the selected card centred.) Deliberately **floorless**: the manual
-**Fit button** (`fitAll`) and `frameMatches` (the "N matches" pill). `fitAll` frames the whole layout
-box (`computeFitFor`, width-primary) with no floor, so a dense graph zooms all the way out until every
-resource is on screen (a 476-resource cluster fit at 0.16×); when a filter is active it frames just the
-lit subset (`fitNodeSet`, min-fit, mirroring `frameMatches`) so the matches aren't drowned in a faded
-graph — still floorless, so 8 matches fit at 0.31× while the faded remainder spills off-viewport. Both
-are explicit "show me everything / locate my scattered matches" gestures where framing the whole set,
-speck or not, is the point; only the automatic FILTER fit keeps its own floor + worst-match fallback.
-The Nodes view has its own fits (`fitCapBox`/`fitCapRowExpanded`, already width-driven + floor-aware).
+*floored* fits — the scope/layout fit-all effect and double-click-empty (`resetView`) — are driven
+by the canvas **WIDTH**, not `min(width, height)`: trees are far taller than wide, and height-fit
+shrank a tall tree until its text was noise. A tall tree **overflows vertically** (top-anchored),
+clamped to `[MIN_FIT_SCALE, 1.4]`; 60px padding is the only horizontal margin. Positioning is
+per-axis: a fitting axis centres; an overflowing axis pans so a `focus` point sits at the viewport
+centre, clamped so content keeps covering the frame. **fit-all** focuses the box's TOP-LEFT corner;
+a **selection** focuses the selected card's centre so an overspilling subtree stays readable.
+Deliberately **floorless**: the manual **Fit button** (`fitAll`) and `frameMatches` (the "N
+matches" pill) — explicit "show me everything / locate my matches" gestures where framing the
+whole set, speck or not, is the point (with a filter active, `fitAll` frames just the lit subset
+via `fitNodeSet`). Only the automatic FILTER fit keeps its own floor + worst-match fallback. The
+Nodes view has its own fits (`fitCapBox`/`fitCapRowExpanded`, width-driven + floor-aware).
 
 > The viewport-fit *math* is pure and unit-tested (`viewport.ts`); the live transform can't be verified
 > headless (rAF is frozen). See [`ADR 20260605`](ADR/20260605-testing-view-math-vs-headless-animation.md)
-> and the dogfooding playbook's "Measurement pitfalls".
+> and docs/live-debug.md "Measurement pitfalls".
 
 ## Blueprint grid (pan/zoom tracking)
 
-The canvas backdrop is a 5-layer CSS `background-image` on `.topology` (2 minor lines @`GRID_MINOR`=26px,
-2 major @`GRID_MAJOR`=130px, 1 radial sheen). The cards live in an SVG `<g transform="translate(tx,ty)
-scale(s)">`, so to glue the grid to the cards the SAME `tx`/`ty`/`scale` signals drive an inline
-`background-position` (`${tx}px ${ty}px` for each line layer) and `background-size` (`${26*scale}px` /
-`${130*scale}px`); the sheen stays `0 0` / `100% 100%` (viewport-anchored, not world-anchored). It's
-drift-free because the grid reads the exact transform the `<g>` does — proven live (`background-position`
-== the `<g>` translate, and cell == base×scale, at scale 3). At low zoom (`.labels-hidden`, scale < 0.45)
-the dense minor lines would haze into a flat wash, so that rule zeroes ONLY `--grid-minor` to
-`transparent`, keeping the major grid for spatial reference and — critically — all 5 layers present, so
-the inline 5-entry size/position lists never misalign against the layer list.
+The canvas backdrop is a 5-layer CSS `background-image` on `.topology` (2 minor lines
+@`GRID_MINOR`=26px, 2 major @`GRID_MAJOR`=130px, 1 viewport-anchored radial sheen). The SAME
+`tx`/`ty`/`scale` signals that transform the SVG `<g>` drive inline `background-position`/`-size`,
+so the grid glues to the cards drift-free. At low zoom (`.labels-hidden`, scale < 0.45) the rule
+zeroes ONLY `--grid-minor` to `transparent` — all 5 layers stay present, so the inline 5-entry
+size/position lists never misalign against the layer list.
 
 ## Adding a new layout
 

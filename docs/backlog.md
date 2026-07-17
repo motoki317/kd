@@ -9,7 +9,8 @@ lifecycle). The per-item `file:line` evidence and verdicts are what make an entr
 **Status (2026-06-10):** The UX and server surfaces are **mature** — delegated re-surveys now refute
 ~94% of generated candidates. Source new work from real user feedback or a new feature area, not
 filler re-surveys; do NOT re-dogfood a surface marked mature below unless its code changed. Durable
-techniques live in the `improvement-cycle` skill (`dogfooding-kd-ui.md`), recurring traps in AGENTS.md.
+techniques live in `docs/live-debug.md` + the `improvement-cycle` skill (`dogfooding-kd-ui.md`),
+recurring traps in AGENTS.md.
 **Current focus (user-set, 2026-06-10): beginner-first** — short UI texts, prune excess features/docs,
 structural cleanup over micro-edits.
 
