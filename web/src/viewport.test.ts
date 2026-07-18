@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { boundingBox, selectionMaxScale, fitBox, fitBoxFloored, clampPan } from './viewport'
+import { boundingBox, selectionMaxScale, fitBox, fitBoxFloored, clampPan, zoomScaleBounds } from './viewport'
 
 describe('boundingBox', () => {
   it('unions cards by their centre ± half-extent', () => {
@@ -223,5 +223,54 @@ describe('clampPan', () => {
   it('passes a within-bounds pan through unchanged', () => {
     const content = { width: 4000, height: 3000 }
     expect(clampPan(-200, -150, content, view)).toEqual({ tx: -200, ty: -150 })
+  })
+})
+
+describe('zoomScaleBounds', () => {
+  it('uses whole-layout fit for the minimum and the 3x cap for the maximum', () => {
+    expect(zoomScaleBounds(
+      { width: 2000, height: 1000 },
+      { width: 220, height: 60 },
+      { width: 1000, height: 800, topInset: 0 },
+    )).toEqual({ min: 0.44, max: 3 })
+  })
+
+  it('collapses the maximum to the minimum when a tiny viewport makes them cross', () => {
+    expect(zoomScaleBounds(
+      { width: 10, height: 10 },
+      { width: 220, height: 60 },
+      { width: 150, height: 150, topInset: 0 },
+    )).toEqual({ min: 1, max: 1 })
+  })
+
+  it('caps the minimum at natural size and lets one-card fit bind the maximum', () => {
+    const bounds = zoomScaleBounds(
+      { width: 100, height: 100 },
+      { width: 220, height: 60 },
+      { width: 500, height: 400, topInset: 0 },
+    )
+    expect(bounds.min).toBe(1)
+    expect(bounds.max).toBeCloseTo(380 / 220, 8)
+  })
+
+  it('uses the view below the toolbar for both fitted bounds', () => {
+    const layout = { width: 1000, height: 1000 }
+    const card = { width: 220, height: 60 }
+
+    expect(zoomScaleBounds(layout, card, { width: 1000, height: 300, topInset: 0 }))
+      .toEqual({ min: 0.18, max: 3 })
+    expect(zoomScaleBounds(layout, card, { width: 1000, height: 300, topInset: 60 }))
+      .toEqual({ min: 0.12, max: 2 })
+  })
+
+  it.each([0, 100, 120])('keeps bounds positive through a transient %ipx-wide view', (width) => {
+    const bounds = zoomScaleBounds(
+      { width: 1000, height: 1000 },
+      { width: 220, height: 60 },
+      { width, height: 800, topInset: 0 },
+    )
+
+    expect(bounds.min).toBeCloseTo(1 / 1000, 8)
+    expect(bounds.max).toBeCloseTo(1 / 220, 8)
   })
 })
