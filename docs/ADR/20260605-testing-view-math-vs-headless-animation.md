@@ -78,5 +78,4 @@ retracted, not fixed; "fixing" either would have broken real behaviour.
 The recurring measurement pitfalls (rAF frozen; entry `@keyframes` frozen at `from`; transitioned
 properties reading stale after a runtime toggle; DOM lagging a synchronous signal by a tick; a held
 element ref going stale across a Solid `<For>` reconcile) are catalogued in the `improvement-cycle`
-skill's `dogfooding-kd-ui.md` "Measurement pitfalls" section, with the do-not-re-propose entries in
-`docs/backlog.md`.
+skill's `dogfooding-kd-ui.md` "Measurement pitfalls" section.

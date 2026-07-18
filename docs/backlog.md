@@ -32,7 +32,7 @@ lines; logs-header chip stacking at phone width; co-routed multi-type edges draw
 drawer-overlay Tab-bleed at phone width + modal-help inert siblings; TopologyToolbar extraction;
 manifest format-toggle drops the find scroll anchor; one unreproduced ghost-clear on SSE reconnect
 (watch for it); Volumes-lens typed/depth-limited spotlight walk (regression risk to the ownership
-spotlight — see the PVC-spotlight row in Rejected).
+spotlight).
 
 ## Open
 
@@ -109,69 +109,3 @@ inherits the analysis.
   folds only degree-1 leaves; >8 subtree-owning same-kind siblings under one parent don't occur in
   kd's graph, and synthesizing bundle edges is real risk for no benefit. *Reopen when:* a concrete
   graph shape shows it.
-
-## Rejected — do not re-propose
-
-Generated and **refuted against the real code**; re-proposing them wastes a cycle. (~94% of generated
-ideas get refuted once a surface matures — see Status.)
-
-| Candidate | Verdict |
-|---|---|
-| Split LogViewer's toolbar (or panel) into its own component | rejected (2026-06-10) — the toolbar JSX reads 9+ signals of one cohesive stream/buffer state machine; extraction means ~18 drilled props. No clean state seam, unlike KindFacts/ManifestPanel |
-| Hardcoded short labels for vendor CRDs without API shortNames | rejected (2026-06-10) — any code would be invented, a per-vendor list with no canonical source, and worse than the truncated real prefix; hover + drawer carry the full name |
-| Collapse a container's identical Req+Lim bars into one "Req=Lim" bar | rejected (2026-06-10) — the 34px sublabel track can't fit it, variable row counts break the cross-card repetition idiom, and two equal bars already read "req = lim" |
-| Flag an Unavailable APIService | already-handled (2026-06-06) — `crHealthFromConditions` reads `Available` (False → Degraded) and surfaces its message |
-| Unknown `?ctx=` "silently shows another cluster's data" | refuted (2026-06-05) — App.tsx validates ctx against the fetched list and falls back to the default; breadcrumb + URL self-correct (verified live) |
-| Persist substring filter + case-toggle across resource navigation | wrong (misreads Solid reactivity — components remount) |
-| Export / download visible logs as text | low-value |
-| Scroll-position bookmark on context/container switch | wrong |
-| Lock aggregated pod set mid-stream; warn on new/removed pods | wrong |
-| Container card click → auto-select in logs tab | low-value |
-| Cmd/Ctrl+F search container cards within the drawer | low-value |
-| Container state → inline health severity (restart badge as progressing) | risky |
-| Container group collapse/expand | low-value |
-| Multi-select resources with Shift+click, light edges between selections | risky |
-| Distinguish direct vs indirect edges in selection highlight | wrong |
-| Reversible/bidirectional edge hover for relationship traversal | wrong |
-| Type-based edge opacity hierarchy | low-value |
-| Move keyboard hints from placeholder to aria-description | low-value |
-| Add modal semantics + focus trap to help overlay | wrong |
-| `aria-current='page'` on active namespace button | low-value |
-| Node CPU/mem allocation in the per-namespace graph | dead end — needs metrics-server + annotation scraping; not worth the coupling |
-| LogViewer duplicate-tail dedup on SSE reconnect | dead end — lossy for aggregated streams (drops legitimate repeated lines) |
-| Extract a `urlEnumPref` helper for the groupBy/capResource init pattern | premature (2026-06-05) — only 2 non-identical instances, and the URL-write half is deliberately centralized. Rule-of-three unmet; revisit on a 3rd URL-backed enum pref |
-| Shut registry/informer caches down on SIGTERM | low-value — Go reaps goroutines on exit (no slow-shutdown exists); the process-lifetime cache is intentional and documented (`registry.go:240-241`). `Shutdown()` is exercised by the store test helper |
-| Panic-recovery wrapper around SSE graph build / log-stream goroutines | wrong — handlers are already wrapped by `server.recoverer`; graph ops have no panic paths; a recover() would mask real bugs |
-| Log/handle `json.Marshal` failure in `writeSSE` | low-value — payloads are primitive-typed; marshal cannot fail. Real failures are network writes, already handled |
-| `VisibleNamespaces` should gate on `*` instead of hardcoded `pods` | already-handled — pods-as-visibility-gate is the documented RBAC design (ADR 20260527) |
-| Dim/disable/count log-level chips by which levels are present | wrong (2026-06-05) — the chips are a persistent HIDE-preference (`kd:logsHideLevels`), not a content indicator; streaming content would flicker and undermine set-once-persist. The "↧ N err" jump covers "is there an error" |
-| Validate `-addr` / env durations in `config.Load` | low-value — `ListenAndServe`/flag parse already give clear errors ~100 ms later |
-| Explicit `scrollIntoView` in the Kinds-row arrow-key handler | refuted live (2026-06-10) — native `.focus()` already scrolls the overflowing row; the only residual is the LAST chip's slightly-clipped right edge, a nicety. jsdom stubs scroll, so source surveys re-flag this — verify live |
-| Events "Warnings only" filter needs a "shown / total" readout | already-mitigated (2026-06-10) — the tab badge always shows the total (`DetailDrawer.tsx`) and the chip shows the warning count; both numbers are visible |
-| Events tab message search/filter box | refuted (2026-06-10) — the list is fully-rendered DOM bounded by the ~1h event TTL, so native Cmd+F searches it; Logs needed its own filter only because of the streaming buffer |
-| Manifest in-pane find keyboard shortcut | superseded (2026-06-12) — the minimal-keyboard overhaul fixed the surface at FOUR bindings; do not add a shortcut without removing one in trade |
-| Sort in-cluster `List()` context order; `defer debounce.Stop()` | low-value — in-cluster has a single context; the debounce timer is GC'd and not a race |
-| "A non-default relationship filter clutters the canvas with orphan cards" | working-as-designed (live-checked, 219-resource namespace) — kd shows ALL resources under any rel-filter (0143cea); `orphanBlock` folds kinds with ≥5 loose nodes into "+N more". Do NOT hide nodes under a rel-filter — that re-introduces the vanishing-standalone-ConfigMap bug 0143cea fixed |
-| Light theme renders dark toolbar chips / fails AA contrast | refuted — measurement artifact: a runtime theme toggle leaves `transition: background` stale under headless Chrome, and a naive parser misread `color(srgb …/α)`. Fresh loads in each theme are AA-compliant. See dogfooding "Measurement pitfalls" |
-| Add a match-count / Enter-cycle hint to the topology search | already-done — `.topology-matches` shows "N of M" and the titles document Enter/Shift+Enter cycling (verified live); the probe queried the wrong class |
-| Make graph nodes keyboard-focusable (tabindex) | wrong — 33+ tab stops would be tab-order noise; the keyboard path is search-cycling (`/` → Enter/Shift+Enter) |
-| Harden / improve the multi-cluster context-switch flow | already-robust — verified live on a 5-context kubeconfig: friendly names from ARNs, namespace preserved across clusters, clean Connecting transition, bad `?ns=` self-corrects |
-| "Drawer overflows the viewport / × unreachable at 1280px" | harness artifact (2026-06-05) — the frozen headless compositor holds the `drawer-in` keyframe at its `from` frame, so a fresh drawer measures 32px off-screen; killing the animation snaps it flush. Do NOT "fix" the layout — kill animations before measuring (dogfooding "Measurement pitfalls" #6) |
-| "Selecting a PVC in Volumes lights ~11 unrelated pods" | NOT a bug — `spotlightSubtree` deliberately walks the whole undirected component over displayed edges; pods sharing ConfigMaps/Secrets legitimately join. Do NOT special-case to 1-hop/directional — would regress the ownership spotlight |
-| "An empty-selector PDB draws guard edges to unrelated pods" | NOT a bug — `spec.selector: {}` genuinely guards every pod in the namespace (the deliberate fix for the pdb-empty-sel dead-end; do NOT re-skip empty selectors); density is the cluster's config, managed by folding |
-| Give long CRD kinds an acronym short-label fallback | low-value + risky (2026-06-06) — the truncated chip already carries a disambiguating title/aria-label; a CamelCase-acronym fallback regresses single-word kinds (Workflow→"W") and risks collisions. Curated labels are for built-in kinds only |
-| Make the HEALTH filter multi-select like KINDS | low-value + risky (2026-06-06) — health is an ordinal severity ladder where triage focuses on ONE level, so single-select is principled (KINDS is nominal, hence multi); the refactor touches the core spotlight across App+Topology for niche value. Edge legibility confirmed mature at the same time (solid=owns / dashed=other, hover-disclosed `<title>` verbs) |
-| Surface a failed container's exit as the Pod's hero `message` | refuted live (2026-06-06) — the failed container card is red-tinted directly under the hero and reads "Terminated: Error (exit 1)"; a hero message would duplicate it. `statusMessage` deliberately carries only what container statuses can't |
-| Surface DisruptionAllowed reason on a **Healthy** at-floor PDB | low-value + risky (2026-06-06) — the Degraded case shipped (e84f8f6); alarming a green PDB (where 0 is correct protective behaviour) fights the "healthy has no why" gate, and the caution "can disrupt 0" chip + Events already flag it. Do NOT extend the message gate to Healthy |
-| "ECK Elasticsearch `status.health` falls through to Unknown" | already-handled (2026-06-06) — `crHealth` has a dedicated green/yellow/red switch; verified live against a yellow cluster ("Ready · yellow" → Progressing) |
-| "Expanding a busy node in the Nodes view doesn't bring its pods into view" | harness artifact (2026-06-05) — `requestAnimationFrame` callbacks never fire in headless agent-browser and every non-initial viewport move is rAF-driven, so the viewport cannot move under eval-driven clicks; the expand logic is correct. Do NOT add rAF deferrals (tried, reverted). Assert computed targets in unit tests or use a headed browser (dogfooding "Measurement pitfalls", rAF) |
-| Click-to-solo on log level chips | rejected (2026-06-10) — breaks the app-wide multi-toggle chip idiom for a 2-click saving; "↧ N err" already jumps to errors |
-| Reorder relationship chips by edge count | rejected (2026-06-10) — stable chip order is muscle memory; a count-driven shuffle gains no triage |
-| Drawer open at ~800px crushes the canvas to a sliver | working-as-designed (2026-06-10) — deliberate priority-ordered degradation (drawer keeps readable width; ⌘B recovers; ≤640px switches to overlays). Don't add a mid-width breakpoint |
-| Dedicated icons for vendor CRD kinds | rejected (2026-06-11) — the deliberate line in `icons.tsx` is built-in kinds only; the fallback square + kind label already identifies a CRD, and one vendor icon opens per-vendor sprawl |
-| Shrink the ~61 KB latin-font payload | rejected (2026-06-14 perf pass) — `font-display: swap` keeps fonts off LCP (measured); glyph-subsetting is unsafe for arbitrary log/manifest text; dropping a weight regresses the design language |
-| Brotli for static assets; inline critical CSS | deferred (2026-06-14 perf pass) — both <0.1 s on top of gzip, each with a dependency/build cost; revisit only if the RTT-bound Slow4G LCP (2.2 s) becomes a real ask |
-| Code-split CapacityView like the drawer | deferred (2026-06-14 perf pass) — `capacityLayout` is referenced synchronously in Topology's layout memo, so only the render component would split; smaller win than the drawer plus a Suspense flash on a one-click switch |
-| Component tests for Topology / DetailDrawer | already-done (2026-05-29) — ~100 component tests ship via `@solidjs/testing-library`; the residual selection→drawer-centering gap is live-verification territory (jsdom rects are zeros — a mocked test validates the mock) |
-| Chase graph render/update performance | rejected (2026-06-14 perf pass) — folding caps the visible DOM; measured 0 long tasks |
-| Compatibility path for old-JS tabs pinned to a draining pod | rejected (2026-07-17) — the 40s watchdog reconnect transient self-heals |
