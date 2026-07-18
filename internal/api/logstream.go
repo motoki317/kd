@@ -153,6 +153,11 @@ func (a *API) handleResourceLogStream(w http.ResponseWriter, r *http.Request) {
 // tests can shorten it.
 var logResolveInterval = 3 * time.Second
 
+type drainMark struct {
+	terminal bool
+	gen      int32
+}
+
 // superviseLogStreams keeps a follow stream's per-container streamers in sync with the resource's
 // live descendant pods. It re-resolves on a short interval and starts a streamer for any target not
 // already being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted
@@ -164,7 +169,7 @@ var logResolveInterval = 3 * time.Second
 func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, container string, timestamps bool, tail *int64, canReadPodLogs func(string) bool, out chan<- logLine, gone chan<- struct{}) {
 	var mu sync.Mutex
 	streaming := make(map[string]bool)
-	drained := make(map[string]bool)
+	drained := make(map[string]drainMark)
 
 	wasGone := false
 	resolve := func() {
@@ -184,26 +189,41 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 			terminalAtAttach := pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 			for _, target := range targetContainers(pod, container) {
 				key := logStreamKey(pod, target)
+				status, hasStatus := logContainerStatus(pod, target)
+				generationAtAttach := status.RestartCount
+				generationDrainAtAttach := hasStatus && (status.State.Waiting != nil || status.State.Terminated != nil)
 				mu.Lock()
-				// A terminal pod's follow stream dumps its existing log and immediately EOFs; once
-				// drained, re-attaching it on every resolution would append the full log forever.
-				if streaming[key] || drained[key] {
+				mark, wasDrained := drained[key]
+				// A permanently finished pod cannot produce another log, while a non-running container
+				// at the same generation is still exposing the backoff dump already read. Running,
+				// missing, and changed statuses stay eligible because a cached snapshot can otherwise
+				// freeze the tail after a clean-but-premature EOF. RestartCount can reset after node-state
+				// loss, leaving a residual risk that a stale generation-zero mark skips one fresh attempt.
+				generationStillDrained := wasDrained && generationDrainAtAttach &&
+					status.RestartCount == mark.gen
+				if streaming[key] || (wasDrained && mark.terminal) || generationStillDrained {
 					mu.Unlock()
 					continue
 				}
 				streaming[key] = true
 				mu.Unlock()
-				go func(pod *corev1.Pod, container, key string, terminalAtAttach bool) {
+				go func(pod *corev1.Pod, container, key string, terminalAtAttach, generationDrainAtAttach bool, generationAtAttach int32) {
 					opened, cleanEOF := streamContainerLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
 					mu.Lock()
-					// Running-at-attach may restart before becoming terminal, while open or scan
-					// failures may leave unread logs. Neither is proof that the final log was drained.
-					if terminalAtAttach && opened && cleanEOF {
-						drained[key] = true
+					if opened && cleanEOF {
+						// Phase is the only reliable finality signal when an API-legal terminal pod omits
+						// container statuses, so it remains a permanent belt around generation tracking.
+						if terminalAtAttach {
+							drained[key] = drainMark{terminal: true}
+						} else if generationDrainAtAttach {
+							// A stopped generation cannot gain bytes until kubelet creates its replacement,
+							// while a running or status-less clean EOF may only be a dropped live tail.
+							drained[key] = drainMark{gen: generationAtAttach}
+						}
 					}
 					delete(streaming, key)
 					mu.Unlock()
-				}(pod, target, key, terminalAtAttach)
+				}(pod, target, key, terminalAtAttach, generationDrainAtAttach, generationAtAttach)
 			}
 		}
 	}
@@ -219,6 +239,17 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 			resolve()
 		}
 	}
+}
+
+func logContainerStatus(pod *corev1.Pod, container string) (corev1.ContainerStatus, bool) {
+	for _, statuses := range [][]corev1.ContainerStatus{pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses} {
+		for _, status := range statuses {
+			if status.Name == container {
+				return status, true
+			}
+		}
+	}
+	return corev1.ContainerStatus{}, false
 }
 
 func logStreamKey(pod *corev1.Pod, container string) string {
