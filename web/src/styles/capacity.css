@@ -302,7 +302,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
-/* Health dot, filled per state: green = healthy, red = degraded, gray = unknown, etc. (cycle 308).
+/* Health dot, filled per state: green = healthy, red = degraded, gray = unknown, etc.
    Was a hollow gray ring when healthy — which read as "everything is gray / off" rather than
    "everything is fine". A filled green dot makes a healthy cluster scan as a wall of green with
    colored exceptions, the dashboard idiom operators expect. */
@@ -320,7 +320,7 @@
   color: var(--accent);
   font-weight: 600;
 }
-/* Jump-landing pulse (cycle 330/R5): a one-shot accent ring + glow on a programmatic jump (Alt+T,
+/* Jump-landing pulse: a one-shot accent ring + glow on a programmatic jump (Alt+T,
    first-load). box-shadow rather than background so it layers over the .active tint and the ::before
    bar without fighting them, and fades to nothing — the row keeps its normal active look afterward. */
 @keyframes ns-flash {
@@ -368,4 +368,3 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-

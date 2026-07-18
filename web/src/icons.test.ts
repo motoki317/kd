@@ -27,11 +27,11 @@ describe('kindIcon', () => {
       'RoleBinding',
       'ClusterRole',
       'ClusterRoleBinding',
-      // Cluster-scoped kinds surfaced by the dynamic-informer store (cycle 177).
+      // Cluster-scoped kinds surfaced by the dynamic-informer store.
       'PersistentVolume',
       'CustomResourceDefinition',
       'StorageClass',
-      // Common cluster-scope / policy kinds (cycle 212): show up in real namespaces or the
+      // Common cluster-scope / policy kinds: show up in real namespaces or the
       // [cluster] view, so a fallback square is a downgrade.
       'APIService',
       'CSINode',

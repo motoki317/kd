@@ -9,7 +9,7 @@ export function createExitAnimation(src: {
   layoutNodes: () => PositionedNode[]
   groupBy: () => GroupBy | undefined
 }) {
-  // Exit animation (cycle 160): when a node drops out of props.nodes, keep its last-known position
+  // Exit animation: when a node drops out of props.nodes, keep its last-known position
   // rendered with a fading-out class for 320ms so the operator sees it leave rather than vanish.
   // We snapshot the prior layout each time createEffect runs and diff against the new one.
   const [exiting, setExiting] = createSignal<PositionedNode[]>([])

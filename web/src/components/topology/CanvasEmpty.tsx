@@ -17,7 +17,7 @@ export default function CanvasEmpty(props: Props) {
   return (
     <div class="topology-empty">
       {/* Friendly graphic: three card silhouettes staggered like a small cluster, each with a
-          tiny icon-circle hint at the top-left echoing the cycle-126 icon-forward card. */}
+          tiny icon-circle hint at the top-left echoing the icon-forward card. */}
       <svg class="topology-empty-illo" viewBox="0 0 140 64" width="140" height="64" aria-hidden="true">
         <g>
           <rect x="6" y="22" width="36" height="22" rx="5" class="empty-card" />

@@ -38,7 +38,7 @@ export function createSidebarHealth(deps: {
     return c
   })
 
-  // Favicon attention badge (cycle 286): paint the worst non-Healthy state present in the cluster as a
+  // Favicon attention badge: paint the worst non-Healthy state present in the cluster as a
   // colored dot on the brand mark, so multi-tab operators spot trouble without clicking into each tab.
   // Healthy/empty restores the plain mark. Updated via the existing <link rel="icon"> element rather
   // than injecting a new one, so the DOM stays clean across HMR reloads in dev.

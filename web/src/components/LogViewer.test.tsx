@@ -109,7 +109,7 @@ describe('LogViewer', () => {
   })
 
   // The scroll region is a tab stop so keyboard users can focus and arrow-scroll it (Firefox doesn't
-  // auto-focus scrollable regions like Chrome), and so the expanded-drawer focus trap (cycle 326)
+  // auto-focus scrollable regions like Chrome), and so the expanded-drawer focus trap
   // counts it as a boundary instead of letting Tab fall through to the canvas behind.
   it('makes the log scroll region keyboard-focusable', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
@@ -117,7 +117,7 @@ describe('LogViewer', () => {
   })
 
   // Wrap defaults on (today's behavior); toggling off switches the body to no-wrap horizontal scroll
-  // and persists the choice so it survives pod switches and reloads (cycle 327).
+  // and persists the choice so it survives pod switches and reloads.
   it('toggles line wrapping and persists the preference', () => {
     localStorage.removeItem('kd:logsWrap')
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
@@ -351,7 +351,7 @@ describe('LogViewer', () => {
     expect(caseBtn.getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('Latest button advertises unseen line count while scrolled up (cycle 266)', async () => {
+  it('Latest button advertises unseen line count while scrolled up', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
     ))
@@ -376,7 +376,7 @@ describe('LogViewer', () => {
   })
 
   // Aggregated workload streams interleave several pods; per-pod chips let an operator isolate one
-  // replica without typing its pod-hash into the filter (cycle 329). Single-pod views have no chips.
+  // replica without typing its pod-hash into the filter. Single-pod views have no chips.
   it('offers per-pod toggles for an aggregated stream and hides a pod when clicked', async () => {
     const { container, findByText } = render(() => (
       <LogViewer ctx="test-ctx" namespace="shop" kind="Deployment" name="web" aggregated={true} containers={['app']} restarts={0} status="Running" />
@@ -405,7 +405,7 @@ describe('LogViewer', () => {
     expect(container.querySelectorAll('.logs-pod-chip').length).toBe(0)
   })
 
-  // Jump-to-error (cycle 333/R6): the button appears only when the buffer holds error-level lines,
+  // Jump-to-error: the button appears only when the buffer holds error-level lines,
   // and clicking it flashes the next error line (stepping through them).
   it('offers a jump-to-error control only when error lines exist, and flashes the target', async () => {
     Element.prototype.scrollIntoView = vi.fn() // jsdom has no layout; stub the scroll
@@ -450,7 +450,7 @@ describe('LogViewer', () => {
     expect(lineWith('all good').querySelector('.log-level-error')).toBeNull()
   })
 
-  it('highlights filter matches with <mark> inside the kept lines (cycle 249)', async () => {
+  it('highlights filter matches with <mark> inside the kept lines', async () => {
     const { container, findByPlaceholderText } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} status="Running" />
     ))

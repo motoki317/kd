@@ -41,12 +41,12 @@ describe('navCandidates', () => {
   })
 
   it('scopes to the search query, taking precedence over the health filter', () => {
-    // With the cycle-215 compose-all-filters change, search AND health both apply: search=web
+    // Search AND health compose: search=web
     // matches a (Pod web, Healthy) and c (Deployment web, Degraded); health=Degraded keeps only c.
     expect(navCandidates(nodes, 'web', 'Degraded').map((n) => n.id)).toEqual(['c'])
   })
 
-  it('scopes to the kind filter alongside search/health (compose, cycle 215)', () => {
+  it('composes the kind filter with search and health', () => {
     // kindFilter=Pod intersects with no other filter → only Pods (a, b).
     expect(navCandidates(nodes, '', null, new Set(['Pod'])).map((n) => n.id)).toEqual(['a', 'b'])
     // kindFilter=Pod ∩ health=Degraded → b only (the degraded Pod, not the degraded Deployment).

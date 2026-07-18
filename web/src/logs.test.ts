@@ -41,7 +41,7 @@ describe('filterLogLines', () => {
     expect(filterLogLines(lines, 'timeout')).toEqual([])
   })
 
-  it('hides lines whose detected level is toggled off, keeping unleveled lines (cycle 328)', () => {
+  it('hides lines whose detected level is toggled off, keeping unleveled lines', () => {
     const lvlLines: LogEntry[] = [
       { pod: 'a', line: 'E0521 12:00:00.0 1 main.go:1] boom' }, // error
       { pod: 'a', line: 'W0521 12:00:00.0 1 main.go:2] careful' }, // warn
@@ -64,7 +64,7 @@ describe('filterLogLines', () => {
     expect(filterLogLines(lvlLines, '', false, new Set())).toHaveLength(4)
   })
 
-  it('AND-combines the level filter with the substring query (cycle 328)', () => {
+  it('AND-combines the level filter with the substring query', () => {
     const lvlLines: LogEntry[] = [
       { pod: 'a', line: 'E0521 1 db connection refused' },
       { pod: 'a', line: 'I0521 1 db pool warmed' },
@@ -76,7 +76,7 @@ describe('filterLogLines', () => {
     ])
   })
 
-  it('matches case-sensitively when asked (cycle 321)', () => {
+  it('matches case-sensitively when asked', () => {
     // Case-insensitive "ERROR" matches both the upper-case level and the prose "error".
     expect(filterLogLines(lines, 'ERROR', false).map((l) => l.line)).toEqual([
       'ERROR failed to connect to db',
@@ -214,7 +214,7 @@ describe('splitByMatch', () => {
     expect(splitByMatch('hello world', 'xyz')).toEqual([{ text: 'hello world', match: false }])
   })
 
-  it('highlights case-sensitively when asked, skipping differently-cased text (cycle 321)', () => {
+  it('highlights case-sensitively when asked, skipping differently-cased text', () => {
     expect(splitByMatch('connect to DB and ConneCT again', 'connect', true)).toEqual([
       { text: 'connect', match: true },
       { text: ' to DB and ConneCT again', match: false },

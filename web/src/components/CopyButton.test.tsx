@@ -24,7 +24,7 @@ describe('CopyButton', () => {
     expect(written).toEqual(['plain'])
   })
 
-  it('Shift+click copies altText when one is provided (cycle 287)', async () => {
+  it('Shift+click copies altText when one is provided', async () => {
     const { container } = render(() => (
       <CopyButton text={() => 'web'} title="Copy name" altText={() => 'Pod/web'} altTitle="for Kind/name" />
     ))

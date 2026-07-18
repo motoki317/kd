@@ -5,7 +5,7 @@ import Sidebar from './Sidebar'
 import { CLUSTER_SCOPE, type NamespaceInfo } from '../api'
 
 afterEach(cleanup)
-// jsdom doesn't implement scrollIntoView; Sidebar calls it when the selection changes (cycle 242).
+// jsdom doesn't implement scrollIntoView; Sidebar calls it when the selection changes.
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
 })
@@ -133,7 +133,7 @@ describe('Sidebar', () => {
     expect(titles[1]).toContain('Healthy')
   })
 
-  it('renders a filled health dot for every namespace — healthy reads green, not a hollow gray ring (cycle 308)', () => {
+  it('renders a filled health dot for every namespace — healthy reads green, not a hollow gray ring', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
@@ -151,7 +151,7 @@ describe('Sidebar', () => {
     expect(dots[0].style.background).toBe('var(--health-healthy)')
   })
 
-  it('counts only Degraded/Progressing in the "needs attention" badge, not Unknown/Suspended (cycle 313)', () => {
+  it('counts only Degraded/Progressing in the "needs attention" badge, not Unknown/Suspended', () => {
     const mix: NamespaceInfo[] = [
       { name: 'broken', health: 'Degraded', nonReady: 2 },
       { name: 'rolling', health: 'Progressing', nonReady: 1 },
@@ -166,7 +166,7 @@ describe('Sidebar', () => {
     expect(container.querySelector('.ns-trouble')?.textContent).toBe('2')
   })
 
-  it('names the health state in the ns-count tooltip (cycle 317)', () => {
+  it('names the health state in the ns-count tooltip', () => {
     const { container } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={noop} loading={false} failed={false} />
     ))
@@ -176,7 +176,7 @@ describe('Sidebar', () => {
     expect(titles).toEqual(['1 non-ready · Progressing', '3 non-ready · Degraded'])
   })
 
-  it('colors the ns-count with the legible ink, not the vivid dot value (cycle 132)', () => {
+  it('colors the ns-count with the legible ink, not the vivid dot value', () => {
     // The dot stays vivid (graphics, 3:1) but the count is small text and must clear AA 4.5:1 on the
     // light theme — healthTextColor returns the darker *-text ink for the trouble states the badge
     // actually shows. Alpha order: mmm (Progressing) then zzz-broken (Degraded).
@@ -210,7 +210,7 @@ describe('Sidebar', () => {
     expect(getByText("Couldn't load namespaces.")).toBeTruthy()
   })
 
-  it('Enter on the filter input selects the top-of-list match (cycle 223)', () => {
+  it('Enter on the filter input selects the top-of-list match', () => {
     const onSelect = vi.fn()
     const { getByPlaceholderText } = render(() => (
       <Sidebar namespaces={namespaces} selected={null} onSelect={onSelect} loading={false} failed={false} />
@@ -244,7 +244,7 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(input)
   })
 
-  it('offers a retry button on failure when onRetry is wired (cycle 220)', () => {
+  it('offers a retry button on failure when onRetry is wired', () => {
     const onRetry = vi.fn()
     const { getByText } = render(() => (
       <Sidebar namespaces={[]} selected={null} onSelect={noop} loading={false} failed={true} onRetry={onRetry} />
@@ -306,7 +306,7 @@ describe('Sidebar', () => {
   })
 
   // A programmatic jump (Alt+T / first-load) bumps the flash tick; the selected row pulses so the
-  // landing is visible even when 'nearest' scrolling didn't move anything (cycle 332/R5).
+  // landing is visible even when 'nearest' scrolling didn't move anything.
   it('flashes the selected row when the flash tick changes', async () => {
     const [flash, setFlash] = createSignal(0)
     const { container } = render(() => (

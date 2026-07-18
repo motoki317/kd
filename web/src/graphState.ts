@@ -60,11 +60,9 @@ export function spotlightNeighbors(id: string, edges: KEdge[]): { nodes: Set<str
 
 export function fromSnapshot(g: KGraph): GraphState {
   const nodes: Record<string, KNode> = {}
-  // Tolerate a missing/null nodes or edges array: a namespace whose resources have no relationships
-  // (e.g. a system namespace holding only a ConfigMap + ServiceAccount) yields zero edges, which the
-  // server marshals as JSON `null` (a nil Go slice). `[...null]` throws — and the throw landed inside
-  // the EventSource snapshot listener, BEFORE connState flipped to 'live', so such namespaces hung
-  // forever on "connecting…". The server also now sends `[]`, but stay defensive on the client.
+  // Tolerate missing/null nodes or edges from stale payloads. Before the server guaranteed `[]`, a
+  // zero-edge graph marshaled a nil Go slice as JSON `null`; `[...null]` threw inside EventSource
+  // before connState became 'live', leaving the namespace on "connecting…". Stay defensive here.
   for (const n of g.nodes ?? []) nodes[n.id] = n
   return { nodes, edges: [...(g.edges ?? [])] }
 }

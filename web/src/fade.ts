@@ -19,7 +19,7 @@ export interface FadeContext {
 // current focus. The ORDER is load-bearing (a new filter must slot into the right rung), highest
 // priority first:
 //   1. the selected node itself NEVER fades — the operator's focus stays visible even if a filter
-//      would otherwise exclude it (cycle 224);
+//      would otherwise exclude it;
 //   2. kind filter — a node of an unselected kind always fades, so kinds COMPOSE with (rather than
 //      override) whatever else is active;
 //   3. search query — while searching, only matches stay lit;

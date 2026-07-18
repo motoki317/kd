@@ -226,8 +226,8 @@ export default function ManifestPanel(props: {
           onInput={(e) => setManifestQuery(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
-              // Two-stage Esc: clear first, then blur (matches the other find/search fields,
-              // cycle 268). Keeps the global Esc handler from running until both are done.
+              // Two-stage Esc: clear first, then blur (matches the other find/search fields).
+              // Keeps the global Esc handler from running until both are done.
               if (manifestQuery()) setManifestQuery('')
               else (e.currentTarget as HTMLInputElement).blur()
             }

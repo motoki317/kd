@@ -61,7 +61,7 @@
 .drawer-resizer:focus-visible {
   outline: none;
 }
-/* Expanded mode (cycle 311): lift the drawer out of the flex row and fill the whole canvas area
+/* Expanded mode: lift the drawer out of the flex row and fill the whole canvas area
    (.main is position: relative), covering the topology so logs/manifests get the full width. The
    topbar + namespace sidebar stay visible for navigation. The drop shadow seats it above the canvas
    it now hides. */
@@ -170,7 +170,7 @@
   font-size: var(--fs-meta);
   line-height: 1.45;
 }
-/* Drawer hero header (cycle 128): big kind icon on the left, kind label + name stacked on the
+/* Drawer hero header: big kind icon on the left, kind label + name stacked on the
    right — mirrors the topology card so the drawer reads as the card "expanded". The hero picks
    up a health-tinted icon stroke so it pops at a glance before any text is read. */
 .drawer-hero {
@@ -489,7 +489,7 @@
   display: flex;
   gap: 4px;
 }
-/* Cycle 146: each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
+/* Each meta fact gets its own bordered pill — age, restarts, host, capacity, ns — so
    the row reads as a strip of discrete facts instead of a dot-separated run-on. */
 .drawer-meta > span,
 .drawer-meta > button.drawer-age {
@@ -499,7 +499,7 @@
   padding: 2px 8px;
   white-space: nowrap;
 }
-/* Host meta rendered as a button (cycle 116) so it can navigate to its Node; strip default chrome
+/* Host meta rendered as a button so it can navigate to its Node; strip default chrome
    to match the sibling spans, and add a quiet hover so the click affordance is visible. */
 button.drawer-age {
   font: inherit;
@@ -517,7 +517,7 @@ button.drawer-host:hover {
   gap: 12px;
 }
 /* A container group — "Init containers" / "Containers" — with a count, so the operator reads how
-   many of each kind exist before scanning the cards (cycle 338). */
+   many of each kind exist before scanning the cards. */
 .container-group {
   display: flex;
   flex-direction: column;
@@ -585,7 +585,7 @@ summary.container-group-head::before,
 }
 /* One card per container pairs its runtime status (head row) with its image (indented below), so the
    two facts an operator wants — "is it OK?" and "what's it running?" — sit together instead of in two
-   separate lists (cycle 338). Health tint mirrors the topology card so trouble reads at a glance. */
+   separate lists. Health tint mirrors the topology card so trouble reads at a glance. */
 .container-card {
   display: flex;
   flex-direction: column;
@@ -868,7 +868,7 @@ summary.container-group-head::before,
   font-size: var(--fs-meta);
   max-width: 100%;
   overflow: hidden;
-  /* As of cycle 254 each chip is a button — strip the browser defaults so it still reads as a
+  /* Each chip is a button — strip the browser defaults so it still reads as a
      pill but signals "I do something" on hover (a subtle border lift). */
   background: transparent;
   padding: 0;
@@ -1075,7 +1075,7 @@ summary.container-group-head::before,
   color: #fff;
   border-color: var(--degraded-badge);
   /* Soft red glow so a Warning-events tab announces trouble at a glance — same vocabulary as
-     the non-healthy card halo (cycle 136). */
+     the non-healthy card halo. */
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--health-degraded) 22%, transparent);
 }
 
@@ -1099,4 +1099,3 @@ summary.container-group-head::before,
 .manifest-section.hidden {
   display: none;
 }
-

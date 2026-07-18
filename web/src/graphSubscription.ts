@@ -2,7 +2,7 @@
 // resets on a ctx/ns change, what survives a manual reconnect, how a snapshot resolves the
 // selection — live next to the stream handlers they drive. The reconcile + defensive `?? []`
 // semantics (via graphState's reducers) are load-bearing: a nil-slice snapshot once threw inside
-// the SSE listener and silently killed it (see AGENTS.md "Force empty slices to []").
+// the SSE listener and silently killed it (server invariant: internal/kube/graph/build.go).
 // A factory: App calls it inside its component body so the effect runs under its root.
 
 import { createEffect, createSignal, onCleanup, untrack, type Accessor, type Setter } from 'solid-js'
@@ -63,7 +63,7 @@ export function createGraphSubscription(deps: {
     clearPendingSel,
   } = deps
 
-  // Manual reconnect signal (cycle 291): clicking the offline conn pill bumps this counter,
+  // Manual reconnect signal: clicking the offline conn pill bumps this counter,
   // which the SSE subscription effect tracks — incrementing tears down the stale EventSource and
   // opens a fresh one. EventSource auto-reconnects with backoff, but the operator sometimes knows
   // the server just came back and doesn't want to wait the rest of the backoff window.
@@ -79,7 +79,7 @@ export function createGraphSubscription(deps: {
   createEffect(() => {
     const c = ctx()
     const ns = namespace()
-    reconnectTick() // tracked: a manual reconnect (cycle 291) re-fires the effect
+    reconnectTick() // tracked: a manual reconnect re-fires the effect
     if (!c || !ns) return
     // A CONTEXT change clears it immediately instead of waiting for the new snapshot to resolve
     // it away: if the new cluster never answers (dead credentials), the stale selection ghosted

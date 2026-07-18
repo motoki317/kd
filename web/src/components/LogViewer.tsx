@@ -83,7 +83,7 @@ export default function LogViewer(props: Props) {
   // Client-side line filter ("grep"): hide lines not containing this substring.
   const [filter, setFilter] = createSignal('')
   // Case-sensitive matching for the filter (off by default — most triage is case-insensitive, but
-  // an exact match disambiguates e.g. "ERROR" the level from "error" in prose). (cycle 321)
+  // an exact match disambiguates e.g. "ERROR" the level from "error" in prose).
   const [caseSensitive, setCaseSensitive] = createSignal(false)
   // One filter-highlight pass shared by every render path (plain / ANSI segment / JSON message /
   // JSON extras): split the text on the active filter and wrap each hit in <mark>. Closes over the
@@ -112,7 +112,7 @@ export default function LogViewer(props: Props) {
       writePref('kd:logsWrap', w ? '0' : '1')
       return !w
     })
-  // Per-level filtering (cycle 328): the set of levels to HIDE. The badge classifier (parseLogLevel)
+  // Per-level filtering: the set of levels to HIDE. The badge classifier (parseLogLevel)
   // already labels each line; this reuses it as a filter so an operator can drop INFO/DEBUG noise and
   // scan errors without crafting a regex. Persisted like wrap — a content-agnostic triage habit that
   // should outlive a single pod selection — and kept visible as dimmed chips so the state never hides.
@@ -126,7 +126,7 @@ export default function LogViewer(props: Props) {
       writePref('kd:logsHideLevels', [...next].join(','))
       return next
     })
-  // Per-source filtering for grouped streams (cycle 328/R2, generalized): an aggregated workload
+  // Per-source filtering for grouped streams: an aggregated workload
   // interleaves lines from every descendant pod, and a single pod's merged view interleaves every
   // container — so isolating one noisy source meant typing its name into the filter. hiddenGroups is
   // the set of source keys (pod, or container in combined mode) to suppress. NOT persisted — names are
@@ -185,7 +185,7 @@ export default function LogViewer(props: Props) {
   let pre: HTMLPreElement | undefined
   let filterInput: HTMLInputElement | undefined
 
-  // Jump-to-error (cycle 332/R6): error-level lines are the triage target, but finding the first one
+  // Jump-to-error: error-level lines are the triage target, but finding the first one
   // in a 2000-line buffer of INFO chatter means scrolling forever. errorIndices are the positions of
   // error lines in the visible set; the button/Shift+E steps through them, wrapping. The badge
   // classifier already runs per visible line for the inline badge, so this is reusing that signal.
@@ -390,7 +390,7 @@ export default function LogViewer(props: Props) {
             onInput={(e) => setFilter(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
-                // Two-stage Esc: clear first, then blur (matches sidebar/topology, cycle 268).
+                // Two-stage Esc: clear first, then blur (matches sidebar/topology).
                 if (filter()) setFilter('')
                 else (e.currentTarget as HTMLInputElement).blur()
               }
@@ -411,7 +411,7 @@ export default function LogViewer(props: Props) {
             Aa
           </button>
         </Show>
-        {/* Per-level filter chips (cycle 328): one per recognized severity, colored to match the inline
+        {/* Per-level filter chips: one per recognized severity, colored to match the inline
             badges. A lit chip shows that level; clicking dims it and hides those lines. Lines with no
             detected level always stay (see filterLogLines), so this trims labeled noise, not context. */}
         <Show when={lines().length > 0}>
@@ -432,7 +432,7 @@ export default function LogViewer(props: Props) {
           </span>
         </Show>
         <span class="logs-right">
-          {/* Jump-to-error (cycle 332/R6): only present when the visible buffer holds error lines.
+          {/* Jump-to-error: only present when the visible buffer holds error lines.
               Clicking (or Shift+E) steps to the next one, wrapping — fast triage past INFO chatter. */}
           <Show when={errorIndices().length > 0}>
             <button
@@ -475,13 +475,13 @@ export default function LogViewer(props: Props) {
               }
               // Copy acts on the filtered view, so say so when ANY filter is active (text, level, or
               // source) — otherwise the static "Copy logs" hides that you're copying a subset, not the
-              // whole buffer (cycle 318; extended to level/source filters so all three read alike).
+              // whole buffer. Substring, level, and source filters use the same label.
               title={filtering() ? `Copy ${visibleLines().length} filtered line${visibleLines().length === 1 ? '' : 's'}` : 'Copy logs'}
             />
           </Show>
         </span>
       </div>
-      {/* Per-source toggles for grouped streams (cycle 328/R2, generalized): one chip per source
+      {/* Per-source toggles for grouped streams: one chip per source
           present (pod for a workload, container for a merged pod), colored to match that source's inline
           label so the connection is obvious. Click hides/shows it; shift-click solos it. Only shown
           when more than one source is interleaved. */}
@@ -515,7 +515,7 @@ export default function LogViewer(props: Props) {
               class="log-line"
               // Alt/Option-click copies just this line (with its source/timestamp prefix, matching the
               // bulk copy) — the fastest way to share one error line into a chat or ticket. Alt
-              // rather than Shift so it doesn't fight Shift+click range text-selection (cycle 323).
+              // rather than Shift so it doesn't fight Shift+click range text-selection.
               title="Alt-click to copy this line"
               onClick={(e) => {
                 if (!e.altKey) return
@@ -535,7 +535,7 @@ export default function LogViewer(props: Props) {
                   ?.catch(() => {})
               }}
             >
-              {/* Colored severity badge (cycle 322) for error-first scanning. Only shown when a
+              {/* Colored severity badge for error-first scanning. Only shown when a
                   level is confidently detected; plain lines stay badge-free. */}
               <Show when={parseLogLevel(l.line)}>
                 {(lvl) => <span class={`log-level log-level-${lvl()}`}>{LEVEL_LABEL[lvl()]}</span>}
@@ -548,7 +548,7 @@ export default function LogViewer(props: Props) {
               {/* Time column shows when timestamps are on — toggled by the operator, or defaulted on in
                   combined mode (the merge is time-ordered, so the stamp is what makes the order legible). */}
               <Show when={timestamps() && l.time}>
-                {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover (cycle 324). */}
+                {/* Compact HH:MM:SS.mmm display; full RFC3339 stamp on hover. */}
                 <span class="log-time" title={l.time}>{formatLogTime(l.time!)}</span>
               </Show>
               {/* A structured line (JSON or logfmt) leads with its `message` (bright) and trails the
@@ -564,7 +564,7 @@ export default function LogViewer(props: Props) {
                   // Plain lines (the common case) skip the ANSI parser to keep allocations down — ANSI
                   // segmentation only kicks in for lines that actually contain a CSI escape. Both
                   // branches chunk each segment via splitByMatch so a typed filter highlights the
-                  // matched substring inline (cycle 249), making the hit's position obvious.
+                  // matched substring inline, making the hit's position obvious.
                   <Show
                     when={hasAnsi(l.line)}
                     fallback={<Highlighted text={l.line} />}

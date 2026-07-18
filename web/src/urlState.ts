@@ -53,9 +53,9 @@ export function createUrlState() {
   createEffect(() => writePref('kd:orphans', showOrphaned() ? '1' : '0'))
   // Relationship + kind chips share one toggle/solo semantics — see toggleInSet.
   const toggleRel = (c: RelCategory, solo = false) => setRelFilter(toggleInSet(relFilter(), c, solo))
-  // Kind filter (cycle 203): a multi-select set of kinds to spotlight, composing with search +
+  // Kind filter: a multi-select set of kinds to spotlight, composing with search +
   // healthFilter. Lives in App so it resets on namespace/view change alongside the others. Seed
-  // from `?kinds=` so a shared URL restores the filtered view (cycle 217).
+  // from `?kinds=` so a shared URL restores the filtered view.
   const urlKinds = params.get('kinds')
   const [kindFilter, setKindFilter] = createSignal<Set<string>>(
     new Set(urlKinds ? urlKinds.split(',').filter(Boolean) : []),
@@ -101,7 +101,7 @@ export function createUrlSync(deps: {
   const { ctx, contextsInfo, namespace, groupBy, relFilter, capResource, showOrphaned, kindFilter, selectedNode } = deps
   // Mirror ctx/namespace/view/selection back into the URL (replace, not push, so Back isn't spammed).
   // ctx is included only when the switcher is enabled (kubeconfig mode); in-cluster keeps URLs clean.
-  // Kind filter (cycle 217) is included so a filtered view ("pods only") is shareable via URL.
+  // Kind filter is included so a filtered view ("pods only") is shareable via URL.
   // Search and healthFilter are kept ephemeral — those are mid-investigation state, not view config.
   createEffect(() => {
     const p = new URLSearchParams()

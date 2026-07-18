@@ -25,9 +25,10 @@ import (
 // rules) stay unstructured and flow through the CR-specific paths (CR health heuristic,
 // CR-defined edge inferrer).
 
-// typedFactories enumerates every kind the graph package has typed per-kind logic for, mapped
-// to a factory that returns a fresh empty value of that type. The kind/apiVersion key is the
-// stringified GVK as kd already exposes via describe().
+// typedFactories enumerates every kind the graph package handles through a typed assertion. The
+// dynamic store yields *unstructured.Unstructured, so omitting a kind makes its live extractor
+// silently return empty even though typed-fixture tests pass. Each factory returns a fresh value;
+// the key is the stringified GVK already exposed by describe().
 var typedFactories = map[string]func() runtime.Object{
 	"v1/Pod":                                   func() runtime.Object { return &corev1.Pod{} },
 	"v1/ReplicationController":                 func() runtime.Object { return &corev1.ReplicationController{} },

@@ -415,7 +415,7 @@ describe('layoutGraph', () => {
     expect(lower.top - upper.bot).toBeGreaterThan(18) // wider than the within-block COL_V_GAP
   })
 
-  it('lays parents left of their children in LR (Ownership view orientation, cycle 310)', () => {
+  it('lays parents left of their children in LR (Ownership view orientation)', () => {
     const l = layoutGraph(nodes, edges, 'LR')
     const x = (id: string) => l.nodes.find((n) => n.id === id)!.x
     expect(x('dep')).toBeLessThan(x('rs'))
@@ -423,7 +423,7 @@ describe('layoutGraph', () => {
     expect(x('rs')).toBeLessThan(x('p2'))
   })
 
-  it('collapses a high-fanout hub in LR, placing the visible cards + pill to the right (cycle 310)', () => {
+  it('collapses a high-fanout hub in LR, placing the visible cards + pill to the right', () => {
     // A ReplicaSet owning 24 pods. The fold leaves the newest COLLAPSE_VISIBLE pods + a pill; those
     // still wrap into columns that grow rightward (LR), and the pill sits to the right like a child.
     const rs: KNode = { id: 'rs', kind: 'ReplicaSet', name: 'web-x', health: 'Healthy' }

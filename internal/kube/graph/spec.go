@@ -4,6 +4,16 @@ package graph
 // address/ports, an Ingress's routes, a Role's rules, a binding's grantees — as display-ready strings
 // on the graph Node: "what does this resource declare", the counterpart to fields.go's "what is this
 // pod/node doing at runtime". This file keeps only the formatting/access helpers those domains share.
+//
+// To add a fact: extract it in spec_<domain>.go (dispatch in spec_routing.go); add its Node field,
+// build.go assignment, and diff.go nodeEqual check; then add the matching KNode field in
+// web/src/types.ts and labelled chip/row in web/src/components/KindFacts.tsx. A typed extractor also
+// needs its kind in unstructured.go typedFactories. Never expose Secret values; emit key names and
+// sizes only. Represent a meaningful zero as a string so omitempty cannot erase it.
+//
+// For a CR, confirm each Nested* path against `kubectl get ... -o json`, not the drawer's YAML view:
+// its flattened indentation can make a copied fixture pass while the live field stays empty.
+// Unstructured numbers may decode as int64 or float64, so accept both.
 
 import (
 	"fmt"

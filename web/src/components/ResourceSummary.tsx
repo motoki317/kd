@@ -201,7 +201,7 @@ export default function ResourceSummary(props: Props) {
 
   return (
     <div class="drawer-summary">
-      {/* Drawer "hero" header (cycle 128): a card-sized kind silhouette plus the kind label and
+      {/* Drawer "hero" header: a card-sized kind silhouette plus the kind label and
           name stacked beside it — mirrors the topology card's icon-forward design so the drawer
           reads as the "blown up" version of the card you just clicked. The icon's host <g> picks
           up the health color (.health-tint*) so the hero pops in the row even before the eye
@@ -378,7 +378,7 @@ export default function ResourceSummary(props: Props) {
                   title={`Copy ${k}${v ? `=${v}` : ''}${v ? ' · Shift+click: value only' : ''}`}
                   onClick={async (e) => {
                     // Capture el BEFORE await — DOM nulls currentTarget after the synchronous
-                    // handler returns. Same pattern as the drawer share button (cycle 275/281).
+                    // handler returns. Same pattern as the drawer share button.
                     const el = e.currentTarget as HTMLButtonElement
                     const text = e.shiftKey && v ? v : (v ? `${k}=${v}` : k)
                     try {

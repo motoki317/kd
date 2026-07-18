@@ -1,4 +1,4 @@
-// Theme preference (cycle 301): the dashboard used to follow the OS color scheme with no override.
+// Theme preference: the dashboard used to follow the OS color scheme with no override.
 // Operators on a light-defaulted OS who want a dark canvas (or vice versa) had no recourse. A
 // three-way preference — light / dark / system — is stored in localStorage and resolved to the
 // concrete scheme that paints the page. 'system' still tracks the OS live so the original

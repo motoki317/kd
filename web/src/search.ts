@@ -7,8 +7,8 @@ import type { KNode } from './types'
 // (labels), what it runs (images), and its current state (status — so "CrashLoopBackOff" spotlights
 // every troubled pod). Case-insensitive substring match; callers pass the query pre-trimmed.
 //
-// Round-trip with the Kind/name copy gestures (cycle 287 Shift+click, cycle 288 'y'): when the
-// query contains a single "/" and both halves are non-empty, treat it as a structured
+// A copied Kind/name round-trips into search: when the query contains a single "/" and both halves
+// are non-empty, treat it as a structured
 // "Kind/name" predicate — left = kind substring, right = name substring (both case-insensitive).
 // So pasting "Pod/web-abc" jumps straight to that resource without lighting up every other Pod or
 // every other "web-*" resource. Plain substring still wins when the query has no slash or one of

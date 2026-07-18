@@ -70,7 +70,7 @@ export default function App() {
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
 
-  // Navigation history (cycle 300): operators walk owner chips and event-source pills to chase a
+  // Navigation history: operators walk owner chips and event-source pills to chase a
   // controller→pod→pod-event trail. Without history, going back means remembering what they had
   // selected — error-prone after a few hops. A stack of prior selection IDs powers a "back"
   // button in the drawer. Cleared on namespace/view/ctx change so we don't restore an
@@ -97,7 +97,7 @@ export default function App() {
   // Topology search lives here (not in Topology) so it resets on namespace/view change.
   const [search, setSearch] = createSignal('')
   const [showHelp, setShowHelp] = createSignal(false)
-  // Collapsible sidebar (cycle 299): operators with wide ownership graphs sometimes want every
+  // Collapsible sidebar: operators with wide ownership graphs sometimes want every
   // pixel for the canvas. Toggled from the topbar; state persists in localStorage so a
   // reload doesn't surprise them with the sidebar re-appearing. Default expanded — except on a
   // phone-width screen with no stored pref, where the 220px sidebar would leave a sliver of
@@ -177,7 +177,7 @@ export default function App() {
     mq.addEventListener('change', onMq)
     onCleanup(() => mq.removeEventListener('change', onMq))
   }
-  // Theme preference (cycle 301): light / dark / system, cycled from a topbar toggle. The effect
+  // Theme preference: light / dark / system, cycled from a topbar toggle. The effect
   // persists the choice and re-stamps <html data-theme>; index.tsx already applied it pre-render.
   // When the choice is 'system', track OS scheme changes live so the canvas follows a mid-session
   // OS flip — the explicit pins ignore the OS, so we tear the listener down when not on 'system'.
@@ -327,7 +327,7 @@ export default function App() {
     <div class="app">
       <header class="topbar">
         {/* Clickable home: resets grouping + relationships + filters + selection without touching
-            the namespace (cycle 290). Operators land on the default "group by relationship,
+            the namespace. Operators land on the default "group by relationship,
             ownership only, no spotlight" stance — without hunting for the right controls. */}
         {/* Sidebar toggle: the only way to reclaim (or restore) the namespace column. Far left,
             directly above the panel it controls (proximity); shares the topbar-utility chrome. */}
@@ -360,7 +360,7 @@ export default function App() {
             setSelectedId(null)
           }}
         >
-          {/* Brand mark (cycle 131): a tiny stacked-tier glyph that echoes the ownership tree the
+          {/* Brand mark: a tiny stacked-tier glyph that echoes the ownership tree the
               dashboard draws (a controller over its children). Pure decoration — the "kd" text
               still carries the name — but anchors the topbar so the brand reads as a logo rather
               than a bare lowercase word. */}
@@ -397,7 +397,7 @@ export default function App() {
         {/* The group-by segmented control + relationship/health/kind filters all live together in
             the Topology toolbar now (one control surface on the canvas), so the topbar stays just
             brand · context · breadcrumb · status · theme. */}
-        {/* When offline (cycle 291), the conn pill becomes clickable as a manual reconnect:
+        {/* When offline, the conn pill becomes clickable as a manual reconnect:
             EventSource auto-reconnects, but on a long backoff — operators who know the server is
             back shouldn't have to wait it out. role/title shift to reflect the affordance.
             Hidden entirely in the no-access / not-signed-in states: with no namespace there is no
@@ -441,7 +441,7 @@ export default function App() {
           </button>
         </Show>
         </Show>
-        {/* Theme toggle (cycle 301): one button cycles system → light → dark. The glyph names the
+        {/* Theme toggle: one button cycles system → light → dark. The glyph names the
             CURRENT mode (auto/sun/moon) and the title spells out what a click switches to, so the
             three-way control stays legible without a dropdown stealing topbar width. */}
         <button
@@ -595,8 +595,8 @@ export default function App() {
             usage={selectedUsage()}
             workloadUsage={selectedWorkloadUsage()}
             hostCapacity={selectedHostCapacity()}
-            // A cross-reference jump (cycle 300) pushes history so the drawer back button walks back to
-            // the resource the operator came from. The cycle-300 helper pushes the prior selection only
+            // A cross-reference jump pushes history so the drawer back button walks back to
+            // the resource the operator came from. selectAndRemember pushes the prior selection only
             // when changing to a different node — so re-selecting the same node is a no-op.
             onNavigateRef={(ref) => {
               const match = Object.values(graph.nodes).find((n) => matchSel(n, ref))

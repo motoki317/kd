@@ -15,7 +15,7 @@
   position: relative;
 }
 .brand {
-  /* Now a <button> (cycle 290) so clicking the logo resets the view. Strip button chrome so it
+  /* Now a <button> so clicking the logo resets the view. Strip button chrome so it
      reads identical to the prior <div> presentation, only with cursor + focus affordance. */
   background: none;
   border: 0;
@@ -289,7 +289,7 @@
   .conn.connecting,
   .conn.live.conn-ping::before { animation: none; }
 }
-/* Offline-as-button (cycle 291): when offline, the pill becomes a clickable retry. Inherit the
+/* Offline-as-button: when offline, the pill becomes a clickable retry. Inherit the
    .conn shape but add hover/focus affordance so the operator can tell it's actionable. */
 button.conn.conn-retry {
   background: none;
@@ -354,7 +354,7 @@ button.conn.conn-retry:focus-visible {
   color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-/* Theme toggle (cycle 301): shares the round bordered chrome of .help-btn so the two topbar
+/* Theme toggle: shares the round bordered chrome of .help-btn so the two topbar
    utility buttons read as a set. The icon strokes pick up the dim text color (filled accents like
    the moon/auto disc use currentColor) so the glyph sits at the same visual weight as the ? mark. */
 .theme-btn {

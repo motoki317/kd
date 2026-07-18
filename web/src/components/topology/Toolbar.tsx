@@ -158,7 +158,7 @@ export default function Toolbar(props: Props) {
             ref={(el) => props.searchRef?.(el)}
             placeholder="Search resources…  ( / )"
             aria-label="Search resources in current view"
-            // Surface the structured-form (cycle 295) on hover so an operator who pasted a
+            // Surface the structured-form on hover so an operator who pasted a
             // Kind/name and got a single hit can intuit why — also discoverable for those who
             // haven't read the help overlay.
             title="Search by name, kind, status, IP, image, or label. Enter steps through matches; po/web finds one kind."
@@ -225,7 +225,7 @@ export default function Toolbar(props: Props) {
         </Show>
         {/* Clear-all: surfaces the same operation as Escape, but discoverable without knowing
             the shortcut. Visible only when at least one filter is on, so the toolbar stays
-            quiet when there's nothing to clear (cycle 216). */}
+            quiet when there's nothing to clear. */}
         <Show when={(matches() || props.healthFilter || activeKinds()) && props.onClearFilters}>
           <button class="topology-clear" onClick={() => props.onClearFilters?.()} title="Clear all filters (Esc)">
             clear
@@ -471,7 +471,7 @@ export default function Toolbar(props: Props) {
                       {kindIcon(c.kind)}
                     </svg>
                     <span class="kind-chip-label">{kindShortLabel(c.kind)}</span>
-                    {/* Tiny severity dot (cycle 289): kinds with any non-Healthy resource get a
+                    {/* Tiny severity dot: kinds with any non-Healthy resource get a
                         colored pip in their bottom-right. Preserves the count-based chip order so
                         muscle memory survives, while still surfacing "which kinds carry trouble" at
                         a glance — answer the operator's "where do I look?" without scanning cards. */}

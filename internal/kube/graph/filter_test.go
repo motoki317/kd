@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// SummarizeBuilt is the cycle-201 entry point used by the SSE handler so the same unfiltered
+// SummarizeBuilt is the SSE handler entry point, so the same unfiltered
 // graph powers both the filtered view payload and the namespace summary (no double Build). Pin
 // behavior so future refactors can't quietly drop the parity with Summarize.
 func TestSummarizeBuiltMatchesSummarize(t *testing.T) {

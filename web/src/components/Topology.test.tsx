@@ -115,13 +115,13 @@ describe('Topology', () => {
     expect(auth.container.querySelector('.topology-empty-text')?.getAttribute('role')).toBe('status')
   })
 
-  it('tags Pod cards with kind-pod (cycle 202: distinct accent for the fundamental workload)', () => {
+  it('tags Pod cards with kind-pod (distinct accent for the fundamental workload)', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     // Only the two Pods carry the kind-pod class; the Deployment doesn't.
     expect(container.querySelectorAll('g.node.kind-pod').length).toBe(2)
   })
 
-  it('kind chips with any non-Healthy resource get a severity dot (cycle 289)', () => {
+  it('kind chips with any non-Healthy resource get a severity dot', () => {
     // nodes contains a Degraded Pod, so the Pod chip should carry .troubled + a .kind-chip-dot.
     // The Deployment is Healthy, so the Deployment chip should not. onKindFilter has to be
     // present for chips to render at all (the Show gate).
@@ -201,7 +201,7 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-stripe')).toBeTruthy()
   })
 
-  it('renders a kind-filter chip per present kind, ordered by count (cycle 203)', () => {
+  it('renders a kind-filter chip per present kind, ordered by count', () => {
     // nodes has 2 Pods + 1 Deployment, so the chips should be [Pod (2), Deployment (1)].
     const onKindFilter = vi.fn()
     const { container } = render(() => (
@@ -232,7 +232,7 @@ describe('Topology', () => {
     expect(btn.querySelector('.toolbar-filters-count')).toBeNull()
   })
 
-  it('fades non-matching kinds when a kind filter is active, lit ones survive (cycle 203)', () => {
+  it('fades non-matching kinds when a kind filter is active, lit ones survive', () => {
     // kindFilter={Pod} → the Deployment should fade, the two Pods stay lit.
     const { container } = render(() => (
       <Topology
@@ -257,7 +257,7 @@ describe('Topology', () => {
     expect(container.querySelector('.topology-kinds')).toBeNull()
   })
 
-  it('count reflects the kind filter ("2 of 3" when only Pods are active, cycle 213)', () => {
+  it('count reflects the kind filter ("2 of 3" when only Pods are active)', () => {
     const { container } = render(() => (
       <Topology
         nodes={nodes}
@@ -269,11 +269,11 @@ describe('Topology', () => {
       />
     ))
     // 2 Pods of 3 total resources, computed from the intersected filter set. (Trailing sr-only noun
-    // for the live region, cycle 335/R8.)
+    // for the live region.)
     expect(container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources match')
   })
 
-  it('selected node never fades, even when a filter excludes it (cycle 224)', () => {
+  it('selected node never fades, even when a filter excludes it', () => {
     // kindFilter={Deployment}, selected the Pod web-abc → the Pod stays lit so the operator's
     // focus doesn't ghost out. Of the two unselected nodes, the other Pod fades and the
     // Deployment stays lit (matches the filter).
@@ -301,11 +301,11 @@ describe('Topology', () => {
     const firstChip = container.querySelector('.kind-chip') as HTMLButtonElement
     fireEvent.click(firstChip)
     // The most common kind (Pod) sits first, so clicking the first chip dispatches 'Pod'. The
-    // second arg is `solo` (cycle 255) — false on a plain click; Shift+click sets it true.
+    // second arg is `solo` — false on a plain click; Shift+click sets it true.
     expect(onKindFilter).toHaveBeenCalledWith('Pod', false)
   })
 
-  it('shows "X of N matches" when the selected node is itself a match (cycle 285)', () => {
+  it('shows "X of N matches" when the selected node is itself a match', () => {
     // selectedId=2 is the Degraded Pod 'web-abc'; search "web" matches both Deployment 'web' (id=1)
     // and 'web-abc'. In severity-first order the Degraded pod (web-abc, id=2) comes first, so the
     // selection is position 1 of 2.
@@ -347,7 +347,7 @@ describe('Topology', () => {
     expect(noneBtn.disabled).toBe(true)
   })
 
-  it('Enter in the topology search selects the most-troubled match (cycle 259)', () => {
+  it('Enter in the topology search selects the most-troubled match', () => {
     const onSelect = vi.fn()
     // Render with a search query that hits two nodes; the Degraded one ('web-abc') should win
     // the severity-first sort even though 'api-xyz' is alpha-first.
@@ -379,7 +379,7 @@ describe('Topology', () => {
     expect(onSelect2).toHaveBeenCalledWith('2')
   })
 
-  it('clicking the already-selected card calls onDeselect (cycle 298 toggle; deferred since 315)', () => {
+  it('clicking the already-selected card calls onDeselect after the click delay', () => {
     vi.useFakeTimers()
     try {
       const onSelect = vi.fn()
@@ -388,7 +388,7 @@ describe('Topology', () => {
         <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="2" onSelect={onSelect} onDeselect={onDeselect} />
       ))
       // Node id=2 is selected. Click it again — should deselect, not re-select. The deselect is
-      // deferred ~220ms (cycle 315) so a double-click can cancel it, so advance timers to see it.
+      // deferred ~220ms so a double-click can cancel it, so advance timers to see it.
       const card = container.querySelector('g.node.selected') as SVGGElement
       expect(card).toBeTruthy()
       fireEvent.click(card)
@@ -401,7 +401,7 @@ describe('Topology', () => {
     }
   })
 
-  it('double-clicking a card cancels the deferred deselect and keeps it selected (cycle 315)', () => {
+  it('double-clicking a card cancels the deferred deselect and keeps it selected', () => {
     vi.useFakeTimers()
     try {
       const onSelect = vi.fn()
@@ -422,7 +422,7 @@ describe('Topology', () => {
     }
   })
 
-  it('clicking a kind-grouping kind group bg solos that kind (cycle 276)', () => {
+  it('clicking a kind-grouping kind group bg solos that kind', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
       <Topology
@@ -447,7 +447,7 @@ describe('Topology', () => {
     expect(solo).toBe(true)
   })
 
-  it('Shift+click on a kind chip dispatches solo=true (cycle 255)', () => {
+  it('Shift+click on a kind chip dispatches solo=true', () => {
     const onKindFilter = vi.fn()
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} onKindFilter={onKindFilter} kindFilter={new Set<string>()} />
@@ -947,7 +947,7 @@ describe('Topology', () => {
     expect(container.querySelector('.cap-tooltip-hint')).toBeNull()
   })
 
-  it('clears all filters via onClearFilters (cycle 216)', () => {
+  it('clears all filters via onClearFilters', () => {
     const onClearFilters = vi.fn()
     const { container } = render(() => (
       <Topology
@@ -982,7 +982,7 @@ describe('Topology', () => {
     expect(noFilter.container.querySelector('.topology-count')?.textContent).toBe('3 resources')
     cleanup()
     // Search "web" matches the Deployment + web-abc Pod (2 of 3). textContent includes the sr-only
-    // suffix that gives the live announcement a noun (cycle 335/R8).
+    // suffix that gives the live announcement a noun.
     const filtered = render(() => <Topology nodes={nodes} edges={edges} search="web" {...base} />)
     expect(filtered.container.querySelector('.topology-count')?.textContent).toBe('2 of 3 resources match')
   })
@@ -1079,14 +1079,14 @@ describe('Topology', () => {
   })
 
   // The match count is a polite live region so screen readers hear it update as the filter narrows.
-  it('marks the resource count as an atomic polite live region (cycle 335/R8)', () => {
+  it('marks the resource count as an atomic polite live region', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const count = container.querySelector('.topology-count')!
     expect(count.getAttribute('aria-live')).toBe('polite')
     expect(count.getAttribute('aria-atomic')).toBe('true')
   })
 
-  it('calls onDeselect when a background click lands outside any card (cycle 161)', () => {
+  it('calls onDeselect when a background click lands outside any card', () => {
     const onDeselect = vi.fn()
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="1" onDeselect={onDeselect} />
@@ -1098,7 +1098,7 @@ describe('Topology', () => {
     expect(onDeselect).toHaveBeenCalledOnce()
   })
 
-  it('lights only the selected node\'s DIRECT neighbours, fading the rest (reverts cycle 157)', () => {
+  it('lights only the selected node\'s DIRECT neighbours, fading the rest', () => {
     // Chain: Deployment(1) → ReplicaSet(2) → Pod(3), plus an unrelated standalone Pod(4). Selecting
     // the Pod focuses on its DIRECT relations only: the Pod(3) and its owner ReplicaSet(2) stay lit;
     // the Deployment(1) two hops up AND the standalone(4) both fade. The user's "focus only into the
@@ -1223,7 +1223,7 @@ describe('Topology', () => {
     expect(selected?.textContent).toMatch(/-3$/)
   })
 
-  it('accents the direct edge and fades the rest — direct-only focus (cycle 309, tightened)', () => {
+  it('accents the direct edge and fades the rest — direct-only focus', () => {
     // Chain: Deployment(1) → ReplicaSet(2) → Pod(3). Selecting the Pod accents the RS→Pod edge (2→3)
     // that touches it, and — now that the spotlight is direct-only — FADES the Deployment→RS edge
     // (1→2) further up the tree (its endpoints are outside the 1-hop focus). The accented edge and the
@@ -1248,7 +1248,7 @@ describe('Topology', () => {
     expect(container.querySelectorAll('.edges path.faded').length).toBe(1)
   })
 
-  it('does NOT call onDeselect when a card click lands on a node (cycle 161)', () => {
+  it('does NOT call onDeselect when a card click lands on a node', () => {
     const onDeselect = vi.fn()
     const { container } = render(() => (
       <Topology nodes={nodes} edges={edges} search="" {...base} selectedId="1" onDeselect={onDeselect} />
@@ -1286,7 +1286,7 @@ describe('Topology', () => {
     expect(kindPod?.textContent).toBe('api-7d9f-2xkp')
   })
 
-  it('search match count + Enter-cycle respect the active kind filter (cycle 314)', () => {
+  it('search match count + Enter-cycle respect the active kind filter', () => {
     // Search "web" matches the Deployment "web" and the Pod "web-abc" (2). With a Pod-only kind
     // filter active, only the Pod should count as a match — the faded Deployment must be excluded.
     const onSelect = vi.fn()
@@ -1399,7 +1399,7 @@ describe('Topology', () => {
     expect(hov.container.querySelectorAll('.edges path.flow.flow-lit').length).toBe(0) // but no speed-up
   })
 
-  // Edge-hover endpoint halo (cycle 330/R4): hovering an edge marks both its endpoint cards .target.
+  // Edge-hover endpoint halo: hovering an edge marks both its endpoint cards .target.
   it('halos both endpoint cards while an edge is hovered', () => {
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const edgeG = container.querySelector('.edges > g') as SVGGElement

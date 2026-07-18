@@ -45,8 +45,8 @@ func loggableFloor(kind string) bool {
 }
 
 func buildGraph(objs, sourcePods []runtime.Object, keepCompletedPods bool) *Graph {
-	// Non-nil Nodes so an empty graph marshals `"nodes":[]`, not `null` (Edges is guarded after
-	// buildEdges below, which reassigns it).
+	// Graph Nodes and Edges must marshal as `[]`, never `null`: a null once threw inside the client's
+	// SSE listener and silently killed it. Initialize Nodes here; buildEdges reassigns Edges below.
 	g := &Graph{Nodes: []Node{}}
 	objs = slices.Clone(objs)
 	for i, o := range objs {
@@ -127,10 +127,7 @@ func buildGraph(objs, sourcePods []runtime.Object, keepCompletedPods bool) *Grap
 
 	var endpoints map[string]*Endpoints
 	g.Edges, endpoints = buildEdges(g.Nodes, objs, newIndex(g.Nodes))
-	// buildEdges returns a nil slice when nothing relates (a namespace of standalone resources — only
-	// a ConfigMap + ServiceAccount, say). A nil slice marshals as JSON `null`, which the client's
-	// snapshot reducer (`[...g.edges]`) threw on, hanging the whole namespace on "connecting…" forever.
-	// `edges` is non-optional in the wire contract, so force `[]`.
+	// buildEdges returns nil when nothing relates; preserve the `[]` wire contract above.
 	if g.Edges == nil {
 		g.Edges = []Edge{}
 	}

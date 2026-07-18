@@ -4,7 +4,7 @@
   display: flex;
   min-height: 0;
 }
-/* Collapsed sidebar (cycle 299): the operator pressed Cmd/Ctrl+B to reclaim canvas width. Hide
+/* Collapsed sidebar: the operator pressed Cmd/Ctrl+B to reclaim canvas width. Hide
    instead of unmount so SSE-driven namespace summaries keep flowing and the toggle restores
    state instantly (the namespace list is otherwise re-fetched on remount). */
 .body.sidebar-collapsed .sidebar {
