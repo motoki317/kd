@@ -112,10 +112,10 @@ export function fitBoxFloored(
   }
 }
 
-// clampPan keeps at least `margin` px of the laid-out graph on-screen, so a pan can't fling the whole
-// graph off the canvas. `content` is the graph size ALREADY multiplied by the current scale; `view`
-// is the viewport. A graph smaller than the viewport is unaffected (the lower bound `margin - content`
-// is then more negative than any reasonable pan, and the upper bound `view - margin` is past it).
+// clampPan keeps an overflowing axis covering the viewport and at least `margin` px of a smaller
+// axis visible. `content` is the graph size ALREADY multiplied by the current scale; `view` is the
+// viewport. Axes choose their bounds independently so a wide-but-short graph stays covered only
+// horizontally.
 export function clampPan(
   tx: number,
   ty: number,
@@ -123,8 +123,12 @@ export function clampPan(
   view: { width: number; height: number },
   margin = 60,
 ): { tx: number; ty: number } {
+  const minTx = content.width >= view.width ? view.width - content.width : margin - content.width
+  const maxTx = content.width >= view.width ? 0 : view.width - margin
+  const minTy = content.height >= view.height ? view.height - content.height : margin - content.height
+  const maxTy = content.height >= view.height ? 0 : view.height - margin
   return {
-    tx: Math.min(Math.max(tx, margin - content.width), view.width - margin),
-    ty: Math.min(Math.max(ty, margin - content.height), view.height - margin),
+    tx: Math.min(Math.max(tx, minTx), maxTx),
+    ty: Math.min(Math.max(ty, minTy), maxTy),
   }
 }

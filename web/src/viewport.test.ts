@@ -161,16 +161,36 @@ describe('fitBoxFloored', () => {
 describe('clampPan', () => {
   const view = { width: 1000, height: 800 }
 
-  it('keeps a large graph from being flung fully off-screen (≥ margin stays visible)', () => {
+  it('keeps a large graph covering the viewport', () => {
     const content = { width: 4000, height: 3000 } // bigger than the viewport
-    // Panned far left/up: tx clamps to its lower bound margin - content.width; not past it.
+    // Panned far left/up: the content's far edge stays at the viewport's far edge.
     const far = clampPan(-99999, -99999, content, view)
-    expect(far.tx).toBe(60 - 4000)
-    expect(far.ty).toBe(60 - 3000)
-    // Panned far right/down: clamps to view - margin so a sliver of graph stays on the far edge.
+    expect(far.tx).toBe(1000 - 4000)
+    expect(far.ty).toBe(800 - 3000)
+    // Panned far right/down: the content's near edge stays at the viewport's near edge.
     const near = clampPan(99999, 99999, content, view)
-    expect(near.tx).toBe(1000 - 60)
-    expect(near.ty).toBe(800 - 60)
+    expect(near.tx).toBe(0)
+    expect(near.ty).toBe(0)
+  })
+
+  it('keeps the 60 px visible bounds for a graph smaller than the viewport', () => {
+    const content = { width: 400, height: 300 }
+    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 60 - 400, ty: 60 - 300 })
+    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 1000 - 60, ty: 800 - 60 })
+  })
+
+  it('chooses covered and keep-visible bounds independently per axis', () => {
+    const content = { width: 4000, height: 300 }
+    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 1000 - 4000, ty: 60 - 300 })
+    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 0, ty: 800 - 60 })
+  })
+
+  it('switches to covered bounds at exact viewport equality', () => {
+    const equal = clampPan(500, -500, { width: 1000, height: 800 }, view)
+    expect(equal).toEqual({ tx: 0, ty: 0 })
+
+    const oneShort = clampPan(-99999, 99999, { width: 999, height: 799 }, view)
+    expect(oneShort).toEqual({ tx: 60 - 999, ty: 800 - 60 })
   })
 
   it('passes a within-bounds pan through unchanged', () => {
