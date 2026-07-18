@@ -107,7 +107,7 @@ export function createClusterSession(deps: {
   // graph subscription's `summary` handler; mergedNamespaces is the single source the sidebar (and the
   // trouble jump below) reads.
   const { mergedNamespaces, recordSummary } = createLiveHealth({ ctx, namespaceList, pollGen })
-  // Kind → API short-name map (cycle 302): fetched once per context so cards label kinds with the
+  // Kind → API short-name map: fetched once per context so cards label kinds with the
   // cluster's own abbreviations (cm, pdb, CRD-defined shorts) instead of a hardcoded guess. Keyed
   // on ctx because CRDs — hence short names — differ per cluster. Feeds names.ts via a setter
   // rather than props so every kindShortLabel() call site picks it up without threading the map

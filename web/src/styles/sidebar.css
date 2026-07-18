@@ -118,7 +118,7 @@
 .ns-list button.active {
   background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
-/* Active-row left accent (cycle 134): a 3px vertical bar at the left edge so the active namespace
+/* Active-row left accent: a 3px vertical bar at the left edge so the active namespace
    reads at a peripheral glance without needing to track the row tint. Tied to ::before so it
    layers under the button content cleanly. Blueprint: the bar carries a cyan glow so it reads as
    the active circuit line. */
@@ -197,13 +197,13 @@
   stroke: var(--pod-accent);
 }
 /* A faded kind-group sinks the whole group (bg + label + cards inside) — kind-filter active
-   and this kind isn't in it (cycle 234). */
+   and this kind isn't in it. */
 .kind-group.faded {
   opacity: 0.2;
   transition: opacity 0.12s;
 }
 
-/* Host group (Nodes view, cycle 205). Mirrors .kind-group but distinct enough that the two
+/* Host group (Nodes view). Mirrors .kind-group but distinct enough that the two
    grouped views don't visually conflate — a slightly warmer fill, no surface-2 shadow. */
 .kind-groups .kind-group-count {
   font-weight: 400;

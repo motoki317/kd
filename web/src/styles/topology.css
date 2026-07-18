@@ -473,7 +473,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Severity dot (cycle 289): small colored pip on chips whose kind carries any non-Healthy
+/* Severity dot: small colored pip on chips whose kind carries any non-Healthy
    resource. Sits between the label and the count so it reads as "this kind has trouble of THIS
    color" — the inline color is set by JS to match the worst-health hue. */
 .kind-chip-dot {
@@ -740,9 +740,9 @@
 .node {
   cursor: pointer;
   /* Resting elevation: a tiny drop-shadow lifts every card slightly off the dotted canvas, so cards
-     read as physical "tiles" rather than flat fills (cycle 127). Hover deepens it; transitions
-     here so the lift fades in/out instead of jumping.
-     Cycle 159: also transition transform, so SSE-patched layout shifts glide instead of teleport. */
+     read as physical "tiles" rather than flat fills. Hover deepens it; transitions
+     here so the lift fades in/out instead of jumping. Transform also transitions so SSE-patched
+     layout shifts glide instead of teleporting. */
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
   transition: opacity 0.12s, filter 0.15s, transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
   /* Brief fade on first mount — eases the "connecting → graph" snap and also gentles in SSE-added
@@ -873,7 +873,7 @@
   stroke-dasharray: 5 4;
   opacity: 0.9;
 }
-/* Cycle 160: a removed node renders briefly at its last position with this class so the layout
+/* A removed node renders briefly at its last position with this class so the layout
    diff is visible as a fade-out instead of an instant vanish. pointer-events: none keeps it from
    competing for clicks; the transition is on the .node opacity rule above. */
 .node.exiting {
@@ -941,11 +941,9 @@
 .node.h-degraded { --card-border: var(--health-degraded); }
 .node.target { --card-border: var(--accent); }
 .node.selected { --card-border: var(--accent); }
-/* Card background carries health: every state gets a colored border + matching pastel tint so the
-   whole card body reads as the status indicator. Cycle 126 dropped the inset stripe in favor of
-   this (frees the left padding for the larger icon, and the colored body is far more visible at
-   zoom-out than a 5px line was). Healthy uses the gentlest tint so a single degraded card still
-   pops out of a wall of green; selection overrides with the accent border. */
+/* Card background carries health: a colored border and pastel tint remain visible at zoom-out.
+   Healthy uses the gentlest tint so a degraded card still pops out of a wall of green; selection
+   overrides with the accent border. */
 .node-bg {
   fill: color-mix(in srgb, var(--health-healthy) 5%, var(--surface));
   stroke: var(--card-border);
@@ -955,7 +953,7 @@
 .node.h-degraded .node-bg {
   stroke-width: 2;
   fill: color-mix(in srgb, var(--health-degraded) 9%, var(--surface));
-  /* Soft health-tinted halo (cycle 136): only non-healthy states wear it, so trouble cards
+  /* Soft health-tinted halo: only non-healthy states wear it, so trouble cards
      announce themselves from across a packed canvas before the eye reads the border color. The
      glow lives on .node-bg (not .node) so it doesn't replace the hover/selected lift filter on
      the parent group. */
@@ -978,7 +976,7 @@
 .node.selected .node-bg {
   stroke-width: 2.5;
 }
-/* Edge-hover endpoint halo (cycle 330/R4): an accent ring + glow distinct from the resting health
+/* Edge-hover endpoint halo: an accent ring + glow distinct from the resting health
    tint, so hovering an edge makes "these two cards" pop even when they're far apart. Transient, so it
    sits below .selected in the cascade and a selected endpoint keeps its selection look. */
 .node.target .node-bg {
@@ -1034,7 +1032,7 @@
 .node-icon-large {
   stroke-width: 0.75;
 }
-/* Pod kind accent (cycle 202): pod cards are the fundamental workload, so the icon and the kind
+/* Pod kind accent: pod cards are the fundamental workload, so the icon and the kind
    label pick up --pod-accent. The card body + border still carry health, and the accent stays
    visually quiet against a degraded red / progressing amber border so status never gets lost. */
 .node.kind-pod .node-icon {
@@ -1066,7 +1064,7 @@
   fill: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
-/* Card text fades out when zoomed far out (cycle 325): at that scale it's a few unreadable pixels,
+/* Card text fades out when zoomed far out: at that scale it's a few unreadable pixels,
    so the overview reads cleaner as icon + health-color only. The icon stays. */
 .node-kind,
 .node-name,
@@ -1080,4 +1078,3 @@
 .labels-hidden .node-restarts {
   opacity: 0;
 }
-

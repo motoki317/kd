@@ -140,9 +140,9 @@ describe('layoutGraphByCapacity', () => {
     expect(cluster.otherUseSeg).toBeUndefined()
   })
 
-  // The overshoot bug (AGENTS.md): N near-zero pods must NOT each draw at a per-segment floor, or
-  // their tiled minimums run past the track (a 31-pod node at 8% use drew ~70%). Healthy sub-threshold
-  // pods fold into ONE block sized by their EXACT summed value, so the bar end stays honest.
+  // The overshoot invariant is owned by docs/frontend-internals.md "Nodes capacity view": N near-zero
+  // pods must NOT each draw at a per-segment floor (31 pods at 8% use drew ~70%). Healthy
+  // sub-threshold pods fold into ONE exact-sum block, so the bar end stays honest.
   describe('small-pod folding (overshoot guard)', () => {
     const huge = node('huge', 100_000, 100_000) // scale = 1080/100000 = 0.0108 → 100m draws ~1px (< fold)
 

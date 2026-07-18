@@ -42,7 +42,7 @@ interface Props {
   edges: KEdge[]
   selectedId: string | null
   healthFilter?: import('../types').Health | null
-  // Multi-select set of kinds to spotlight (cycle 203). Empty / null means "show all"; a
+  // Multi-select set of kinds to spotlight. Empty / null means "show all"; a
   // non-empty set fades every node whose kind isn't in it. The parent owns the set so it
   // survives namespace/view transitions when desired (currently cleared on view change).
   kindFilter?: Set<string> | null
@@ -109,7 +109,7 @@ interface Props {
   // filterRef but for the resource search instead of the namespace filter.
   searchRef?: (el: HTMLInputElement) => void
   onSelect: (id: string) => void
-  // Background click dismisses the open drawer (cycle 161). Optional — parent decides whether
+  // Background click dismisses the open drawer. Optional — parent decides whether
   // the click-out behavior is wired (Topology tests pass no-op handlers).
   onDeselect?: () => void
 }
@@ -405,7 +405,7 @@ export default function Topology(props: Props) {
   })
   // Counts + worst-health per kind in the current view. Chips order by count (most-common first,
   // typically Pod) — predictable so the row doesn't reshuffle when a single resource flips state.
-  // The per-kind worst health (cycle 289) drives a small severity dot on the chip so the operator
+  // The per-kind worst health drives a small severity dot on the chip so the operator
   // spots WHICH kinds carry trouble without scanning the canvas; preserves the stable order while
   // still surfacing the answer to "where do I look first".
   // Per-kind count + worst-health, folding a collapsed pill's hidden nodes back so chips stay honest —
@@ -501,7 +501,7 @@ export default function Topology(props: Props) {
   const [scale, setScale] = createSignal(1)
   const [tx, setTx] = createSignal(0)
   const [ty, setTy] = createSignal(0)
-  // Endpoints of the edge currently under the pointer (cycle 330/R4): in a dense graph an edge's two
+  // Endpoints of the edge currently under the pointer: in a dense graph an edge's two
   // cards can be far apart or buried, so hovering the edge halos both ends to answer "what does this
   // connect?" without selecting. Null when no edge is hovered.
   const [hoverEnds, setHoverEnds] = createSignal<{ from: string; to: string } | null>(null)
@@ -536,7 +536,7 @@ export default function Topology(props: Props) {
   let lastX = 0
   let lastY = 0
   // Pointer velocity (px/ms), EMA-smoothed across recent moves, for the flick-to-coast momentum on
-  // drag release (cycle 339/R10).
+  // drag release.
   let vx = 0
   let vy = 0
   let lastMoveT = 0
@@ -552,7 +552,7 @@ export default function Topology(props: Props) {
   // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
   // changes glide instead of jumping — easier for a human to track what just changed.
   let animFrame = 0
-  let selFitFrame = 0 // rAF handle for the deferred selection-fit (cycle 307)
+  let selFitFrame = 0 // rAF handle for the deferred selection-fit
   // A selection-fit waiting for the canvas to reach its post-drawer width. Opening the drawer mounts
   // a flex sibling that shrinks the SVG, but the mount+reflow lands an unpredictable frame or two
   // after the selectedId change (the drawer is even absent from the DOM on the first rAF) — so a
@@ -574,7 +574,7 @@ export default function Topology(props: Props) {
     pendingSelFit = null
     animateTo(fitNodeSetFloored(inSet, selectionMaxScale, focus))
   }
-  let cardClickTimer: ReturnType<typeof setTimeout> | undefined // deferred deselect, cancelled by dblclick (cycle 315)
+  let cardClickTimer: ReturnType<typeof setTimeout> | undefined // deferred deselect, cancelled by dblclick
   function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
     cancelAnimationFrame(animFrame)
     const s0 = scale(), tx0 = tx(), ty0 = ty()
@@ -605,7 +605,7 @@ export default function Topology(props: Props) {
     return fitBox({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height, topInset }, maxScale)
   }
 
-  // fitNodeSet (cycle 336/R9): frames a set of cards. boundingBox + selectionMaxScale + fitBox are
+  // fitNodeSet: frames a set of cards. boundingBox + selectionMaxScale + fitBox are
   // pure (viewport.ts); this just threads the live viewport in via computeFitFor. maxScale is a
   // constant for fit-all or selectionMaxScale for a selection (it needs the box dims, hence the fn form).
   function fitNodeSet(
@@ -719,7 +719,7 @@ export default function Topology(props: Props) {
     }
   })
 
-  // Track SVG size so resizes keep the graph on-screen (cycle 294). Drawer open/close and window
+  // Track SVG size so resizes keep the graph on-screen. Drawer open/close and window
   // resizes both squeeze/grow the SVG; without this the existing pan stays at old coords and the
   // graph can drift off-screen. Closing the drawer is the dominant trigger, and the operator's zoom
   // must survive it (see the deselect branch above) — so preserve the current scale and only
@@ -843,7 +843,7 @@ export default function Topology(props: Props) {
   // Auto-fit to the lit subset when a DISCRETE filter (health legend / kind chips) toggles, so a
   // triage action — "show me what's Degraded" — frames the matches instead of leaving the operator
   // staring at faded healthy cards while the few matches sit off-screen ("11 of 336" with nothing
-  // visible). The manual Fit already frames the lit subset (cycle 214); this just does it on the
+  // visible). The manual Fit already frames the lit subset; this just does it on the
   // toggle so the operator doesn't have to also reach for Fit. Deliberately scoped:
   //   - Search is excluded — it is incremental per-keystroke, so fitting on every character would
   //     make the viewport jump around while typing; the manual Fit covers it.
@@ -894,7 +894,7 @@ export default function Topology(props: Props) {
   // clampTranslate keeps at least a margin of the laid-out graph on-screen, so a pan can't fling the
   // whole canvas into the void (where the only recovery was the Fit button). The graph spans screen
   // x in [tx, tx + width*scale]; we require its far edge to stay ≥ margin inside the viewport on
-  // each side. A graph smaller than the viewport is unaffected (the bounds never invert). (cycle 316)
+  // each side. A graph smaller than the viewport is unaffected (the bounds never invert).
   function clampTranslate(txv: number, tyv: number): { tx: number; ty: number } {
     const l = layout()
     if (!svg || l.width === 0) return { tx: txv, ty: tyv }
@@ -1004,7 +1004,7 @@ export default function Topology(props: Props) {
     lastX = e.clientX
     lastY = e.clientY
   }
-  // Coast the canvas after a flick, decaying velocity until it's negligible (cycle 339/R10). Gives the
+  // Coast the canvas after a flick, decaying velocity until it's negligible. Gives the
   // pan a physical "throw it and let it settle" feel instead of stopping dead. clampTranslate still
   // arrests each axis at the layout edge, so momentum can't fling the graph out of view.
   function startMomentum() {
@@ -1055,8 +1055,8 @@ export default function Topology(props: Props) {
     } catch {
       /* not captured */
     }
-    // After a drag: a fast release coasts (momentum, cycle 339/R10); a slow one just glides back into
-    // bounds if it ended past the edge (cycle 316). 0.4 px/ms ≈ 400 px/s — above a deliberate flick,
+    // After a drag: a fast release coasts (momentum); a slow one just glides back into
+    // bounds if it ended past the edge. 0.4 px/ms ≈ 400 px/s — above a deliberate flick,
     // below an ordinary reposition, so a careful drag still stops exactly where released.
     if (wasDragging) {
       if (Math.hypot(vx, vy) > 0.4) {
@@ -1067,7 +1067,7 @@ export default function Topology(props: Props) {
       if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
       return
     }
-    // Cycle 161: a click on the topology background (not on a card and not a pan) dismisses the
+    // A click on the topology background (not on a card and not a pan) dismisses the
     // open drawer.
     if (!props.onDeselect || !props.selectedId) return
     if (isBackgroundClick(e.target)) props.onDeselect()
@@ -1096,9 +1096,9 @@ export default function Topology(props: Props) {
   function resetView() {
     const l = layout()
     if (!svg || l.width === 0) return
-    // Cycle 293: when a selection is active, 'f' re-frames the selection's connected subtree
+    // When a selection is active, 'f' re-frames the selection's connected subtree
     // (same set the click-into-selection effect targets). Otherwise it falls back to the
-    // filter-aware fit-all from cycle 214. Without this, the operator who manually panned
+    // filter-aware fit-all. Without this, the operator who manually panned
     // away from their selected subtree would lose it on 'f' — they'd have to click the
     // selection again to recover the frame.
     if (props.selectedId) {
@@ -1120,7 +1120,7 @@ export default function Topology(props: Props) {
     }
     // When any filter is active, frame just the lit subset — otherwise "Fit" gives you a
     // viewport of mostly-faded cards with the actual interesting nodes shrunk down. With no
-    // filter the full layout BOX is the right frame (cycle 214) — NOT the node boxes: in the
+    // filter the full layout BOX is the right frame — NOT the node boxes: in the
     // capacity view layout().nodes are small hit-targets (pod segments, node labels) while the
     // drawn content is the full-width tracks/bars, so framing the boxes zoomed Fit to 1.4x and
     // left the track running 4 viewports wide on a phone. The box also covers kind-band headers.
@@ -1157,7 +1157,7 @@ export default function Topology(props: Props) {
   // zooms all the way out until every resource is on screen — the operator's "show me everything".
   // Distinct from resetView (double-click), which floors at MIN_FIT_SCALE to keep text readable and
   // re-frames the selected subtree. When a filter is active it frames just the lit subset (mirroring
-  // resetView's cycle-214 rule): fitting the whole faded graph would shrink the matches to specks — but
+  // resetView's filter-aware rule): fitting the whole faded graph would shrink the matches to specks — but
   // still WITHOUT the floor, unlike the automatic filter-fit. On a sparse, unfiltered view the floor
   // never binds, so this and double-click coincide; the difference shows only when the fit is sub-floor.
   function fitAll() {
@@ -1175,7 +1175,7 @@ export default function Topology(props: Props) {
     // Below ~0.45 zoom the fixed-size card text renders at a few unreadable pixels, so it's just
     // noise over the overview. labels-hidden fades the text out, leaving a clean map of health-tinted,
     // icon-only cards; hover/click still reveal the detail. The icon + card color carry kind + health
-    // at any zoom (cycle 325).
+    // at any zoom.
     <div
       class="topology"
       classList={{ 'labels-hidden': scale() < 0.45 }}
@@ -1214,7 +1214,7 @@ export default function Topology(props: Props) {
           </For>
         </div>
       </Show>
-      {/* Filtered-everything-out overlay (cycle 219): when a filter is active and nothing
+      {/* Filtered-everything-out overlay: when a filter is active and nothing
           is lit, surface that clearly + a one-click clear button so the operator doesn't have
           to guess why the canvas looks dim. Sits above the canvas like the empty state. */}
       <Show
@@ -1413,7 +1413,7 @@ export default function Topology(props: Props) {
                       faded: !!activeKinds() && !activeKinds()!.has(g.kind),
                       'kind-group-interactive': !!props.onKindFilter,
                     }}
-                    // Cycle 276: clicking a kind group's bg/label solos that kind in the filter,
+                    // Clicking a kind group's bg/label solos that kind in the filter,
                     // matching Shift+click on the kind chip. Faster than scanning the chip row when
                     // the operator is already looking at the "All view" cluster they want to focus on.
                     onClick={(e) => {
@@ -1471,7 +1471,7 @@ export default function Topology(props: Props) {
             <For each={renderedEdges()}>
               {(e) => (
                 <g
-                  // Hovering anywhere on the edge halos both endpoint cards (cycle 330/R4). The hit
+                  // Hovering anywhere on the edge halos both endpoint cards. The hit
                   // target is the wide transparent companion path below, since the visible 1-2px line
                   // is nearly impossible to hover in a dense graph.
                   onPointerEnter={() => setHoverEnds({ from: e.from, to: e.to })}
@@ -1520,11 +1520,11 @@ export default function Topology(props: Props) {
                   classList={{
                     selected: n.id === props.selectedId,
                     faded: nodeFaded(n),
-                    // Endpoint of the hovered edge (cycle 330/R4): a transient accent halo.
+                    // Endpoint of the hovered edge: a transient accent halo.
                     target: edgeEndpoint(n.id),
                     exiting: exitingIds().has(n.id),
                     [`h-${n.health.toLowerCase()}`]: true,
-                    // Pod kind gets a CSS hook for the accent treatment (cycle 202): pods are the
+                    // Pod kind gets a CSS hook for the accent treatment: pods are the
                     // fundamental workload, so they read distinct from their controllers/services
                     // even before the operator focuses on the card.
                     'kind-pod': n.kind === 'Pod',
@@ -1533,8 +1533,8 @@ export default function Topology(props: Props) {
                      changes — when SSE patches shift the Dagre layout, cards glide to their new
                      spots instead of teleporting. See .node { transition: transform … } in CSS. */
                   style={{ transform: `translate(${n.x - n.width / 2}px, ${n.y - n.height / 2}px)` }}
-                  /* Cycle 298: clicking the already-selected card deselects (mirrors how the legend
-                     pills and kind chips toggle on a repeat click). Cycle 315: the toggle-OFF is
+                  /* Clicking the already-selected card deselects (mirrors how the legend pills and
+                     kind chips toggle on a repeat click). The toggle-OFF is
                      deferred a beat so a double-click can cancel it — otherwise double-clicking a
                      card (a natural "focus this" gesture) ran select(click1)→deselect(click2) and
                      left nothing selected. Selecting stays immediate; only deselect waits. */
@@ -1570,13 +1570,13 @@ export default function Topology(props: Props) {
                   <path class="node-bg" d={`M0 0 H${n.width - 10} L${n.width} 10 V${n.height} H0 Z`} />
                   <path class="node-notch" d={`M${n.width - 10} 0 L${n.width} 10`} />
                   <path class="node-bracket" d={`M0 12 L0 0 L12 0 M0 ${n.height - 12} L0 ${n.height} L12 ${n.height} M${n.width - 12} ${n.height} L${n.width} ${n.height} L${n.width} ${n.height - 12}`} />
-                  {/* Icon-forward card (cycle 126): a 28×28 kind silhouette anchors the left column
+                  {/* Icon-forward card: a 28×28 kind silhouette anchors the left column
                       and a small uppercase kind label sits under it; the right column lays name,
                       status and the restart/age badge on their own rows so nothing competes for
                       width. Health is carried by the .node-bg border + tint (see CSS), so a colored
                       stripe is redundant and was removed to reclaim left padding for the icon. */}
-                  {/* Optically-centered icon (cycle 306): a full-box glyph inks ~y14–34, i.e. ~2px
-                      above the card's geometric center (y30). Geometric centering (cycle 305) measured
+                  {/* Optically-centered icon: a full-box glyph inks ~y14–34, i.e. ~2px
+                      above the card's geometric center (y30). Geometric centering measured
                       dead-on but *looked* bottom-heavy because the kind label hangs below with empty
                       space above — an icon with a caption beneath has to ride slightly high to read as
                       centered. The label tucks ~3px under the glyph. */}
@@ -1720,7 +1720,7 @@ export default function Topology(props: Props) {
                 >
                   {shownPods().length} pod{shownPods().length === 1 ? '' : 's'}
                 </Show>
-                {/* Per-grouping summary (cycle 231): Kind grouping shows the kind count, Nodes
+                {/* Per-grouping summary: Kind grouping shows the kind count, Nodes
                     grouping shows the host count — each surfaces the dimension that grouping
                     actually exposes, so "is this dense?" reads without parsing the canvas. */}
                 <Show when={props.groupBy === 'kind' && groups().length > 1}>

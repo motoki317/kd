@@ -32,7 +32,7 @@ interface Props {
   onNavigateRef?: (kindSlashName: string) => boolean
   // Jump a Pod's host-meta chip to its Node: switch to the Nodes view and select that Node.
   onGoToNode?: (host: string) => void
-  // Navigation history affordance (cycle 300): canBack=true when a prior selection exists; onBack
+  // Navigation history affordance: canBack=true when a prior selection exists; onBack
   // pops one step. Optional so the drawer still works for callers that haven't wired history.
   canBack?: boolean
   onBack?: () => void
@@ -68,7 +68,7 @@ export default function DetailDrawer(props: Props) {
   // has a body to show. A re-selection during the exit cancels the exit and adopts the new node.
   const [displayNode, setDisplayNode] = createSignal<KNode | null>(props.node)
   const [exiting, setExiting] = createSignal(false)
-  // Expanded mode (cycle 311): the drawer grows to fill the whole canvas area so logs/manifests get
+  // Expanded mode: the drawer grows to fill the whole canvas area so logs/manifests get
   // the full width an operator needs to actually read them. Sticky across owner-chip navigation (you
   // stay in "big" mode while walking the tree) but resets when the drawer closes, so a fresh
   // selection opens in the compact side panel again.
@@ -78,7 +78,7 @@ export default function DetailDrawer(props: Props) {
   // Set when the drawer opens from a closed state (not when navigating between resources while
   // open), so the tab-default effect below can reset to the kind's default tab on a fresh open —
   // a loggable resource lands on Logs (the most-accessed view) even if the last session ended on
-  // Manifest — while still preserving the tab as the operator walks owner chips (cycle 312).
+  // Manifest — while still preserving the tab as the operator walks owner chips.
   let openedFresh = false
   createEffect(
     on(
@@ -162,8 +162,8 @@ export default function DetailDrawer(props: Props) {
   // On selection or availability change, keep the current tab if the resource still has it. This
   // preserves an operator's tab across navigation and only falls back when the active tab disappears.
   // Tab panel scroll container — reset to the top whenever the displayed resource changes so a
-  // long previous events list doesn't carry the operator's prior position into a fresh resource
-  // (cycle 272). The manifest's matching reset lives in ManifestPanel.
+  // long previous events list doesn't carry the operator's prior position into a fresh resource.
+  // The manifest's matching reset lives in ManifestPanel.
   let eventsPanelEl: HTMLDivElement | undefined
   createEffect(
     on(
@@ -249,7 +249,7 @@ export default function DetailDrawer(props: Props) {
   createEffect(on(() => displayNode()?.id, () => setWarnOnly(false)))
   const shownEvents = () => (warnOnly() ? eventList().filter((e) => e.type === 'Warning') : eventList())
 
-  // Focus trap (cycle 326): expanded mode covers the topology, but the canvas controls (search, kind
+  // Focus trap: expanded mode covers the topology, but the canvas controls (search, kind
   // chips, Fit) stay in the DOM and tabbable — Shift+Tab from the drawer's first control would land
   // on a button hidden behind the panel. While expanded, wrap Tab at the drawer's focusable
   // boundaries so keyboard focus can't escape to the obscured canvas. offsetParent filtering drops
@@ -334,7 +334,7 @@ export default function DetailDrawer(props: Props) {
               hostCapacity={props.hostCapacity}
               onGoToNode={props.onGoToNode}
             />
-            {/* Header action cluster: back (when history exists, cycle 300), share (copies the
+            {/* Header action cluster: back (when history exists), share (copies the
                 deep-link URL) and close. Grouped in a flex row so space-between in the header
                 doesn't push them apart. Share lets the operator paste a link to this resource
                 into a chat / PR instead of explaining "the noisy pod in prod ns". URL already
@@ -360,7 +360,7 @@ export default function DetailDrawer(props: Props) {
                 onClick={async (e) => {
                   // Capture the element BEFORE await — `currentTarget` is nulled out as soon as the
                   // synchronous event handler returns (standard DOM), so the post-await read would
-                  // throw on .classList. Same pattern label-chip uses (cycle 254).
+                  // throw on .classList. Same pattern label-chip uses.
                   const el = e.currentTarget as HTMLButtonElement
                   try {
                     await navigator.clipboard.writeText(window.location.href)

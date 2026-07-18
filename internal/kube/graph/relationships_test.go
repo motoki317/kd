@@ -218,7 +218,7 @@ func TestBuildInferredEdges(t *testing.T) {
 		{"pod mounts configmap via projected source", EdgeMounts, "Pod", "web-1", "ConfigMap", "web-projcm"},
 		{"pod mounts secret via projected source", EdgeMounts, "Pod", "web-1", "Secret", "web-projsec"},
 		{"pod mounts pvc", EdgeMounts, "Pod", "web-1", "PersistentVolumeClaim", "web-data"},
-		// PVC's volumeName completes the Pod → PVC → PV chain (cycle 235).
+		// PVC's volumeName completes the Pod → PVC → PV chain.
 		{"pvc binds to pv", EdgeMounts, "PersistentVolumeClaim", "web-data", "PersistentVolume", "web-pv"},
 		{"pod uses serviceaccount", EdgeUsesServiceAccount, "Pod", "web-1", "ServiceAccount", "web-sa"},
 		{"rolebinding binds role", EdgeBinds, "RoleBinding", "web-rb", "Role", "web-role"},

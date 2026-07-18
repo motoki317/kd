@@ -74,7 +74,7 @@ describe('nodeMatches', () => {
     expect(nodeMatches(sts, 'sts')).toBe(true)
   })
 
-  describe('Kind/name predicate (cycle 295)', () => {
+  describe('Kind/name predicate', () => {
     const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', health: 'Healthy' }
     const dep: KNode = { id: 'd1', kind: 'Deployment', name: 'web', health: 'Healthy' }
     const cm: KNode = { id: 'cm1', kind: 'ConfigMap', name: 'web-config', health: 'Healthy' }

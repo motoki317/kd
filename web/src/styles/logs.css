@@ -46,7 +46,7 @@
   align-items: center;
   /* Wrap so a narrow (compact) drawer never pushes the Copy button off the right edge — the toolbar
      carries a lot now (stream toggles + filter + per-level segmented control). row-gap keeps wrapped
-     rows legible (cycle 337, fixes the cycle-328 overflow). */
+     rows legible. */
   flex-wrap: wrap;
   gap: 8px;
   row-gap: 8px;
@@ -192,7 +192,7 @@
 .logs-count.none {
   color: var(--degraded-text);
 }
-/* Per-pod filter chips for aggregated streams (cycle 328/R2): a wrapping row between the toolbar and
+/* Per-pod filter chips for aggregated streams: a wrapping row between the toolbar and
    the log body. Each chip carries the pod's signature hue dot so it ties to the inline pod labels. */
 .logs-pods {
   display: flex;
@@ -235,7 +235,7 @@
   border-radius: 50%;
   flex: none;
 }
-/* Jump-to-error button (cycle 332/R6): error-tinted so it reads as "there are errors here, click to
+/* Jump-to-error button: error-tinted so it reads as "there are errors here, click to
    find them". Only rendered when the buffer holds error lines. */
 .logs-errjump {
   border: 1px solid color-mix(in srgb, var(--health-degraded) 45%, var(--border));
@@ -307,7 +307,7 @@
 .log-line:has(> .log-level-warn) {
   box-shadow: inset 2px 0 0 #f6c768;
 }
-/* No-wrap mode (cycle 327): each entry stays on one line and the body scrolls horizontally. width
+/* No-wrap mode: each entry stays on one line and the body scrolls horizontally. width
    max-content lets the line box (and its hover wash) extend to the full content width; min-width 100%
    keeps short lines full-width so the hover target isn't a stub. The body already has overflow:auto. */
 .logs-body.no-wrap .log-line {
@@ -317,14 +317,14 @@
   min-width: 100%;
 }
 /* Faint hover wash hints the line is interactive (Alt-click to copy); a brighter flash confirms
-   the copy landed (cycle 323). */
+   the copy landed. */
 .log-line:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 .log-line.copied {
   background: color-mix(in srgb, var(--health-healthy) 30%, transparent);
 }
-/* Per-line severity badge (cycle 322): a compact, fixed-width colored chip so an operator can scan
+/* Per-line severity badge: a compact, fixed-width colored chip so an operator can scan
    a busy stream for ERR/WRN at a glance. Only rendered for lines whose level was detected. */
 .log-level {
   display: inline-block;
@@ -367,11 +367,11 @@
      clears it (5.2:1) while staying well below the body's #d6deea so the fields stay subordinate. */
   color: #7d8997;
 }
-/* Per-level filter chips (cycle 328): same colors as the inline badges so the toolbar control reads
+/* Per-level filter chips: same colors as the inline badges so the toolbar control reads
    as "these are the levels showing". color/background are inherited from the shared .log-level-<lvl>
    rules above; this only adds the button chrome. A dimmed (.off) chip means that level is hidden —
    the two-class .logs-level.off out-specifies .log-level-<lvl>, so it overrides without !important. */
-/* Segmented control (cycle 337): the four levels share one bordered pill with hairline dividers
+/* Segmented control: the four levels share one bordered pill with hairline dividers
    instead of four separate gapped chips — noticeably narrower, so the toolbar stops overflowing, and
    it reads as one "show these levels" control rather than four loose buttons. */
 .logs-levels {

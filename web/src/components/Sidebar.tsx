@@ -54,7 +54,7 @@ export default function Sidebar(props: Props) {
   // The red "needs attention" badge counts only namespaces that are actively not-OK — Degraded
   // (broken) or Progressing (mid-rollout). Unknown (a CR/resource kd can't classify) and Suspended
   // (intentionally off) are excluded: counting them turned a cluster full of harmless custom
-  // resources into a permanent red alarm (cycle 313, follows up the cycle-308 gray-dot fix). The list
+  // resources into a permanent red alarm. The list
   // itself stays A→Z (see `shown` above — troubled-first sorting was dropped because it re-shuffled
   // rows under the cursor); every namespace still shows its own health dot, only the badge COUNT narrows.
   const troubled = createMemo(
@@ -64,7 +64,7 @@ export default function Sidebar(props: Props) {
   // Scroll the active ns into view when the selection changes externally — e.g. on first load
   // when mostTroubled() picks the auto-selected namespace, or when a URL change navigates to
   // one not currently visible (long list, scrolled away). Block: 'nearest' so we don't jump
-  // when the item is already in view (cycle 242).
+  // when the item is already in view.
   let listRef: HTMLUListElement | undefined
   createEffect(
     on(
@@ -76,7 +76,7 @@ export default function Sidebar(props: Props) {
       },
     ),
   )
-  // Flash the selected row on a programmatic jump (cycle 330/R5). 'nearest' scrolling above stays
+  // Flash the selected row on a programmatic jump. 'nearest' scrolling above stays
   // silent when the row is already visible, so without this a trouble-badge jump can land with no visible
   // change. Deferred to a microtask so the .active class for the new selection has been committed
   // before we look it up; remove/reflow/add restarts the CSS animation when the same row re-flashes.
@@ -164,7 +164,7 @@ export default function Sidebar(props: Props) {
             }
             else if (e.key === 'Enter') {
               // Jump straight to the top-of-list match — operators expect filter+Enter to be
-              // an explicit "go" action, not a "remember the search" no-op (cycle 223). The list
+              // an explicit "go" action, not a "remember the search" no-op. The list
               // is alphabetical, so this lands on the first matching ns by name.
               const first = shown()[0]
               if (first) {

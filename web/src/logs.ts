@@ -134,7 +134,7 @@ export function formatLogTime(raw: string): string {
 // filterLogLines keeps only the lines whose text contains the query — the in-viewer "grep" for
 // finding an error in a busy stream. Case-insensitive by default (the common triage need); pass
 // caseSensitive to match exactly. An empty/whitespace query keeps every line, so the filter is off
-// until the user types. hiddenLevels (cycle 328) additionally drops lines whose DETECTED level is
+// until the user types. hiddenLevels additionally drops lines whose DETECTED level is
 // toggled off — combined with the substring filter via AND. Lines with no confident level (stack-trace
 // bodies, continuation lines, plain stdout) are always kept so hiding INFO/DEBUG noise doesn't swallow
 // the context around an error.

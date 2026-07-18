@@ -113,7 +113,7 @@ func buildEdges(nodes []Node, objs []runtime.Object, idx *index) ([]Edge, map[st
 			b.networkPolicyEdges(id, ns, o, nodes)
 		case *corev1.PersistentVolumeClaim:
 			// A bound PVC carries its target PV's name in spec.volumeName, completing the
-			// Pod → PVC → PV chain in the Volumes view (cycle 235). Modeled as a `mounts`
+			// Pod → PVC → PV chain in the Volumes view. Modeled as a `mounts`
 			// edge so the volumes view's existing filter picks it up without a new edge type.
 			if o.Spec.VolumeName != "" {
 				b.link(id, EdgeMounts, "PersistentVolume", "", o.Spec.VolumeName)

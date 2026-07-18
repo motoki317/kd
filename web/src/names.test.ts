@@ -105,7 +105,7 @@ describe('cardName', () => {
     expect(long.length).toBeLessThanOrEqual(22)
   })
   it('middle-truncates an over-long name to the card budget', () => {
-    // After cycle 126 the name has its own row, no badge competing — full CARD_NAME_MAX is used.
+    // The name has its own row with no competing badge, so it uses full CARD_NAME_MAX.
     const long = 'kube-scheduler-docker-desktop'
     const out = cardName(long, undefined)
     expect(out.length).toBeLessThan(long.length)

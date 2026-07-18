@@ -178,7 +178,7 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Manifest') // last
   })
 
-  it('renders a back button only when canBack is true and routes its click to onBack (cycle 300)', async () => {
+  it('renders a back button only when canBack is true and routes its click to onBack', async () => {
     // Without canBack, no back button is rendered.
     const { container, unmount } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
@@ -196,7 +196,7 @@ describe('DetailDrawer', () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
-  it('opens a loggable resource on the Logs tab on a fresh open (was latching to Manifest, cycle 312)', async () => {
+  it('opens a loggable resource on the Logs tab on a fresh open', async () => {
     const pod: KNode = { id: 'p1', kind: 'Pod', name: 'web-abc', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['web'] }
     const [node, setNode] = createSignal<KNode | null>(null)
     const { container } = render(() => (
@@ -210,7 +210,7 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-tabs button.active')?.textContent?.trim()).toBe('Logs')
   })
 
-  it('preserves the active tab when navigating between resources while open (cycle 312)', async () => {
+  it('preserves the active tab when navigating between resources while open', async () => {
     const podA: KNode = { id: 'a', kind: 'Pod', name: 'a', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['c'] }
     const podB: KNode = { id: 'b', kind: 'Pod', name: 'b', namespace: 'shop', health: 'Healthy', loggable: true, containers: ['c'] }
     const [node, setNode] = createSignal<KNode | null>(podA)
@@ -230,7 +230,7 @@ describe('DetailDrawer', () => {
     expect(active()).toBe('Manifest')
   })
 
-  it('toggles an expanded (canvas-filling) mode via the tab-bar full-screen button (cycle 311)', () => {
+  it('toggles an expanded (canvas-filling) mode via the tab-bar full-screen button', () => {
     const { container } = render(() => (
       <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />
     ))
@@ -295,7 +295,7 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-resizer')).toBeNull()
   })
 
-  it('[ / ] do nothing when no node is shown (cycle 292)', () => {
+  it('[ / ] do nothing when no node is shown', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={null} onClose={() => {}} />)
     // Should be empty — no drawer rendered.
     expect(container.querySelector('.drawer-tabs')).toBeFalsy()
@@ -357,7 +357,7 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-message')).toBeNull()
   })
 
-  it('offers a copy-name button in the header (cycle 287: title also documents Shift+click for Kind/name)', () => {
+  it('offers a copy-name button in the header (title also documents Shift+click for Kind/name)', () => {
     const { container } = render(() => <DetailDrawer ctx="test-ctx" node={configMap} onClose={() => {}} />)
     const btn = container.querySelector('.drawer-name .copy-btn') as HTMLButtonElement
     expect(btn).toBeTruthy()
@@ -365,7 +365,7 @@ describe('DetailDrawer', () => {
     expect(btn.getAttribute('title')).toMatch(/Shift\+click for Kind\/name/)
   })
 
-  it('label chip click copies key=value; Shift+click copies value only (cycle 282)', async () => {
+  it('label chip click copies key=value; Shift+click copies value only', async () => {
     const writes: string[] = []
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -389,7 +389,7 @@ describe('DetailDrawer', () => {
     expect(writes).toEqual(['app=shop', 'v1.2.3'])
   })
 
-  it('share button copies window.location.href to the clipboard (cycle 275)', async () => {
+  it('share button copies window.location.href to the clipboard', async () => {
     const writes: string[] = []
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -458,7 +458,7 @@ describe('DetailDrawer', () => {
     expect(line).toContain('run one-shot work as a Job')
   })
 
-  it('init containers come before main containers (cycle 274)', () => {
+  it('init containers come before main containers', () => {
     const pod: KNode = {
       ...configMap,
       kind: 'Pod',
@@ -486,7 +486,7 @@ describe('DetailDrawer', () => {
     expect(imgs).toEqual(['nginx:1.25', 'envoy:1.29'])
   })
 
-  // For a Pod the image belongs WITH its container (cycle 338): each card pairs name + state + image,
+  // For a Pod the image belongs WITH its container: each card pairs name + state + image,
   // and the separate workload image list is not shown (that would be the "shown separately" the
   // redesign removed).
   it('pairs each pod container with its own image and drops the separate image list', () => {
@@ -649,7 +649,7 @@ describe('DetailDrawer', () => {
     expect(container.querySelector('.drawer-age')?.textContent).toContain('3d')
   })
 
-  it('expands to full screen from the tab bar on any tab, not just Logs (cycle 311, relocated)', () => {
+  it('expands to full screen from the tab bar on any tab, not just Logs', () => {
     // The full-screen toggle moved out of the logs toolbar / drawer header into the tab bar, so every
     // tab can expand — here a ConfigMap, which has no Logs tab at all (only Events + Manifest).
     const { container } = render(() => (
@@ -767,7 +767,7 @@ describe('DetailDrawer', () => {
     find.dispatchEvent(new Event('input', { bubbles: true }))
     // Two case-insensitive hits in the body.
     expect(container.querySelectorAll('.manifest-match').length).toBe(2)
-    // The count badge reads "<current>/<total>" once Enter cycling kicked in (cycle 263); fresh
+    // The count badge reads "<current>/<total>" once Enter cycling kicked in; fresh
     // state is index 0, i.e. "1/2".
     expect(container.querySelector('.manifest-find-count')?.textContent).toMatch(/1\/2/)
     // Typing must scroll the FIRST match into view (browser-find behaviour), not leave the manifest

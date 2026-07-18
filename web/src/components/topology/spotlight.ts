@@ -46,8 +46,8 @@ export function createSpotlight(src: {
   // SHAPE depends on the layout:
   //   - relationship view → the DIRECT (1-hop) neighbours only (spotlightNeighbors). Focusing a
   //     resource lights and frames "what connects straight to it", not its whole transitive tree —
-  //     the user's "focus only into the direct related resources". (This reverses cycle 157, which
-  //     had promoted it to the full component; the tighter focus reads better on dense graphs.)
+  //     the user's "focus only into the direct related resources". The tighter focus reads better
+  //     on dense graphs.
   //   - Nodes (capacity) view → the full connected component (spotlightSubtree), unchanged: selecting
   //     a pod still lights its workload's sibling pods across hosts, reachable only through the owner.
   //   - Kinds view → no spotlight at all (null): the per-kind matrix draws no relationships, so
@@ -93,7 +93,7 @@ export function createSpotlight(src: {
     }
     return m
   })
-  // Ordered list of matches in the same severity-first order used for Enter cycling (cycle 284).
+  // Ordered list of matches in the same severity-first order used for Enter cycling.
   // Memoized so the "X of N" indicator and the Enter handler agree on positions.
   const matchOrdered = createMemo(() => {
     const m = matches()
@@ -101,7 +101,7 @@ export function createSpotlight(src: {
     return orderedForNav(src.nodes().filter((n) => m.has(n.id)))
   })
   // 1-based position of the current selection within matchOrdered, or 0 if the selection is not a
-  // match. Drives the "3 of 7 matches" indicator that complements Enter-cycling (cycle 285).
+  // match. Drives the "3 of 7 matches" indicator that complements Enter-cycling.
   const matchPos = createMemo(() => {
     const ordered = matchOrdered()
     if (ordered.length === 0) return 0
@@ -109,7 +109,7 @@ export function createSpotlight(src: {
     return idx < 0 ? 0 : idx + 1
   })
 
-  // Active kind filter (cycle 203): an empty/null set means "show all kinds"; otherwise only the
+  // Active kind filter: an empty/null set means "show all kinds"; otherwise only the
   // listed kinds stay lit. Re-derived so an empty set still reads as "no filter active".
   const activeKinds = createMemo(() => {
     const s = src.kindFilter()
@@ -126,7 +126,7 @@ export function createSpotlight(src: {
   // only a bare selection lights its edges accent. When a kind filter is active alongside another
   // filter, both must accept the node — so kinds compose rather than overriding. The selected
   // node never fades, even if a filter would exclude it: the operator's focus stays visible
-  // instead of ghosting out behind the spotlight (cycle 224).
+  // instead of ghosting out behind the spotlight.
   const nodeFaded = (n: { id: string; health: string; kind: string }) =>
     isNodeFaded(n, {
       selectedId: src.selectedId(),

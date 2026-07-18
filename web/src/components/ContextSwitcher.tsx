@@ -48,7 +48,7 @@ export default function ContextSwitcher(props: Props) {
             // re-rendering the list (the contexts refetch after a stream failure churns the option
             // nodes, and the select-level value binding loses that race).
             // The option's value is the full kubeconfig context name (URL truth); the visible label
-            // is the trimmed tail (cycle 210). Hover reveals the full identifier.
+            // is the trimmed tail. Hover reveals the full identifier.
             <option
               value={c.name}
               selected={c.name === (props.current ?? props.info!.default)}

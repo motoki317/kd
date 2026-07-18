@@ -36,7 +36,7 @@ export function matchSel(n: KNode, sel: string): boolean {
 // navCandidates is the set keyboard stepping (j/k) walks through. When ANY filter is active,
 // navigation is scoped to what's spotlighted — so "filter to Degraded, then step" visits only the
 // degraded nodes — matching the topology's compose-all-filters fade. With no filter, every node
-// is a candidate. Kinds compose with the others (cycle 215: keyboard nav was previously ignoring
+// is a candidate. Kinds compose with the others; otherwise keyboard navigation can ignore
 // the kind filter, which let j/k drift off the spotlighted set).
 export function navCandidates(
   nodes: KNode[],

@@ -3,7 +3,7 @@ import { createSignal } from 'solid-js'
 // CopyButton copies the text returned by props.text() to the clipboard and briefly confirms.
 // Silently no-ops when the Clipboard API is unavailable (e.g. a non-secure context).
 //
-// Optional altText/altTitle (cycle 287): when present, Shift+click copies altText instead. Used by
+// Optional altText/altTitle: when present, Shift+click copies altText instead. Used by
 // the drawer's name button so plain click copies just the name (the common case — pasting into
 // chat) while Shift+click copies "Kind/name" for kubectl pipelines. The title gets a "· ⇧ for
 // <altTitle>" suffix so the modifier is discoverable.

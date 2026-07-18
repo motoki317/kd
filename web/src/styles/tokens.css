@@ -64,7 +64,7 @@
      the contrast that matters is against the badge's own white text, not the surface behind it. */
   --degraded-badge: #c73e36;
 
-  /* Pod accent (cycle 202): pods are the fundamental unit operators look at first, so they get
+  /* Pod accent: pods are the fundamental unit operators look at first, so they get
      a distinct icon/label color so a sea of similar cards still reads "this one's a pod" at a
      glance. Indigo — clearly off the cyan accent and the health greens/blues. Only affects the
      icon and the small kind label — never the health border/tint. */
