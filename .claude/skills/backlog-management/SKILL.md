@@ -37,6 +37,7 @@ sections:
 - **Rejected — do not re-propose** — `candidate | verdict`, refuted against the real code. The
   anti-rework memory: without it, surveys regenerate the same losers (~94% of ideas get refuted at
   a mature surface). Always record the one-line verdict.
+
 ## Lifecycle
 
 - **Seed** Open from a discover + adversarial-verify pass — only `real`-verdict items, with
