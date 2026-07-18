@@ -206,6 +206,7 @@ export default function DetailDrawer(props: Props) {
   const key = createMemo<{ ctx: string; ns: string; kind: string; name: string } | null>((prev) => {
     const n = displayNode()
     if (!n) return null
+    // An empty {ns} path segment redirects 307 → 404, so cluster-scoped nodes substitute the sentinel.
     const ns = n.namespace || CLUSTER_SCOPE
     if (prev && prev.ctx === props.ctx && prev.ns === ns && prev.kind === n.kind && prev.name === n.name) {
       return prev
