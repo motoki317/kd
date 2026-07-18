@@ -287,6 +287,8 @@ export default function LogViewer(props: Props) {
       (entry) => {
         setError(false) // a line arriving means the stream recovered
         setGone(false) // a same-name re-create resumed streaming — the notice is stale
+        // Append every entry verbatim; client-side dedup would drop legitimate repeated lines from
+        // aggregated streams.
         setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
         // While scrolled up, count incoming lines so the Latest button can advertise the backlog.
         if (!pinned()) setUnseenLines((n) => Math.min(n + 1, 999))

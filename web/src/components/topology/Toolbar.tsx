@@ -311,6 +311,8 @@ export default function Toolbar(props: Props) {
             permanent row, not behind the Filters fold. No caps label: each pill already names its
             state in words next to its dot. The at-a-glance proportion lives in the fixed-width
             stripe pinned to the top of the canvas (rendered by Topology). */}
+        {/* Health is an ordinal severity ladder, so triage spotlights one state at a time; unlike
+            nominal Kinds, it is not multi-select. */}
         <Show when={shownHealth().length > 0 && props.onHealthFilter}>
           <div class="toolbar-facet">
             <div class="topology-health-pills" role="toolbar" aria-label="Health filter" onKeyDown={onToolbarKey}>

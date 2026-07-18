@@ -72,6 +72,8 @@ const official = Object.fromEntries(
   Object.entries(K8S_ICONS).map(([kind, paints]) => [kind, () => renderGlyph(paints)]),
 )
 
+// Keep kd-drawn icons to built-in kinds; adding vendor glyphs turns this closed set into a
+// per-vendor catalog.
 const icons: Record<string, () => JSX.Element> = {
   ...official,
   // Server box with ports — a Node is a worker machine. kd-drawn: Argo CD's app tree never shows
