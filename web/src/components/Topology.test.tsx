@@ -5,6 +5,8 @@ import type { KEdge, KNode, RelCategory } from '../types'
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   // openFilters persists kd:filtersOpen via the disclosure's pref write — clear it so every test
   // starts from the production default (folded).
   localStorage.removeItem('kd:filtersOpen')
@@ -31,6 +33,18 @@ const base = {
   onSelect: () => {},
 }
 const faded = (c: Element) => c.querySelectorAll('g.node.faded').length
+const stubViewport = (width: number, height: number) =>
+  vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    toJSON: () => ({}),
+  })
 // The relationship/kind filter facets fold behind the toolbar's Filters disclosure (closed by
 // default). Tests that assert on them open the fold first, the way an operator would.
 const openFilters = (c: Element) => {
@@ -71,6 +85,260 @@ describe('Topology', () => {
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 120, clientY: 100 })
     expect(num(world(), /scale\(([-\d.]+)\)/)).toBeCloseTo(s0 * 2, 5)
     expect(num(world(), /translate\(([-\d.]+)/)).toBeCloseTo(txAfterPinch + 20, 5)
+  })
+
+  it('wheel zoom clamps against the new scale', () => {
+    const view = { width: 300, height: 240 }
+    stubViewport(view.width, view.height)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 99_999 })
+    const before = world()
+    const s0 = num(before, /scale\(([-\d.]+)\)/)
+    const tx0 = num(before, /translate\(([-\d.]+)/)
+    const ty0 = num(before, /translate\([-\d.]+,([-\d.]+)/)
+    expect(tx0).toBeLessThan(0)
+    expect(ty0).toBeLessThan(0)
+
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: 1, clientX: 0, clientY: 0 })
+    const after = world()
+    const s1 = num(after, /scale\(([-\d.]+)\)/)
+    const contentWidth = (view.width - tx0) * (s1 / s0)
+    const contentHeight = (view.height - ty0) * (s1 / s0)
+    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - contentWidth, 5)
+    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - contentHeight, 5)
+  })
+
+  it('pinch zoom clamps against the new scale', () => {
+    const view = { width: 300, height: 240 }
+    stubViewport(view.width, view.height)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 99_999 })
+    const before = world()
+    const s0 = num(before, /scale\(([-\d.]+)\)/)
+    const tx0 = num(before, /translate\(([-\d.]+)/)
+    const ty0 = num(before, /translate\([-\d.]+,([-\d.]+)/)
+    expect(tx0).toBeLessThan(0)
+    expect(ty0).toBeLessThan(0)
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'touch', clientX: -100, clientY: 100 })
+    fireEvent.pointerDown(svg, { pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(svg, { pointerId: 2, clientX: 80, clientY: 100 })
+    const after = world()
+    const s1 = num(after, /scale\(([-\d.]+)\)/)
+    const contentWidth = (view.width - tx0) * (s1 / s0)
+    const contentHeight = (view.height - ty0) * (s1 / s0)
+    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - contentWidth, 5)
+    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - contentHeight, 5)
+  })
+
+  it('keeps a small graph within the visible margin while zooming', () => {
+    const view = { width: 2000, height: 1200 }
+    stubViewport(view.width, view.height)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: -99_999, deltaY: 0 })
+    const before = world()
+    expect(num(before, /translate\(([-\d.]+)/)).toBe(view.width - 60)
+
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: -1, clientX: 0, clientY: 0 })
+    const after = world()
+    expect(num(after, /scale\(([-\d.]+)\)/)).toBeGreaterThan(num(before, /scale\(([-\d.]+)\)/))
+    expect(num(after, /translate\(([-\d.]+)/)).toBe(view.width - 60)
+  })
+
+  it('keeps inward momentum after release outside a covered bound and settles in bounds', () => {
+    const view = { width: 300, height: 240 }
+    stubViewport(view.width, view.height)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      const id = ++frameId
+      frames.set(id, cb)
+      return id
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id)
+    })
+    const stepFrame = () => {
+      const entry = frames.entries().next().value as [number, FrameRequestCallback] | undefined
+      expect(entry).toBeTruthy()
+      frames.delete(entry![0])
+      now += 16
+      entry![1](now)
+    }
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
+    now = 1000
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
+    now = 1001
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 900, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 900, clientY: 0 })
+
+    expect(frames.size).toBe(1)
+    stepFrame()
+    expect(frames.size).toBe(1)
+    stepFrame()
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(0)
+
+    for (let i = 0; frames.size > 0 && i < 200; i++) stepFrame()
+    expect(frames.size).toBe(0)
+    const settledTx = num(world(), /translate\(([-\d.]+)/)
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 0 })
+    const lowerTx = num(world(), /translate\(([-\d.]+)/)
+    expect(settledTx).toBeGreaterThanOrEqual(lowerTx)
+    expect(settledTx).toBeLessThanOrEqual(0)
+  })
+
+  it('cancels an active release glide before applying clamped wheel zoom', () => {
+    const view = { width: 300, height: 240 }
+    stubViewport(view.width, view.height)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      const id = ++frameId
+      frames.set(id, cb)
+      return id
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id)
+    })
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
+    now = 10_000
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
+    expect(frames.size).toBe(1)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeGreaterThan(0)
+
+    const scaleBeforeZoom = num(world(), /scale\(([-\d.]+)\)/)
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: 1, clientX: 0, clientY: 0 })
+    expect(frames.size).toBe(0)
+    expect(num(world(), /scale\(([-\d.]+)\)/)).toBeLessThan(scaleBeforeZoom)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBe(0)
+  })
+
+  it('cancels an active release glide before applying trackpad pan', () => {
+    const view = { width: 300, height: 240 }
+    stubViewport(view.width, view.height)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      const id = ++frameId
+      frames.set(id, cb)
+      return id
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id)
+    })
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
+    now = 10_000
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
+    expect(frames.size).toBe(1)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeGreaterThan(0)
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 100, deltaY: 0 })
+    expect(frames.size).toBe(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBe(0)
+  })
+
+  it('cancels an active release glide before applying a generic resize clamp', () => {
+    let viewWidth = 300
+    const viewHeight = 240
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: viewWidth,
+      bottom: viewHeight,
+      width: viewWidth,
+      height: viewHeight,
+      toJSON: () => ({}),
+    }))
+    let notifyResize = () => {}
+    class TestResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        notifyResize = () => cb([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      const id = ++frameId
+      frames.set(id, cb)
+      return id
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id)
+    })
+    const stepFrame = () => {
+      const pending = [...frames.values()]
+      frames.clear()
+      now += 16
+      for (const cb of pending) cb(now)
+    }
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 0 })
+    const oldLower = num(world(), /translate\(([-\d.]+)/)
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
+    now = 10_000
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
+    expect(frames.size).toBe(1)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(oldLower)
+
+    viewWidth = 500
+    notifyResize()
+    expect(frames.size).toBe(2)
+    stepFrame()
+
+    expect(frames.size).toBe(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeCloseTo(oldLower + 200, 5)
   })
 
   it('empty-state distinguishes connecting (spinner) from offline (static, points at retry)', () => {
