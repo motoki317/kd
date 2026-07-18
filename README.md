@@ -73,3 +73,5 @@ To build and run the real binary:
 just build
 ./kd   # Web on :9123
 ```
+
+Client changes follow [the design language](docs/design.md) and [client gotchas](docs/client-gotchas.md).

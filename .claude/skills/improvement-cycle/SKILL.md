@@ -16,7 +16,7 @@ the actual code before building.**
 
 ## The loop
 
-`DISCOVER → VERIFY (adversarial) → RANK → IMPLEMENT one → VERIFY LIVE → TEST → COMMIT → LOG`
+`DISCOVER → VERIFY (adversarial) → RANK → IMPLEMENT one → VERIFY LIVE → TEST → COMMIT → GROOM`
 
 One improvement per commit; don't batch. Keep the backlog current so the loop survives compaction.
 
@@ -63,7 +63,7 @@ real code; the proposer guessed).
 ## 4. IMPLEMENT one cycle
 
 The smallest change that delivers it. Match surrounding style; comments explain WHY. Any visual
-change is designed against the four design principles + explicit-over-implicit (AGENTS.md).
+change follows the four design principles + explicit-over-implicit in `docs/design.md`.
 
 ## 5. VERIFY LIVE
 
@@ -74,13 +74,13 @@ this skill. Live driving has repeatedly caught bugs unit tests could not.
 
 ## 6. TEST
 
-Add/extend a unit test for the durable contract. Mind jsdom limits (AGENTS.md): assert the DOM
-contract that *enables* a behaviour and rely on live verification for the behaviour itself.
+Add/extend a unit test for the durable contract. Mind jsdom limits (`docs/client-gotchas.md`):
+assert the DOM contract that *enables* a behaviour and rely on live verification for the behaviour itself.
 
-## 7. COMMIT + LOG
+## 7. COMMIT + GROOM
 
 One Conventional Commit per cycle (git ops only per the session's standing permission); the commit
-message is the durable "what + why". Then update the backlog: shipped → Done (one line), refuted →
+message is the durable "what + why". Then update the backlog: shipped → delete the row, refuted →
 Rejected with its verdict.
 
 ## Backlog

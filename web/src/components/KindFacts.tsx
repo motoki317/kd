@@ -57,7 +57,7 @@ function KeyValRow(props: { row: string; title?: string }) {
 // rules, a PDB's policy, a ConfigMap's keys…), each block a Show gated on the server-extracted
 // field. It is the presentation counterpart of the server's spec.go extractors: one chip/row idiom
 // (MetaChip / KeyValRow / route-row) per fact, so adding a kind's essence stays a one-block change
-// here + one extractor there (see the AGENTS.md "declarative essence" recipe).
+// here + one extractor there (see the recipe in internal/kube/graph/spec.go).
 export default function KindFacts(props: { node: KNode }) {
   return (
     <>
