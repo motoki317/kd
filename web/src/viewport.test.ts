@@ -180,17 +180,24 @@ describe('clampPan', () => {
     expect(clampPan(0, 99999, content, insetView).ty).toBe(64)
   })
 
-  it('switches vertical coverage at the toolbar-adjusted viewport height', () => {
+  it('keeps fitting content fully inside the vertical frame below an inset', () => {
+    const insetView = { ...view, topInset: 64 }
+    const content = { width: 400, height: 300 }
+    expect(clampPan(-99999, -99999, content, insetView)).toEqual({ tx: 0, ty: 64 })
+    expect(clampPan(99999, 99999, content, insetView)).toEqual({ tx: 600, ty: 500 })
+  })
+
+  it('meets continuously at the toolbar-adjusted vertical frame height', () => {
     const insetView = { ...view, topInset: 64 }
     expect(clampPan(0, 99999, { width: 400, height: 736 }, insetView).ty).toBe(64)
-    expect(clampPan(0, 99999, { width: 400, height: 735 }, insetView).ty).toBe(800 - 60)
+    expect(clampPan(0, 99999, { width: 400, height: 735 }, insetView).ty).toBe(65)
   })
 
   it('does not apply the toolbar inset to horizontal threshold or bounds', () => {
     const insetView = { ...view, topInset: 64 }
     const content = { width: 950, height: 300 }
-    expect(clampPan(-99999, 0, content, insetView).tx).toBe(60 - 950)
-    expect(clampPan(99999, 0, content, insetView).tx).toBe(1000 - 60)
+    expect(clampPan(-99999, 0, content, insetView).tx).toBe(0)
+    expect(clampPan(99999, 0, content, insetView).tx).toBe(1000 - 950)
   })
 
   it('defaults an omitted toolbar inset to zero', () => {
@@ -200,16 +207,16 @@ describe('clampPan', () => {
     )
   })
 
-  it('keeps the 60 px visible bounds for a graph smaller than the viewport', () => {
+  it('keeps a graph smaller than the viewport fully inside both axes', () => {
     const content = { width: 400, height: 300 }
-    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 60 - 400, ty: 60 - 300 })
-    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 1000 - 60, ty: 800 - 60 })
+    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 0, ty: 0 })
+    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 1000 - 400, ty: 800 - 300 })
   })
 
-  it('chooses covered and keep-visible bounds independently per axis', () => {
+  it('chooses covered and keep-inside bounds independently per axis', () => {
     const content = { width: 4000, height: 300 }
-    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 1000 - 4000, ty: 60 - 300 })
-    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 0, ty: 800 - 60 })
+    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 1000 - 4000, ty: 0 })
+    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 0, ty: 800 - 300 })
   })
 
   it('switches to covered bounds at exact viewport equality', () => {
@@ -217,7 +224,21 @@ describe('clampPan', () => {
     expect(equal).toEqual({ tx: 0, ty: 0 })
 
     const oneShort = clampPan(-99999, 99999, { width: 999, height: 799 }, view)
-    expect(oneShort).toEqual({ tx: 60 - 999, ty: 800 - 60 })
+    expect(oneShort).toEqual({ tx: 0, ty: 1 })
+  })
+
+  it('moves both endpoint pairs continuously through frame equality', () => {
+    const insetView = { ...view, topInset: 64 }
+    const cases = [
+      { content: { width: 999, height: 735 }, lower: { tx: 0, ty: 64 }, upper: { tx: 1, ty: 65 } },
+      { content: { width: 1000, height: 736 }, lower: { tx: 0, ty: 64 }, upper: { tx: 0, ty: 64 } },
+      { content: { width: 1001, height: 737 }, lower: { tx: -1, ty: 63 }, upper: { tx: 0, ty: 64 } },
+    ]
+
+    for (const { content, lower, upper } of cases) {
+      expect(clampPan(-99999, -99999, content, insetView)).toEqual(lower)
+      expect(clampPan(99999, 99999, content, insetView)).toEqual(upper)
+    }
   })
 
   it('passes a within-bounds pan through unchanged', () => {

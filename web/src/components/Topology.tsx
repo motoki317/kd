@@ -901,9 +901,9 @@ export default function Topology(props: Props) {
     }, { defer: true }),
   )
 
-  // clampTranslate keeps an overflowing layout covering the visible frame below the toolbar and at
-  // least a margin of a smaller layout visible. A prospective scale lets zoom clamp its anchored
-  // translate before the scale signal changes; fits bypass this helper by design.
+  // clampTranslate keeps an overflowing layout covering the visible frame below the toolbar and a
+  // fitting layout fully inside it. A prospective scale lets zoom clamp its anchored translate
+  // before the scale signal changes; fits bypass this helper by design.
   type CanvasView = { width: number; height: number; topInset: number }
   function currentView(viewport?: { width: number; height: number; topInset?: number }): CanvasView {
     const rect = viewport ?? svg!.getBoundingClientRect()

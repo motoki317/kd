@@ -130,23 +130,24 @@ export function fitBoxFloored(
   }
 }
 
-// clampPan keeps an overflowing axis covering its visible frame and at least `margin` px of a
-// smaller axis visible. `content` is the graph size ALREADY multiplied by the current scale. The
-// vertical covered frame starts below `topInset`; keep-visible bounds retain their existing SVG-wide
-// slack. Axes choose independently so a wide-but-short graph stays covered only horizontally.
+// clampPan mirrors the invariant around frame equality: an overflowing axis keeps covering its
+// visible frame, while a fitting axis stays fully inside it. `content` is the graph size ALREADY
+// multiplied by the current scale; the vertical frame starts below `topInset`. Sorting the same two
+// endpoints handles both regimes independently and makes the bounds continuous when content equals
+// the frame (both endpoints converge to 0 horizontally and topInset vertically).
 export function clampPan(
   tx: number,
   ty: number,
   content: { width: number; height: number },
   view: { width: number; height: number; topInset?: number },
-  margin = 60,
 ): { tx: number; ty: number } {
   const topInset = view.topInset ?? 0
-  const minTx = content.width >= view.width ? view.width - content.width : margin - content.width
-  const maxTx = content.width >= view.width ? 0 : view.width - margin
-  const coveredY = content.height >= view.height - topInset
-  const minTy = coveredY ? view.height - content.height : margin - content.height
-  const maxTy = coveredY ? topInset : view.height - margin
+  const xEnd = view.width - content.width
+  const yEnd = view.height - content.height
+  const minTx = Math.min(0, xEnd)
+  const maxTx = Math.max(0, xEnd)
+  const minTy = Math.min(topInset, yEnd)
+  const maxTy = Math.max(topInset, yEnd)
   return {
     tx: Math.min(Math.max(tx, minTx), maxTx),
     ty: Math.min(Math.max(ty, minTy), maxTy),
