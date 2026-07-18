@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
-import { NODE_HEIGHT, NODE_WIDTH } from '../layout'
+import { layoutGraphWithOrphans, NODE_HEIGHT, NODE_WIDTH } from '../layout'
+import { projectEdges } from '../relationships'
 import type { KEdge, KNode, RelCategory } from '../types'
 
 afterEach(() => {
@@ -57,6 +58,33 @@ const stubToolbarHeight = (height: number) => {
     }
     return elementRect.call(this)
   })
+}
+const stubAnimationFrames = () => {
+  let now = 0
+  let frameId = 0
+  const frames = new Map<number, FrameRequestCallback>()
+  vi.spyOn(performance, 'now').mockImplementation(() => now)
+  vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+    const id = ++frameId
+    frames.set(id, cb)
+    return id
+  })
+  vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+    frames.delete(id)
+  })
+  return {
+    frames,
+    setNow(value: number) {
+      now = value
+    },
+    step(elapsed = 16) {
+      const entry = frames.entries().next().value as [number, FrameRequestCallback] | undefined
+      if (!entry) throw new Error('no animation frame queued')
+      frames.delete(entry[0])
+      now += elapsed
+      entry[1](now)
+    },
+  }
 }
 // The relationship/kind filter facets fold behind the toolbar's Filters disclosure (closed by
 // default). Tests that assert on them open the fold first, the way an operator would.
@@ -252,46 +280,68 @@ describe('Topology', () => {
     expect(ty()).toBe(64)
   })
 
-  it('keeps a small graph within the visible margin while zooming', () => {
+  it('keeps a small graph fully inside the viewport while zooming', () => {
     const view = { width: 2000, height: 1200 }
+    const topInset = 64
     stubViewport(view.width, view.height)
+    stubToolbarHeight(topInset)
+    const displayEdges = projectEdges(edges, base.relFilter)
+    const connectedIds = new Set(displayEdges.flatMap((edge) => [edge.from, edge.to]))
+    const fixtureLayout = layoutGraphWithOrphans(
+      nodes.filter((node) => connectedIds.has(node.id)),
+      nodes.filter((node) => !connectedIds.has(node.id)),
+      displayEdges,
+    )
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const svg = container.querySelector('svg.topology-svg')!
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
     const num = (t: string, re: RegExp) => Number(t.match(re)![1])
 
-    fireEvent.wheel(svg, { deltaMode: 0, deltaX: -99_999, deltaY: 0 })
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: -99_999, deltaY: -99_999 })
     const before = world()
-    expect(num(before, /translate\(([-\d.]+)/)).toBe(view.width - 60)
+    const beforeTx = num(before, /translate\(([-\d.]+)/)
+    expect(beforeTx).toBeGreaterThanOrEqual(0)
 
     fireEvent.wheel(svg, { deltaMode: 1, deltaY: -1, clientX: 0, clientY: 0 })
     const after = world()
-    expect(num(after, /scale\(([-\d.]+)\)/)).toBeGreaterThan(num(before, /scale\(([-\d.]+)\)/))
-    expect(num(after, /translate\(([-\d.]+)/)).toBe(view.width - 60)
+    const afterScale = num(after, /scale\(([-\d.]+)\)/)
+    const afterTx = num(after, /translate\(([-\d.]+)/)
+    const afterTy = num(after, /translate\([-\d.]+,([-\d.]+)/)
+    expect(afterScale).toBeGreaterThan(num(before, /scale\(([-\d.]+)\)/))
+    expect(afterTx).toBeGreaterThanOrEqual(0)
+    expect(afterTx).toBeLessThan(beforeTx)
+    expect(afterTx + fixtureLayout.width * afterScale).toBeLessThanOrEqual(view.width)
+    expect(afterTy).toBeGreaterThanOrEqual(topInset)
+    expect(afterTy + fixtureLayout.height * afterScale).toBeLessThanOrEqual(view.height)
+  })
+
+  it('settles an over-dragged fitting graph fully below the toolbar', () => {
+    stubViewport(2000, 1200)
+    stubToolbarHeight(64)
+    const animation = stubAnimationFrames()
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const ty = () => Number(world().match(/translate\([-\d.]+,([-\d.]+)/)![1])
+    animation.frames.clear()
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    animation.setNow(10_000)
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 100, clientY: -9900 })
+    expect(ty()).toBeLessThan(64)
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: -9900 })
+
+    expect(animation.frames.size).toBe(1)
+    for (let i = 0; animation.frames.size > 0 && i < 10; i++) animation.step(50)
+    expect(animation.frames.size).toBe(0)
+    expect(ty()).toBe(64)
   })
 
   it('keeps inward momentum after release outside a covered bound and settles in bounds', () => {
     const view = { width: 300, height: 240 }
     stubViewport(view.width, view.height)
-    let now = 0
-    vi.spyOn(performance, 'now').mockImplementation(() => now)
-    let frameId = 0
-    const frames = new Map<number, FrameRequestCallback>()
-    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
-      const id = ++frameId
-      frames.set(id, cb)
-      return id
-    })
-    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
-      frames.delete(id)
-    })
-    const stepFrame = () => {
-      const entry = frames.entries().next().value as [number, FrameRequestCallback] | undefined
-      expect(entry).toBeTruthy()
-      frames.delete(entry![0])
-      now += 16
-      entry![1](now)
-    }
+    const animation = stubAnimationFrames()
 
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const svg = container.querySelector('svg.topology-svg')!
@@ -299,20 +349,20 @@ describe('Topology', () => {
     const num = (t: string, re: RegExp) => Number(t.match(re)![1])
 
     fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
-    now = 1000
+    animation.setNow(1000)
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
-    now = 1001
+    animation.setNow(1001)
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 900, clientY: 0 })
     fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 900, clientY: 0 })
 
-    expect(frames.size).toBe(1)
-    stepFrame()
-    expect(frames.size).toBe(1)
-    stepFrame()
+    expect(animation.frames.size).toBe(1)
+    animation.step()
+    expect(animation.frames.size).toBe(1)
+    animation.step()
     expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(0)
 
-    for (let i = 0; frames.size > 0 && i < 200; i++) stepFrame()
-    expect(frames.size).toBe(0)
+    for (let i = 0; animation.frames.size > 0 && i < 200; i++) animation.step()
+    expect(animation.frames.size).toBe(0)
     const settledTx = num(world(), /translate\(([-\d.]+)/)
     fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 0 })
     const lowerTx = num(world(), /translate\(([-\d.]+)/)
