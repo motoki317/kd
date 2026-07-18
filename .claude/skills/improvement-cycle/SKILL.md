@@ -80,8 +80,9 @@ assert the DOM contract that *enables* a behaviour and rely on live verification
 ## 7. COMMIT + GROOM
 
 One Conventional Commit per cycle (git ops only per the session's standing permission); the commit
-message is the durable "what + why". Then update the backlog: shipped → delete the row, refuted →
-Rejected with its verdict.
+message is the durable "what + why". Then groom durable state: shipped → delete the backlog row;
+refuted → check the owning site's comments and git log, add a missing durable constraint at the code
+site, or drop the candidate when no such constraint exists.
 
 ## Backlog
 

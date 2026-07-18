@@ -83,7 +83,7 @@ escalation, and never copy their names into tracked files.
 
 ## Durable project state
 
-- `docs/backlog.md`: Open, Future, and Rejected work; lifecycle is in the `backlog-management` skill.
+- `docs/backlog.md`: Open and Future work; lifecycle is in the `backlog-management` skill.
 - `docs/ADR/`: decisions; `git log`: shipped what and why.
 - `docs/frontend-internals.md`, `docs/design.md`, `docs/client-gotchas.md`, `docs/live-debug.md`: focused guides.
 - `docs/plans/`: gitignored session scratch only. Long-lived context must be git-tracked.

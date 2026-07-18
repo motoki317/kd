@@ -54,7 +54,7 @@ only attributed by container name, hiding per-replica imbalance.
 - Colours stay a non-status vocabulary (no green/red/amber in the segment palette) so a segment
   never reads as health; stacks change WHO, never HOW MUCH (a stack's total width equals the plain
   fill).
-- Rejected along the way (see docs/backlog.md): collapsing equal Req+Lim bars into one "Req=Lim" bar
+- Rejected along the way: collapsing equal Req+Lim bars into one "Req=Lim" bar
   (breaks the per-card repetition idiom; the fixed sublabel column can't fit it), and per-pod
   swatches on container cards (cards stopped needing a colour join once they gauge themselves).
 
