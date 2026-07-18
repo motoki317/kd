@@ -59,16 +59,6 @@ spotlight).
   **Reopen when:** canvas card geometry is being touched anyway, or the sans/mono split on cards
   starts reading as inconsistent in practice.
 
-- **Large-graph empty gutter after a window shrink** — *verified live (2026-06-05), deferred — touches
-  heavily-tuned pan-clamp behaviour.* For a graph wider than the viewport, `clampTranslate`
-  (`Topology.tsx`) guarantees only "≥60px of graph visible", not "viewport covered", so a shrink
-  (1280→700) can leave a large empty gutter beside an overflowing graph. The fix (for
-  `w ≥ rect.width`, clamp so the viewport stays covered) also changes how a large graph pans, and
-  pan/zoom feel is user-iterated territory; window resizes mid-session are rare, and the dominant
-  resize (drawer open) is owned by selection-fit. **Reopen when:** the user wants the graph
-  re-anchored on resize, or confirms large-graph pan should never expose empty gutter; then split
-  `clampTranslate` into small-graph (keep-visible) vs large-graph (keep-covered) bounds + tests.
-
 - **GRPCRoute has routing edges but no drawer routing table** — *low value, deferred.*
   `gatewayRouteEdges` already emits `EdgeRoutes` for a GRPCRoute's `backendRefs`, but the drawer's
   `routes()` table only handles HTTPRoute; a faithful GRPCRoute table would render
