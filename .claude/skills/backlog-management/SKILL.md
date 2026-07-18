@@ -2,7 +2,7 @@
 name: backlog-management
 description: >-
   Use when creating, grooming, or working a persistent improvement backlog — adding or triaging an
-  item, recording why an idea was rejected, marking work done, deciding where a long-lived task should
+  item, recording why an idea was rejected, deciding where a long-lived task should
   live, or grooming stale entries. For this repo the backlog is the git-tracked docs/backlog.md. Reach
   for this skill whenever you are about to write down a future task, a tech-debt note, or a "we should
   eventually…" item, even if the user doesn't say the word "backlog" — durable tasks belong here, not
@@ -26,7 +26,7 @@ with `git ls-files docs/backlog.md`, or the next session won't see it.
 ## The file is the template
 
 Don't restate the schema here — `docs/backlog.md`'s header documents the layout and its live
-contents are the worked example (describing the format in two places is how docs drift). Four
+contents are the worked example (describing the format in two places is how docs drift). Three
 sections:
 
 - **Open** — actionable items: `id | area | value/effort | status | evidence | proposal`. Every
@@ -37,20 +37,17 @@ sections:
 - **Rejected — do not re-propose** — `candidate | verdict`, refuted against the real code. The
   anti-rework memory: without it, surveys regenerate the same losers (~94% of ideas get refuted at
   a mature surface). Always record the one-line verdict.
-- **Done** — a short headline index that **defers to `git log`** as the authoritative per-item
-  record; don't recopy commit prose.
-
 ## Lifecycle
 
 - **Seed** Open from a discover + adversarial-verify pass — only `real`-verdict items, with
   evidence.
-- **Work** top-down by value/effort. **Ship** → one-line Done headline. **Refute** → Rejected with
-  verdict.
+- **Work** top-down by value/effort. **Ship** → delete the row; the commit/PR is the record.
+  **Refute** → Rejected with verdict.
 - **Groom** — remove or re-file rows overtaken by code changes; a backlog people stop trusting is
   dead weight.
 
 Keep a dated **Status** line at the top recording when a surface went mature — a fresh session
 reads it first and skips filler re-surveys.
 
-Porting to another repo: the reusable part is the shape (tracked, four sections, per-entry
-evidence, Done defers to git log); the path and focus areas are kd-specific.
+Porting to another repo: the reusable part is the shape (tracked, three sections, per-entry
+evidence); the path and focus areas are kd-specific.

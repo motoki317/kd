@@ -1,9 +1,8 @@
 # Frontend internals — topology canvas
 
 Deep mechanics of how `web/src/` draws the SVG topology: layouts, collapse, edge routing, and
-viewport fit. AGENTS.md is the nav sheet and lists the *surprising* one-liners; this file holds the
-canvas internals an agent needs **only when changing the layout/render path**. Design rationale for
-the big surfaces lives in ADRs — this file is the "how it works / what will bite you" companion.
+viewport fit. AGENTS.md is the repository router; this file holds the canvas internals needed only
+when changing the layout/render path. Design rationale for the big surfaces lives in ADRs.
 
 - Capacity view → [`ADR 20260603-nodes-capacity-usage-visualization`](ADR/20260603-nodes-capacity-usage-visualization.md)
 - Group-by + relationship filter → [`ADR 20260603-unified-view-relationship-filter-grouping`](ADR/20260603-unified-view-relationship-filter-grouping.md)
