@@ -139,6 +139,61 @@ describe('Topology', () => {
     expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - contentHeight, 5)
   })
 
+  it('keeps an inset-aligned floored rest state through pan, zoom, and resize clamps', () => {
+    stubViewport(300, 240)
+    const elementRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('topology-toolbar')) {
+        return {
+          x: 0, y: 0, left: 0, top: 0, right: 300, bottom: 64, width: 300, height: 64,
+          toJSON: () => ({}),
+        }
+      }
+      return elementRect.call(this)
+    })
+    let notifyResize = () => {}
+    class TestResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        notifyResize = () => cb([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    let frameId = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      const id = ++frameId
+      frames.set(id, cb)
+      return id
+    })
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames.delete(id)
+    })
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const ty = () => Number(world().match(/translate\([-\d.]+,([-\d.]+)/)![1])
+
+    // Model the inset-aligned transform produced by a tall floored fit, then exercise every clamp
+    // path that previously yanked that legal rest position back under the toolbar.
+    fireEvent.wheel(svg, { deltaMode: 0, deltaY: -99_999 })
+    expect(ty()).toBe(64)
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 100 })
+    expect(ty()).toBe(64)
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: -1, clientX: 150, clientY: 64 })
+    expect(ty()).toBe(64)
+
+    frames.clear()
+    notifyResize()
+    expect(frames.size).toBe(1)
+    const resizeFrames = [...frames.values()]
+    frames.clear()
+    for (const cb of resizeFrames) cb(16)
+    expect(ty()).toBe(64)
+  })
+
   it('keeps a small graph within the visible margin while zooming', () => {
     const view = { width: 2000, height: 1200 }
     stubViewport(view.width, view.height)

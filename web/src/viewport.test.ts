@@ -173,6 +173,33 @@ describe('clampPan', () => {
     expect(near.ty).toBe(0)
   })
 
+  it('keeps covered content within the vertical frame below an inset', () => {
+    const insetView = { ...view, topInset: 64 }
+    const content = { width: 400, height: 1000 }
+    expect(clampPan(0, -99999, content, insetView).ty).toBe(800 - 1000)
+    expect(clampPan(0, 99999, content, insetView).ty).toBe(64)
+  })
+
+  it('switches vertical coverage at the toolbar-adjusted viewport height', () => {
+    const insetView = { ...view, topInset: 64 }
+    expect(clampPan(0, 99999, { width: 400, height: 736 }, insetView).ty).toBe(64)
+    expect(clampPan(0, 99999, { width: 400, height: 735 }, insetView).ty).toBe(800 - 60)
+  })
+
+  it('does not apply the toolbar inset to horizontal threshold or bounds', () => {
+    const insetView = { ...view, topInset: 64 }
+    const content = { width: 950, height: 300 }
+    expect(clampPan(-99999, 0, content, insetView).tx).toBe(60 - 950)
+    expect(clampPan(99999, 0, content, insetView).tx).toBe(1000 - 60)
+  })
+
+  it('defaults an omitted toolbar inset to zero', () => {
+    const content = { width: 4000, height: 3000 }
+    expect(clampPan(99999, 99999, content, view)).toEqual(
+      clampPan(99999, 99999, content, { ...view, topInset: 0 }),
+    )
+  })
+
   it('keeps the 60 px visible bounds for a graph smaller than the viewport', () => {
     const content = { width: 400, height: 300 }
     expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 60 - 400, ty: 60 - 300 })
