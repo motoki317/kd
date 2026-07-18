@@ -40,6 +40,8 @@ export { setServerShortNames }
 // intentionally absent here — the server map covers them; listing them would just risk drifting
 // from the cluster's truth. What remains is kinds the apiserver gives no short name but whose full
 // kind still overflows the icon column.
+// Keep this fallback to built-in kinds: vendor CRDs have no canonical labels, and curated aliases
+// would introduce collisions.
 const KIND_SHORT_LABELS: Record<string, string> = {
   Secret: 'SECRT',
   Group: 'GRP',

@@ -1,4 +1,6 @@
 /* Drawer */
+/* Mid-width deliberately protects the drawer's reading width and lets the canvas yield; only the
+   640px phone breakpoint switches to an overlay. */
 .drawer {
   width: var(--drawer-w);
   /* Cap to .main's width minus the canvas floor (--canvas-min), NOT a viewport-relative 70vw: the

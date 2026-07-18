@@ -67,6 +67,8 @@ export interface NamespacesStreamHandlers {
 // transparently re-created in place — no app-state reset; the server re-sends its authoritative
 // snapshot on reconnect. A native `error` is left to EventSource's own retry (the detectable case);
 // the timer stays armed as a backstop in case that retry itself silently stalls.
+// During a rolling upgrade, an old-pod-pinned tab may stall until this watchdog reconnects; the
+// transient self-heals, so there is no cross-version compatibility path.
 const SSE_STALE_MS = 40_000 // ~2.5 heartbeat intervals: survives two missed 15s pings before giving up
 const SSE_BACKOFF_MAX_MS = 120_000 // ceiling on the gap between reconnect attempts during an outage
 
