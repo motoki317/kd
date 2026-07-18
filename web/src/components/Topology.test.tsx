@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
+import { NODE_HEIGHT, NODE_WIDTH } from '../layout'
 import type { KEdge, KNode, RelCategory } from '../types'
 
 afterEach(() => {
@@ -45,6 +46,18 @@ const stubViewport = (width: number, height: number) =>
     height,
     toJSON: () => ({}),
   })
+const stubToolbarHeight = (height: number) => {
+  const elementRect = HTMLElement.prototype.getBoundingClientRect
+  return vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.classList.contains('topology-toolbar')) {
+      return {
+        x: 0, y: 0, left: 0, top: 0, right: 0, bottom: height, width: 0, height,
+        toJSON: () => ({}),
+      }
+    }
+    return elementRect.call(this)
+  })
+}
 // The relationship/kind filter facets fold behind the toolbar's Filters disclosure (closed by
 // default). Tests that assert on them open the fold first, the way an operator would.
 const openFilters = (c: Element) => {
@@ -70,6 +83,7 @@ describe('Topology', () => {
     // Phones never send wheel events, so the two-finger pinch is the ONLY touch zoom path. The
     // contract: spreading the fingers to 2x their distance doubles the scale (anchored at their
     // midpoint), and lifting one finger ends the zoom — the survivor pans without a scale jump.
+    stubViewport(1000, 800)
     const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
     const svg = container.querySelector('svg.topology-svg')!
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
@@ -85,6 +99,59 @@ describe('Topology', () => {
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 120, clientY: 100 })
     expect(num(world(), /scale\(([-\d.]+)\)/)).toBeCloseTo(s0 * 2, 5)
     expect(num(world(), /translate\(([-\d.]+)/)).toBeCloseTo(txAfterPinch + 20, 5)
+  })
+
+  it('wheel zoom cannot shrink a small layout below its fit-all scale', () => {
+    stubViewport(1000, 800)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const scale = () => Number(world().match(/scale\(([-\d.]+)\)/)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: 99_999, clientX: 500, clientY: 400 })
+
+    expect(scale()).toBe(1)
+  })
+
+  it('wheel zoom uses the toolbar inset when one-card height limits the maximum', () => {
+    stubViewport(1000, 300)
+    stubToolbarHeight(60)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const scale = () => Number(world().match(/scale\(([-\d.]+)\)/)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 1, deltaY: -99_999, clientX: 500, clientY: 150 })
+
+    expect(scale()).toBeCloseTo((300 - 60 - 2 * 60) / NODE_HEIGHT, 5)
+  })
+
+  it('pinch zoom cannot grow beyond the one-card fit scale', () => {
+    stubViewport(300, 240)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const scale = () => Number(world().match(/scale\(([-\d.]+)\)/)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 100 })
+    fireEvent.pointerDown(svg, { pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(svg, { pointerId: 2, clientX: 1100, clientY: 100 })
+
+    expect(scale()).toBeCloseTo((300 - 2 * 60) / NODE_WIDTH, 5)
+  })
+
+  it('pinch zoom cannot shrink a small layout below its fit-all scale', () => {
+    stubViewport(1000, 800)
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const scale = () => Number(world().match(/scale\(([-\d.]+)\)/)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 100 })
+    fireEvent.pointerDown(svg, { pointerId: 2, pointerType: 'touch', clientX: 1000, clientY: 100 })
+    fireEvent.pointerMove(svg, { pointerId: 2, clientX: 1, clientY: 100 })
+
+    expect(scale()).toBe(1)
   })
 
   it('wheel zoom clamps against the new scale', () => {
@@ -141,16 +208,7 @@ describe('Topology', () => {
 
   it('keeps an inset-aligned floored rest state through pan, zoom, and resize clamps', () => {
     stubViewport(300, 240)
-    const elementRect = HTMLElement.prototype.getBoundingClientRect
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this.classList.contains('topology-toolbar')) {
-        return {
-          x: 0, y: 0, left: 0, top: 0, right: 300, bottom: 64, width: 300, height: 64,
-          toJSON: () => ({}),
-        }
-      }
-      return elementRect.call(this)
-    })
+    stubToolbarHeight(64)
     let notifyResize = () => {}
     class TestResizeObserver {
       constructor(cb: ResizeObserverCallback) {

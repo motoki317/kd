@@ -1,5 +1,14 @@
 import { createMemo, createSignal, For, Show, createEffect, on, onCleanup, onMount } from 'solid-js'
-import { connGroups, kindGroups, layoutGraphByKind, layoutGraphWithOrphans, type CollapseMeta, type OrphanLayout } from '../layout'
+import {
+  connGroups,
+  kindGroups,
+  layoutGraphByKind,
+  layoutGraphWithOrphans,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  type CollapseMeta,
+  type OrphanLayout,
+} from '../layout'
 import { layoutGraphByCapacity, type CapRow, type CapacityLayout } from '../capacityLayout'
 import type { CapResource } from '../resource'
 import { useNow } from '../clock'
@@ -19,7 +28,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale } from '../viewport'
+import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale, zoomScaleBounds } from '../viewport'
 import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, Health, KEdge, KNode, RelCategory } from '../types'
@@ -895,21 +904,35 @@ export default function Topology(props: Props) {
   // clampTranslate keeps an overflowing layout covering the visible frame below the toolbar and at
   // least a margin of a smaller layout visible. A prospective scale lets zoom clamp its anchored
   // translate before the scale signal changes; fits bypass this helper by design.
+  type CanvasView = { width: number; height: number; topInset: number }
+  function currentView(viewport?: { width: number; height: number; topInset?: number }): CanvasView {
+    const rect = viewport ?? svg!.getBoundingClientRect()
+    return {
+      width: rect.width,
+      height: rect.height,
+      topInset: viewport?.topInset ?? toolbarEl?.getBoundingClientRect().height ?? 0,
+    }
+  }
+
   function clampTranslate(
     txv: number,
     tyv: number,
     scalev = scale(),
-    viewport?: { width: number; height: number },
+    viewport?: { width: number; height: number; topInset?: number },
   ): { tx: number; ty: number } {
     const l = layout()
     if (!svg || l.width === 0) return { tx: txv, ty: tyv }
-    const rect = viewport ?? svg.getBoundingClientRect()
-    const view = {
-      width: rect.width,
-      height: rect.height,
-      topInset: toolbarEl?.getBoundingClientRect().height ?? 0,
-    }
+    const view = currentView(viewport)
     return clampPan(txv, tyv, { width: l.width * scalev, height: l.height * scalev }, view)
+  }
+
+  function scaleBounds(view: CanvasView): { min: number; max: number } {
+    const l = layout()
+    return zoomScaleBounds(
+      { width: l.width, height: l.height },
+      { width: NODE_WIDTH, height: NODE_HEIGHT },
+      view,
+    )
   }
 
   // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see
@@ -935,12 +958,14 @@ export default function Topology(props: Props) {
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
       const oldScale = scale()
-      const s = Math.min(Math.max(oldScale * factor, 0.15), 3)
+      const view = currentView(rect)
+      const bounds = scaleBounds(view)
+      const s = Math.min(Math.max(oldScale * factor, bounds.min), bounds.max)
       const c = clampTranslate(
         mx - ((mx - tx()) / oldScale) * s,
         my - ((my - ty()) / oldScale) * s,
         s,
-        rect,
+        view,
       )
       setTx(c.tx)
       setTy(c.ty)
@@ -993,12 +1018,14 @@ export default function Topology(props: Props) {
         const mx = (a.x + b.x) / 2 - rect.left
         const my = (a.y + b.y) / 2 - rect.top
         const oldScale = scale()
-        const s = Math.min(Math.max(oldScale * (dist / pinchDist), 0.15), 3)
+        const view = currentView(rect)
+        const bounds = scaleBounds(view)
+        const s = Math.min(Math.max(oldScale * (dist / pinchDist), bounds.min), bounds.max)
         const c = clampTranslate(
           mx - ((mx - tx()) / oldScale) * s,
           my - ((my - ty()) / oldScale) * s,
           s,
-          rect,
+          view,
         )
         setTx(c.tx)
         setTy(c.ty)

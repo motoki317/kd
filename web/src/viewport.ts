@@ -26,6 +26,8 @@ export interface FitTransform {
   ty: number
 }
 
+const DEFAULT_FIT_PADDING = 60
+
 // boundingBox spreads every card to its x±w/2, y±h/2 corners and takes the min/max — the union box
 // the fit needs to frame. (Cards are positioned by their CENTRE, hence the ±half-extent.)
 export function boundingBox(nodes: Box[]): Bounds {
@@ -55,7 +57,7 @@ export function fitBox(
   box: { minX: number; minY: number; maxX: number; maxY: number },
   view: { width: number; height: number; topInset: number },
   maxScale: number,
-  padding = 60,
+  padding = DEFAULT_FIT_PADDING,
 ): FitTransform {
   const availH = Math.max(1, view.height - view.topInset)
   const w = Math.max(1, box.maxX - box.minX)
@@ -64,6 +66,22 @@ export function fitBox(
   const cx = (box.minX + box.maxX) / 2
   const cy = (box.minY + box.maxY) / 2
   return { scale, tx: view.width / 2 - cx * scale, ty: view.topInset + availH / 2 - cy * scale }
+}
+
+export function zoomScaleBounds(
+  layout: { width: number; height: number },
+  card: { width: number; height: number },
+  view: { width: number; height: number; topInset: number },
+): { min: number; max: number } {
+  // Reuse fitBox so interactive zoom follows the same padding and toolbar geometry as explicit
+  // fits. A transient sub-padding width still gets a positive 1px fitting area, matching fitBox's
+  // vertical guard; Infinity leaves the natural-size and 3x policy caps independent.
+  const fitView = { ...view, width: Math.max(view.width, DEFAULT_FIT_PADDING * 2 + 1) }
+  const fitScale = (size: { width: number; height: number }) =>
+    fitBox({ minX: 0, minY: 0, maxX: size.width, maxY: size.height }, fitView, Number.POSITIVE_INFINITY).scale
+  const min = Math.min(fitScale(layout), 1)
+  const max = Math.min(3, fitScale(card))
+  return { min, max: Math.max(min, max) }
 }
 
 // fitBoxFloored frames `box` driven by the canvas WIDTH, clamped to [minScale, maxScale]. Unlike
