@@ -892,9 +892,9 @@ export default function Topology(props: Props) {
     }, { defer: true }),
   )
 
-  // clampTranslate keeps an overflowing layout covering the viewport and at least a margin of a
-  // smaller layout visible. A prospective scale lets zoom clamp its anchored translate before the
-  // scale signal changes; fits bypass this helper by design.
+  // clampTranslate keeps an overflowing layout covering the visible frame below the toolbar and at
+  // least a margin of a smaller layout visible. A prospective scale lets zoom clamp its anchored
+  // translate before the scale signal changes; fits bypass this helper by design.
   function clampTranslate(
     txv: number,
     tyv: number,
@@ -903,7 +903,12 @@ export default function Topology(props: Props) {
   ): { tx: number; ty: number } {
     const l = layout()
     if (!svg || l.width === 0) return { tx: txv, ty: tyv }
-    const view = viewport ?? svg.getBoundingClientRect()
+    const rect = viewport ?? svg.getBoundingClientRect()
+    const view = {
+      width: rect.width,
+      height: rect.height,
+      topInset: toolbarEl?.getBoundingClientRect().height ?? 0,
+    }
     return clampPan(txv, tyv, { width: l.width * scalev, height: l.height * scalev }, view)
   }
 
