@@ -748,6 +748,7 @@ export default function Topology(props: Props) {
         if (l.width === 0) return
         if (props.selectedId) return // selection-fit owns this case
         // Snap, not animate: a resize is a viewport change, not a user-initiated transition.
+        cancelAnimationFrame(animFrame) // its target was computed against the old viewport
         const c = clampTranslate(tx(), ty())
         setTx(c.tx)
         setTy(c.ty)
@@ -891,15 +892,19 @@ export default function Topology(props: Props) {
     }, { defer: true }),
   )
 
-  // clampTranslate keeps at least a margin of the laid-out graph on-screen, so a pan can't fling the
-  // whole canvas into the void (where the only recovery was the Fit button). The graph spans screen
-  // x in [tx, tx + width*scale]; we require its far edge to stay ≥ margin inside the viewport on
-  // each side. A graph smaller than the viewport is unaffected (the bounds never invert).
-  function clampTranslate(txv: number, tyv: number): { tx: number; ty: number } {
+  // clampTranslate keeps an overflowing layout covering the viewport and at least a margin of a
+  // smaller layout visible. A prospective scale lets zoom clamp its anchored translate before the
+  // scale signal changes; fits bypass this helper by design.
+  function clampTranslate(
+    txv: number,
+    tyv: number,
+    scalev = scale(),
+    viewport?: { width: number; height: number },
+  ): { tx: number; ty: number } {
     const l = layout()
     if (!svg || l.width === 0) return { tx: txv, ty: tyv }
-    const rect = svg.getBoundingClientRect()
-    return clampPan(txv, tyv, { width: l.width * scale(), height: l.height * scale() }, { width: rect.width, height: rect.height })
+    const view = viewport ?? svg.getBoundingClientRect()
+    return clampPan(txv, tyv, { width: l.width * scalev, height: l.height * scalev }, view)
   }
 
   // Wheel handling distinguishes three gestures, matching the conventions Mac users expect (see
@@ -913,6 +918,7 @@ export default function Topology(props: Props) {
   // canvas is denser and a 1.1x factor per click was overshooting.
   function onWheel(e: WheelEvent) {
     e.preventDefault()
+    cancelAnimationFrame(animFrame) // direct wheel input owns the camera from this event onward
     const deltaScale = e.deltaMode === 0 ? 1 : e.deltaMode === 1 ? 10 : 20
     const isPinch = e.ctrlKey || e.metaKey
     const isMouseWheel = e.deltaMode !== 0 // LINE/PAGE deltas come from classic mice
@@ -923,9 +929,16 @@ export default function Topology(props: Props) {
       const rect = svg!.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
-      const s = Math.min(Math.max(scale() * factor, 0.15), 3)
-      setTx(mx - ((mx - tx()) / scale()) * s)
-      setTy(my - ((my - ty()) / scale()) * s)
+      const oldScale = scale()
+      const s = Math.min(Math.max(oldScale * factor, 0.15), 3)
+      const c = clampTranslate(
+        mx - ((mx - tx()) / oldScale) * s,
+        my - ((my - ty()) / oldScale) * s,
+        s,
+        rect,
+      )
+      setTx(c.tx)
+      setTy(c.ty)
       setScale(s)
     } else {
       // Trackpad 2-finger scroll: pan in both axes. Both deltas are in pixel units already.
@@ -974,9 +987,16 @@ export default function Topology(props: Props) {
         const rect = svg!.getBoundingClientRect()
         const mx = (a.x + b.x) / 2 - rect.left
         const my = (a.y + b.y) / 2 - rect.top
-        const s = Math.min(Math.max(scale() * (dist / pinchDist), 0.15), 3)
-        setTx(mx - ((mx - tx()) / scale()) * s)
-        setTy(my - ((my - ty()) / scale()) * s)
+        const oldScale = scale()
+        const s = Math.min(Math.max(oldScale * (dist / pinchDist), 0.15), 3)
+        const c = clampTranslate(
+          mx - ((mx - tx()) / oldScale) * s,
+          my - ((my - ty()) / oldScale) * s,
+          s,
+          rect,
+        )
+        setTx(c.tx)
+        setTy(c.ty)
         setScale(s)
       }
       pinchDist = dist
@@ -1004,9 +1024,14 @@ export default function Topology(props: Props) {
     lastX = e.clientX
     lastY = e.clientY
   }
-  // Coast the canvas after a flick, decaying velocity until it's negligible. Gives the
-  // pan a physical "throw it and let it settle" feel instead of stopping dead. clampTranslate still
-  // arrests each axis at the layout edge, so momentum can't fling the graph out of view.
+  function settlePan() {
+    const c = clampTranslate(tx(), ty())
+    if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
+  }
+
+  // Coast the canvas after a flick, decaying velocity until it's negligible. Gives the pan a
+  // physical "throw it and let it settle" feel instead of stopping dead. clampTranslate arrests
+  // outward motion at an edge while an inward release past the edge keeps moving back into range.
   function startMomentum() {
     // Cap the launch speed so an extreme flick can't fling the canvas across the screen — coasting
     // should feel like a throw, not a loss of control.
@@ -1024,9 +1049,13 @@ export default function Topology(props: Props) {
       const c = clampTranslate(nx, ny)
       setTx(c.tx)
       setTy(c.ty)
-      if (c.tx !== nx) vx = 0 // hit the horizontal edge — stop that axis
-      if (c.ty !== ny) vy = 0
-      if (Math.hypot(vx, vy) > 0.015) animFrame = requestAnimationFrame(tick)
+      if ((nx > c.tx && vx > 0) || (nx < c.tx && vx < 0)) vx = 0
+      if ((ny > c.ty && vy > 0) || (ny < c.ty && vy < 0)) vy = 0
+      if (Math.hypot(vx, vy) > 0.015) {
+        animFrame = requestAnimationFrame(tick)
+      } else {
+        settlePan()
+      }
     }
     animFrame = requestAnimationFrame(tick)
   }
@@ -1063,8 +1092,7 @@ export default function Topology(props: Props) {
         startMomentum()
         return
       }
-      const c = clampTranslate(tx(), ty())
-      if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
+      settlePan()
       return
     }
     // A click on the topology background (not on a card and not a pan) dismisses the
