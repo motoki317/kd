@@ -6,7 +6,7 @@ import { layoutGraphWithOrphans, NODE_HEIGHT, NODE_WIDTH } from '../layout'
 import { layoutGraphByCapacity } from '../capacityLayout'
 import { projectEdges } from '../relationships'
 import type { KEdge, KNode, RelCategory } from '../types'
-import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale } from '../viewport'
+import { boundingBox, clampPan, fitBox, fitBoxFloored, FIT_PADDING, selectionMaxScale } from '../viewport'
 
 afterEach(() => {
   cleanup()
@@ -371,6 +371,58 @@ describe('Topology', () => {
       expect(actual.tx).toBeCloseTo(bounded.tx, 5)
       expect(actual.ty).toBeCloseTo(bounded.ty, 5)
     })
+  })
+
+  it('centres a filter fit at its breathed scale before applying the layout bound', () => {
+    const view = { width: 1000, height: 800, topInset: 64 }
+    stubViewport(view.width, view.height)
+    stubToolbarHeight(view.topInset)
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `filter-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: i === 3 ? 'Degraded' : 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `filter-${i}`,
+      to: `filter-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const fixtureLayout = layoutGraphWithOrphans(chainNodes, [], chainEdges)
+    const [healthFilter, setHealthFilter] = createSignal<'Degraded' | undefined>()
+    const { container } = render(() => (
+      <Topology
+        nodes={chainNodes}
+        edges={chainEdges}
+        search=""
+        {...base}
+        healthFilter={healthFilter()}
+        onHealthFilter={() => {}}
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    animation.frames.clear()
+
+    setHealthFilter('Degraded')
+    animation.step()
+    animation.drain()
+
+    const match = fixtureLayout.nodes.find((node) => node.id === 'filter-3')!
+    const bounds = boundingBox([match])
+    const target = fitBox(bounds, view, 1.4, FIT_PADDING, 0.92)
+    const expected = clampPan(
+      target.tx,
+      target.ty,
+      { width: fixtureLayout.width * target.scale, height: fixtureLayout.height * target.scale },
+      view,
+    )
+    const actual = world()
+    expect(num(actual, /scale\(([-\d.]+)\)/)).toBeCloseTo(target.scale, 5)
+    expect(num(actual, /translate\(([-\d.]+)/)).toBeCloseTo(expected.tx, 5)
+    expect(num(actual, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(expected.ty, 5)
   })
 
   it('bounds a bottom-edge selection fit while keeping the selected card visible', () => {

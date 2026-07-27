@@ -630,10 +630,23 @@ export default function Topology(props: Props) {
   // given padding. Caps max scale so single-card selections don't zoom in to absurd sizes.
   // computeFitFor reads the live viewport (the SVG rect + the overlaying toolbar's height) and
   // delegates the framing geometry to the pure fitBox (viewport.ts), which the unit tests pin.
-  function computeFitFor(minX: number, minY: number, maxX: number, maxY: number, maxScale: number) {
+  function computeFitFor(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    maxScale: number,
+    breathing = 1,
+  ) {
     const rect = svg!.getBoundingClientRect()
     const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
-    return fitBox({ minX, minY, maxX, maxY }, { width: rect.width, height: rect.height, topInset }, maxScale)
+    return fitBox(
+      { minX, minY, maxX, maxY },
+      { width: rect.width, height: rect.height, topInset },
+      maxScale,
+      FIT_PADDING,
+      breathing,
+    )
   }
 
   // fitNodeSet: frames a set of cards. boundingBox + selectionMaxScale + fitBox are
@@ -642,19 +655,18 @@ export default function Topology(props: Props) {
   function fitNodeSet(
     nodes: { x: number; y: number; width: number; height: number }[],
     maxScale: number | ((w: number, h: number) => number),
+    breathing = 1,
   ) {
     const bb = boundingBox(nodes)
     const ms = typeof maxScale === 'function' ? maxScale(bb.width, bb.height) : maxScale
-    return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms)
+    return computeFitFor(bb.minX, bb.minY, bb.maxX, bb.maxY, ms, breathing)
   }
 
   // fitLit frames a lit node set at the standard 1.4× cap, then eases it out by ×0.92 for the same
   // breathing room the manual Fit leaves. Most callers animate straight to it; the automatic filter-fit
   // first checks the returned scale against the legibility floor before committing.
   function fitLit(lit: { x: number; y: number; width: number; height: number }[]) {
-    const target = fitNodeSet(lit, 1.4)
-    target.scale *= 0.92
-    return target
+    return fitNodeSet(lit, 1.4, 0.92)
   }
 
   // Floored variants of the two above: like computeFitFor/fitNodeSet but they never zoom out past
