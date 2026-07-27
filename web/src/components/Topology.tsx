@@ -28,7 +28,7 @@ import { nodeMatches } from '../search'
 import { kindIcon } from '../icons'
 import { relativeAge } from '../time'
 import { projectEdges, REL_CATEGORIES, relCategoriesPresent } from '../relationships'
-import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale, zoomScaleBounds } from '../viewport'
+import { boundingBox, clampPan, fitBox, fitBoxFloored, FIT_PADDING, selectionMaxScale, zoomScaleBounds } from '../viewport'
 import { scrollEdges, type ScrollEdges } from '../scrollEdges'
 import { CLUSTER_SCOPE } from '../api'
 import type { Capacity, Health, KEdge, KNode, RelCategory } from '../types'
@@ -287,7 +287,7 @@ export default function Topology(props: Props) {
     const rect = svg.getBoundingClientRect()
     const topInset = toolbarEl?.getBoundingClientRect().height ?? 0
     const availH = Math.max(1, rect.height - topInset)
-    const padding = 60
+    const padding = FIT_PADDING
     const scale = Math.max(MIN_FIT_SCALE, Math.min(1.2, (rect.width - padding * 2) / r.width))
     const cx = r.x + r.width / 2
     const tx = rect.width / 2 - cx * scale
@@ -561,6 +561,12 @@ export default function Topology(props: Props) {
   // Replaces the prior "snap-instantly" updates so namespace/view switches and selection focus
   // changes glide instead of jumping — easier for a human to track what just changed.
   let animFrame = 0
+  let cameraAnimating = false
+  const cancelCameraAnimation = () => {
+    cancelAnimationFrame(animFrame)
+    animFrame = 0
+    cameraAnimating = false
+  }
   let selFitFrame = 0 // rAF handle for the deferred selection-fit
   // A selection-fit waiting for the canvas to reach its post-drawer width. Opening the drawer mounts
   // a flex sibling that shrinks the SVG, but the mount+reflow lands an unpredictable frame or two
@@ -585,21 +591,32 @@ export default function Topology(props: Props) {
   }
   let cardClickTimer: ReturnType<typeof setTimeout> | undefined // deferred deselect, cancelled by dblclick
   function animateTo(target: { scale: number; tx: number; ty: number }, duration = 360) {
-    cancelAnimationFrame(animFrame)
+    cancelCameraAnimation()
     const s0 = scale(), tx0 = tx(), ty0 = ty()
     const t0 = performance.now()
     const tick = (now: number) => {
       const t = Math.min(1, (now - t0) / duration)
       const e = 1 - Math.pow(1 - t, 3)
-      setScale(s0 + (target.scale - s0) * e)
-      setTx(tx0 + (target.tx - tx0) * e)
-      setTy(ty0 + (target.ty - ty0) * e)
+      const nextScale = s0 + (target.scale - s0) * e
+      const c = clampTranslate(
+        tx0 + (target.tx - tx0) * e,
+        ty0 + (target.ty - ty0) * e,
+        nextScale,
+      )
+      setScale(nextScale)
+      setTx(c.tx)
+      setTy(c.ty)
       if (t < 1) animFrame = requestAnimationFrame(tick)
+      else {
+        animFrame = 0
+        cameraAnimating = false
+      }
     }
+    cameraAnimating = true
     animFrame = requestAnimationFrame(tick)
   }
   onCleanup(() => {
-    cancelAnimationFrame(animFrame)
+    cancelCameraAnimation()
     cancelAnimationFrame(selFitFrame)
     clearTimeout(cardClickTimer)
   })
@@ -720,9 +737,10 @@ export default function Topology(props: Props) {
     const target = computeFitFloored(0, 0, l.width, l.height, { maxScale: 1.4, focus: { x: 0, y: 0 } })
     if (firstFit) {
       firstFit = false
+      const c = clampTranslate(target.tx, target.ty, target.scale)
       setScale(target.scale)
-      setTx(target.tx)
-      setTy(target.ty)
+      setTx(c.tx)
+      setTy(c.ty)
     } else {
       animateTo(target)
     }
@@ -733,8 +751,9 @@ export default function Topology(props: Props) {
   // graph can drift off-screen. Closing the drawer is the dominant trigger, and the operator's zoom
   // must survive it (see the deselect branch above) — so preserve the current scale and only
   // re-clamp the translate into the resized viewport, rather than re-fitting to fit-all and throwing
-  // the zoom away. `f` / double-click still fit on demand. Selection owns the shrink case (drawer
-  // opening). Debounce via rAF so a continuous resize (window drag) doesn't fight the animation.
+  // the zoom away. `f` / double-click still fit on demand. A pending selection fit owns the drawer
+  // opening; an already-selected resource still needs this clamp. Debounce via rAF so a continuous
+  // resize (window drag) doesn't fight the animation.
   // Guarded for jsdom (no ResizeObserver).
   onMount(() => {
     if (!svg || typeof ResizeObserver === 'undefined') return
@@ -747,23 +766,26 @@ export default function Topology(props: Props) {
         if (!svg) return
         // The drawer just opened and shrank the canvas: the width is now settled, so run the
         // selection-fit that was waiting for it (frames the selection against the visible canvas,
-        // not the pre-drawer width). Must precede the selectedId guard below — the fit IS the
-        // selected case here.
+        // not the pre-drawer width). This fit must precede the generic clamp below.
         if (pendingSelFit) {
           runSelFit()
           return
         }
+        // Camera animations clamp every frame against the live SVG and toolbar geometry, so they
+        // already enforce the resized bound. Cancelling one for a later observer batch can strand
+        // a first-selection fit near its starting camera with the selected card still off-screen.
+        if (cameraAnimating) return
         const l = layout()
         if (l.width === 0) return
-        if (props.selectedId) return // selection-fit owns this case
         // Snap, not animate: a resize is a viewport change, not a user-initiated transition.
-        cancelAnimationFrame(animFrame) // its target was computed against the old viewport
+        cancelCameraAnimation()
         const c = clampTranslate(tx(), ty())
         setTx(c.tx)
         setTy(c.ty)
       })
     })
     ro.observe(svg)
+    if (toolbarEl) ro.observe(toolbarEl)
     onCleanup(() => {
       if (rafId) cancelAnimationFrame(rafId)
       ro.disconnect()
@@ -902,8 +924,8 @@ export default function Topology(props: Props) {
   )
 
   // clampTranslate keeps an overflowing layout covering the visible frame below the toolbar and a
-  // fitting layout fully inside it. A prospective scale lets zoom clamp its anchored translate
-  // before the scale signal changes; fits bypass this helper by design.
+  // fitting layout fully inside it. A prospective scale lets zoom and animated fits clamp before
+  // the scale signal changes.
   type CanvasView = { width: number; height: number; topInset: number }
   function currentView(viewport?: { width: number; height: number; topInset?: number }): CanvasView {
     const rect = viewport ?? svg!.getBoundingClientRect()
@@ -926,6 +948,18 @@ export default function Topology(props: Props) {
     return clampPan(txv, tyv, { width: l.width * scalev, height: l.height * scalev }, view)
   }
 
+  createEffect(
+    on(
+      () => `${layout().width}x${layout().height}`,
+      () => {
+        const c = clampTranslate(tx(), ty())
+        setTx(c.tx)
+        setTy(c.ty)
+      },
+      { defer: true },
+    ),
+  )
+
   function scaleBounds(view: CanvasView): { min: number; max: number } {
     const l = layout()
     return zoomScaleBounds(
@@ -946,7 +980,7 @@ export default function Topology(props: Props) {
   // canvas is denser and a 1.1x factor per click was overshooting.
   function onWheel(e: WheelEvent) {
     e.preventDefault()
-    cancelAnimationFrame(animFrame) // direct wheel input owns the camera from this event onward
+    cancelCameraAnimation() // direct wheel input owns the camera from this event onward
     const deltaScale = e.deltaMode === 0 ? 1 : e.deltaMode === 1 ? 10 : 20
     const isPinch = e.ctrlKey || e.metaKey
     const isMouseWheel = e.deltaMode !== 0 // LINE/PAGE deltas come from classic mice
@@ -994,7 +1028,7 @@ export default function Topology(props: Props) {
         }
         pointerDown = false
         dragging = false
-        cancelAnimationFrame(animFrame)
+        cancelCameraAnimation()
         return
       }
     }
@@ -1004,7 +1038,7 @@ export default function Topology(props: Props) {
     startY = lastY = e.clientY
     vx = vy = 0
     lastMoveT = performance.now()
-    cancelAnimationFrame(animFrame) // grabbing the canvas stops any in-flight coast
+    cancelCameraAnimation() // grabbing the canvas stops any in-flight coast
   }
   function onPointerMove(e: PointerEvent) {
     if (pinchPts.has(e.pointerId)) pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -1044,26 +1078,29 @@ export default function Topology(props: Props) {
       }
     }
     if (dragging) {
-      setTx(tx() + (e.clientX - lastX))
-      setTy(ty() + (e.clientY - lastY))
+      const previousTx = tx()
+      const previousTy = ty()
+      const proposedTx = previousTx + (e.clientX - lastX)
+      const proposedTy = previousTy + (e.clientY - lastY)
+      const c = clampTranslate(proposedTx, proposedTy)
+      setTx(c.tx)
+      setTy(c.ty)
       // EMA-smooth the instantaneous velocity so one jittery sample doesn't dominate the flick.
+      // A clipped axis has hit its hard edge: discard its outward velocity so release cannot queue
+      // a no-op coast or pull a short inward reversal back toward the wall.
       const now = performance.now()
       const dt = Math.max(1, now - lastMoveT)
-      vx = 0.6 * vx + 0.4 * ((e.clientX - lastX) / dt)
-      vy = 0.6 * vy + 0.4 * ((e.clientY - lastY) / dt)
+      vx = c.tx === proposedTx ? 0.6 * vx + 0.4 * ((c.tx - previousTx) / dt) : 0
+      vy = c.ty === proposedTy ? 0.6 * vy + 0.4 * ((c.ty - previousTy) / dt) : 0
       lastMoveT = now
     }
     lastX = e.clientX
     lastY = e.clientY
   }
-  function settlePan() {
-    const c = clampTranslate(tx(), ty())
-    if (c.tx !== tx() || c.ty !== ty()) animateTo({ scale: scale(), tx: c.tx, ty: c.ty }, 200)
-  }
 
   // Coast the canvas after a flick, decaying velocity until it's negligible. Gives the pan a
   // physical "throw it and let it settle" feel instead of stopping dead. clampTranslate arrests
-  // outward motion at an edge while an inward release past the edge keeps moving back into range.
+  // outward motion at an edge.
   function startMomentum() {
     // Cap the launch speed so an extreme flick can't fling the canvas across the screen — coasting
     // should feel like a throw, not a loss of control.
@@ -1086,9 +1123,11 @@ export default function Topology(props: Props) {
       if (Math.hypot(vx, vy) > 0.015) {
         animFrame = requestAnimationFrame(tick)
       } else {
-        settlePan()
+        animFrame = 0
+        cameraAnimating = false
       }
     }
+    cameraAnimating = true
     animFrame = requestAnimationFrame(tick)
   }
   function onPointerUp(e: PointerEvent) {
@@ -1116,15 +1155,13 @@ export default function Topology(props: Props) {
     } catch {
       /* not captured */
     }
-    // After a drag: a fast release coasts (momentum); a slow one just glides back into
-    // bounds if it ended past the edge. 0.4 px/ms ≈ 400 px/s — above a deliberate flick,
-    // below an ordinary reposition, so a careful drag still stops exactly where released.
+    // After a drag, only a deliberate flick coasts. 0.4 px/ms ≈ 400 px/s — above an ordinary
+    // reposition, so a careful drag stops exactly where released.
     if (wasDragging) {
       if (Math.hypot(vx, vy) > 0.4) {
         startMomentum()
         return
       }
-      settlePan()
       return
     }
     // A click on the topology background (not on a card and not a pan) dismisses the

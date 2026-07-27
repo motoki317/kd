@@ -26,7 +26,7 @@ export interface FitTransform {
   ty: number
 }
 
-const DEFAULT_FIT_PADDING = 60
+export const FIT_PADDING = 60
 
 // boundingBox spreads every card to its x±w/2, y±h/2 corners and takes the min/max — the union box
 // the fit needs to frame. (Cards are positioned by their CENTRE, hence the ±half-extent.)
@@ -57,12 +57,13 @@ export function fitBox(
   box: { minX: number; minY: number; maxX: number; maxY: number },
   view: { width: number; height: number; topInset: number },
   maxScale: number,
-  padding = DEFAULT_FIT_PADDING,
+  padding = FIT_PADDING,
+  breathing = 1,
 ): FitTransform {
   const availH = Math.max(1, view.height - view.topInset)
   const w = Math.max(1, box.maxX - box.minX)
   const h = Math.max(1, box.maxY - box.minY)
-  const scale = Math.min((view.width - padding * 2) / w, Math.max(1, availH - padding * 2) / h, maxScale)
+  const scale = Math.min((view.width - padding * 2) / w, Math.max(1, availH - padding * 2) / h, maxScale) * breathing
   const cx = (box.minX + box.maxX) / 2
   const cy = (box.minY + box.maxY) / 2
   return { scale, tx: view.width / 2 - cx * scale, ty: view.topInset + availH / 2 - cy * scale }
@@ -76,7 +77,7 @@ export function zoomScaleBounds(
   // Reuse fitBox so interactive zoom follows the same padding and toolbar geometry as explicit
   // fits. A transient sub-padding width still gets a positive 1px fitting area, matching fitBox's
   // vertical guard; Infinity leaves the natural-size and 3x policy caps independent.
-  const fitView = { ...view, width: Math.max(view.width, DEFAULT_FIT_PADDING * 2 + 1) }
+  const fitView = { ...view, width: Math.max(view.width, FIT_PADDING * 2 + 1) }
   const fitScale = (size: { width: number; height: number }) =>
     fitBox({ minX: 0, minY: 0, maxX: size.width, maxY: size.height }, fitView, Number.POSITIVE_INFINITY).scale
   const min = Math.min(fitScale(layout), 1)
@@ -108,7 +109,7 @@ export function fitBoxFloored(
     padding?: number
   },
 ): FitTransform {
-  const padding = opts.padding ?? 60
+  const padding = opts.padding ?? FIT_PADDING
   const breathing = opts.breathing ?? 1
   const availH = Math.max(1, view.height - view.topInset)
   const w = Math.max(1, box.maxX - box.minX)
@@ -133,21 +134,22 @@ export function fitBoxFloored(
 // clampPan mirrors the invariant around frame equality: an overflowing axis keeps covering its
 // visible frame, while a fitting axis stays fully inside it. `content` is the graph size ALREADY
 // multiplied by the current scale; the vertical frame starts below `topInset`. Sorting the same two
-// endpoints handles both regimes independently and makes the bounds continuous when content equals
-// the frame (both endpoints converge to 0 horizontally and topInset vertically).
+// endpoints handles both regimes independently and makes the bounds continuous when content fills
+// the frame between its padded edges.
 export function clampPan(
   tx: number,
   ty: number,
   content: { width: number; height: number },
   view: { width: number; height: number; topInset?: number },
+  padding = FIT_PADDING,
 ): { tx: number; ty: number } {
   const topInset = view.topInset ?? 0
-  const xEnd = view.width - content.width
-  const yEnd = view.height - content.height
-  const minTx = Math.min(0, xEnd)
-  const maxTx = Math.max(0, xEnd)
-  const minTy = Math.min(topInset, yEnd)
-  const maxTy = Math.max(topInset, yEnd)
+  const xEnd = view.width - padding - content.width
+  const yEnd = view.height - padding - content.height
+  const minTx = Math.min(padding, xEnd)
+  const maxTx = Math.max(padding, xEnd)
+  const minTy = Math.min(topInset + padding, yEnd)
+  const maxTy = Math.max(topInset + padding, yEnd)
   return {
     tx: Math.min(Math.max(tx, minTx), maxTx),
     ty: Math.min(Math.max(ty, minTy), maxTy),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { boundingBox, selectionMaxScale, fitBox, fitBoxFloored, clampPan, zoomScaleBounds } from './viewport'
+import { boundingBox, selectionMaxScale, fitBox, fitBoxFloored, clampPan, FIT_PADDING, zoomScaleBounds } from './viewport'
 
 describe('boundingBox', () => {
   it('unions cards by their centre ± half-extent', () => {
@@ -57,6 +57,15 @@ describe('fitBox', () => {
     const t = fitBox({ minX: 50, minY: 50, maxX: 50, maxY: 50 }, view, 2)
     expect(Number.isFinite(t.scale)).toBe(true)
     expect(t.scale).toBe(2) // clamped to maxScale, not Infinity
+  })
+
+  it('applies breathing before centring an off-origin box', () => {
+    const box = { minX: 1000, minY: 700, maxX: 1400, maxY: 1000 }
+    const t = fitBox(box, view, 3, FIT_PADDING, 0.92)
+
+    expect(t.scale).toBeCloseTo(2.2 * 0.92, 5)
+    expect(1200 * t.scale + t.tx).toBeCloseTo(500, 5)
+    expect(850 * t.scale + t.ty).toBeCloseTo(400, 5)
   })
 })
 
@@ -161,69 +170,128 @@ describe('fitBoxFloored', () => {
 describe('clampPan', () => {
   const view = { width: 1000, height: 800 }
 
-  it('keeps a large graph covering the viewport', () => {
+  it('keeps a large graph covering the viewport up to the fit margin', () => {
     const content = { width: 4000, height: 3000 } // bigger than the viewport
-    // Panned far left/up: the content's far edge stays at the viewport's far edge.
+    // Panned far left/up: the content's far edge stays inside the viewport by the fit margin.
     const far = clampPan(-99999, -99999, content, view)
-    expect(far.tx).toBe(1000 - 4000)
-    expect(far.ty).toBe(800 - 3000)
-    // Panned far right/down: the content's near edge stays at the viewport's near edge.
+    expect(far.tx).toBe(1000 - 60 - 4000)
+    expect(far.ty).toBe(800 - 60 - 3000)
+    // Panned far right/down: the content's near edge stays inside the viewport by the fit margin.
     const near = clampPan(99999, 99999, content, view)
-    expect(near.tx).toBe(0)
-    expect(near.ty).toBe(0)
+    expect(near.tx).toBe(60)
+    expect(near.ty).toBe(60)
+  })
+
+  it('uses padded sorted endpoints for fitting content, toolbar insets, and the regime crossover', () => {
+    const insetView = { ...view, topInset: 64 }
+
+    expect(clampPan(-99999, -99999, { width: 400, height: 300 }, insetView)).toEqual({ tx: 60, ty: 124 })
+    expect(clampPan(99999, 99999, { width: 400, height: 300 }, insetView)).toEqual({ tx: 540, ty: 440 })
+
+    const cases = [
+      { content: { width: 879, height: 615 }, lower: { tx: 60, ty: 124 }, upper: { tx: 61, ty: 125 } },
+      { content: { width: 880, height: 616 }, lower: { tx: 60, ty: 124 }, upper: { tx: 60, ty: 124 } },
+      { content: { width: 881, height: 617 }, lower: { tx: 59, ty: 123 }, upper: { tx: 60, ty: 124 } },
+    ]
+    for (const { content, lower, upper } of cases) {
+      expect(clampPan(-99999, -99999, content, insetView)).toEqual(lower)
+      expect(clampPan(99999, 99999, content, insetView)).toEqual(upper)
+    }
+
+    expect(FIT_PADDING).toBe(60)
+  })
+
+  it('keeps edge selection cards visible while bounding the composed fit to the layout', () => {
+    const layout = { width: 2000, height: 1600 }
+    const card = { width: 220, height: 60 }
+    const centres = [
+      { x: card.width / 2, y: card.height / 2 },
+      { x: layout.width - card.width / 2, y: card.height / 2 },
+      { x: card.width / 2, y: layout.height - card.height / 2 },
+      { x: layout.width - card.width / 2, y: layout.height - card.height / 2 },
+    ]
+
+    for (const focus of centres) {
+      const box = {
+        minX: focus.x - card.width / 2,
+        minY: focus.y - card.height / 2,
+        maxX: focus.x + card.width / 2,
+        maxY: focus.y + card.height / 2,
+      }
+      const fit = fitBoxFloored(box, { ...view, topInset: 0 }, {
+        maxScale: 2.5,
+        minScale: 0.55,
+        focus,
+      })
+      const bounded = clampPan(
+        fit.tx,
+        fit.ty,
+        { width: layout.width * fit.scale, height: layout.height * fit.scale },
+        view,
+      )
+
+      expect(bounded.tx).toBeLessThanOrEqual(FIT_PADDING)
+      expect(bounded.ty).toBeLessThanOrEqual(FIT_PADDING)
+      expect(bounded.tx + layout.width * fit.scale).toBeGreaterThanOrEqual(view.width - FIT_PADDING)
+      expect(bounded.ty + layout.height * fit.scale).toBeGreaterThanOrEqual(view.height - FIT_PADDING)
+      expect(box.minX * fit.scale + bounded.tx).toBeGreaterThanOrEqual(FIT_PADDING)
+      expect(box.maxX * fit.scale + bounded.tx).toBeLessThanOrEqual(view.width - FIT_PADDING)
+      expect(box.minY * fit.scale + bounded.ty).toBeGreaterThanOrEqual(FIT_PADDING)
+      expect(box.maxY * fit.scale + bounded.ty).toBeLessThanOrEqual(view.height - FIT_PADDING)
+    }
   })
 
   it('keeps covered content within the vertical frame below an inset', () => {
     const insetView = { ...view, topInset: 64 }
     const content = { width: 400, height: 1000 }
-    expect(clampPan(0, -99999, content, insetView).ty).toBe(800 - 1000)
-    expect(clampPan(0, 99999, content, insetView).ty).toBe(64)
+    expect(clampPan(0, -99999, content, insetView, 0).ty).toBe(800 - 1000)
+    expect(clampPan(0, 99999, content, insetView, 0).ty).toBe(64)
   })
 
   it('keeps fitting content fully inside the vertical frame below an inset', () => {
     const insetView = { ...view, topInset: 64 }
     const content = { width: 400, height: 300 }
-    expect(clampPan(-99999, -99999, content, insetView)).toEqual({ tx: 0, ty: 64 })
-    expect(clampPan(99999, 99999, content, insetView)).toEqual({ tx: 600, ty: 500 })
+    expect(clampPan(-99999, -99999, content, insetView, 0)).toEqual({ tx: 0, ty: 64 })
+    expect(clampPan(99999, 99999, content, insetView, 0)).toEqual({ tx: 600, ty: 500 })
   })
 
   it('meets continuously at the toolbar-adjusted vertical frame height', () => {
     const insetView = { ...view, topInset: 64 }
-    expect(clampPan(0, 99999, { width: 400, height: 736 }, insetView).ty).toBe(64)
-    expect(clampPan(0, 99999, { width: 400, height: 735 }, insetView).ty).toBe(65)
+    expect(clampPan(0, 99999, { width: 400, height: 736 }, insetView, 0).ty).toBe(64)
+    expect(clampPan(0, 99999, { width: 400, height: 735 }, insetView, 0).ty).toBe(65)
   })
 
   it('does not apply the toolbar inset to horizontal threshold or bounds', () => {
     const insetView = { ...view, topInset: 64 }
     const content = { width: 950, height: 300 }
-    expect(clampPan(-99999, 0, content, insetView).tx).toBe(0)
-    expect(clampPan(99999, 0, content, insetView).tx).toBe(1000 - 950)
+    expect(clampPan(-99999, 0, content, insetView, 0).tx).toBe(0)
+    expect(clampPan(99999, 0, content, insetView, 0).tx).toBe(1000 - 950)
   })
 
   it('defaults an omitted toolbar inset to zero', () => {
     const content = { width: 4000, height: 3000 }
-    expect(clampPan(99999, 99999, content, view)).toEqual(
-      clampPan(99999, 99999, content, { ...view, topInset: 0 }),
+    expect(clampPan(99999, 99999, content, view, 0)).toEqual(
+      clampPan(99999, 99999, content, { ...view, topInset: 0 }, 0),
     )
   })
 
   it('keeps a graph smaller than the viewport fully inside both axes', () => {
     const content = { width: 400, height: 300 }
-    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 0, ty: 0 })
-    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 1000 - 400, ty: 800 - 300 })
+    expect(clampPan(-99999, -99999, content, view, 0)).toEqual({ tx: 0, ty: 0 })
+    expect(clampPan(99999, 99999, content, view, 0)).toEqual({ tx: 1000 - 400, ty: 800 - 300 })
   })
 
   it('chooses covered and keep-inside bounds independently per axis', () => {
     const content = { width: 4000, height: 300 }
-    expect(clampPan(-99999, -99999, content, view)).toEqual({ tx: 1000 - 4000, ty: 0 })
-    expect(clampPan(99999, 99999, content, view)).toEqual({ tx: 0, ty: 800 - 300 })
+    expect(clampPan(-99999, -99999, content, view, 0)).toEqual({ tx: 1000 - 4000, ty: 0 })
+    expect(clampPan(99999, 99999, content, view, 0)).toEqual({ tx: 0, ty: 800 - 300 })
   })
 
   it('switches to covered bounds at exact viewport equality', () => {
-    const equal = clampPan(500, -500, { width: 1000, height: 800 }, view)
+    const equal = clampPan(500, -500, { width: 1000, height: 800 }, view, 0)
     expect(equal).toEqual({ tx: 0, ty: 0 })
 
-    const oneShort = clampPan(-99999, 99999, { width: 999, height: 799 }, view)
+    const oneShort = clampPan(-99999, 99999, { width: 999, height: 799 }, view, 0)
     expect(oneShort).toEqual({ tx: 0, ty: 1 })
   })
 
@@ -236,14 +304,14 @@ describe('clampPan', () => {
     ]
 
     for (const { content, lower, upper } of cases) {
-      expect(clampPan(-99999, -99999, content, insetView)).toEqual(lower)
-      expect(clampPan(99999, 99999, content, insetView)).toEqual(upper)
+      expect(clampPan(-99999, -99999, content, insetView, 0)).toEqual(lower)
+      expect(clampPan(99999, 99999, content, insetView, 0)).toEqual(upper)
     }
   })
 
   it('passes a within-bounds pan through unchanged', () => {
     const content = { width: 4000, height: 3000 }
-    expect(clampPan(-200, -150, content, view)).toEqual({ tx: -200, ty: -150 })
+    expect(clampPan(-200, -150, content, view, 0)).toEqual({ tx: -200, ty: -150 })
   })
 })
 

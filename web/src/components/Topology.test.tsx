@@ -1,9 +1,11 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library'
+import { createSignal } from 'solid-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
 import { layoutGraphWithOrphans, NODE_HEIGHT, NODE_WIDTH } from '../layout'
 import { projectEdges } from '../relationships'
 import type { KEdge, KNode, RelCategory } from '../types'
+import { boundingBox, clampPan, fitBoxFloored, selectionMaxScale } from '../viewport'
 
 afterEach(() => {
   cleanup()
@@ -83,6 +85,15 @@ const stubAnimationFrames = () => {
       frames.delete(entry[0])
       now += elapsed
       entry[1](now)
+    },
+    drain(elapsed = 60, afterStep?: () => void, maxFrames = 20) {
+      let count = 0
+      while (frames.size > 0 && count < maxFrames) {
+        this.step(elapsed)
+        afterStep?.()
+        count++
+      }
+      expect(frames.size, `animation did not settle within ${maxFrames} frames`).toBe(0)
     },
   }
 }
@@ -201,10 +212,10 @@ describe('Topology', () => {
     fireEvent.wheel(svg, { deltaMode: 1, deltaY: 1, clientX: 0, clientY: 0 })
     const after = world()
     const s1 = num(after, /scale\(([-\d.]+)\)/)
-    const contentWidth = (view.width - tx0) * (s1 / s0)
-    const contentHeight = (view.height - ty0) * (s1 / s0)
-    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - contentWidth, 5)
-    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - contentHeight, 5)
+    const contentWidth = (view.width - 60 - tx0) * (s1 / s0)
+    const contentHeight = (view.height - 60 - ty0) * (s1 / s0)
+    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - 60 - contentWidth, 5)
+    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - 60 - contentHeight, 5)
   })
 
   it('pinch zoom clamps against the new scale', () => {
@@ -228,13 +239,13 @@ describe('Topology', () => {
     fireEvent.pointerMove(svg, { pointerId: 2, clientX: 80, clientY: 100 })
     const after = world()
     const s1 = num(after, /scale\(([-\d.]+)\)/)
-    const contentWidth = (view.width - tx0) * (s1 / s0)
-    const contentHeight = (view.height - ty0) * (s1 / s0)
-    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - contentWidth, 5)
-    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - contentHeight, 5)
+    const contentWidth = (view.width - 60 - tx0) * (s1 / s0)
+    const contentHeight = (view.height - 60 - ty0) * (s1 / s0)
+    expect(num(after, /translate\(([-\d.]+)/)).toBeCloseTo(view.width - 60 - contentWidth, 5)
+    expect(num(after, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(view.height - 60 - contentHeight, 5)
   })
 
-  it('keeps an inset-aligned floored rest state through pan, zoom, and resize clamps', () => {
+  it('keeps an inset-aligned floored rest state through pan, zoom, and resize clamps', async () => {
     stubViewport(300, 240)
     stubToolbarHeight(64)
     let notifyResize = () => {}
@@ -257,19 +268,44 @@ describe('Topology', () => {
     vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
       frames.delete(id)
     })
-    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const { container } = render(() => (
+      <Topology nodes={nodes} edges={edges} search="" {...base} scope="init" />
+    ))
     const svg = container.querySelector('svg.topology-svg')!
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
     const ty = () => Number(world().match(/translate\([-\d.]+,([-\d.]+)/)![1])
+    const displayEdges = projectEdges(edges, base.relFilter)
+    const connectedIds = new Set(displayEdges.flatMap((edge) => [edge.from, edge.to]))
+    const fixtureLayout = layoutGraphWithOrphans(
+      nodes.filter((node) => connectedIds.has(node.id)),
+      nodes.filter((node) => !connectedIds.has(node.id)),
+      displayEdges,
+    )
 
-    // Model the inset-aligned transform produced by a tall floored fit, then exercise every clamp
-    // path that previously yanked that legal rest position back under the toolbar.
+    // The first floored fit itself rests on the bound. Exercise every clamp path that previously
+    // yanked that legal position back under the toolbar.
+    await Promise.resolve()
+    const initial = world()
+    expect(ty()).toBe(124)
     fireEvent.wheel(svg, { deltaMode: 0, deltaY: -99_999 })
-    expect(ty()).toBe(64)
+    expect(world()).toBe(initial)
+    expect(ty()).toBe(124)
     fireEvent.wheel(svg, { deltaMode: 0, deltaX: 100 })
-    expect(ty()).toBe(64)
+    expect(ty()).toBe(124)
+    const beforeZoom = world()
     fireEvent.wheel(svg, { deltaMode: 1, deltaY: -1, clientX: 150, clientY: 64 })
-    expect(ty()).toBe(64)
+    const zoomed = world()
+    const zoomedScale = num(zoomed, /scale\(([-\d.]+)\)/)
+    const expectedZoom = clampPan(
+      150 - ((150 - num(beforeZoom, /translate\(([-\d.]+)/)) / num(beforeZoom, /scale\(([-\d.]+)\)/)) * zoomedScale,
+      64 - ((64 - num(beforeZoom, /translate\([-\d.]+,([-\d.]+)/)) / num(beforeZoom, /scale\(([-\d.]+)\)/)) * zoomedScale,
+      { width: fixtureLayout.width * zoomedScale, height: fixtureLayout.height * zoomedScale },
+      { width: 300, height: 240, topInset: 64 },
+    )
+    const zoomedTy = ty()
+    expect(num(zoomed, /translate\(([-\d.]+)/)).toBeCloseTo(expectedZoom.tx, 5)
+    expect(zoomedTy).toBeCloseTo(expectedZoom.ty, 5)
 
     frames.clear()
     notifyResize()
@@ -277,7 +313,428 @@ describe('Topology', () => {
     const resizeFrames = [...frames.values()]
     frames.clear()
     for (const cb of resizeFrames) cb(16)
-    expect(ty()).toBe(64)
+    expect(ty()).toBe(zoomedTy)
+  })
+
+  it('keeps every frame of an edge fit inside the pan bound', () => {
+    const view = { width: 800, height: 500, topInset: 64 }
+    stubViewport(view.width, view.height)
+    stubToolbarHeight(view.topInset)
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `chain-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: i === 6 ? 'Degraded' : 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `chain-${i}`,
+      to: `chain-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const fixtureLayout = layoutGraphWithOrphans(chainNodes, [], chainEdges)
+    const [healthFilter, setHealthFilter] = createSignal<'Degraded' | undefined>()
+    const { container } = render(() => (
+      <Topology
+        nodes={chainNodes}
+        edges={chainEdges}
+        search=""
+        {...base}
+        healthFilter={healthFilter()}
+        onHealthFilter={() => {}}
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    animation.frames.clear()
+
+    setHealthFilter('Degraded')
+    expect(animation.frames.size).toBe(1)
+    animation.step()
+    expect(animation.frames.size).toBe(1)
+
+    animation.drain(60, () => {
+      const transform = world()
+      const s = num(transform, /scale\(([-\d.]+)\)/)
+      const actual = {
+        tx: num(transform, /translate\(([-\d.]+)/),
+        ty: num(transform, /translate\([-\d.]+,([-\d.]+)/),
+      }
+      const bounded = clampPan(
+        actual.tx,
+        actual.ty,
+        { width: fixtureLayout.width * s, height: fixtureLayout.height * s },
+        view,
+      )
+      expect(actual.tx).toBeCloseTo(bounded.tx, 5)
+      expect(actual.ty).toBeCloseTo(bounded.ty, 5)
+    })
+  })
+
+  it('bounds a bottom-edge selection fit while keeping the selected card visible', () => {
+    const view = { width: 800, height: 500, topInset: 64 }
+    stubViewport(view.width, view.height)
+    stubToolbarHeight(view.topInset)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('main') ? 1000 : 0
+    })
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `edge-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `edge-${i}`,
+      to: `edge-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const fixtureLayout = layoutGraphWithOrphans(chainNodes, [], chainEdges)
+    const [selectedId, setSelectedId] = createSignal<string | null>(null)
+    const { container } = render(() => (
+      <Topology
+        nodes={chainNodes}
+        edges={chainEdges}
+        search=""
+        {...base}
+        selectedId={selectedId()}
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    animation.frames.clear()
+
+    setSelectedId('edge-6')
+    animation.step()
+    animation.drain()
+
+    const transform = world()
+    const s = num(transform, /scale\(([-\d.]+)\)/)
+    const actual = {
+      tx: num(transform, /translate\(([-\d.]+)/),
+      ty: num(transform, /translate\([-\d.]+,([-\d.]+)/),
+    }
+    const bounded = clampPan(
+      actual.tx,
+      actual.ty,
+      { width: fixtureLayout.width * s, height: fixtureLayout.height * s },
+      view,
+    )
+    expect(actual.tx).toBeCloseTo(bounded.tx, 5)
+    expect(actual.ty).toBeCloseTo(bounded.ty, 5)
+
+    const selected = fixtureLayout.nodes.find((node) => node.id === 'edge-6')!
+    expect((selected.x - selected.width / 2) * s + actual.tx).toBeGreaterThanOrEqual(0)
+    expect((selected.x + selected.width / 2) * s + actual.tx).toBeLessThanOrEqual(view.width)
+    expect((selected.y - selected.height / 2) * s + actual.ty).toBeGreaterThanOrEqual(view.topInset)
+    expect((selected.y + selected.height / 2) * s + actual.ty).toBeLessThanOrEqual(view.height)
+  })
+
+  it('lets the first selection fit finish across separate drawer and toolbar resize batches', () => {
+    let viewWidth = 1000
+    const viewHeight = 500
+    let toolbarHeight = 64
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: viewWidth,
+      bottom: viewHeight,
+      width: viewWidth,
+      height: viewHeight,
+      toJSON: () => ({}),
+    }))
+    const elementRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('topology-toolbar')) {
+        return {
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          right: viewWidth,
+          bottom: toolbarHeight,
+          width: viewWidth,
+          height: toolbarHeight,
+          toJSON: () => ({}),
+        }
+      }
+      return elementRect.call(this)
+    })
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('main') ? 1000 : 0
+    })
+    let notifyResize = () => {}
+    class TestResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        notifyResize = () => cb([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `first-resize-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `first-resize-${i}`,
+      to: `first-resize-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const fixtureLayout = layoutGraphWithOrphans(chainNodes, [], chainEdges)
+    const [selectedId, setSelectedId] = createSignal<string | null>(null)
+    const { container } = render(() => (
+      <main class="main">
+        <Topology
+          nodes={chainNodes}
+          edges={chainEdges}
+          search=""
+          {...base}
+          selectedId={selectedId()}
+        />
+      </main>
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    animation.frames.clear()
+
+    setSelectedId('first-resize-6')
+    animation.step() // deferred fit sees the full-width canvas and waits for the drawer
+    expect(animation.frames.size).toBe(0)
+
+    viewWidth = 474
+    notifyResize()
+    animation.step() // drawer resize consumes pendingSelFit and schedules animateTo
+    animation.step(16) // first selection-fit frame
+
+    toolbarHeight = 80
+    notifyResize()
+    animation.step(16) // next selection-fit frame, then the later toolbar resize callback
+    animation.step(16)
+    animation.drain()
+
+    const selected = fixtureLayout.nodes.find((node) => node.id === 'first-resize-6')!
+    const related = fixtureLayout.nodes.filter((node) =>
+      node.id === 'first-resize-5' || node.id === 'first-resize-6')
+    const bounds = boundingBox(related)
+    const target = fitBoxFloored(
+      bounds,
+      { width: viewWidth, height: viewHeight, topInset: 64 },
+      {
+        minScale: 0.55,
+        maxScale: selectionMaxScale(bounds.width, bounds.height),
+        focus: { x: selected.x, y: selected.y },
+      },
+    )
+    const expected = clampPan(
+      target.tx,
+      target.ty,
+      { width: fixtureLayout.width * target.scale, height: fixtureLayout.height * target.scale },
+      { width: viewWidth, height: viewHeight, topInset: toolbarHeight },
+    )
+    const actual = world()
+    expect(num(actual, /scale\(([-\d.]+)\)/)).toBeCloseTo(target.scale, 5)
+    expect(num(actual, /translate\(([-\d.]+)/)).toBeCloseTo(expected.tx, 5)
+    expect(num(actual, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(expected.ty, 5)
+  })
+
+  it('leaves a legal camera unchanged on layout shrink and re-clamps an illegal one', () => {
+    const view = { width: 800, height: 500, topInset: 64 }
+    stubViewport(view.width, view.height)
+    stubToolbarHeight(view.topInset)
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `shrink-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `shrink-${i}`,
+      to: `shrink-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const [count, setCount] = createSignal(7)
+    const { container } = render(() => (
+      <Topology
+        nodes={chainNodes.slice(0, count())}
+        edges={chainEdges.slice(0, Math.max(0, count() - 1))}
+        search=""
+        {...base}
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: -99_999, deltaY: -99_999 })
+    const legal = world()
+    setCount(2)
+    expect(world()).toBe(legal)
+
+    setCount(7)
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 99_999 })
+    const beforeShrink = world()
+    const scaleBeforeShrink = num(beforeShrink, /scale\(([-\d.]+)\)/)
+    const expectedLayout = layoutGraphWithOrphans(chainNodes.slice(0, 2), [], chainEdges.slice(0, 1))
+    const expected = clampPan(
+      num(beforeShrink, /translate\(([-\d.]+)/),
+      num(beforeShrink, /translate\([-\d.]+,([-\d.]+)/),
+      { width: expectedLayout.width * scaleBeforeShrink, height: expectedLayout.height * scaleBeforeShrink },
+      view,
+    )
+
+    setCount(2)
+    const afterShrink = world()
+    expect(num(afterShrink, /scale\(([-\d.]+)\)/)).toBe(scaleBeforeShrink)
+    expect(num(afterShrink, /translate\(([-\d.]+)/)).toBeCloseTo(expected.tx, 5)
+    expect(num(afterShrink, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(expected.ty, 5)
+  })
+
+  it('re-clamps a resize while a resource is selected', () => {
+    let viewWidth = 800
+    const view = { height: 500, topInset: 64 }
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: viewWidth,
+      bottom: view.height,
+      width: viewWidth,
+      height: view.height,
+      toJSON: () => ({}),
+    }))
+    stubToolbarHeight(view.topInset)
+    let notifyResize = () => {}
+    class TestResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        notifyResize = () => cb([], this as unknown as ResizeObserver)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `resize-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `resize-${i}`,
+      to: `resize-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const fixtureLayout = layoutGraphWithOrphans(chainNodes, [], chainEdges)
+    const { container } = render(() => (
+      <Topology
+        nodes={chainNodes}
+        edges={chainEdges}
+        search=""
+        {...base}
+        selectedId="resize-6"
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+    animation.frames.clear()
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 99_999 })
+    const beforeResize = world()
+    const s = num(beforeResize, /scale\(([-\d.]+)\)/)
+
+    viewWidth = 1000
+    notifyResize()
+    animation.step()
+
+    const expected = clampPan(
+      num(beforeResize, /translate\(([-\d.]+)/),
+      num(beforeResize, /translate\([-\d.]+,([-\d.]+)/),
+      { width: fixtureLayout.width * s, height: fixtureLayout.height * s },
+      { width: viewWidth, height: view.height, topInset: view.topInset },
+    )
+    const afterResize = world()
+    expect(num(afterResize, /scale\(([-\d.]+)\)/)).toBe(s)
+    expect(num(afterResize, /translate\(([-\d.]+)/)).toBeCloseTo(expected.tx, 5)
+    expect(num(afterResize, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(expected.ty, 5)
+  })
+
+  it('observes toolbar height changes and re-clamps the camera below the new inset', () => {
+    const view = { width: 800, height: 500 }
+    stubViewport(view.width, view.height)
+    let toolbarHeight = 64
+    const elementRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('topology-toolbar')) {
+        return {
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          right: view.width,
+          bottom: toolbarHeight,
+          width: view.width,
+          height: toolbarHeight,
+          toJSON: () => ({}),
+        }
+      }
+      return elementRect.call(this)
+    })
+    let notifyResize = () => {}
+    const observed: Element[] = []
+    class TestResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        notifyResize = () => cb([], this as unknown as ResizeObserver)
+      }
+      observe(target: Element) {
+        observed.push(target)
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    const animation = stubAnimationFrames()
+    const chainNodes: KNode[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `toolbar-${i}`,
+      kind: i === 0 ? 'Deployment' : i === 1 ? 'ReplicaSet' : 'Pod',
+      name: `workload-${i}`,
+      health: 'Healthy',
+    }))
+    const chainEdges: KEdge[] = Array.from({ length: 6 }, (_, i) => ({
+      from: `toolbar-${i}`,
+      to: `toolbar-${i + 1}`,
+      type: 'ownerReference',
+    }))
+    const { container } = render(() => (
+      <Topology nodes={chainNodes} edges={chainEdges} search="" {...base} />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const toolbar = container.querySelector('.topology-toolbar')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const ty = () => Number(world().match(/translate\([-\d.]+,([-\d.]+)/)![1])
+    animation.frames.clear()
+
+    expect(observed).toContain(svg)
+    expect(observed).toContain(toolbar)
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: -99_999, deltaY: 99_999 })
+    expect(ty()).toBe(64 + 60)
+
+    toolbarHeight = 100
+    notifyResize()
+    animation.step()
+    expect(ty()).toBe(100 + 60)
   })
 
   it('keeps a small graph fully inside the viewport while zooming', () => {
@@ -315,7 +772,7 @@ describe('Topology', () => {
     expect(afterTy + fixtureLayout.height * afterScale).toBeLessThanOrEqual(view.height)
   })
 
-  it('settles an over-dragged fitting graph fully below the toolbar', () => {
+  it('stops an over-drag at the bound without moving after release', () => {
     stubViewport(2000, 1200)
     stubToolbarHeight(64)
     const animation = stubAnimationFrames()
@@ -327,18 +784,42 @@ describe('Topology', () => {
     animation.frames.clear()
 
     fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100 })
-    animation.setNow(10_000)
+    animation.setNow(16)
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 100, clientY: -9900 })
-    expect(ty()).toBeLessThan(64)
+    expect(ty()).toBe(124)
+    const released = world()
     fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: -9900 })
 
-    expect(animation.frames.size).toBe(1)
-    for (let i = 0; animation.frames.size > 0 && i < 10; i++) animation.step(50)
     expect(animation.frames.size).toBe(0)
-    expect(ty()).toBe(64)
+    expect(world()).toBe(released)
   })
 
-  it('keeps inward momentum after release outside a covered bound and settles in bounds', () => {
+  it('moves inward immediately after an over-drag without retaining outward momentum', () => {
+    stubViewport(2000, 1200)
+    stubToolbarHeight(64)
+    const animation = stubAnimationFrames()
+
+    const { container } = render(() => <Topology nodes={nodes} edges={edges} search="" {...base} />)
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const ty = () => Number(world().match(/translate\([-\d.]+,([-\d.]+)/)![1])
+
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 100 })
+    animation.setNow(16)
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 100, clientY: -9900 })
+    expect(ty()).toBe(124)
+
+    animation.setNow(32)
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 100, clientY: -9890 })
+    expect(ty()).toBe(134)
+    const released = world()
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: -9890 })
+
+    expect(animation.frames.size).toBe(0)
+    expect(world()).toBe(released)
+  })
+
+  it('keeps inward momentum after reversing from a covered bound', () => {
     const view = { width: 300, height: 240 }
     stubViewport(view.width, view.height)
     const animation = stubAnimationFrames()
@@ -359,7 +840,7 @@ describe('Topology', () => {
     animation.step()
     expect(animation.frames.size).toBe(1)
     animation.step()
-    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(60)
 
     for (let i = 0; animation.frames.size > 0 && i < 200; i++) animation.step()
     expect(animation.frames.size).toBe(0)
@@ -367,10 +848,10 @@ describe('Topology', () => {
     fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 0 })
     const lowerTx = num(world(), /translate\(([-\d.]+)/)
     expect(settledTx).toBeGreaterThanOrEqual(lowerTx)
-    expect(settledTx).toBeLessThanOrEqual(0)
+    expect(settledTx).toBeLessThanOrEqual(60)
   })
 
-  it('cancels an active release glide before applying clamped wheel zoom', () => {
+  it('cancels active momentum before applying clamped wheel zoom', () => {
     const view = { width: 300, height: 240 }
     stubViewport(view.width, view.height)
     let now = 0
@@ -391,21 +872,21 @@ describe('Topology', () => {
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
     const num = (t: string, re: RegExp) => Number(t.match(re)![1])
 
-    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
-    now = 10_000
-    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
-    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 0 })
+    now = 1
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
     expect(frames.size).toBe(1)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBeGreaterThan(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(60)
 
     const scaleBeforeZoom = num(world(), /scale\(([-\d.]+)\)/)
     fireEvent.wheel(svg, { deltaMode: 1, deltaY: 1, clientX: 0, clientY: 0 })
     expect(frames.size).toBe(0)
     expect(num(world(), /scale\(([-\d.]+)\)/)).toBeLessThan(scaleBeforeZoom)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBe(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThanOrEqual(60)
   })
 
-  it('cancels an active release glide before applying trackpad pan', () => {
+  it('cancels active momentum before applying trackpad pan', () => {
     const view = { width: 300, height: 240 }
     stubViewport(view.width, view.height)
     let now = 0
@@ -426,19 +907,20 @@ describe('Topology', () => {
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
     const num = (t: string, re: RegExp) => Number(t.match(re)![1])
 
-    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
-    now = 10_000
-    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 1000, clientY: 0 })
-    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 0 })
+    now = 1
+    fireEvent.pointerMove(svg, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
     expect(frames.size).toBe(1)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBeGreaterThan(0)
+    const beforePan = num(world(), /translate\(([-\d.]+)/)
+    expect(beforePan).toBeLessThan(60)
 
     fireEvent.wheel(svg, { deltaMode: 0, deltaX: 100, deltaY: 0 })
     expect(frames.size).toBe(0)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBe(0)
+    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(beforePan)
   })
 
-  it('cancels an active release glide before applying a generic resize clamp', () => {
+  it('keeps active momentum self-clamped through a generic resize', () => {
     let viewWidth = 300
     const viewHeight = 240
     vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
@@ -486,22 +968,44 @@ describe('Topology', () => {
     const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
     const num = (t: string, re: RegExp) => Number(t.match(re)![1])
 
-    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 0 })
-    const oldLower = num(world(), /translate\(([-\d.]+)/)
-    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 1000, clientY: 0 })
-    now = 10_000
+    fireEvent.pointerDown(svg, { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 0 })
+    now = 1
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 0, clientY: 0 })
     fireEvent.pointerUp(svg, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
     expect(frames.size).toBe(1)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBeLessThan(oldLower)
+    const draggedScale = num(world(), /scale\(([-\d.]+)\)/)
 
     viewWidth = 500
     notifyResize()
     expect(frames.size).toBe(2)
     stepFrame()
 
+    const displayEdges = projectEdges(edges, base.relFilter)
+    const connectedIds = new Set(displayEdges.flatMap((edge) => [edge.from, edge.to]))
+    const fixtureLayout = layoutGraphWithOrphans(
+      nodes.filter((node) => connectedIds.has(node.id)),
+      nodes.filter((node) => !connectedIds.has(node.id)),
+      displayEdges,
+    )
+    const expectBounded = () => {
+      const resizedTx = num(world(), /translate\(([-\d.]+)/)
+      const resizedTy = num(world(), /translate\([-\d.]+,([-\d.]+)/)
+      const expected = clampPan(
+        resizedTx,
+        resizedTy,
+        { width: fixtureLayout.width * draggedScale, height: fixtureLayout.height * draggedScale },
+        { width: viewWidth, height: viewHeight },
+      )
+      expect(resizedTx).toBeCloseTo(expected.tx, 5)
+      expect(resizedTy).toBeCloseTo(expected.ty, 5)
+    }
+    expect(frames.size).toBe(1)
+    expectBounded()
+    for (let i = 0; frames.size > 0 && i < 200; i++) {
+      stepFrame()
+      expectBounded()
+    }
     expect(frames.size).toBe(0)
-    expect(num(world(), /translate\(([-\d.]+)/)).toBeCloseTo(oldLower + 200, 5)
   })
 
   it('empty-state distinguishes connecting (spinner) from offline (static, points at retry)', () => {

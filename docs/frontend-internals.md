@@ -325,6 +325,17 @@ whole set, speck or not, is the point (with a filter active, `fitAll` frames jus
 via `fitNodeSet`). Only the automatic FILTER fit keeps its own floor + worst-match fallback. The
 Nodes view has its own fits (`fitCapBox`/`fitCapRowExpanded`, width-driven + floor-aware).
 
+**Camera bounds (`FIT_PADDING`):** every camera path uses the layout box plus the shared 60px
+screen-space fit halo. Drag, wheel, pinch, and momentum clamp before committing a move; automatic
+fits keep their framing math, then clamp every animation frame at that frame's scale. Layout
+dimension changes, SVG or drawer resizes, and toolbar-height changes re-clamp translation without
+changing a still-legal camera or its scale.
+
+The fitting/overflowing crossover can put a slight kink in an otherwise smooth transition because
+the legal interval briefly collapses to one translation. A card taller than the padded visible frame
+also cannot be shown whole at `MIN_FIT_SCALE`; changing scale policy to hide that physical limit is
+outside the camera-bound contract.
+
 > The viewport-fit *math* is pure and unit-tested (`viewport.ts`); the live transform can't be verified
 > headless (rAF is frozen). See [`ADR 20260605`](ADR/20260605-testing-view-math-vs-headless-animation.md)
 > and docs/live-debug.md "Measurement pitfalls".
