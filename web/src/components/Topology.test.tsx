@@ -3,9 +3,10 @@ import { createSignal } from 'solid-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Topology from './Topology'
 import { layoutGraphWithOrphans, NODE_HEIGHT, NODE_WIDTH } from '../layout'
+import { layoutGraphByCapacity } from '../capacityLayout'
 import { projectEdges } from '../relationships'
 import type { KEdge, KNode, RelCategory } from '../types'
-import { boundingBox, clampPan, fitBoxFloored, selectionMaxScale } from '../viewport'
+import { boundingBox, clampPan, fitBox, fitBoxFloored, selectionMaxScale } from '../viewport'
 
 afterEach(() => {
   cleanup()
@@ -1754,6 +1755,105 @@ describe('Topology', () => {
     fireEvent.click(container.querySelector('.cap-node-frame') as Element) // expand
     fireEvent.click(container.querySelector('.cap-bullet') as Element) // click the pod card
     expect(selected).toBe('p1')
+  })
+
+  it('Nodes view: keyboard-selecting a pod in an expanded row frames that pod card', () => {
+    const view = { width: 800, height: 500, topInset: 64 }
+    stubViewport(view.width, view.height)
+    stubToolbarHeight(view.topInset)
+    const animation = stubAnimationFrames()
+    const nodesV: KNode[] = [
+      { id: 'node-a', kind: 'Node', name: 'host-1', health: 'Healthy', allocatable: { cpuMilli: 4000 } },
+      ...Array.from({ length: 8 }, (_, i): KNode => ({
+        id: `pod-${i}`,
+        kind: 'Pod',
+        name: `pod-${i}`,
+        health: 'Healthy',
+        host: 'host-1',
+        requests: { cpuMilli: 100 + i * 10 },
+      })),
+    ]
+    const usage = {
+      items: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`pod-${i}`, { cpuMilli: 80 + i * 10 }])),
+    }
+    const capacity = { nodes: nodesV, usage }
+    const [selectedId, setSelectedId] = createSignal<string | null>(null)
+    const { container } = render(() => (
+      <Topology
+        nodes={nodesV}
+        edges={[]}
+        search=""
+        {...base}
+        groupBy="nodes"
+        capacity={capacity}
+        namespace=""
+        selectedId={selectedId()}
+        onSelect={setSelectedId}
+      />
+    ))
+    const svg = container.querySelector('svg.topology-svg')!
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!
+    const num = (t: string, re: RegExp) => Number(t.match(re)![1])
+
+    fireEvent.click(container.querySelector('.cap-node-frame') as Element)
+    expect(container.querySelectorAll('.cap-bullet').length).toBe(8)
+    const expandedLayout = layoutGraphByCapacity(
+      nodesV,
+      usage.items,
+      'cpu',
+      '',
+      new Set(['host:host-1']),
+    )
+    const expectedPodFrame = (id: string) => {
+      const bullet = expandedLayout.rows[0].bullets.find((item) => item.node.id === id)!
+      const box = bullet.box!
+      const focusBox = { x: box.x, y: box.y, width: bullet.focusW ?? box.width, height: box.height }
+      const center = {
+        x: focusBox.x + focusBox.width / 2,
+        y: focusBox.y + focusBox.height / 2,
+        width: focusBox.width,
+        height: focusBox.height,
+      }
+      const bounds = boundingBox([center])
+      const target = fitBox(bounds, view, selectionMaxScale(bounds.width, bounds.height))
+      return {
+        target,
+        pan: clampPan(
+          target.tx,
+          target.ty,
+          { width: expandedLayout.width * target.scale, height: expandedLayout.height * target.scale },
+          view,
+        ),
+      }
+    }
+    const expectFrame = ({ target, pan }: ReturnType<typeof expectedPodFrame>) => {
+      const actual = world()
+      expect(num(actual, /scale\(([-\d.]+)\)/)).toBeCloseTo(target.scale, 5)
+      expect(num(actual, /translate\(([-\d.]+)/)).toBeCloseTo(pan.tx, 5)
+      expect(num(actual, /translate\([-\d.]+,([-\d.]+)/)).toBeCloseTo(pan.ty, 5)
+    }
+
+    animation.frames.clear()
+    setSelectedId('pod-7')
+    animation.step()
+    animation.drain()
+    const pod7Frame = expectedPodFrame('pod-7')
+    expectFrame(pod7Frame)
+
+    fireEvent.wheel(svg, { deltaMode: 0, deltaX: 99_999, deltaY: 99_999 })
+    animation.frames.clear()
+    fireEvent.dblClick(svg)
+    animation.drain()
+
+    expectFrame(pod7Frame)
+
+    const selectedBullet = [...container.querySelectorAll('.cap-bullet')]
+      .find((element) => element.textContent?.includes('pod-7'))!
+    fireEvent.click(selectedBullet)
+    setSelectedId('pod-0')
+    animation.step()
+    animation.drain()
+    expectFrame(expectedPodFrame('pod-0'))
   })
 
   it('Nodes view: clicking the node name selects the Node (opens its drawer), not expand', () => {

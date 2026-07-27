@@ -248,13 +248,22 @@ export default function Topology(props: Props) {
   // 'nodes' (the dispatch above), and CapacityLayout is a Layout superset.
   const capRows = createMemo<CapRow[]>(() => (props.groupBy === 'nodes' ? (layout() as CapacityLayout).rows : []))
   const capInfo = createMemo(() => layout() as CapacityLayout)
-  // In the Nodes (capacity) view, "frame the selection" means frame the whole node ROW the selected
-  // pod (or node) lives in — not its related() subtree, whose edges come from the namespace graph,
-  // not this cluster-wide feed. Returns the row's box in center convention, or null when the id
-  // isn't on any row. (item: selecting a pod fits to the node it runs on.)
+  const capRowFor = (id: string | null) => {
+    if (props.groupBy !== 'nodes' || !id) return undefined
+    return capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
+  }
+  const capBulletFitBoxFor = (row: CapRow, id: string) => {
+    if (!row.expanded) return null
+    const bullet = row.bullets.find((b) => b.node.id === id)
+    const box = bullet?.box
+    if (!bullet || !box) return null
+    return { x: box.x, y: box.y, width: bullet.focusW ?? box.width, height: box.height }
+  }
+  // In the Nodes (capacity) view, collapsed-row pods and nodes frame the whole node ROW they live
+  // in — not related(), whose edges come from the namespace graph, not this cluster-wide feed.
+  // Expanded-row pods use capBulletFitBoxFor instead. Returns the row box in center convention.
   const capRowBoxFor = (id: string | null) => {
-    if (props.groupBy !== 'nodes' || !id) return null
-    const row = capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id))
+    const row = capRowFor(id)
     if (!row) return null
     return { x: row.x + row.width / 2, y: row.y + row.height / 2, width: row.width, height: row.height }
   }
@@ -298,10 +307,6 @@ export default function Topology(props: Props) {
     cancelAnimationFrame(selFitFrame)
     selFitFrame = requestAnimationFrame(() => animateTo({ scale, tx, ty }))
   }
-  // A pod-card click both SELECTS the pod (opening the drawer) and wants to zoom to that card — but the
-  // selection-fit effect, reacting to the same selectedId change, would otherwise re-frame the whole node
-  // row. Setting this ref before onSelect tells that effect to frame the pod card instead, just this once.
-  let capPodFitBox: { x: number; y: number; width: number; height: number } | null = null
   // fitCapBox animates the viewport to frame a capacity-view box (a node row, or a single expanded pod
   // card). Takes a top-left box; selectionMaxScale lets a small pod card zoom in close while a tall
   // expanded node row stays moderate. Deferred a frame so a just-toggled layout has settled first.
@@ -827,15 +832,12 @@ export default function Topology(props: Props) {
           pendingSelFit = null // deselect: drop any fit waiting on the drawer so it can't fire late
           return
         }
-        // Nodes view: frame the node ROW the selection sits in — UNLESS the selection came from clicking
-        // an expanded pod card, in which case zoom to that card (the user's "click a pod box to read its
-        // bars"). capPodFitBox is consumed once so a later keyboard/search selection of the same kind
-        // still frames the whole row. Entering here means the id IS on a row (else fall through to the
-        // relationship path below).
-        const capRow = props.groupBy === 'nodes' && id ? capRows().find((r) => r.node?.id === id || r.allPodIds.includes(id)) : undefined
+        // Nodes view: an expanded pod frames its bullet's readable bar region regardless of whether
+        // selection came from a click, keyboard, search, or deep link. Nodes and collapsed-row pods
+        // retain the row fit. Entering here means the id is on a row; otherwise use the relationship path.
+        const capRow = capRowFor(id)
         if (capRow) {
-          const podBox = capPodFitBox
-          capPodFitBox = null
+          const podBox = capBulletFitBoxFor(capRow, id)
           if (podBox) {
             fitCapBox(podBox)
           } else if (expandedClusters().has(`host:${capRow.host}`)) {
@@ -1199,7 +1201,13 @@ export default function Topology(props: Props) {
     // away from their selected subtree would lose it on 'f' — they'd have to click the
     // selection again to recover the frame.
     if (props.selectedId) {
-      // Nodes view: 'f' re-frames the selected pod's node row (matching the click-into-selection fit).
+      const capRow = capRowFor(props.selectedId)
+      const capPodBox = capRow && capBulletFitBoxFor(capRow, props.selectedId)
+      if (capPodBox) {
+        fitCapBox(capPodBox)
+        return
+      }
+      // Nodes view: a node or a pod in a collapsed row re-frames its node row.
       const capBox = capRowBoxFor(props.selectedId)
       if (capBox) {
         animateTo(fitNodeSet([capBox], 1.4))
@@ -1476,7 +1484,7 @@ export default function Topology(props: Props) {
               aggFaded={capAggFaded}
               rowFaded={capRowFaded}
               onSelect={props.onSelect}
-              onSelectBullet={(id, box) => { capPodFitBox = box; props.onSelect(id); fitCapBox(box) }}
+              onSelectBullet={(id, box) => { props.onSelect(id); fitCapBox(box) }}
               onToggleRow={toggleCapRow}
               onHover={(key, tip, e) => { setCapHover(key); showTip(tip, e) }}
               onLeave={() => { setCapHover(null); setCapTip(null) }}
