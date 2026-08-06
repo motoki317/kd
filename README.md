@@ -43,6 +43,7 @@ kd reads your kubeconfig and serves the dashboard on http://localhost:9123/.
 
 - Download and run the `kd` binary from [the latest GitHub Releases](https://github.com/motoki317/kd/releases)
 - If you have [Nix](https://nixos.org/) (flakes enabled): `nix run github:motoki317/kd`
+- If you have [mise](https://mise.jdx.dev/): `mise x github:motoki317/kd@latest -- kd`
 
 ## Deploy to a cluster
 
