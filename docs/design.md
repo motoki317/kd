@@ -1,7 +1,15 @@
 # UI design
 
 kd lets operators spot, compare, and scan instead of reading every value. User-facing copy should
-name the concrete effect ("big things look big"), not call it "intuitive."
+name the concrete effect ("big things look big"), not call it "intuitive" — and use easy words:
+many readers are not native English speakers.
+
+## Audience
+
+kd serves human Kubernetes beginners: they must succeed from the UI alone, without reading long
+descriptions or external docs. Judge every candidate change by "does a beginner get it at a
+glance?", not by completeness. Pruning serves this as much as adding — remove or fold excess
+features and docs, and prefer structural cleanup over one-by-one micro-edits.
 
 ## Principles
 

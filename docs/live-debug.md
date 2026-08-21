@@ -87,6 +87,30 @@ measurement confirms behaviour: assert a class, a computed style, a rect vs boun
 order. Dispatch real events on elements (`el.dispatchEvent(new MouseEvent('click',{bubbles:true}))`).
 Re-test from a narrow viewport (`agent-browser set viewport 375 667`, then reload) for overflow.
 
+## Measuring CPU
+
+Never guess a CPU bottleneck — measure per thread. A main-thread-only view misleads: any continuous
+CSS animation forces a per-frame draw/swap on the GPU and compositor threads even while the main
+thread is ~100 % idle, so hitting ~0 % at rest requires nothing animating at rest. Targets: ~0–1 %
+CPU at idle, ~10 % under active data flow.
+
+- Record with `agent-browser profiler start` / `profiler stop trace.json` (a CDP trace). Sum
+  `RunTask` durations (cat `disabled-by-default-devtools.timeline`, ph `X`) **per pid/tid**,
+  mapping names via the `thread_name`/`process_name` metadata events — watch the GPU Process and
+  Compositor threads, not just CrRendererMain. `DrawFrame`/s ≈ 0 at true idle; a steady
+  refresh-rate stream of them means a continuous animation is running.
+- Prove the page is truly idle BEFORE profiling: a `MutationObserver` must count 0 mutations and
+  `document.getAnimations()` must show 0 running animations — profiling while an animation still
+  runs once produced a false negative. To pin a cost causally, cancel the suspect
+  (`getAnimations().forEach(a => a.cancel())`), confirm 0 running, and re-profile.
+- MutationObserver trap: reading `record.target` in the callback returns the element's CURRENT
+  state, so a remove-then-add within one tick is counted twice. Use `record.oldValue` with
+  `attributeOldValue: true` for per-mutation truth.
+- Active CPU needs real churn — an idle cluster produces no sustained patches. On the demo
+  cluster, `kubectl create deployment` with `--replicas=5` in a throwaway namespace, then loop
+  `kubectl rollout restart` on it (~4 s cadence ≈ realistic deploys; ~1.3 s ≈ aggressive). Delete
+  the namespace after.
+
 ## Measurement pitfalls (headless) — check before believing a finding
 
 The frozen headless compositor and jsdom-style gaps manufacture convincing fake bugs. Each of these

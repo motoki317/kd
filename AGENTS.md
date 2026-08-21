@@ -29,6 +29,7 @@ live debugging in [docs/live-debug.md](docs/live-debug.md).
 | Touch styles | `web/src/styles/<area>.css`; cascade order is documented in `web/src/index.css` |
 | Touch drawer usage gauges | `web/src/resourceBars.ts` → `web/src/components/UsageGauges.tsx`; consumers: `web/src/components/ResourceSummary.tsx`, `web/src/components/ContainerCards.tsx`; rollup: `web/src/usageAggregate.ts`; invariants: "Drawer resource gauges" in `docs/frontend-internals.md` |
 | Add an SSE event | `internal/api/sse.go` and `web/src/api.ts` |
+| Touch log streaming | `internal/api/logstream.go`; one endpoint `/resources/{kind}/{name}/log/stream` serves pods and controllers — a goroutine per descendant pod fans into one channel drained by a single writer |
 | Touch RBAC policy | `internal/rbac/`, `charts/kd/values.yaml`, and `charts/kd/README.md` |
 | Record a decision | `docs/ADR/YYYYMMDD-title.md`; template: `docs/ADR/_template.md` |
 
