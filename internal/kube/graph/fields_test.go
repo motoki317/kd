@@ -1323,14 +1323,14 @@ func TestLastTerminatedString(t *testing.T) {
 
 	// The card shows the SPEC image (the manifest's tag), not status.Image: a node that already cached a
 	// different tag for the running digest reports THAT alias in status, naming an image never deployed.
-	// An ephemeral container has no spec entry, so it falls back to its status image.
+	// A status without a spec entry falls back to its status image.
 	imgPod := &corev1.Pod{
 		Spec: corev1.PodSpec{Containers: []corev1.Container{
 			{Name: "app", Image: "ghcr.io/example/app:v2"},
 		}},
 		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
-			{Name: "app", Image: "ghcr.io/example/app:cached-alias"},  // status names a digest-alias tag
-			{Name: "debugger", Image: "ghcr.io/example/debug:latest"}, // no spec container → keep status
+			{Name: "app", Image: "ghcr.io/example/app:cached-alias"},   // status names a digest-alias tag
+			{Name: "unmatched", Image: "ghcr.io/example/debug:latest"}, // no spec container → keep status
 		}},
 	}
 	imgStats := containerStatuses(imgPod)
@@ -1338,7 +1338,7 @@ func TestLastTerminatedString(t *testing.T) {
 		t.Errorf("app image = %q, want the spec tag ghcr.io/example/app:v2 (not the status alias)", imgStats[0].Image)
 	}
 	if imgStats[1].Image != "ghcr.io/example/debug:latest" {
-		t.Errorf("ephemeral image = %q, want the status image as fallback", imgStats[1].Image)
+		t.Errorf("fallback image = %q, want the status image as fallback", imgStats[1].Image)
 	}
 
 	// A container caught currently Terminated (e.g. mid-crashloop) must NOT also carry LastTerminated:
