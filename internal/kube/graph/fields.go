@@ -103,15 +103,15 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 		images[c.Name] = c.Image
 	}
 	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses)+len(p.Status.EphemeralContainerStatuses))
-	for _, cs := range p.Status.InitContainerStatuses {
+	for _, cs := range statusesInSpecOrder(p.Status.InitContainerStatuses, initContainerNames(p)) {
 		st := containerStat(cs, true, resources[cs.Name], images[cs.Name])
 		st.Sidecar = sidecars[cs.Name]
 		out = append(out, st)
 	}
-	for _, cs := range p.Status.ContainerStatuses {
+	for _, cs := range statusesInSpecOrder(p.Status.ContainerStatuses, containerNames(p)) {
 		out = append(out, containerStat(cs, false, resources[cs.Name], images[cs.Name]))
 	}
-	for _, cs := range p.Status.EphemeralContainerStatuses {
+	for _, cs := range statusesInSpecOrder(p.Status.EphemeralContainerStatuses, ephemeralContainerNames(p)) {
 		st := containerStat(cs, false, corev1.ResourceRequirements{}, images[cs.Name])
 		st.Ephemeral = true
 		out = append(out, st)
@@ -120,6 +120,26 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 		return nil
 	}
 	return out
+}
+
+func statusesInSpecOrder(statuses []corev1.ContainerStatus, names []string) []corev1.ContainerStatus {
+	byName := make(map[string]corev1.ContainerStatus, len(statuses))
+	for _, cs := range statuses {
+		byName[cs.Name] = cs
+	}
+	ordered := make([]corev1.ContainerStatus, 0, len(statuses))
+	for _, name := range names {
+		if cs, ok := byName[name]; ok {
+			ordered = append(ordered, cs)
+			delete(byName, name)
+		}
+	}
+	for _, cs := range statuses {
+		if _, unmatched := byName[cs.Name]; unmatched {
+			ordered = append(ordered, cs)
+		}
+	}
+	return ordered
 }
 
 func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequirements, specImage string) ContainerStatus {
