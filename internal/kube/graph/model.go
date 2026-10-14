@@ -158,6 +158,7 @@ type ContainerStatus struct {
 	Restarts  int32  `json:"restarts,omitempty"`
 	State     string `json:"state"`               // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
 	Init      bool   `json:"init,omitempty"`      // an init container, native sidecars included
+	Sidecar   bool   `json:"sidecar,omitempty"`   // a native sidecar (init container with restartPolicy: Always) runs for the pod's life, so its bounds count in the pod total
 	Ephemeral bool   `json:"ephemeral,omitempty"` // a kubectl debug container has no probes or resources, so readiness and bounds do not apply
 	Image     string `json:"image,omitempty"`     // the container's SPEC image (what the manifest declared), not status.Image — see containerStat
 	// LastTerminated is why the container PREVIOUSLY exited (e.g. "OOMKilled (exit 137)"), from

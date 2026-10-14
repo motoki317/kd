@@ -224,7 +224,7 @@ func TestPodRequestsAndLimits(t *testing.T) {
 		t.Errorf("podRequests(no requests) = %+v, want nil", got)
 	}
 
-	// Init containers are excluded from the sum (limits mirror requests).
+	// Regular init containers are excluded from the sum (limits mirror requests).
 	withInit := &corev1.Pod{Spec: corev1.PodSpec{
 		InitContainers: []corev1.Container{{Resources: corev1.ResourceRequirements{Limits: reqs("4", "4Gi")}}},
 		Containers:     []corev1.Container{{Resources: corev1.ResourceRequirements{Limits: reqs("500m", "512Mi")}}},
@@ -242,6 +242,47 @@ func TestPodRequestsAndLimits(t *testing.T) {
 	}
 	if got := podLimits(&corev1.Node{}); got != nil {
 		t.Errorf("podLimits(non-pod) = %+v, want nil", got)
+	}
+}
+
+func TestPodResourcesWithOnlySidecarBounds(t *testing.T) {
+	obj := decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+spec:
+  initContainers:
+    - name: init-migrate
+      resources:
+        requests: {cpu: "4", memory: 4Gi}
+        limits: {cpu: "8", memory: 8Gi}
+    - name: proxy
+      restartPolicy: Always
+      resources:
+        requests: {memory: 32Mi}
+        limits: {memory: 64Mi}
+  containers:
+    - name: app
+`)[0]
+	for _, tc := range []struct {
+		name string
+		got  *Resources
+		mem  int64
+	}{
+		{"requests", podRequests(obj), 32 * 1024 * 1024},
+		{"limits", podLimits(obj), 64 * 1024 * 1024},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got == nil {
+				t.Fatal("sidecar-only bounds missing")
+			}
+			if tc.got.CPUMilli != nil || tc.got.Pods != nil {
+				t.Errorf("unset fields must stay nil: %+v", tc.got)
+			}
+			wantInt64(t, "memory", tc.got.MemBytes, tc.mem)
+		})
 	}
 }
 

@@ -17,6 +17,84 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+func TestBuildNativeSidecarResources(t *testing.T) {
+	g := Build(decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: pod-1
+spec:
+  overhead:
+    cpu: 100m
+    memory: 512Mi
+  initContainers:
+    - name: init-migrate
+      image: example/setup:v1
+      resources:
+        requests: {cpu: 900m, memory: 1Gi}
+        limits: {cpu: "2", memory: 2Gi}
+    - name: proxy
+      image: example/proxy:v1
+      restartPolicy: Always
+      resources:
+        requests: {cpu: 20m, memory: 32Mi}
+        limits: {cpu: 40m, memory: 64Mi}
+  containers:
+    - name: app
+      image: example/app:v1
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {cpu: 100m, memory: 128Mi}
+status:
+  phase: Running
+  initContainerStatuses:
+    - name: proxy
+      ready: true
+      state:
+        running: {}
+    - name: init-migrate
+      state:
+        terminated:
+          reason: Completed
+  containerStatuses:
+    - name: app
+      ready: true
+      state:
+        running: {}
+`))
+	node := nodeByName(g, "Pod", "web-1")
+	if node == nil || node.Requests == nil || node.Limits == nil {
+		t.Fatalf("pod bounds missing: %+v", node)
+	}
+	wantInt64(t, "request cpu", node.Requests.CPUMilli, 70)
+	wantInt64(t, "request memory", node.Requests.MemBytes, 96*1024*1024)
+	wantInt64(t, "limit cpu", node.Limits.CPUMilli, 140)
+	wantInt64(t, "limit memory", node.Limits.MemBytes, 192*1024*1024)
+	want := []ContainerStatus{
+		{Name: "proxy", State: "Running", Ready: true, Init: true, Sidecar: true, Image: "example/proxy:v1", CPURequestMilli: 20, MemRequestBytes: 32 * 1024 * 1024, CPULimitMilli: 40, MemLimitBytes: 64 * 1024 * 1024},
+		{Name: "init-migrate", State: "Terminated: Completed", Init: true, Image: "example/setup:v1", CPURequestMilli: 900, MemRequestBytes: 1024 * 1024 * 1024, CPULimitMilli: 2000, MemLimitBytes: 2 * 1024 * 1024 * 1024},
+		{Name: "app", State: "Running", Ready: true, Image: "example/app:v1", CPURequestMilli: 50, MemRequestBytes: 64 * 1024 * 1024, CPULimitMilli: 100, MemLimitBytes: 128 * 1024 * 1024},
+	}
+	if !slices.Equal(node.ContainerStatuses, want) {
+		t.Errorf("statuses = %+v, want %+v", node.ContainerStatuses, want)
+	}
+	for _, cs := range node.ContainerStatuses {
+		data, err := json.Marshal(cs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cs.Name == "proxy" {
+			if !strings.Contains(string(data), `"sidecar":true`) {
+				t.Errorf("sidecar flag missing on wire: %s", data)
+			}
+		} else if strings.Contains(string(data), `"sidecar"`) {
+			t.Errorf("non-sidecar must omit flag: %s", data)
+		}
+	}
+}
+
 func TestBuildEphemeralContainers(t *testing.T) {
 	g := Build(decodeFixture(t, `
 apiVersion: v1
