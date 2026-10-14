@@ -262,8 +262,20 @@ export function streamGraph(ctx: string, ns: string, h: GraphStreamHandlers): ()
 export interface LogEntry {
   pod: string
   container?: string // source container, set when a single pod's logs are merged across all containers
-  time?: string // RFC3339Nano emission time, present only when timestamps were requested
+  time?: string // RFC3339Nano emission time, absent when the kubelet line lacks a valid timestamp
   line: string
+}
+
+export interface LogStreamHandlers {
+  log: (entry: LogEntry) => void
+  // The one-shot (previous-logs) dump emits `done` when it has streamed everything; the live follow
+  // stream never does. Lets the viewer tell "nothing yet, still streaming" from "finished, empty".
+  done?: () => void
+  // The follow stream's supervisor reports the tailed resource being deleted — distinct from a
+  // connection error and from a mid-rollout zero-pod gap (which stays silent).
+  gone?: () => void
+  open?: () => void
+  error?: () => void
 }
 
 // streamLogs tails a resource's logs and returns a function that closes the stream. For a Pod this
@@ -274,30 +286,26 @@ export function streamLogs(
   ns: string,
   kind: string,
   name: string,
-  opts: { container?: string; tailLines?: number; previous?: boolean; timestamps?: boolean },
-  onLine: (entry: LogEntry) => void,
-  onError?: () => void,
-  onDone?: () => void,
-  onGone?: () => void,
+  opts: { container?: string; tailLines?: number; previous?: boolean },
+  h: LogStreamHandlers,
 ): () => void {
   const params = new URLSearchParams({ follow: opts.previous ? 'false' : 'true' })
   if (opts.container) params.set('container', opts.container)
   if (opts.tailLines != null) params.set('tailLines', String(opts.tailLines))
   if (opts.previous) params.set('previous', 'true')
-  if (opts.timestamps) params.set('timestamps', 'true')
+  // LogViewer compares stamps to drop lines re-sent after a reconnect, and sorts merged views by them
+  // because each container's tail arrives as one batch.
+  params.set('timestamps', 'true')
   // A cluster-scoped resource (a Node aggregating its static pods' logs) has an empty namespace;
   // interpolating it raw yields `namespaces//…` which the server 307→404s. Substitute the scope
   // sentinel the server unmaps — same rule as the manifest/events fetches.
   const es = new EventSource(
     `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns || CLUSTER_SCOPE)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
   )
-  es.addEventListener('log', (e) => onLine(JSON.parse((e as MessageEvent).data) as LogEntry))
-  // The one-shot (previous-logs) dump emits `done` when it has streamed everything; the live follow
-  // stream never does. Lets the viewer tell "nothing yet, still streaming" from "finished, empty".
-  es.addEventListener('done', () => onDone?.())
-  // The follow stream's supervisor reports the tailed resource being deleted — distinct from a
-  // connection error and from a mid-rollout zero-pod gap (which stays silent).
-  es.addEventListener('gone', () => onGone?.())
-  es.onerror = () => onError?.()
+  es.addEventListener('open', () => h.open?.())
+  es.addEventListener('log', (e) => h.log(JSON.parse((e as MessageEvent).data) as LogEntry))
+  es.addEventListener('done', () => h.done?.())
+  es.addEventListener('gone', () => h.gone?.())
+  es.onerror = () => h.error?.()
   return () => es.close()
 }

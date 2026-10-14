@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render } from '@solidjs/testing-library'
 import { createSignal } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LogViewer from './LogViewer'
+import { LOG_BUFFER_CAPACITY } from '../logResume'
 
 // LogViewer opens an EventSource on mount; a no-op stub keeps it from touching the network. The
 // class tracks its instances so a test can fire onerror to assert how the viewer renders a stream
@@ -9,6 +10,7 @@ import LogViewer from './LogViewer'
 let eventSources: NoopEventSource[] = []
 class NoopEventSource {
   url: string
+  closed = false
   onerror: (() => void) | null = null
   listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
   constructor(url: string | URL) {
@@ -18,11 +20,11 @@ class NoopEventSource {
   addEventListener(name: string, fn: (e: MessageEvent) => void) {
     ;(this.listeners[name] ||= []).push(fn)
   }
-  emit(name: string, payload: unknown) {
+  emit(name: string, payload?: unknown) {
     const ev = new MessageEvent(name, { data: JSON.stringify(payload) })
     for (const fn of this.listeners[name] ?? []) fn(ev)
   }
-  close() {}
+  close() { this.closed = true }
 }
 beforeEach(() => {
   eventSources = []
@@ -190,6 +192,99 @@ describe('LogViewer', () => {
   it('always offers a timestamps toggle', () => {
     const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
     expect(container.querySelector('.logs-ts')?.textContent).toContain('timestamps')
+  })
+
+  it('requests timestamps without showing the time column or restarting when toggled', () => {
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
+    const es = eventSources.at(-1)!
+    expect(new URL(es.url, window.location.origin).searchParams.get('timestamps')).toBe('true')
+    es.emit('open')
+    es.emit('log', { pod: 'web-1', container: 'app', time: '2021-05-21T12:00:00.799799345Z', line: 'hello' })
+    expect(container.querySelector('.log-time')).toBeNull()
+    ;(container.querySelector('.logs-ts') as HTMLButtonElement).click()
+    expect(container.querySelector('.log-time')?.getAttribute('title')).toBe('2021-05-21T12:00:00.799799345Z')
+    expect(eventSources).toHaveLength(1)
+    ;(container.querySelector('.logs-ts') as HTMLButtonElement).click()
+    expect(container.querySelector('.log-time')).toBeNull()
+    expect(container.querySelectorAll('.log-line')).toHaveLength(1)
+  })
+
+  it('keeps exactly the newest buffer-capacity lines after trimming', () => {
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} restarts={0} />)
+    const es = eventSources.at(-1)!
+    es.emit('open')
+    for (let i = 0; i < LOG_BUFFER_CAPACITY + 2; i++) {
+      es.emit('log', { pod: 'web-1', container: 'app', time: '2021-05-21T12:00:00.799799345Z', line: `line ${i}` })
+    }
+    const lines = container.querySelectorAll('.log-line')
+    expect(lines).toHaveLength(LOG_BUFFER_CAPACITY)
+    expect(lines[0].textContent).toBe('line 2')
+    expect(lines[lines.length - 1].textContent).toBe(`line ${LOG_BUFFER_CAPACITY + 1}`)
+  })
+
+  it.each([
+    { mode: 'single-container follow', containers: ['app'], aggregated: false, previous: false },
+    { mode: 'merged follow', containers: ['app', 'sidecar'], aggregated: false, previous: false },
+    { mode: 'workload follow', containers: [], aggregated: true, previous: false },
+    { mode: 'previous logs', containers: ['app'], aggregated: false, previous: true },
+  ])('drops replay and keeps gap lines in $mode', ({ containers, aggregated, previous }) => {
+    const { container } = render(() => <LogViewer ctx="test-ctx" {...base} aggregated={aggregated} containers={containers} restarts={1} status="Running" />)
+    if (previous) (container.querySelector('.logs-prev') as HTMLButtonElement).click()
+    const es = eventSources.at(-1)!
+    const params = new URL(es.url, window.location.origin).searchParams
+    expect(params.get('timestamps')).toBe('true')
+    expect(params.get('follow')).toBe(previous ? 'false' : 'true')
+    es.emit('open')
+    const older = '2021-05-21T12:00:00.799799344Z'
+    const last = '2021-05-21T12:00:00.799799345Z'
+    const newer = '2021-05-21T12:00:00.799799346Z'
+    const tail = [
+      { pod: 'web-1', container: 'app', time: older, line: 'earlier' },
+      { pod: 'web-1', container: 'app', time: last, line: 'burst' },
+      { pod: 'web-1', container: 'app', time: last, line: 'burst' },
+    ]
+    tail.forEach(log => es.emit('log', log))
+    es.onerror?.()
+    expect(container.querySelector('.logs-error')?.textContent).toBe('stream interrupted')
+    es.emit('open')
+    expect(container.querySelector('.logs-error')).toBeNull()
+    expect(container.querySelectorAll('.log-line')).toHaveLength(3)
+    ;[...tail, tail[2], { ...tail[2], line: 'gap at boundary' }, { ...tail[2], time: newer }].forEach(log => es.emit('log', log))
+    expect([...container.querySelectorAll('.log-line')].map(el => {
+      const copy = el.cloneNode(true) as HTMLElement
+      copy.querySelectorAll('.log-pod, .log-time').forEach(label => label.remove())
+      return copy.textContent
+    }))
+      .toEqual(['earlier', 'burst', 'burst', 'burst', 'gap at boundary', 'burst'])
+    if (containers.length === 1) expect(container.querySelector('.log-time')).toBeNull()
+    es.onerror?.()
+    es.emit('open')
+    es.emit('log', { ...tail[2], line: 'gap at boundary' })
+    es.emit('log', { ...tail[2], time: newer })
+    expect(container.querySelectorAll('.log-line')).toHaveLength(6)
+    expect(container.querySelector('.logs-error')).toBeNull()
+  })
+
+  it.each(['ctx', 'namespace', 'kind', 'name', 'container', 'previous'])('starts fresh resume state when %s changes', (field) => {
+    const [target, setTarget] = createSignal({ ctx: 'test-ctx', ...base })
+    const { container } = render(() => <LogViewer {...target()} aggregated={false} containers={['wait', 'main']} restarts={1} status="Running" />)
+    const es = eventSources.at(-1)!
+    const log = { pod: 'web-1', container: 'main', time: '2021-05-21T12:00:00.799799345Z', line: 'burst' }
+    es.emit('open')
+    es.emit('log', log)
+    es.emit('open')
+    es.emit('log', log)
+    expect(container.querySelectorAll('.log-line')).toHaveLength(1)
+    if (field === 'container') fireEvent.change(container.querySelector('.logs-container')!, { target: { value: 'wait' } })
+    else if (field === 'previous') (container.querySelector('.logs-prev') as HTMLButtonElement).click()
+    else setTarget(value => ({ ...value, [field]: `${value[field as keyof typeof value]}-other` }))
+    expect(es.closed).toBe(true)
+    expect(container.querySelectorAll('.log-line')).toHaveLength(0)
+    const fresh = eventSources.at(-1)!
+    expect(fresh).not.toBe(es)
+    fresh.emit('open')
+    fresh.emit('log', log)
+    expect(container.querySelectorAll('.log-line')).toHaveLength(1)
   })
 
   // The scroll region is a tab stop so keyboard users can focus and arrow-scroll it (Firefox doesn't

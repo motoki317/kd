@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { streamGraph, streamNamespaces, type NamespaceInfo } from './api'
+import { streamGraph, streamLogs, streamNamespaces, type NamespaceInfo } from './api'
 
 // A minimal EventSource stand-in: jsdom ships none, so tests drive the watchdog by constructing these
 // and firing events by hand. Instances accumulate so a reconnect is observable as a second instance.
@@ -49,6 +49,24 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks() // undo any Math.random spy
   vi.useRealTimers()
+})
+
+describe('streamLogs native reconnect', () => {
+  it('reports open on every connection through the same EventSource', () => {
+    const opened = vi.fn()
+    const errored = vi.fn()
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: () => {}, error: errored, open: opened })
+    const es = MockEventSource.last
+    es.emit('open')
+    expect(opened).toHaveBeenCalledTimes(1)
+    es.error()
+    expect(errored).toHaveBeenCalledTimes(1)
+    es.emit('open')
+    expect(opened).toHaveBeenCalledTimes(2)
+    expect(MockEventSource.count).toBe(1)
+    close()
+    expect(es.closed).toBe(true)
+  })
 })
 
 describe('streamNamespaces watchdog', () => {
