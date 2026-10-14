@@ -693,16 +693,21 @@ func TestAggregatedLogStream(t *testing.T) {
 	}
 }
 
-// TestAllContainersLogStream verifies a single multi-container pod's __all__ stream fans out one
-// streamer per app container, tagging each line with its source container so the client can label and
-// timestamp-order the merged view.
+// The client needs a source container tag to label and timestamp-order the merged view across init,
+// app, and ephemeral containers.
 func TestAllContainersLogStream(t *testing.T) {
 	objs := []runtime.Object{
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "shop"}},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "web-1", UID: "p1"},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
-			Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{{Name: "setup"}},
+				Containers:     []corev1.Container{{Name: "app"}, {Name: "sidecar"}},
+				EphemeralContainers: []corev1.EphemeralContainer{{
+					EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"},
+				}},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		},
 	}
 	srv := newServer(t, "", objs...)
@@ -730,12 +735,12 @@ func TestAllContainersLogStream(t *testing.T) {
 		if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ll) == nil && ll.Container != "" {
 			seen[ll.Container] = true
 		}
-		if seen["app"] && seen["sidecar"] {
+		if seen["setup"] && seen["app"] && seen["sidecar"] && seen["debugger"] {
 			break
 		}
 	}
-	if !seen["app"] || !seen["sidecar"] {
-		t.Errorf("all-containers stream tagged containers %v, want both app and sidecar", seen)
+	if !seen["setup"] || !seen["app"] || !seen["sidecar"] || !seen["debugger"] {
+		t.Errorf("all-containers stream tagged containers %v, want setup, app, sidecar, and debugger", seen)
 	}
 }
 

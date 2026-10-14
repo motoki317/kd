@@ -37,10 +37,8 @@ type logLine struct {
 	Line string `json:"line"`
 }
 
-// allContainers is the sentinel container value requesting a single pod's logs merged across every app
-// container (kubectl logs --all-containers): each line is tagged with its source container so the
-// client can label and timestamp-order them. It is the default view for a multi-container pod, where
-// picking one container hides the cross-talk (an app erroring because its sidecar isn't ready).
+// allContainers requests init, app, and ephemeral logs together so setup failures and debug output
+// remain visible alongside app logs.
 const allContainers = "__all__"
 
 // handleResourceLogStream tails the logs of a resource as SSE `log` events. For a Pod that is the
@@ -242,7 +240,7 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 }
 
 func logContainerStatus(pod *corev1.Pod, container string) (corev1.ContainerStatus, bool) {
-	for _, statuses := range [][]corev1.ContainerStatus{pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses} {
+	for _, statuses := range [][]corev1.ContainerStatus{pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses, pod.Status.EphemeralContainerStatuses} {
 		for _, status := range statuses {
 			if status.Name == container {
 				return status, true
@@ -313,8 +311,7 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1
 		streamContainerLogs(ctx, client, pod, containers[0], follow, previous, timestamps, tail, out)
 		return
 	}
-	// allContainers fans out one streamer per app container, merged into the same channel; the client
-	// timestamp-orders them.
+	// The client timestamp-orders the shared channel so init and ephemeral output interleave with app logs.
 	var wg sync.WaitGroup
 	for _, target := range containers {
 		wg.Add(1)
@@ -333,8 +330,14 @@ func targetContainers(pod *corev1.Pod, container string) []string {
 		}
 		return []string{container}
 	}
-	containers := make([]string, 0, len(pod.Spec.Containers))
+	containers := make([]string, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers)+len(pod.Spec.EphemeralContainers))
+	for _, ct := range pod.Spec.InitContainers {
+		containers = append(containers, ct.Name)
+	}
 	for _, ct := range pod.Spec.Containers {
+		containers = append(containers, ct.Name)
+	}
+	for _, ct := range pod.Spec.EphemeralContainers {
 		containers = append(containers, ct.Name)
 	}
 	return containers

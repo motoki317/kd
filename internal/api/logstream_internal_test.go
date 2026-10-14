@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -50,6 +51,21 @@ func TestLogStreamKeyIncludesPodUIDAndContainer(t *testing.T) {
 	}
 	if logStreamKey(a, "main") == logStreamKey(a, "sidecar") {
 		t.Fatalf("different containers share key %q", logStreamKey(a, "main"))
+	}
+}
+
+func TestTargetContainersAllContainers(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{
+		InitContainers: []corev1.Container{{Name: "setup-b"}, {Name: "setup-a"}},
+		Containers:     []corev1.Container{{Name: "worker"}, {Name: "app"}},
+		EphemeralContainers: []corev1.EphemeralContainer{
+			{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debug-b"}},
+			{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debug-a"}},
+		},
+	}}
+	want := []string{"setup-b", "setup-a", "worker", "app", "debug-b", "debug-a"}
+	if got := targetContainers(pod, allContainers); !slices.Equal(got, want) {
+		t.Fatalf("targetContainers = %v, want %v", got, want)
 	}
 }
 
@@ -178,6 +194,181 @@ func TestSuperviseLogStreamsDoesNotRedumpCompletedPod(t *testing.T) {
 	case got := <-lines:
 		t.Fatalf("completed pod log repeated as %q", got.Line)
 	default:
+	}
+}
+
+func TestSuperviseLogStreamsDoesNotRedumpTerminatedContainers(t *testing.T) {
+	cases := []struct {
+		name      string
+		container string
+		pod       func() *corev1.Pod
+	}{
+		{
+			name:      "init container",
+			container: "setup",
+			pod: func() *corev1.Pod {
+				return testLogPodWithInitContainerStatus("shop-0-uid", corev1.PodRunning, "setup", corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"},
+				}, 0)
+			},
+		},
+		{
+			name:      "ephemeral container",
+			container: "debugger",
+			pod: func() *corev1.Pod {
+				pod := testLogPod("shop-0-uid", corev1.PodRunning, "main")
+				pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{{
+					EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"},
+				}}
+				pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{{
+					Name: "debugger", State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"},
+					},
+				}}
+				return pod
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			useFastLogResolveInterval(t)
+			var mu sync.Mutex
+			requests := map[string]int{}
+			client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				container := r.URL.Query().Get("container")
+				mu.Lock()
+				requests[container]++
+				mu.Unlock()
+				var body io.Reader = strings.NewReader(container + " log\n")
+				if container == "main" {
+					body = io.MultiReader(body, blockUntilCancelled{r.Context()})
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"text/plain"}},
+					Body:       io.NopCloser(body),
+					Request:    r,
+				}, nil
+			}))
+			pod := c.pod()
+			resolved := make(chan struct{}, 16)
+			st := &stubLogStore{
+				objs: func() []runtime.Object {
+					resolved <- struct{}{}
+					return []runtime.Object{pod}
+				},
+				client: client,
+			}
+			lines := startSupervisedPodLogs(t, st, pod, allContainers)
+			seen := map[string]bool{}
+			timer := time.NewTimer(time.Second)
+			defer timer.Stop()
+			for len(seen) < 2 {
+				select {
+				case got := <-lines:
+					if got.Pod != pod.Name || got.Line != got.Container+" log" {
+						t.Fatalf("log line = %+v, want source pod and container tags", got)
+					}
+					seen[got.Container] = true
+				case <-timer.C:
+					t.Fatalf("timed out waiting for main and %s logs, saw %v", c.container, seen)
+				}
+			}
+			if !seen["main"] || !seen[c.container] {
+				t.Fatalf("log sources = %v, want main and %s", seen, c.container)
+			}
+			waitForFreshLogResolves(t, resolved, 5)
+			mu.Lock()
+			gotMain, gotTerminated := requests["main"], requests[c.container]
+			mu.Unlock()
+			if gotMain != 1 || gotTerminated != 1 {
+				t.Fatalf("GetLogs requests = main:%d %s:%d, want one each", gotMain, c.container, gotTerminated)
+			}
+			select {
+			case got := <-lines:
+				t.Fatalf("terminated container log repeated as %+v", got)
+			default:
+			}
+		})
+	}
+}
+
+func TestSuperviseLogStreamsAttachesStartedAndAddedContainers(t *testing.T) {
+	useFastLogResolveInterval(t)
+	var mu sync.Mutex
+	current := testLogPodWithInitContainerStatus("shop-0-uid", corev1.PodRunning, "setup", corev1.ContainerState{
+		Waiting: &corev1.ContainerStateWaiting{Reason: "PodInitializing"},
+	}, 0)
+	requests := map[string]int{}
+	client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		container := r.URL.Query().Get("container")
+		mu.Lock()
+		requests[container]++
+		waiting := container == "setup" && current.Status.InitContainerStatuses[0].State.Waiting != nil
+		mu.Unlock()
+		status := http.StatusOK
+		body := io.MultiReader(strings.NewReader(container+" log\n"), blockUntilCancelled{r.Context()})
+		if waiting {
+			status = http.StatusBadRequest
+			body = strings.NewReader("container is waiting to start")
+		}
+		return &http.Response{
+			StatusCode: status,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(body),
+			Request:    r,
+		}, nil
+	}))
+	resolved := make(chan struct{}, 16)
+	st := &stubLogStore{
+		objs: func() []runtime.Object {
+			mu.Lock()
+			pod := current
+			mu.Unlock()
+			resolved <- struct{}{}
+			return []runtime.Object{pod}
+		},
+		client: client,
+	}
+	lines := startSupervisedPodLogs(t, st, current, allContainers)
+	wantLine := func(container string) {
+		t.Helper()
+		select {
+		case got := <-lines:
+			if got != (logLine{Pod: "shop-0", Container: container, Line: container + " log"}) {
+				t.Fatalf("log line = %+v, want %s log with source tags", got, container)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for %s log", container)
+		}
+	}
+	wantLine("main")
+	waitForFreshLogResolves(t, resolved, 5)
+	mu.Lock()
+	gotWaiting, gotAdded := requests["setup"], requests["debugger"]
+	current = current.DeepCopy()
+	current.Status.InitContainerStatuses[0].State = corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	mu.Unlock()
+	if gotWaiting == 0 || gotAdded != 0 {
+		t.Fatalf("GetLogs requests before start = setup:%d debugger:%d, want setup retries and no debugger", gotWaiting, gotAdded)
+	}
+	wantLine("setup")
+	mu.Lock()
+	current = current.DeepCopy()
+	current.Spec.EphemeralContainers = []corev1.EphemeralContainer{{
+		EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"},
+	}}
+	current.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{{
+		Name: "debugger", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+	}}
+	mu.Unlock()
+	wantLine("debugger")
+	waitForFreshLogResolves(t, resolved, 5)
+	mu.Lock()
+	gotMain, gotDebugger := requests["main"], requests["debugger"]
+	mu.Unlock()
+	if gotMain != 1 || gotDebugger != 1 {
+		t.Fatalf("GetLogs requests after attachment = main:%d debugger:%d, want one each", gotMain, gotDebugger)
 	}
 }
 
