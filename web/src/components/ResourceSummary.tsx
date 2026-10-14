@@ -140,12 +140,12 @@ export default function ResourceSummary(props: Props) {
   createEffect(on([() => props.node.id, gaugeBy], () => setHidden(new Set<string>())))
 
   // The Pod gauge's per-container segments, each carrying its container's own req/lim (joined from the
-  // pod's container statuses — app containers only; init containers carry no live usage so never become
-  // a segment) so hiding a container can subtract its bound from the ceiling.
+  // pod's container statuses — app containers and sidecars; regular init bounds are outside the pod
+  // total) so hiding a container can subtract its bound from the ceiling.
   const podSegments = createMemo(() =>
     props.node.kind === 'Pod'
       ? containerSegments(props.usage, (name) => {
-          const cs = props.node.containerStatuses?.find((s) => s.name === name && !s.init)
+          const cs = props.node.containerStatuses?.find((s) => s.name === name && (!s.init || s.sidecar))
           return cs && { reqCpu: cs.cpuRequestMilli, reqMem: cs.memRequestBytes, limCpu: cs.cpuLimitMilli, limMem: cs.memLimitBytes }
         })
       : [],

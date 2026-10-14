@@ -69,10 +69,11 @@ describe('aggregateWorkloadUsage', () => {
     expect(agg?.usage.containers).toBeUndefined()
   })
 
-  it('sums per-container req/lim across replicas for the by-container filter, skipping init containers', () => {
+  it('sums app and native sidecar bounds across replicas while skipping regular init bounds', () => {
     // The by-container view's ceiling subtrahend: each container name's req/lim summed fleet-wide, from
-    // the replicas' container statuses (spec bounds). Init containers carry no live usage, so they never
-    // become a segment and must not contribute a bound.
+    // the replicas' container statuses (spec bounds). Regular init bounds are excluded from pod totals,
+    // so they must not contribute a bound. An ephemeral container passes the bound filter but declares
+    // no bounds, so its entry is empty.
     const mk = (id: string): KNode =>
       ({
         id,
@@ -82,14 +83,16 @@ describe('aggregateWorkloadUsage', () => {
         health: 'Healthy',
         containerStatuses: [
           { name: 'app', ready: true, state: 'Running', cpuRequestMilli: 100, cpuLimitMilli: 500, memLimitBytes: 256 },
-          { name: 'sidecar', ready: true, state: 'Running', cpuRequestMilli: 50 },
+          { name: 'sidecar', init: true, sidecar: true, ready: true, state: 'Running', cpuRequestMilli: 50, memRequestBytes: 32, cpuLimitMilli: 100, memLimitBytes: 64 },
           { name: 'setup', init: true, ready: false, state: 'Terminated: Completed', cpuRequestMilli: 999 },
+          { name: 'debugger', ephemeral: true, ready: false, state: 'Running' },
         ],
       }) as KNode
     const agg = aggregateWorkloadUsage([mk('a'), mk('b')], { a: { cpuMilli: 1 }, b: { cpuMilli: 1 } })
     expect(agg?.containerBounds).toEqual({
       app: { reqCpu: 200, limCpu: 1000, limMem: 512 },
-      sidecar: { reqCpu: 100 },
+      sidecar: { reqCpu: 100, reqMem: 64, limCpu: 200, limMem: 128 },
+      debugger: {},
     })
   })
 

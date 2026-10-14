@@ -208,6 +208,10 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
   (the wire omits its breakdown) stays a plain fill; a Node never segments. The one per-container
   resource signal kept on the card is the OOM alarm: memory ≥90% of the container's OWN limit reads
   in words (`nearMemLimit`), since an imminent OOM kill is worth words even without a bar.
+  Metrics-server's breakdown can include running init and ephemeral containers; each still gets a
+  segment. Only app containers and native sidecars carry bounds into the pod total (regular init
+  containers are left out; ephemeral containers declare none), so hiding a regular init or ephemeral
+  segment lowers the fill but not the ceiling.
 - **Workload stacks split by pod or by container.** The rollup gauge's fill is a stack of segments
   (`UsageSegment`) — one per POD by default (replicas should pull even weight; an outlier segment is
   the finding; names use the topology's "…-suffix" relative form) — with a persisted caption-row
@@ -227,8 +231,8 @@ extends the track with a hatched overshoot (the Nodes-view bullet idiom). Key in
   legend segment (`onToggleSegment`) drops that container/replica, and the fill AND ceiling regauge
   against the rest — each `UsageSegment` carries its own req/lim, and `minusUsage`/`minusBound`
   lift the hidden segments OUT of the existing totals. Subtract-not-sum is deliberate: the ceiling
-  sums every app container in the SPEC, but segments come from the metrics-server breakdown
-  (metered only) — summing the shown would drop a bounded-but-unmetered container (just-started,
+  sums every app container and native sidecar in the SPEC, but segments come from the metrics-server
+  breakdown (metered only) — summing the shown would drop a bounded-but-unmetered container (just-started,
   crash-looping) and shrink the *unfiltered* gauge. Subtracting keeps unfiltered byte-identical.
   The synthetic "not yet attributed" rest has no bound → not toggleable; the last shown segment
   can't be hidden. The `hidden` set + split toggle (`kd:workloadGaugeBy`) live at the
