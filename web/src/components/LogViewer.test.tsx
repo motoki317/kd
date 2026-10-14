@@ -49,6 +49,24 @@ describe('LogViewer', () => {
     expect(select.value).toBe('__all__')
   })
 
+  it.each([
+    { group: 'init', initContainers: ['init-migrate'], ephemeralContainers: [] },
+    { group: 'ephemeral', initContainers: [], ephemeralContainers: ['debugger'] },
+  ])('defaults one app plus an $group container to All containers', ({ initContainers, ephemeralContainers }) => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']}
+        initContainers={initContainers} ephemeralContainers={ephemeralContainers} restarts={0} />
+    ))
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect(select.querySelector('option')?.value).toBe('__all__')
+    expect(select.value).toBe('__all__')
+    const params = new URL(eventSources.at(-1)!.url, window.location.origin).searchParams
+    expect(params.get('container')).toBe('__all__')
+    expect(params.get('timestamps')).toBe('true')
+    expect(params.get('follow')).toBe('true')
+    expect(container.querySelector('.logs-ts')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('defaults a multi-container pod with a `main` to main, not the merged executor noise', () => {
     // An Argo Workflows step pod (`wait` executor sidecar + `main`): the merged view would drown the
     // step's real output in "no artifact sidecars to kill" noise, so prefer `main` like the single
@@ -57,6 +75,17 @@ describe('LogViewer', () => {
     const select = container.querySelector('.logs-container') as HTMLSelectElement
     expect(select.value).toBe('main')
     expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toContain('All containers')
+  })
+
+  it.each([{ apps: ['main'] }, { apps: ['wait', 'main'] }])('keeps main as the default across all groups for $apps', ({ apps }) => {
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={apps}
+        initContainers={['init-migrate']} ephemeralContainers={['debugger']} restarts={0} />
+    ))
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect(select.value).toBe('main')
+    expect([...select.querySelectorAll('option')].map(o => o.value)).toContain('__all__')
+    expect(new URL(eventSources.at(-1)!.url, window.location.origin).searchParams.get('container')).toBe('main')
   })
 
   it('turns "waiting for log output…" into a terminal notice when the tailed resource is deleted', () => {
@@ -153,6 +182,7 @@ describe('LogViewer', () => {
     setEphemeral(['debugger'])
     const select = container.querySelector('.logs-container') as HTMLSelectElement
     expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['App containers', 'Ephemeral containers'])
+    expect([...select.querySelectorAll('option')].map((o) => o.value)).toEqual(['__all__', 'app', 'debugger'])
     expect(select.value).toBe('app')
     expect(eventSources).toHaveLength(1)
   })
@@ -316,6 +346,50 @@ describe('LogViewer', () => {
     // column ON (toggle reflects it) — every line shows its time, the anchor explaining the interleave.
     expect(container.querySelector('.logs-ts')?.getAttribute('aria-pressed')).toBe('true')
     expect(lines.every((l) => l.querySelector('.log-time'))).toBe(true)
+  })
+
+  it('interleaves initial dumps, a late init tail, followed lines, and a newly attached ephemeral source by nanosecond time', () => {
+    const [ephemeral, setEphemeral] = createSignal<string[]>([])
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'worker']}
+        initContainers={['init-migrate', 'proxy']} ephemeralContainers={ephemeral()} restarts={0} status="Running" />
+    ))
+    const es = eventSources.at(-1)!
+    const history = [
+      { container: 'app', time: '2021-05-21T12:00:00.000000002Z', line: 'app boot' },
+      { container: 'proxy', time: '2021-05-21T12:00:00.000000004Z', line: 'proxy up' },
+      { container: 'app', time: '2021-05-21T12:00:00.000000006Z', line: 'app ready' },
+    ]
+    const assertOrder = (expected: typeof history) => {
+      const rows = [...container.querySelectorAll('.log-line')]
+      expect(rows.map(row => ({
+        container: row.querySelector('.log-pod')?.textContent,
+        time: row.querySelector('.log-time')?.getAttribute('title'),
+      }))).toEqual(expected.map(({ container, time }) => ({ container, time })))
+      expected.forEach((entry, i) => expect(rows[i].textContent).toContain(entry.line))
+    }
+    for (const entry of [history[1], history[0], history[2]]) es.emit('log', entry)
+    assertOrder(history)
+
+    const init = { container: 'init-migrate', time: '2021-05-21T12:00:00.000000001Z', line: 'migration complete' }
+    es.emit('log', init)
+    assertOrder([init, ...history])
+
+    const followed = { container: 'app', time: '2021-05-21T12:00:00.000000008Z', line: 'request handled' }
+    es.emit('log', followed)
+    assertOrder([init, ...history, followed])
+
+    const streams = eventSources.length
+    setEphemeral(['debugger'])
+    expect(eventSources).toHaveLength(streams)
+    expect([...container.querySelectorAll<HTMLOptionElement>('optgroup[label="Ephemeral containers"] option')].map(o => o.value)).toEqual(['debugger'])
+    const debug = { container: 'debugger', time: '2021-05-21T12:00:00.000000005Z', line: 'debug inspection' }
+    es.emit('log', debug)
+    assertOrder([init, history[0], history[1], debug, history[2], followed])
+
+    es.emit('log', history[2])
+    assertOrder([init, history[0], history[1], debug, history[2], history[2], followed])
+    expect([...container.querySelectorAll('.logs-pod-chip')].map(chip => chip.textContent)).toEqual(['app', 'debugger', 'init-migrate', 'proxy'])
   })
 
   it('orders aggregated pod logs by emission time without showing timestamps by default', async () => {
