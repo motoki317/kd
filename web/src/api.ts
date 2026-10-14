@@ -58,14 +58,13 @@ export interface NamespacesStreamHandlers {
 
 // A silently stalled SSE connection — a proxy or NAT half-closing a long-lived stream — delivers no
 // data AND fires no `error`, so EventSource's built-in reconnection never triggers and readyState
-// stays OPEN forever. The namespaces and graph feeds both remain open while an operator stays in the
-// same context or namespace, so a silent stall would freeze health or topology without looking
-// disconnected. Log streams deliberately stay unwrapped because reconnecting replays tailed lines.
+// stays OPEN forever: the feed freezes without looking disconnected.
 //
 // watchedEventSource is the backstop: the server sends a `ping` event every ~15s, so if NOTHING (ping,
 // data, or open) arrives within SSE_STALE_MS the connection is presumed dead and the EventSource is
-// transparently re-created in place — no app-state reset; the server re-sends its authoritative
-// snapshot on reconnect. A native `error` is left to EventSource's own retry (the detectable case);
+// re-created in place. On reconnect the graph and namespace feeds receive a full snapshot that
+// replaces their state; log streams receive each container's recent tail again, which LogViewer
+// filters (logResume.ts). A native `error` is left to EventSource's own retry (the detectable case);
 // the timer stays armed as a backstop in case that retry itself silently stalls.
 // During a rolling upgrade, an old-pod-pinned tab may stall until this watchdog reconnects; the
 // transient self-heals, so there is no cross-version compatibility path.
@@ -74,7 +73,11 @@ const SSE_BACKOFF_MAX_MS = 120_000 // ceiling on the gap between reconnect attem
 
 function watchedEventSource(
   url: string,
-  handlers: { events: Record<string, (e: MessageEvent) => void>; onError?: () => void },
+  handlers: {
+    events: Record<string, (e: MessageEvent) => void>
+    onError?: () => void
+    onOpen?: () => void
+  },
 ): () => void {
   let es: EventSource | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -105,7 +108,11 @@ function watchedEventSource(
     const src = new EventSource(url)
     es = src
     const fresh = () => !closed && myGen === gen
-    src.addEventListener('open', () => fresh() && alive())
+    src.addEventListener('open', () => {
+      if (!fresh()) return
+      alive()
+      handlers.onOpen?.()
+    })
     src.addEventListener('ping', () => fresh() && alive())
     for (const [name, fn] of Object.entries(handlers.events)) {
       src.addEventListener(name, (e) => {
@@ -299,13 +306,16 @@ export function streamLogs(
   // A cluster-scoped resource (a Node aggregating its static pods' logs) has an empty namespace;
   // interpolating it raw yields `namespaces//…` which the server 307→404s. Substitute the scope
   // sentinel the server unmaps — same rule as the manifest/events fetches.
-  const es = new EventSource(
+  return watchedEventSource(
     `${ctxBase(ctx)}/namespaces/${encodeURIComponent(ns || CLUSTER_SCOPE)}/resources/${kind}/${encodeURIComponent(name)}/log/stream?${params}`,
+    {
+      events: {
+        log: (e) => h.log(JSON.parse(e.data) as LogEntry),
+        done: () => h.done?.(),
+        gone: () => h.gone?.(),
+      },
+      onError: () => h.error?.(),
+      onOpen: () => h.open?.(),
+    },
   )
-  es.addEventListener('open', () => h.open?.())
-  es.addEventListener('log', (e) => h.log(JSON.parse((e as MessageEvent).data) as LogEntry))
-  es.addEventListener('done', () => h.done?.())
-  es.addEventListener('gone', () => h.gone?.())
-  es.onerror = () => h.error?.()
-  return () => es.close()
 }
