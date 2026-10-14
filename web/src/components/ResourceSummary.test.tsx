@@ -281,7 +281,7 @@ describe('ResourceSummary container status dots', () => {
     expect(init.querySelector('.container-group-note')?.textContent).toBe('done')
     // Both done init cards stay in the DOM (expand to inspect); CSS hides them while closed.
     expect(init.querySelectorAll('.container-card').length).toBe(2)
-    // The app "Containers" section is never collapsible — a plain div, always shown.
+    // The "App containers" section is never collapsible — a plain div, always shown.
     const appGroup = [...container.querySelectorAll('.container-group')].find((g) => !g.classList.contains('container-group-init'))!
     expect(appGroup.tagName.toLowerCase()).toBe('div')
   })

@@ -454,6 +454,7 @@ export default function DetailDrawer(props: Props) {
                 aggregated={!isPod()}
                 containers={node().containers ?? []}
                 initContainers={node().initContainers ?? []}
+                ephemeralContainers={node().ephemeralContainers ?? []}
                 restarts={node().restarts ?? 0}
                 status={node().status}
                 neverRan={
