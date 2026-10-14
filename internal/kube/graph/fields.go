@@ -89,9 +89,11 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	// limit) and the image the manifest actually asked for.
 	resources := map[string]corev1.ResourceRequirements{}
 	images := map[string]string{}
+	sidecars := map[string]bool{}
 	for _, c := range p.Spec.InitContainers {
 		resources[c.Name] = c.Resources
 		images[c.Name] = c.Image
+		sidecars[c.Name] = isSidecar(c)
 	}
 	for _, c := range p.Spec.Containers {
 		resources[c.Name] = c.Resources
@@ -102,7 +104,9 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 	}
 	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses)+len(p.Status.EphemeralContainerStatuses))
 	for _, cs := range p.Status.InitContainerStatuses {
-		out = append(out, containerStat(cs, true, resources[cs.Name], images[cs.Name]))
+		st := containerStat(cs, true, resources[cs.Name], images[cs.Name])
+		st.Sidecar = sidecars[cs.Name]
+		out = append(out, st)
 	}
 	for _, cs := range p.Status.ContainerStatuses {
 		out = append(out, containerStat(cs, false, resources[cs.Name], images[cs.Name]))
@@ -353,14 +357,26 @@ func podLimits(obj runtime.Object) *Resources {
 	return podResources(obj, func(c corev1.Container) corev1.ResourceList { return c.Resources.Limits })
 }
 
+func isSidecar(c corev1.Container) bool {
+	return c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyAlways
+}
+
 func podResources(obj runtime.Object, which func(corev1.Container) corev1.ResourceList) *Resources {
 	p, ok := obj.(*corev1.Pod)
 	if !ok {
 		return nil
 	}
-	// Init containers are excluded: the effective request is max(initmax, sum(app)), but for a
-	// "feel the size" capacity view summing the app containers is the right first cut.
-	cpuMilli, memBytes := sumContainerResource(p.Spec.Containers, which)
+	// The total sums what runs for the pod's whole life: app containers and native sidecars. Regular init
+	// containers and pod overhead are left out. The scheduler's effective request takes a max() over init
+	// peaks instead, which would stop the drawer from subtracting a hidden container's bounds.
+	containers := make([]corev1.Container, 0, len(p.Spec.Containers)+len(p.Spec.InitContainers))
+	containers = append(containers, p.Spec.Containers...)
+	for _, c := range p.Spec.InitContainers {
+		if isSidecar(c) {
+			containers = append(containers, c)
+		}
+	}
+	cpuMilli, memBytes := sumContainerResource(containers, which)
 	if cpuMilli == nil && memBytes == nil {
 		return nil
 	}
