@@ -17,6 +17,64 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+func TestBuildContainerStatusesInSpecOrder(t *testing.T) {
+	g := Build(decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: pod-1
+spec:
+  initContainers:
+    - {name: setup-b, image: example/setup:v2}
+    - {name: setup-a, image: example/setup:v1}
+    - {name: setup-pending}
+  containers:
+    - {name: worker, image: example/worker:v1}
+    - {name: app, image: example/app:v1}
+    - {name: app-pending}
+  ephemeralContainers:
+    - {name: debug-b, image: example/debug:v2}
+    - {name: debug-a, image: example/debug:v1}
+    - {name: debug-pending}
+status:
+  phase: Running
+  initContainerStatuses:
+    - {name: absent-init, image: example/fallback:v1, state: {running: {}}}
+    - {name: setup-a, image: example/cached:alias, state: {running: {}}}
+    - {name: setup-b, image: example/cached:alias, state: {running: {}}}
+  containerStatuses:
+    - {name: absent-app, image: example/fallback:v2, state: {running: {}}}
+    - {name: app, image: example/cached:alias, state: {running: {}}}
+    - {name: extra-app, image: example/fallback:v3, state: {running: {}}}
+    - {name: worker, image: example/cached:alias, state: {running: {}}}
+  ephemeralContainerStatuses:
+    - {name: absent-debug, image: example/fallback:v4, state: {running: {}}}
+    - {name: debug-a, image: example/cached:alias, state: {running: {}}}
+    - {name: debug-b, image: example/cached:alias, state: {running: {}}}
+`))
+	node := nodeByName(g, "Pod", "web-1")
+	if node == nil {
+		t.Fatal("pod is missing")
+	}
+	want := []ContainerStatus{
+		{Name: "setup-b", State: "Running", Init: true, Image: "example/setup:v2"},
+		{Name: "setup-a", State: "Running", Init: true, Image: "example/setup:v1"},
+		{Name: "absent-init", State: "Running", Init: true, Image: "example/fallback:v1"},
+		{Name: "worker", State: "Running", Image: "example/worker:v1"},
+		{Name: "app", State: "Running", Image: "example/app:v1"},
+		{Name: "absent-app", State: "Running", Image: "example/fallback:v2"},
+		{Name: "extra-app", State: "Running", Image: "example/fallback:v3"},
+		{Name: "debug-b", State: "Running", Ephemeral: true, Image: "example/debug:v2"},
+		{Name: "debug-a", State: "Running", Ephemeral: true, Image: "example/debug:v1"},
+		{Name: "absent-debug", State: "Running", Ephemeral: true, Image: "example/fallback:v4"},
+	}
+	if !slices.Equal(node.ContainerStatuses, want) {
+		t.Errorf("statuses = %+v, want spec order with unmatched statuses last: %+v", node.ContainerStatuses, want)
+	}
+}
+
 func TestBuildNativeSidecarResources(t *testing.T) {
 	g := Build(decodeFixture(t, `
 apiVersion: v1
@@ -73,8 +131,8 @@ status:
 	wantInt64(t, "limit cpu", node.Limits.CPUMilli, 140)
 	wantInt64(t, "limit memory", node.Limits.MemBytes, 192*1024*1024)
 	want := []ContainerStatus{
-		{Name: "proxy", State: "Running", Ready: true, Init: true, Sidecar: true, Image: "example/proxy:v1", CPURequestMilli: 20, MemRequestBytes: 32 * 1024 * 1024, CPULimitMilli: 40, MemLimitBytes: 64 * 1024 * 1024},
 		{Name: "init-migrate", State: "Terminated: Completed", Init: true, Image: "example/setup:v1", CPURequestMilli: 900, MemRequestBytes: 1024 * 1024 * 1024, CPULimitMilli: 2000, MemLimitBytes: 2 * 1024 * 1024 * 1024},
+		{Name: "proxy", State: "Running", Ready: true, Init: true, Sidecar: true, Image: "example/proxy:v1", CPURequestMilli: 20, MemRequestBytes: 32 * 1024 * 1024, CPULimitMilli: 40, MemLimitBytes: 64 * 1024 * 1024},
 		{Name: "app", State: "Running", Ready: true, Image: "example/app:v1", CPURequestMilli: 50, MemRequestBytes: 64 * 1024 * 1024, CPULimitMilli: 100, MemLimitBytes: 128 * 1024 * 1024},
 	}
 	if !slices.Equal(node.ContainerStatuses, want) {
@@ -168,8 +226,8 @@ status:
 	want := []ContainerStatus{
 		{Name: "setup", State: "Terminated: Completed", Init: true, Image: "example/setup:v1"},
 		{Name: "app", State: "Running", Ready: true, Image: "example/app:v1"},
-		{Name: "debug-a", State: "Running", Restarts: 2, Ephemeral: true, Image: "example/debug:v1"},
 		{Name: "debug-b", State: "Terminated: Completed", Ephemeral: true, Image: "example/debug:v2"},
+		{Name: "debug-a", State: "Running", Restarts: 2, Ephemeral: true, Image: "example/debug:v1"},
 	}
 	if !slices.Equal(node.ContainerStatuses, want) {
 		t.Errorf("container statuses = %+v, want %+v", node.ContainerStatuses, want)

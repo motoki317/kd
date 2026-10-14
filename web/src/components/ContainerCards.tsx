@@ -40,9 +40,8 @@ function containerDot(cs: ContainerStatus): { color: string; text: string; cls: 
 }
 
 // containerGroups splits a pod's container statuses into the three groups operators reason about
-// separately: init containers (run once, in order, before the app starts), the long-running app
-// containers, and ephemeral containers (used for debugging). Each carries a header label;
-// order within a group is the server's (execution order).
+// separately: init containers (native sidecars included), app containers, and ephemeral (debug)
+// containers. Within a group, cards keep the server's spec order, the same order as the log picker.
 // Returned even when empty so the caller can render the section headers conditionally.
 interface ContainerGroup {
   label: string
