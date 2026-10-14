@@ -58,16 +58,17 @@ export default function LogViewer(props: Props) {
   // Count of new lines arrived while the operator was scrolled up — surfaced in the "Latest"
   // button so they know how much they're missing without scrolling to check.
   const [unseenLines, setUnseenLines] = createSignal(0)
-  // Selected container for a single multi-container pod. Defaults to ALL_CONTAINERS (merged across
-  // every container) when the pod has more than one — a single container hides the cross-talk that
-  // explains most multi-container failures (an app erroring because its sidecar/proxy isn't up yet).
+  const containerCount = () => props.containers.length + (props.initContainers?.length ?? 0) + (props.ephemeralContainers?.length ?? 0)
+  // Selected container for a single pod. Defaults to ALL_CONTAINERS when the pod has more than one
+  // container in total, counting init, app, and ephemeral ones — a single container hides the cross-talk
+  // that explains most multi-container failures (an app erroring because its sidecar/proxy isn't up yet).
   // EXCEPT an Argo Workflows step pod (a `main` container behind a `wait` executor sidecar): there the
   // sidecars are pure executor noise that drowns the step's real output, so defer to defaultLogContainer
   // — which prefers `main` — exactly as the single-stream default does. (Same reason the merged view
   // isn't the default for those: triaging a failed workflow step wants `main`, not "no artifact
   // sidecars to kill".)
   const initialContainer = () =>
-    !props.aggregated && props.containers.length > 1 && !props.containers.includes('main')
+    !props.aggregated && containerCount() > 1 && !props.containers.includes('main')
       ? ALL_CONTAINERS
       : defaultLogContainer(props.containers)
   const [container, setContainer] = createSignal(initialContainer())
@@ -332,13 +333,11 @@ export default function LogViewer(props: Props) {
             spends its one row on controls. */}
         {/* Init or ephemeral containers split the options into optgroups labelled like the drawer's container
             cards, so the operator can tell which is which; app containers alone stay a flat list. */}
-        <Show when={!props.aggregated && props.containers.length + (props.initContainers?.length ?? 0) + (props.ephemeralContainers?.length ?? 0) > 1}>
+        <Show when={!props.aggregated && containerCount() > 1}>
           <select class="logs-container" aria-label="Container" value={container()} onChange={(e) => setContainer(e.currentTarget.value)}>
-            {/* "All containers" (the default for a multi-container pod) merges every app container,
-                colour-labelled and timestamp-ordered, so cross-container cause-and-effect is visible. */}
-            <Show when={props.containers.length > 1}>
-              <option value={ALL_CONTAINERS} selected={container() === ALL_CONTAINERS}>All containers</option>
-            </Show>
+            {/* Every option sets `selected` as well as the select's `value`: a debug container joining swaps the
+                flat list for optgroups, and recreated options would otherwise fall back to the first one. */}
+            <option value={ALL_CONTAINERS} selected={container() === ALL_CONTAINERS}>All containers</option>
             <Show
               when={(props.initContainers?.length ?? 0) > 0 || (props.ephemeralContainers?.length ?? 0) > 0}
               fallback={<For each={props.containers}>{(c) => <option value={c} selected={container() === c}>{c}</option>}</For>}
@@ -665,8 +664,8 @@ export default function LogViewer(props: Props) {
 const LEVEL_LABEL: Record<LogLevel, string> = { error: 'ERR', warn: 'WRN', info: 'INF', debug: 'DBG' }
 // Severity order (most→least urgent) for the per-level filter chips, so the chip row reads ERR→DBG.
 const LEVEL_ORDER: LogLevel[] = ['error', 'warn', 'info', 'debug']
-// ALL_CONTAINERS is the sentinel container selection requesting a single pod's logs merged across every
-// container — the default for a multi-container pod, mirroring the server's allContainers value.
+// ALL_CONTAINERS selects a single pod's logs merged across all its containers, mirroring the server's
+// allContainers value.
 const ALL_CONTAINERS = '__all__'
 
 // labelColor maps a source name (pod, in an aggregated workload stream; container, in a single pod's
