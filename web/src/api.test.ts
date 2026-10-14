@@ -51,21 +51,97 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('streamLogs native reconnect', () => {
-  it('reports open on every connection through the same EventSource', () => {
+describe('streamLogs watchdog', () => {
+  it.each([false, true])('reconnects after the stale window with previous=%s and preserves the URL', previous => {
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', { container: '__all__', tailLines: 200, previous }, { log: () => {} })
+    const first = MockEventSource.last
+    expect(new URL(first.url, window.location.origin).searchParams.get('timestamps')).toBe('true')
+    first.emit('open')
+    vi.advanceTimersByTime(39_999)
+    expect(MockEventSource.count).toBe(1)
+    vi.advanceTimersByTime(1)
+    expect(MockEventSource.count).toBe(2)
+    expect(first.closed).toBe(true)
+    expect(MockEventSource.last.url).toBe(first.url)
+    close()
+  })
+
+  it('reports every native and watchdog open while ignoring superseded opens', () => {
     const opened = vi.fn()
-    const errored = vi.fn()
-    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: () => {}, error: errored, open: opened })
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: () => {}, open: opened })
+    const first = MockEventSource.last
+    first.emit('open')
+    expect(opened).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(40_000)
+    first.emit('open')
+    expect(opened).toHaveBeenCalledTimes(1)
+    const replacement = MockEventSource.last
+    replacement.emit('open')
+    expect(opened).toHaveBeenCalledTimes(2)
+    replacement.error()
+    replacement.emit('open')
+    expect(opened).toHaveBeenCalledTimes(3)
+    vi.advanceTimersByTime(40_000)
+    replacement.emit('open')
+    expect(opened).toHaveBeenCalledTimes(3)
+    MockEventSource.last.emit('open')
+    expect(opened).toHaveBeenCalledTimes(4)
+    close()
+  })
+
+  it('stays on one connection while log events keep arriving', () => {
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: () => {} })
     const es = MockEventSource.last
     es.emit('open')
-    expect(opened).toHaveBeenCalledTimes(1)
-    es.error()
-    expect(errored).toHaveBeenCalledTimes(1)
-    es.emit('open')
-    expect(opened).toHaveBeenCalledTimes(2)
+    for (let i = 0; i < 8; i++) {
+      vi.advanceTimersByTime(15_000)
+      es.emit('log', JSON.stringify({ pod: 'shop-0', line: 'burst' }))
+    }
     expect(MockEventSource.count).toBe(1)
     close()
+  })
+
+  it('re-attaches every log handler and ignores events from a superseded source', () => {
+    const received = vi.fn()
+    const errored = vi.fn()
+    const done = vi.fn()
+    const gone = vi.fn()
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: received, error: errored, done, gone })
+    const first = MockEventSource.last
+    first.emit('open')
+    vi.advanceTimersByTime(40_000)
+    const log = { pod: 'shop-0', container: 'app', line: 'burst' }
+    first.emit('log', JSON.stringify(log))
+    first.emit('done')
+    first.emit('gone')
+    first.error()
+    for (const handler of [received, errored, done, gone]) expect(handler).not.toHaveBeenCalled()
+    const replacement = MockEventSource.last
+    replacement.emit('open')
+    replacement.emit('log', JSON.stringify(log))
+    replacement.emit('done')
+    replacement.emit('gone')
+    replacement.error()
+    expect(received).toHaveBeenCalledExactlyOnceWith(log)
+    for (const handler of [errored, done, gone]) expect(handler).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it.each([false, true])('never reconnects or delivers events after close with an initial open=%s', opened => {
+    const received = vi.fn()
+    const onOpen = vi.fn()
+    const close = streamLogs('ctx', 'shop', 'Pod', 'shop-0', {}, { log: received, open: onOpen })
+    const es = MockEventSource.last
+    if (opened) es.emit('open')
+    close()
+    onOpen.mockClear()
+    es.emit('open')
+    es.emit('log', JSON.stringify({ pod: 'shop-0', line: 'late' }))
+    vi.advanceTimersByTime(300_000)
+    expect(MockEventSource.count).toBe(1)
     expect(es.closed).toBe(true)
+    expect(received).not.toHaveBeenCalled()
+    expect(onOpen).not.toHaveBeenCalled()
   })
 })
 
