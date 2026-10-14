@@ -59,8 +59,8 @@ export function aggregateWorkloadUsage(
   // Per-container sums across the fleet ("is the sidecar overhead material workload-wide?") — the
   // same names recur on every replica, so summing by name keeps the pod-level segment vocabulary.
   const byName = new Map<string, { cpuMilli: number; memBytes: number }>()
-  // Per-container-name bound sums (from each replica's container statuses, app containers only) — the
-  // by-container filter's subtrahend. Kept apart from `byName`: usage comes from metrics, bounds from spec.
+  // Per-container-name bound sums — the by-container filter's subtrahend. Kept apart from `byName`:
+  // usage comes from metrics, bounds from spec.
   const boundsByName = new Map<string, SegBounds>()
   const podShares: PodShare[] = []
   for (const p of pods) {
@@ -85,7 +85,7 @@ export function aggregateWorkloadUsage(
       byName.set(c.name, acc)
     }
     for (const cs of p.containerStatuses ?? []) {
-      if (cs.init) continue // init containers carry no live usage, so they're never a segment
+      if (cs.init && !cs.sidecar) continue // regular init bounds are outside the pod total
       const acc = boundsByName.get(cs.name) ?? {}
       if (cs.cpuRequestMilli != null) acc.reqCpu = (acc.reqCpu ?? 0) + cs.cpuRequestMilli
       if (cs.memRequestBytes != null) acc.reqMem = (acc.reqMem ?? 0) + cs.memRequestBytes

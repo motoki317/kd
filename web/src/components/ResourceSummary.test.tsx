@@ -130,6 +130,65 @@ describe('ResourceSummary container status dots', () => {
     expect([...container.querySelectorAll('.metric-legend-item')].map((e) => e.textContent?.trim())).toEqual(['app', 'sidecar'])
     expect(container.querySelector('.container-card .pod-metrics')).toBeNull()
   })
+  it('subtracts native sidecar bounds while keeping an ephemeral segment without a bound', () => {
+    const mi = 1024 * 1024
+    const { container } = render(() => (
+      <ResourceSummary
+        node={{
+          ...podWith([
+            { name: 'app', ready: true, state: 'Running', cpuRequestMilli: 50, cpuLimitMilli: 100, memRequestBytes: 64 * mi, memLimitBytes: 128 * mi },
+            { name: 'proxy', init: true, sidecar: true, ready: true, state: 'Running', cpuRequestMilli: 20, cpuLimitMilli: 40, memRequestBytes: 32 * mi, memLimitBytes: 64 * mi },
+            { name: 'init-migrate', init: true, ready: false, state: 'Terminated: Completed', cpuRequestMilli: 900, cpuLimitMilli: 2000 },
+            { name: 'debugger', ephemeral: true, ready: false, state: 'Running' },
+          ]),
+          requests: { cpuMilli: 70, memBytes: 96 * mi },
+          limits: { cpuMilli: 140, memBytes: 192 * mi },
+        }}
+        usage={{
+          cpuMilli: 40, memBytes: 73 * mi,
+          containers: [
+            { name: 'app', cpuMilli: 30, memBytes: 50 * mi },
+            { name: 'proxy', cpuMilli: 8, memBytes: 20 * mi },
+            { name: 'debugger', cpuMilli: 2, memBytes: 3 * mi },
+          ],
+        }}
+      />
+    ))
+    const readings = () => [...container.querySelectorAll('.pod-metrics .metric-val')].map(e => e.textContent?.replace(/\s+/g, ' ').trim())
+    const legend = (name: string) => [...container.querySelectorAll('.metric-legend-item')].find(e => e.textContent?.trim() === name) as HTMLElement
+    const full = ['40m / 140m', '40m / 70m', '73Mi / 192Mi', '73Mi / 96Mi']
+    expect(readings()).toEqual(full)
+    expect([...container.querySelectorAll('.metric-legend-item')].map(e => e.textContent?.trim())).toEqual(['app', 'proxy', 'debugger'])
+    expect(container.querySelector('.metric-fill-stack')?.getAttribute('aria-label')).toContain('debugger 2m')
+    legend('debugger').click()
+    expect(readings()).toEqual(['38m / 140m', '38m / 70m', '70Mi / 192Mi', '70Mi / 96Mi'])
+    legend('debugger').click()
+    expect(readings()).toEqual(full)
+    legend('proxy').click()
+    expect(readings()).toEqual(['32m / 100m', '32m / 50m', '53Mi / 128Mi', '53Mi / 64Mi'])
+    legend('proxy').click()
+    expect(readings()).toEqual(full)
+  })
+  it('keeps a metered regular init segment without subtracting its excluded bound or an unmetered app bound', () => {
+    const { container } = render(() => (
+      <ResourceSummary
+        node={{
+          ...podWith([
+            { name: 'app', ready: false, state: 'Waiting: PodInitializing', cpuRequestMilli: 50 },
+            { name: 'proxy', init: true, sidecar: true, ready: true, state: 'Running', cpuRequestMilli: 20 },
+            { name: 'init-migrate', init: true, ready: false, state: 'Running', cpuRequestMilli: 900 },
+          ]),
+          requests: { cpuMilli: 70 },
+        }}
+        usage={{ cpuMilli: 15, containers: [{ name: 'proxy', cpuMilli: 5 }, { name: 'init-migrate', cpuMilli: 10 }] }}
+      />
+    ))
+    const reading = () => container.querySelector('.pod-metrics .metric-val')?.textContent?.replace(/\s+/g, ' ').trim()
+    expect(reading()).toBe('15m / 70m')
+    const init = [...container.querySelectorAll('.metric-legend-item')].find(e => e.textContent?.trim() === 'init-migrate') as HTMLElement
+    init.click()
+    expect(reading()).toBe('5m / 70m')
+  })
   // The legend is also a filter: clicking a container drops it from the gauge, and the fill AND the
   // ceiling regauge against the rest — bounds SUBTRACTED from the pod total (never re-summed from the
   // shown), so an unmetered-but-bounded container the breakdown can't see still counts.
