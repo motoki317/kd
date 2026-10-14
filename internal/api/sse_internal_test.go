@@ -174,7 +174,7 @@ func TestSplitLogTimestamp(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			ts, msg := splitLogTimestamp(tc.line)
+			ts, msg, _ := splitLogTimestamp(tc.line)
 			if ts != tc.wantTime || msg != tc.wantMsg {
 				t.Errorf("splitLogTimestamp(%q) = (%q, %q), want (%q, %q)", tc.line, ts, msg, tc.wantTime, tc.wantMsg)
 			}
