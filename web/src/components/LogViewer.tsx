@@ -4,6 +4,7 @@ import { ansiStyleToCss, hasAnsi, parseAnsi } from '../ansi'
 import { readRawPref, writePref } from '../prefs'
 import { defaultLogContainer, filterLogLines, formatLogTime, parseJsonLog, parseLogfmtLog, parseLogLevel, splitByMatch, type LogLevel } from '../logs'
 import { middleTruncate } from '../names'
+import { createLogResume, LOG_BUFFER_CAPACITY } from '../logResume'
 import CopyButton from './CopyButton'
 
 interface Props {
@@ -95,7 +96,7 @@ export default function LogViewer(props: Props) {
       {(s) => (s.match ? <mark class="log-match">{s.text}</mark> : <>{s.text}</>)}
     </For>
   )
-  // Ask the server to prepend each line's emission time (kubectl --timestamps), rendered dimmed.
+  // Show each line's emission time, dimmed. Display only: every stream already carries the stamps.
   const [timestamps, setTimestamps] = createSignal(false)
   // Combined mode interleaves several containers' streams BY TIME, so the timestamp is what makes the
   // resulting order legible — without it the merge reads as an arbitrarily shuffled blob (dogfooded on a
@@ -271,9 +272,7 @@ export default function LogViewer(props: Props) {
     const name = props.name
     const c = container()
     const prev = previous()
-    // Grouped streams need per-line timestamps to realign source-batched history with the live
-    // interleave. Fetch them even while the visible column remains gated on timestamps().
-    const ts = timestamps() || grouped()
+    const resume = createLogResume()
     setLines([])
     setError(false)
     setCompleted(false)
@@ -285,20 +284,26 @@ export default function LogViewer(props: Props) {
       ns,
       kind,
       name,
-      { tailLines: 200, container: c || undefined, previous: prev, timestamps: ts },
-      (entry) => {
-        setError(false) // a line arriving means the stream recovered
-        setGone(false) // a same-name re-create resumed streaming — the notice is stale
-        // Append every entry verbatim; client-side dedup would drop legitimate repeated lines from
-        // aggregated streams.
-        setLines((prev) => (prev.length > 2000 ? [...prev.slice(-2000), entry] : [...prev, entry]))
-        // While scrolled up, count incoming lines so the Latest button can advertise the backlog.
-        if (!pinned()) setUnseenLines((n) => Math.min(n + 1, 999))
-        scheduleTail()
+      { tailLines: 200, container: c || undefined, previous: prev },
+      {
+        log: (entry) => {
+          setError(false) // a line arriving means the stream recovered
+          setGone(false) // a same-name re-create resumed streaming — the notice is stale
+          if (!resume.accept(entry)) return
+          setLines((prev) => (prev.length >= LOG_BUFFER_CAPACITY ? [...prev.slice(-(LOG_BUFFER_CAPACITY - 1)), entry] : [...prev, entry]))
+          // While scrolled up, count incoming lines so the Latest button can advertise the backlog.
+          if (!pinned()) setUnseenLines((n) => Math.min(n + 1, 999))
+          scheduleTail()
+        },
+        error: () => setError(true),
+        done: () => setCompleted(true),
+        gone: () => setGone(true),
+        open: () => {
+          resume.opened()
+          // An open proves recovery even when the re-sent tail is empty.
+          setError(false)
+        },
       },
-      () => setError(true),
-      () => setCompleted(true),
-      () => setGone(true),
     )
     onCleanup(close)
   })
