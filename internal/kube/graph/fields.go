@@ -63,8 +63,21 @@ func initContainerNames(obj runtime.Object) []string {
 	return names
 }
 
-// containerStatuses condenses a pod's per-container runtime state (init containers first, then app
-// containers), nil for non-pods. It's the "which container is actually broken" detail an aggregate
+// ephemeralContainerNames lists a pod's ephemeral container names in spec order.
+func ephemeralContainerNames(obj runtime.Object) []string {
+	p, ok := obj.(*corev1.Pod)
+	if !ok || len(p.Spec.EphemeralContainers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(p.Spec.EphemeralContainers))
+	for _, c := range p.Spec.EphemeralContainers {
+		names = append(names, c.Name)
+	}
+	return names
+}
+
+// containerStatuses condenses a pod's per-container runtime state (init, then app, then ephemeral),
+// nil for non-pods. It's the "which container is actually broken" detail an aggregate
 // restart count or phase hides.
 func containerStatuses(obj runtime.Object) []ContainerStatus {
 	p, ok := obj.(*corev1.Pod)
@@ -84,12 +97,20 @@ func containerStatuses(obj runtime.Object) []ContainerStatus {
 		resources[c.Name] = c.Resources
 		images[c.Name] = c.Image
 	}
-	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses))
+	for _, c := range p.Spec.EphemeralContainers {
+		images[c.Name] = c.Image
+	}
+	out := make([]ContainerStatus, 0, len(p.Status.InitContainerStatuses)+len(p.Status.ContainerStatuses)+len(p.Status.EphemeralContainerStatuses))
 	for _, cs := range p.Status.InitContainerStatuses {
 		out = append(out, containerStat(cs, true, resources[cs.Name], images[cs.Name]))
 	}
 	for _, cs := range p.Status.ContainerStatuses {
 		out = append(out, containerStat(cs, false, resources[cs.Name], images[cs.Name]))
+	}
+	for _, cs := range p.Status.EphemeralContainerStatuses {
+		st := containerStat(cs, false, corev1.ResourceRequirements{}, images[cs.Name])
+		st.Ephemeral = true
+		out = append(out, st)
 	}
 	if len(out) == 0 {
 		return nil
@@ -111,7 +132,7 @@ func containerStat(cs corev1.ContainerStatus, init bool, res corev1.ResourceRequ
 	// tag for the same digest names an image the operator never deployed (e.g. spec ":v2" shown as an
 	// older ":latest" the node still had cached). The spec tag matches the manifest and the node-level
 	// Images field, keeping one pod's cards consistent with each other; fall back to status only when a
-	// status container has no spec entry (an ephemeral container).
+	// status container has no spec entry.
 	image := specImage
 	if image == "" {
 		image = cs.Image

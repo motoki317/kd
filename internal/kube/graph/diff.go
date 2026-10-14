@@ -121,6 +121,7 @@ func nodeEqual(a, b Node) bool {
 		resourcesEqual(a.Limits, b.Limits) &&
 		slices.Equal(a.OwnerUIDs, b.OwnerUIDs) &&
 		slices.Equal(a.Images, b.Images) && // an in-place image rollout must repaint the node
+		slices.Equal(a.EphemeralContainers, b.EphemeralContainers) &&
 		slices.Equal(a.ContainerStatuses, b.ContainerStatuses) && // readiness/restart/state changes
 		maps.Equal(a.Labels, b.Labels)
 }

@@ -69,48 +69,51 @@ type Node struct {
 	Containers []string `json:"containers,omitempty"` // pod app container names, for the log picker
 	// InitContainers names a pod's init containers (spec order), so the log picker can also reach a
 	// failed init container's logs — the place a pod stuck in Init records WHY. Kept separate from
-	// Containers so the picker can label the two groups (init runs to completion before the app ones).
-	InitContainers []string          `json:"initContainers,omitempty"`
-	Images         []string          `json:"images,omitempty"`        // distinct container images, "what's deployed here"
-	Host           string            `json:"host,omitempty"`          // node a pod is scheduled on (spec.nodeName)
-	Capacity       string            `json:"capacity,omitempty"`      // a Node's CPU/memory/pod capacity, for "how big is this node"
-	Taints         string            `json:"taints,omitempty"`        // a Node's scheduling taints ("key[=value]:Effect, …"), "why won't pods land here"
-	NetPol         []string          `json:"netpol,omitempty"`        // a NetworkPolicy's target + per-direction rule summary, "what does this allow/deny"
-	ClusterIP      string            `json:"clusterIP,omitempty"`     // a Service's reachable address ("headless"/ExternalName target for those)
-	ExternalIP     string            `json:"externalIP,omitempty"`    // a Service's external address (LoadBalancer ingress / externalIPs / "pending")
-	Ports          []string          `json:"ports,omitempty"`         // a Service's port mappings, "port→target[:nodePort]/proto"
-	Selector       string            `json:"selector,omitempty"`      // a Service's pod selector "k=v, k=v" — the "why no endpoints" answer; "" for selectorless
-	NodeSelector   string            `json:"nodeSelector,omitempty"`  // a DaemonSet's node selector — "which nodes does this run on"; matching none explains a 0/0
-	Routes         []string          `json:"routes,omitempty"`        // an Ingress/HTTPRoute/IngressRoute routing table, "match → service:port"
-	Scrapes        []string          `json:"scrapes,omitempty"`       // a ServiceMonitor/VMServiceScrape's target selector + endpoints, "what does this scrape, on which port/path"
-	Rules          []string          `json:"rules,omitempty"`         // a Role/ClusterRole's policy rules, "resources: verbs"
-	RoleRef        string            `json:"roleRef,omitempty"`       // a RoleBinding/ClusterRoleBinding's target role, "Kind/name"
-	Subjects       []string          `json:"subjects,omitempty"`      // a binding's grantees, "Kind: [namespace/]name" (incl. non-node User/Group)
-	DataKeys       []string          `json:"dataKeys,omitempty"`      // a ConfigMap/Secret's data keys, "key · size" (NAMES + sizes only — never values, even for a Secret)
-	SecretType     string            `json:"secretType,omitempty"`    // a Secret's type (Opaque, kubernetes.io/tls, …) — the operationally-important classifier
-	AccessModes    string            `json:"accessModes,omitempty"`   // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
-	StorageClass   string            `json:"storageClass,omitempty"`  // a PVC/PV's storage class (the provisioner/tier — gp3, standard, …)
-	LastRun        string            `json:"lastRun,omitempty"`       // a CronJob's last schedule time (RFC3339) — "did it actually fire?"
-	Active         int32             `json:"active,omitempty"`        // a Job/CronJob's currently-running pods/jobs ("is one running now?")
-	Failed         int32             `json:"failed,omitempty"`        // a Job's failed pod count — burning retries the "succeeded/total" status hides
-	ScaleReplicas  string            `json:"scaleReplicas,omitempty"` // an HPA's replica state, "current[ → desired]" (mid-scale shows the arrow)
-	ScaleRange     string            `json:"scaleRange,omitempty"`    // an HPA's min–max replica bounds ("2–10") — is it at the ceiling?
-	ScaleMetrics   string            `json:"scaleMetrics,omitempty"`  // the metric driving an HPA, "cpu 72% / 80%" (current / target) — why it scales
-	AppDest        string            `json:"appDest,omitempty"`       // an ArgoCD Application's deploy destination ("[cluster/]namespace") — where its workloads live
-	AppRevision    string            `json:"appRevision,omitempty"`   // an ArgoCD Application's synced revision (short SHA / tag) — what's actually deployed
-	QuotaUsage     []string          `json:"quotaUsage,omitempty"`    // a ResourceQuota's consumption, "resource · used / hard" — "how much room is left?"
-	PDBPolicy      string            `json:"pdbPolicy,omitempty"`     // a PodDisruptionBudget's policy, "min 2" / "max 1" (the configured intent)
-	Disruptions    string            `json:"disruptions,omitempty"`   // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks here); "" for non-PDBs
-	Provisioner    string            `json:"provisioner,omitempty"`   // a StorageClass's provisioner (the CSI driver / volume plugin) — its defining fact
-	ReclaimPolicy  string            `json:"reclaimPolicy,omitempty"` // a StorageClass's reclaim policy (Delete/Retain) — does deleting a PVC destroy the data?
-	VolumeBinding  string            `json:"volumeBinding,omitempty"` // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
-	Expandable     bool              `json:"expandable,omitempty"`    // a StorageClass's allowVolumeExpansion — can PVCs on it grow?
-	CertNames      string            `json:"certNames,omitempty"`     // a Certificate's secured names (commonName + dnsNames) — "what does this cert cover?"
-	CertIssuer     string            `json:"certIssuer,omitempty"`    // a Certificate's issuerRef name — the staging-vs-prod issuer mix-up is the classic mis-issue
-	CertExpiry     string            `json:"certExpiry,omitempty"`    // a Certificate's status.notAfter (RFC3339) — "when does it expire?"; empty until first issuance
-	IssuerConfig   string            `json:"issuerConfig,omitempty"`  // an Issuer/ClusterIssuer's backing CA ("ACME · Let's Encrypt", "CA", …) — "what signs my certs?"
-	Labels         map[string]string `json:"labels,omitempty"`
-	OwnerUIDs      []string          `json:"ownerUIDs,omitempty"`
+	// Containers so the picker can group init, app, and ephemeral containers under their own labels.
+	InitContainers []string `json:"initContainers,omitempty"`
+	// EphemeralContainers names a pod's ephemeral containers (spec order), so the log picker can reach
+	// a debug container's output separately from the app containers' logs.
+	EphemeralContainers []string          `json:"ephemeralContainers,omitempty"`
+	Images              []string          `json:"images,omitempty"`        // distinct container images, "what's deployed here"
+	Host                string            `json:"host,omitempty"`          // node a pod is scheduled on (spec.nodeName)
+	Capacity            string            `json:"capacity,omitempty"`      // a Node's CPU/memory/pod capacity, for "how big is this node"
+	Taints              string            `json:"taints,omitempty"`        // a Node's scheduling taints ("key[=value]:Effect, …"), "why won't pods land here"
+	NetPol              []string          `json:"netpol,omitempty"`        // a NetworkPolicy's target + per-direction rule summary, "what does this allow/deny"
+	ClusterIP           string            `json:"clusterIP,omitempty"`     // a Service's reachable address ("headless"/ExternalName target for those)
+	ExternalIP          string            `json:"externalIP,omitempty"`    // a Service's external address (LoadBalancer ingress / externalIPs / "pending")
+	Ports               []string          `json:"ports,omitempty"`         // a Service's port mappings, "port→target[:nodePort]/proto"
+	Selector            string            `json:"selector,omitempty"`      // a Service's pod selector "k=v, k=v" — the "why no endpoints" answer; "" for selectorless
+	NodeSelector        string            `json:"nodeSelector,omitempty"`  // a DaemonSet's node selector — "which nodes does this run on"; matching none explains a 0/0
+	Routes              []string          `json:"routes,omitempty"`        // an Ingress/HTTPRoute/IngressRoute routing table, "match → service:port"
+	Scrapes             []string          `json:"scrapes,omitempty"`       // a ServiceMonitor/VMServiceScrape's target selector + endpoints, "what does this scrape, on which port/path"
+	Rules               []string          `json:"rules,omitempty"`         // a Role/ClusterRole's policy rules, "resources: verbs"
+	RoleRef             string            `json:"roleRef,omitempty"`       // a RoleBinding/ClusterRoleBinding's target role, "Kind/name"
+	Subjects            []string          `json:"subjects,omitempty"`      // a binding's grantees, "Kind: [namespace/]name" (incl. non-node User/Group)
+	DataKeys            []string          `json:"dataKeys,omitempty"`      // a ConfigMap/Secret's data keys, "key · size" (NAMES + sizes only — never values, even for a Secret)
+	SecretType          string            `json:"secretType,omitempty"`    // a Secret's type (Opaque, kubernetes.io/tls, …) — the operationally-important classifier
+	AccessModes         string            `json:"accessModes,omitempty"`   // a PVC/PV's access modes, abbreviated + "/"-joined (RWO, RWX, ROX, RWOP)
+	StorageClass        string            `json:"storageClass,omitempty"`  // a PVC/PV's storage class (the provisioner/tier — gp3, standard, …)
+	LastRun             string            `json:"lastRun,omitempty"`       // a CronJob's last schedule time (RFC3339) — "did it actually fire?"
+	Active              int32             `json:"active,omitempty"`        // a Job/CronJob's currently-running pods/jobs ("is one running now?")
+	Failed              int32             `json:"failed,omitempty"`        // a Job's failed pod count — burning retries the "succeeded/total" status hides
+	ScaleReplicas       string            `json:"scaleReplicas,omitempty"` // an HPA's replica state, "current[ → desired]" (mid-scale shows the arrow)
+	ScaleRange          string            `json:"scaleRange,omitempty"`    // an HPA's min–max replica bounds ("2–10") — is it at the ceiling?
+	ScaleMetrics        string            `json:"scaleMetrics,omitempty"`  // the metric driving an HPA, "cpu 72% / 80%" (current / target) — why it scales
+	AppDest             string            `json:"appDest,omitempty"`       // an ArgoCD Application's deploy destination ("[cluster/]namespace") — where its workloads live
+	AppRevision         string            `json:"appRevision,omitempty"`   // an ArgoCD Application's synced revision (short SHA / tag) — what's actually deployed
+	QuotaUsage          []string          `json:"quotaUsage,omitempty"`    // a ResourceQuota's consumption, "resource · used / hard" — "how much room is left?"
+	PDBPolicy           string            `json:"pdbPolicy,omitempty"`     // a PodDisruptionBudget's policy, "min 2" / "max 1" (the configured intent)
+	Disruptions         string            `json:"disruptions,omitempty"`   // a PDB's currently-allowed voluntary evictions ("0" → a node drain blocks here); "" for non-PDBs
+	Provisioner         string            `json:"provisioner,omitempty"`   // a StorageClass's provisioner (the CSI driver / volume plugin) — its defining fact
+	ReclaimPolicy       string            `json:"reclaimPolicy,omitempty"` // a StorageClass's reclaim policy (Delete/Retain) — does deleting a PVC destroy the data?
+	VolumeBinding       string            `json:"volumeBinding,omitempty"` // a StorageClass's volume binding mode (Immediate / WaitForFirstConsumer)
+	Expandable          bool              `json:"expandable,omitempty"`    // a StorageClass's allowVolumeExpansion — can PVCs on it grow?
+	CertNames           string            `json:"certNames,omitempty"`     // a Certificate's secured names (commonName + dnsNames) — "what does this cert cover?"
+	CertIssuer          string            `json:"certIssuer,omitempty"`    // a Certificate's issuerRef name — the staging-vs-prod issuer mix-up is the classic mis-issue
+	CertExpiry          string            `json:"certExpiry,omitempty"`    // a Certificate's status.notAfter (RFC3339) — "when does it expire?"; empty until first issuance
+	IssuerConfig        string            `json:"issuerConfig,omitempty"`  // an Issuer/ClusterIssuer's backing CA ("ACME · Let's Encrypt", "CA", …) — "what signs my certs?"
+	Labels              map[string]string `json:"labels,omitempty"`
+	OwnerUIDs           []string          `json:"ownerUIDs,omitempty"`
 	// ContainerStatuses is the per-container runtime state of a pod (init containers first), so the
 	// drawer can show which container is unready or crash-looping rather than just an aggregate.
 	ContainerStatuses []ContainerStatus `json:"containerStatuses,omitempty"`
@@ -150,12 +153,13 @@ type Endpoints struct {
 
 // ContainerStatus is one pod container's runtime state, condensed for display.
 type ContainerStatus struct {
-	Name     string `json:"name"`
-	Ready    bool   `json:"ready"`
-	Restarts int32  `json:"restarts,omitempty"`
-	State    string `json:"state"`           // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
-	Init     bool   `json:"init,omitempty"`  // an init container (runs to completion before the app ones)
-	Image    string `json:"image,omitempty"` // the container's SPEC image (what the manifest declared), not status.Image — see containerStat
+	Name      string `json:"name"`
+	Ready     bool   `json:"ready"`
+	Restarts  int32  `json:"restarts,omitempty"`
+	State     string `json:"state"`               // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
+	Init      bool   `json:"init,omitempty"`      // an init container, native sidecars included
+	Ephemeral bool   `json:"ephemeral,omitempty"` // a kubectl debug container has no probes or resources, so readiness and bounds do not apply
+	Image     string `json:"image,omitempty"`     // the container's SPEC image (what the manifest declared), not status.Image — see containerStat
 	// LastTerminated is why the container PREVIOUSLY exited (e.g. "OOMKilled (exit 137)"), from
 	// lastState.terminated. Empty unless the container restarted at least once — it answers "why did
 	// this restart" for a now-Running container, the actionable signal otherwise buried in the manifest.

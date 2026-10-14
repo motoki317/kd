@@ -131,6 +131,7 @@ var changedFieldCases = []struct {
 	{"RoleRef", func(n *Node) { n.RoleRef = "ClusterRole/admin" }},
 	{"Subjects", func(n *Node) { n.Subjects = []string{"Group: b"} }},
 	{"Images", func(n *Node) { n.Images = []string{"img:2"} }},
+	{"EphemeralContainers", func(n *Node) { n.EphemeralContainers = []string{"debugger"} }},
 	{"ContainerStatuses", func(n *Node) {
 		n.ContainerStatuses = []ContainerStatus{{Name: "app", Ready: false, State: "Waiting: CrashLoopBackOff"}}
 	}},

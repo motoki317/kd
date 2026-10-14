@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,105 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
+
+func TestBuildEphemeralContainers(t *testing.T) {
+	g := Build(decodeFixture(t, `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  uid: pod-1
+spec:
+  initContainers:
+    - name: setup
+      image: example/setup:v1
+  containers:
+    - name: app
+      image: example/app:v1
+  ephemeralContainers:
+    - name: debug-b
+      image: example/debug:v2
+    - name: debug-a
+      image: example/debug:v1
+status:
+  phase: Running
+  initContainerStatuses:
+    - name: setup
+      state:
+        terminated:
+          reason: Completed
+  containerStatuses:
+    - name: app
+      ready: true
+      state:
+        running: {}
+  ephemeralContainerStatuses:
+    - name: debug-a
+      image: example/debug:cached-alias
+      ready: false
+      restartCount: 2
+      state:
+        running: {}
+    - name: debug-b
+      image: example/debug:cached-alias
+      ready: false
+      state:
+        terminated:
+          reason: Completed
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-2
+  namespace: shop
+  uid: pod-2
+spec:
+  containers:
+    - name: app
+status:
+  phase: Running
+  containerStatuses:
+    - name: app
+      ready: true
+      state:
+        running: {}
+`))
+	node := nodeByName(g, "Pod", "web-1")
+	if node == nil {
+		t.Fatal("pod with ephemeral containers is missing")
+	}
+	if want := []string{"debug-b", "debug-a"}; !slices.Equal(node.EphemeralContainers, want) {
+		t.Errorf("ephemeral names = %v, want spec order %v", node.EphemeralContainers, want)
+	}
+	want := []ContainerStatus{
+		{Name: "setup", State: "Terminated: Completed", Init: true, Image: "example/setup:v1"},
+		{Name: "app", State: "Running", Ready: true, Image: "example/app:v1"},
+		{Name: "debug-a", State: "Running", Restarts: 2, Ephemeral: true, Image: "example/debug:v1"},
+		{Name: "debug-b", State: "Terminated: Completed", Ephemeral: true, Image: "example/debug:v2"},
+	}
+	if !slices.Equal(node.ContainerStatuses, want) {
+		t.Errorf("container statuses = %+v, want %+v", node.ContainerStatuses, want)
+	}
+	data, err := json.Marshal(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"ephemeralContainers":["debug-b","debug-a"]`) || !strings.Contains(string(data), `"ephemeral":true`) {
+		t.Errorf("ephemeral fields missing on wire: %s", data)
+	}
+	ordinary := nodeByName(g, "Pod", "web-2")
+	if ordinary == nil {
+		t.Fatal("ordinary pod is missing")
+	}
+	data, err = json.Marshal(ordinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"ephemeral`) {
+		t.Errorf("ordinary pod must omit ephemeral fields: %s", data)
+	}
+}
 
 // KindOf/GVKOf recover an object's kind+apiVersion from the Go type when TypeMeta is empty — the
 // shape every object has coming off an informer lister. These power the manifest handler (stamping
