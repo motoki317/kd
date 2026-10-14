@@ -476,7 +476,35 @@ describe('DetailDrawer', () => {
     expect(names).toEqual(['wait-for-db', 'migrate', 'app', 'sidecar'])
     const groups = [...container.querySelectorAll('.container-group-head')].map((e) => e.textContent)
     expect(groups[0]).toContain('Init containers')
-    expect(groups[1]).toContain('Containers')
+    expect(groups[1]).toContain('App containers')
+  })
+
+  it('updates the cards and log picker when an ephemeral container joins the selected pod', () => {
+    const [node, setNode] = createSignal<KNode>({
+      id: 'pod-1', kind: 'Pod', name: 'web-1', namespace: 'shop', health: 'Healthy', loggable: true,
+      containers: ['app'], containerStatuses: [{ name: 'app', ready: true, state: 'Running' }],
+    })
+    const { container } = render(() => <DetailDrawer ctx="test-ctx" node={node()} onClose={() => {}} />)
+    expect(container.querySelector('.logs-container')).toBeNull()
+    const drawer = container.querySelector('aside.drawer')
+    setNode({ ...node(), ephemeralContainers: ['debugger'] })
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['App containers', 'Ephemeral containers'])
+    expect([...select.querySelectorAll('option')].map((o) => o.value)).toEqual(['app', 'debugger'])
+    expect(select.value).toBe('app')
+    setNode({
+      ...node(),
+      containerStatuses: [
+        ...node().containerStatuses!,
+        { name: 'debugger', ready: false, state: 'Running', ephemeral: true, image: 'example/debug:v1' },
+      ],
+    })
+    expect([...container.querySelectorAll('.container-group-head')].map((g) => g.firstChild?.textContent)).toEqual([
+      'App containers', 'Ephemeral containers',
+    ])
+    expect(container.querySelector('.container-card.not-ready')).toBeNull()
+    expect(container.querySelector('aside.drawer')).toBe(drawer)
+    expect(select.value).toBe('app')
   })
 
   it('renders each workload image (no per-container runtime to pair with)', () => {

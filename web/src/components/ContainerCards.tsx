@@ -7,14 +7,19 @@ import { relativeAge } from '../time'
 import type { ContainerStatus, ContainerUsage, Health, ResourceUsage } from '../types'
 import ImageRef from './ImageRef'
 
+function isAppContainer(cs: ContainerStatus): boolean {
+  return !cs.init && !cs.ephemeral
+}
+
 // containerHealth maps a container's runtime state to the shared Health enum so its dot uses the
 // same colors as the rest of the UI: a crash-loop or non-Completed exit is Degraded, a not-yet-ready
 // Running container is Progressing. A clean exit (Terminated: Completed) is NOT Healthy here — green
 // is reserved for a live, ready container (see containerDot); it resolves to Unknown and is recoloured.
+// A running ephemeral container has no probes, so ready=false is not a failure.
 function containerHealth(cs: ContainerStatus): Health {
   if (cs.state.startsWith('Waiting:')) return 'Degraded'
   if (cs.state.startsWith('Terminated:')) return cs.state.includes('Completed') ? 'Unknown' : 'Degraded'
-  if (cs.state === 'Running') return cs.ready ? 'Healthy' : 'Progressing'
+  if (cs.state === 'Running') return cs.ready || cs.ephemeral ? 'Healthy' : 'Progressing'
   return 'Unknown'
 }
 
@@ -34,9 +39,10 @@ function containerDot(cs: ContainerStatus): { color: string; text: string; cls: 
   return { color: healthColor(h), text: healthTextColor(h), cls: `h-${h.toLowerCase()}` }
 }
 
-// containerGroups splits a pod's container statuses into the two groups operators reason about
-// separately: init containers (run once, in order, before the app starts) and the long-running app
-// containers. Each carries a header label; order within a group is the server's (execution order).
+// containerGroups splits a pod's container statuses into the three groups operators reason about
+// separately: init containers (run once, in order, before the app starts), the long-running app
+// containers, and ephemeral containers (used for debugging). Each carries a header label;
+// order within a group is the server's (execution order).
 // Returned even when empty so the caller can render the section headers conditionally.
 interface ContainerGroup {
   label: string
@@ -46,7 +52,8 @@ interface ContainerGroup {
 function containerGroups(statuses: ContainerStatus[]): ContainerGroup[] {
   return [
     { label: 'Init containers', init: true, items: statuses.filter((c) => c.init) },
-    { label: 'Containers', init: false, items: statuses.filter((c) => !c.init) },
+    { label: 'App containers', init: false, items: statuses.filter(isAppContainer) },
+    { label: 'Ephemeral containers', init: false, items: statuses.filter((c) => c.ephemeral) },
   ]
 }
 
@@ -60,7 +67,7 @@ function initSectionCollapsed(g: ContainerGroup): boolean {
 
 // ContainerCards is a Pod's per-container section: runtime state and the per-container essentials
 // belong together — "which container is broken?" — so each container is one card pairing status
-// (dot + state + restarts) with its last exit and image, grouped into Init vs app containers with
+// (dot + state + restarts) with its last exit and image, grouped into Init / App / Ephemeral containers with
 // counts. A floating tag (":latest"/none) flags an image a rolling restart could silently change.
 // Resource bars live in the drawer's segmented top gauge (the summed fill split by container), not
 // here; the one per-container resource signal kept on the card is the OOM alarm (memory ≥90% of a
@@ -75,7 +82,7 @@ export default function ContainerCards(props: {
   const usageFor = (cs: ContainerStatus): ContainerUsage | undefined => {
     const breakdown = props.usage?.containers
     if (breakdown) return breakdown.find((c) => c.name === cs.name)
-    if (props.usage && !cs.init && props.statuses.filter((s) => !s.init).length === 1) {
+    if (props.usage && isAppContainer(cs) && props.statuses.filter(isAppContainer).length === 1) {
       return { name: cs.name, cpuMilli: props.usage.cpuMilli, memBytes: props.usage.memBytes }
     }
     return undefined
@@ -106,7 +113,8 @@ export default function ContainerCards(props: {
                   // A Running container that isn't ready is failing its readiness probe — say so
                   // in words (explicit over implicit): the blue dot alone doesn't explain why the
                   // pod shows 0/1 and the Service routes nothing to it.
-                  const notReady = cs.state === 'Running' && !cs.ready && !cs.init
+                  // Ephemeral containers have no probes, so readiness does not apply to them.
+                  const notReady = cs.state === 'Running' && !cs.ready && isAppContainer(cs)
                   // The one per-container emergency worth words: memory over 90% of its own limit
                   // means an OOM kill is imminent — explicit text on top of the bar's near-full read.
                   // Returns the reading itself so the message quotes the SAME value it was judged on
@@ -119,7 +127,7 @@ export default function ContainerCards(props: {
                     <div
                       class="container-card"
                       classList={{
-                        'not-ready': !cs.ready && !cs.init && !isDone(cs),
+                        'not-ready': !cs.ready && isAppContainer(cs) && !isDone(cs),
                         [dot.cls]: true,
                       }}
                     >

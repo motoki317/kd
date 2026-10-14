@@ -1,4 +1,5 @@
-import { cleanup, render } from '@solidjs/testing-library'
+import { cleanup, fireEvent, render } from '@solidjs/testing-library'
+import { createSignal } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LogViewer from './LogViewer'
 
@@ -93,14 +94,67 @@ describe('LogViewer', () => {
     expect(initOpts).toEqual(['init-fs', 'init-migrate'])
   })
 
-  it('keeps the picker a flat list (no optgroups) when a pod has no init containers', () => {
+  it('keeps the picker a flat list for app-only pods', () => {
     const { container } = render(() => (
       <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'sidecar']} initContainers={[]} restarts={0} />
     ))
     const select = container.querySelector('.logs-container')!
     expect(select.querySelectorAll('optgroup').length).toBe(0)
-    // "All containers" + the two app containers, flat (no init containers to split out).
+    // "All containers" + the two app containers, flat (no init or ephemeral containers to split out).
     expect(select.querySelectorAll('option').length).toBe(3)
+  })
+
+  it('groups init, app, and ephemeral choices in order and streams the selected debug container', () => {
+    const { container } = render(() => (
+      <LogViewer
+        ctx="test-ctx" {...base} aggregated={false} restarts={0}
+        containers={['app', 'worker']} initContainers={['setup-b', 'setup-a']} ephemeralContainers={['debug-b', 'debug-a']}
+      />
+    ))
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    const groups = [...select.querySelectorAll('optgroup')]
+    expect(groups.map((g) => g.label)).toEqual(['Init containers', 'App containers', 'Ephemeral containers'])
+    expect(groups.map((g) => [...g.querySelectorAll('option')].map((o) => o.value))).toEqual([
+      ['setup-b', 'setup-a'], ['app', 'worker'], ['debug-b', 'debug-a'],
+    ])
+    fireEvent.change(select, { target: { value: 'debug-a' } })
+    expect(eventSources.at(-1)!.url).toContain('container=debug-a')
+  })
+
+  it('keeps the selected worker stream when an ephemeral join replaces the flat picker options', () => {
+    const [ephemeral, setEphemeral] = createSignal<string[]>([])
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app', 'worker']} ephemeralContainers={ephemeral()} restarts={0} />
+    ))
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect(select.querySelectorAll('optgroup')).toHaveLength(0)
+    fireEvent.change(select, { target: { value: 'worker' } })
+    expect(select.value).toBe('worker')
+    const stream = eventSources.at(-1)!
+    const connections = eventSources.length
+    expect(new URL(stream.url, window.location.origin).searchParams.get('container')).toBe('worker')
+    setEphemeral(['debugger'])
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['App containers', 'Ephemeral containers'])
+    expect([...select.querySelectorAll('option')].map((o) => o.value)).toEqual(['__all__', 'app', 'worker', 'debugger'])
+    expect(select.value).toBe('worker')
+    expect(eventSources).toHaveLength(connections)
+    expect(eventSources.at(-1)).toBe(stream)
+    fireEvent.change(select, { target: { value: '__all__' } })
+    expect(eventSources).toHaveLength(connections + 1)
+    expect(new URL(eventSources.at(-1)!.url, window.location.origin).searchParams.get('container')).toBe('__all__')
+  })
+
+  it('shows a picker with an ephemeral optgroup when a debug container joins a one-container pod without reconnecting the app stream', () => {
+    const [ephemeral, setEphemeral] = createSignal<string[]>([])
+    const { container } = render(() => (
+      <LogViewer ctx="test-ctx" {...base} aggregated={false} containers={['app']} ephemeralContainers={ephemeral()} restarts={0} />
+    ))
+    expect(container.querySelector('.logs-container')).toBeNull()
+    setEphemeral(['debugger'])
+    const select = container.querySelector('.logs-container') as HTMLSelectElement
+    expect([...select.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['App containers', 'Ephemeral containers'])
+    expect(select.value).toBe('app')
+    expect(eventSources).toHaveLength(1)
   })
 
   it('always offers a timestamps toggle', () => {

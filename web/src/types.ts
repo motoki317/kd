@@ -92,6 +92,7 @@ export interface KNode {
   restarts?: number
   containers?: string[]
   initContainers?: string[]
+  ephemeralContainers?: string[]
   images?: string[]
   host?: string
   capacity?: string
@@ -151,6 +152,7 @@ export interface ContainerStatus {
   restarts?: number
   state: string // "Running", "Waiting: CrashLoopBackOff", "Terminated: Completed"
   init?: boolean
+  ephemeral?: boolean
   image?: string // the actually-running image, paired with the container in the drawer
   lastTerminated?: string // why it PREVIOUSLY exited ("OOMKilled (exit 137)") — explains a restart
   // This container's OWN limits (absent = unbounded), gauging its usage share against its bound —
