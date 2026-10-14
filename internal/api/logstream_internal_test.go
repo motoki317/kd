@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -51,6 +53,23 @@ func TestLogStreamKeyIncludesPodUIDAndContainer(t *testing.T) {
 	}
 	if logStreamKey(a, "main") == logStreamKey(a, "sidecar") {
 		t.Fatalf("different containers share key %q", logStreamKey(a, "main"))
+	}
+}
+
+func TestPruneLogResumesKeepsLiveAndStreamingTargets(t *testing.T) {
+	resumes := map[string]*logResume{
+		"live-uid/main":    {lines: map[string]int{"tail": 1}},
+		"active-uid/main":  {lines: map[string]int{"tail": 1}},
+		"removed-uid/main": {lines: map[string]int{"tail": 1}},
+	}
+	streaming := map[string]bool{"active-uid/main": true}
+	pruneLogResumes(resumes, streaming, map[string]bool{"live-uid": true})
+	if len(resumes) != 2 || resumes["live-uid/main"] == nil || resumes["active-uid/main"] == nil {
+		t.Fatalf("resumes = %v, want only the live and streaming targets", resumes)
+	}
+	pruneLogResumes(resumes, streaming, nil)
+	if len(resumes) != 1 || resumes["active-uid/main"] == nil {
+		t.Fatalf("resumes without a root = %v, want only the streaming target", resumes)
 	}
 }
 
@@ -734,6 +753,114 @@ func TestSuperviseLogStreamsReattachesAfterRunningContainerTerminatesAtSameResta
 	}
 }
 
+func TestSuperviseLogStreamsResumesWithoutRepeatingDeliveredTail(t *testing.T) {
+	const older = "2021-05-21T12:00:00.799799344Z"
+	const last = "2021-05-21T12:00:00.799799345Z"
+	const newer = "2021-05-21T12:00:00.799799346Z"
+	for _, container := range []string{"setup", "debugger"} {
+		for _, timestamps := range []bool{false, true} {
+			for _, finalStamp := range []string{last, newer} {
+				name := fmt.Sprintf("%s/timestamps=%t/final=%s", container, timestamps, finalStamp)
+				t.Run(name, func(t *testing.T) {
+					useFastLogResolveInterval(t)
+					var mu sync.Mutex
+					pod := testLogPodWithInitContainerStatus("shop-0-uid", corev1.PodRunning, container, corev1.ContainerState{
+						Running: &corev1.ContainerStateRunning{},
+					}, 4)
+					if container == "debugger" {
+						pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{{
+							EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: container},
+						}}
+						pod.Status.EphemeralContainerStatuses = pod.Status.InitContainerStatuses
+						pod.Spec.InitContainers, pod.Status.InitContainerStatuses = nil, nil
+					}
+					current := pod
+					requests := 0
+					requestedStamps := []string{}
+					firstEOF := make(chan struct{})
+					releaseEOF := sync.OnceFunc(func() { close(firstEOF) })
+					t.Cleanup(releaseEOF)
+					prefix := older + " earlier\n" + last + " burst\n" + last + " burst\n"
+					client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+						mu.Lock()
+						requests++
+						attempt := requests
+						requestedStamps = append(requestedStamps, r.URL.Query().Get("timestamps"))
+						mu.Unlock()
+						var body io.Reader = strings.NewReader(prefix + finalStamp + " burst\n")
+						if attempt == 1 {
+							body = io.MultiReader(strings.NewReader(prefix), eofAfter{firstEOF})
+						}
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Header:     http.Header{"Content-Type": []string{"text/plain"}},
+							Body:       io.NopCloser(body),
+							Request:    r,
+						}, nil
+					}))
+					resolved := make(chan struct{}, 16)
+					st := &stubLogStore{client: client, objs: func() []runtime.Object {
+						mu.Lock()
+						p := current
+						mu.Unlock()
+						resolved <- struct{}{}
+						return []runtime.Object{p}
+					}}
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					lines := make(chan logLine, 8)
+					go superviseLogStreams(ctx, st, pod.Namespace, "Pod", pod.Name, container, timestamps, ptr(200), func(string) bool { return true }, lines, nil)
+					wantLine := func(stamp, message string) {
+						t.Helper()
+						select {
+						case got := <-lines:
+							want := logLine{Pod: pod.Name, Container: container, Line: message}
+							if timestamps {
+								want.Time = stamp
+							}
+							if got != want {
+								t.Fatalf("log line = %+v, want %+v", got, want)
+							}
+							wire, err := json.Marshal(got)
+							if err != nil || (!timestamps && strings.Contains(string(wire), `"time":`)) {
+								t.Fatalf("log wire = %s, err = %v, client timestamps = %t", wire, err, timestamps)
+							}
+						case <-time.After(time.Second):
+							t.Fatalf("timed out waiting for %q at %s", message, stamp)
+						}
+					}
+					wantLine(older, "earlier")
+					wantLine(last, "burst")
+					wantLine(last, "burst")
+					mu.Lock()
+					current = current.DeepCopy()
+					statuses := current.Status.InitContainerStatuses
+					if container == "debugger" {
+						statuses = current.Status.EphemeralContainerStatuses
+					}
+					statuses[0].State = corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}
+					mu.Unlock()
+					releaseEOF()
+					wantLine(finalStamp, "burst")
+					waitForFreshLogResolves(t, resolved, 5)
+					mu.Lock()
+					gotRequests := requests
+					gotStamps := slices.Clone(requestedStamps)
+					mu.Unlock()
+					if gotRequests != 2 || !slices.Equal(gotStamps, []string{"true", "true"}) {
+						t.Fatalf("GetLogs requests = %d, timestamps = %v, want 2 with timestamps internally", gotRequests, gotStamps)
+					}
+					select {
+					case got := <-lines:
+						t.Fatalf("delivered tail repeated as %+v", got)
+					default:
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestSuperviseLogStreamsRetriesCompletedPodAfterOpenFailure(t *testing.T) {
 	useFastLogResolveInterval(t)
 
@@ -912,6 +1039,129 @@ func (r eofAfter) Read([]byte) (int, error) {
 	return 0, io.EOF
 }
 
+func TestScanLogStreamResumeMatchesEqualStampMultisets(t *testing.T) {
+	const stamp = "2021-05-21T12:00:00.799799345Z"
+	pod := testLogPod("shop-0-uid", corev1.PodRunning, "main")
+	type attachment struct {
+		lines []string
+		want  []string
+	}
+	for _, tc := range []struct {
+		name        string
+		attachments []attachment
+	}{
+		{"multiplicity across reattachments", []attachment{
+			{[]string{"burst", "burst"}, []string{"burst", "burst"}},
+			{[]string{"burst", "burst", "burst"}, []string{"burst"}},
+			{[]string{"burst"}, nil},
+			{[]string{"burst", "burst", "burst", "burst"}, []string{"burst"}},
+		}},
+		{"sliding tail", []attachment{
+			{[]string{"A", "B"}, []string{"A", "B"}},
+			{[]string{"B", "C"}, []string{"C"}},
+			{[]string{"C", "B", "A", "D", "D"}, []string{"D", "D"}},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resume := &logResume{}
+			for i, step := range tc.attachments {
+				var input strings.Builder
+				for _, line := range step.lines {
+					input.WriteString(stamp + " " + line + "\n")
+				}
+				out := make(chan logLine, 8)
+				if !scanLogStream(context.Background(), strings.NewReader(input.String()), pod, "main", true, resume, out) {
+					t.Fatalf("attachment %d did not end cleanly", i)
+				}
+				close(out)
+				var got []string
+				for line := range out {
+					got = append(got, line.Line)
+				}
+				if !slices.Equal(got, step.want) {
+					t.Fatalf("attachment %d lines = %v, want %v", i, got, step.want)
+				}
+			}
+		})
+	}
+}
+
+func TestScanLogStreamResumeComparesParsedTimesAndPassesUnstampedLines(t *testing.T) {
+	const stamp = "2021-05-21T12:00:00.799799345Z"
+	parsed, err := time.Parse(time.RFC3339Nano, stamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume := &logResume{stamp: parsed, lines: map[string]int{"repeated": 1}}
+	out := make(chan logLine, 8)
+	pod := testLogPod("shop-0-uid", corev1.PodRunning, "main")
+	input := strings.Join([]string{
+		"2021-05-21T14:00:00.799799344+02:00 older",
+		"2021-05-21T14:00:00.799799345+02:00 repeated",
+		"2021-05-21T11:00:00.799799346-01:00 new",
+		"plain log line",
+		"not-a-stamp message",
+	}, "\n")
+	if !scanLogStream(context.Background(), strings.NewReader(input), pod, "main", true, resume, out) {
+		t.Fatal("scan did not end cleanly")
+	}
+	close(out)
+	var got []logLine
+	for line := range out {
+		got = append(got, line)
+	}
+	want := []logLine{
+		{Pod: pod.Name, Container: "main", Time: "2021-05-21T11:00:00.799799346-01:00", Line: "new"},
+		{Pod: pod.Name, Container: "main", Line: "plain log line"},
+		{Pod: pod.Name, Container: "main", Line: "not-a-stamp message"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("resumed lines = %+v, want %+v", got, want)
+	}
+}
+
+func TestStreamContainerLogsOneShotKeepsTimestampOptionsAndRepeatedLines(t *testing.T) {
+	for _, previous := range []bool{false, true} {
+		for _, timestamps := range []bool{false, true} {
+			t.Run(fmt.Sprintf("previous=%t/timestamps=%t", previous, timestamps), func(t *testing.T) {
+				const stamp = "2021-05-21T12:00:00.799799345Z"
+				client := newLogStreamTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					q := r.URL.Query()
+					if q.Get("follow") == "true" || (q.Get("previous") == "true") != previous || (q.Get("timestamps") == "true") != timestamps {
+						t.Fatalf("one-shot query = %s, previous = %t, timestamps = %t", r.URL.RawQuery, previous, timestamps)
+					}
+					line := "burst\n"
+					if timestamps {
+						line = stamp + " " + line
+					}
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     http.Header{"Content-Type": []string{"text/plain"}},
+						Body:       io.NopCloser(strings.NewReader(line + line)),
+						Request:    r,
+					}, nil
+				}))
+				pod := testLogPod("shop-0-uid", corev1.PodRunning, "main")
+				out := make(chan logLine, 8)
+				opened, cleanEOF := streamContainerLogs(context.Background(), client, pod, "main", false, previous, timestamps, nil, nil, out)
+				if !opened || !cleanEOF || len(out) != 2 {
+					t.Fatalf("one-shot opened = %t, cleanEOF = %t, lines = %d, want true, true, 2", opened, cleanEOF, len(out))
+				}
+				for range 2 {
+					got := <-out
+					want := logLine{Pod: pod.Name, Container: "main", Line: "burst"}
+					if timestamps {
+						want.Time = stamp
+					}
+					if got != want {
+						t.Fatalf("one-shot line = %+v, want %+v", got, want)
+					}
+				}
+			})
+		}
+	}
+}
+
 // scanLogStream must stay quiet when the client closes the viewer (ctx cancelled → context.Canceled
 // from the body read) — that is normal teardown on every tailed pod/container, not an anomaly. It must
 // still warn on a genuine abnormal end (an oversized line → bufio.ErrTooLong; a mid-stream read
@@ -977,7 +1227,7 @@ func TestScanLogStreamEndReporting(t *testing.T) {
 				}
 				close(done)
 			}()
-			gotCleanEOF := scanLogStream(ctx, c.reader(ctx), pod, "api-b", false, out)
+			gotCleanEOF := scanLogStream(ctx, c.reader(ctx), pod, "api-b", false, nil, out)
 			close(out)
 			<-done
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -156,6 +157,26 @@ type drainMark struct {
 	gen      int32
 }
 
+// logResume records what one container's follow stream delivered: the newest kubelet timestamp and how
+// many times each line text appeared at it. A re-attach re-sends the tail, so the next stream drops
+// lines stamped earlier, and at that timestamp drops each text only as often as it was delivered.
+// Matching texts rather than counting lines keeps a new line that happens to share the timestamp.
+type logResume struct {
+	stamp time.Time
+	lines map[string]int
+}
+
+// pruneLogResumes drops the records of pods the follow no longer resolves, so a long workload follow
+// does not keep the last lines of every pod it has seen. A running stream keeps its record.
+func pruneLogResumes(resumes map[string]*logResume, streaming, presentUIDs map[string]bool) {
+	for key := range resumes {
+		uid, _, _ := strings.Cut(key, "/")
+		if !presentUIDs[uid] && !streaming[key] {
+			delete(resumes, key)
+		}
+	}
+}
+
 // superviseLogStreams keeps a follow stream's per-container streamers in sync with the resource's
 // live descendant pods. It re-resolves on a short interval and starts a streamer for any target not
 // already being followed, so pods created mid-rollout (a new ReplicaSet's pods, a restarted
@@ -168,10 +189,18 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 	var mu sync.Mutex
 	streaming := make(map[string]bool)
 	drained := make(map[string]drainMark)
+	resumes := make(map[string]*logResume)
 
 	wasGone := false
 	resolve := func() {
 		pods, rootExists := podsForResource(logSnapshot(store, ns, canReadPodLogs), kind, name)
+		presentUIDs := make(map[string]bool, len(pods))
+		for _, pod := range pods {
+			presentUIDs[string(pod.UID)] = true
+		}
+		mu.Lock()
+		pruneLogResumes(resumes, streaming, presentUIDs)
+		mu.Unlock()
 		if !rootExists {
 			if !wasGone && gone != nil {
 				wasGone = true
@@ -204,15 +233,21 @@ func superviseLogStreams(ctx context.Context, store Store, ns, kind, name, conta
 					continue
 				}
 				streaming[key] = true
+				resume := resumes[key]
+				if resume == nil {
+					resume = &logResume{}
+					resumes[key] = resume
+				}
 				mu.Unlock()
 				go func(pod *corev1.Pod, container, key string, terminalAtAttach, generationDrainAtAttach bool, generationAtAttach int32) {
-					opened, cleanEOF := streamContainerLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, out)
+					opened, cleanEOF := streamContainerLogs(ctx, store.Client(), pod, container, true, false, timestamps, tail, resume, out)
 					mu.Lock()
 					if opened && cleanEOF {
 						// Phase is the only reliable finality signal when an API-legal terminal pod omits
 						// container statuses, so it remains a permanent belt around generation tracking.
 						if terminalAtAttach {
 							drained[key] = drainMark{terminal: true}
+							delete(resumes, key)
 						} else if generationDrainAtAttach {
 							// A stopped generation cannot gain bytes until kubelet creates its replacement,
 							// while a running or status-less clean EOF may only be a dropped live tail.
@@ -308,7 +343,7 @@ func podsForResource(objs []runtime.Object, kind, name string) ([]*corev1.Pod, b
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) {
 	containers := targetContainers(pod, container)
 	if len(containers) == 1 {
-		streamContainerLogs(ctx, client, pod, containers[0], follow, previous, timestamps, tail, out)
+		streamContainerLogs(ctx, client, pod, containers[0], follow, previous, timestamps, tail, nil, out)
 		return
 	}
 	// The client timestamp-orders the shared channel so init and ephemeral output interleave with app logs.
@@ -317,7 +352,7 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, pod *corev1
 		wg.Add(1)
 		go func(container string) {
 			defer wg.Done()
-			streamContainerLogs(ctx, client, pod, container, follow, previous, timestamps, tail, out)
+			streamContainerLogs(ctx, client, pod, container, follow, previous, timestamps, tail, nil, out)
 		}(target)
 	}
 	wg.Wait()
@@ -345,8 +380,9 @@ func targetContainers(pod *corev1.Pod, container string) []string {
 
 // streamContainerLogs follows one container of one pod, tagging each line with both names so the client
 // can label by pod (aggregated workload) or by container (a single pod's merged all-container view).
-func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, out chan<- logLine) (opened, cleanEOF bool) {
-	opts := &corev1.PodLogOptions{Container: container, Follow: follow, Previous: previous, Timestamps: timestamps}
+func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *corev1.Pod, container string, follow, previous, timestamps bool, tail *int64, resume *logResume, out chan<- logLine) (opened, cleanEOF bool) {
+	// Resume filtering needs kubelet stamps even when the client hides timestamps.
+	opts := &corev1.PodLogOptions{Container: container, Follow: follow, Previous: previous, Timestamps: timestamps || resume != nil}
 	if tail != nil {
 		opts.TailLines = tail
 	}
@@ -355,24 +391,56 @@ func streamContainerLogs(ctx context.Context, client kubernetes.Interface, pod *
 		return false, false
 	}
 	defer stream.Close()
-	return true, scanLogStream(ctx, stream, pod, container, timestamps, out)
+	return true, scanLogStream(ctx, stream, pod, container, timestamps, resume, out)
 }
 
 // scanLogStream reads lines from an opened pod-log stream, tagging each with the pod and container
 // names, until the stream ends or ctx is cancelled. Split from streamContainerLogs so the read loop
 // and its end-of-stream reporting are testable over a plain io.Reader.
-func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container string, timestamps bool, out chan<- logLine) (cleanEOF bool) {
+func scanLogStream(ctx context.Context, rc io.Reader, pod *corev1.Pod, container string, timestamps bool, resume *logResume, out chan<- logLine) (cleanEOF bool) {
+	var previous time.Time
+	var remaining map[string]int
+	if resume != nil {
+		previous = resume.stamp
+		remaining = maps.Clone(resume.lines)
+	}
 	scanner := bufio.NewScanner(rc)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		ll := logLine{Pod: pod.Name, Container: container, Line: scanner.Text()}
-		if timestamps {
+		var stamp time.Time
+		if timestamps || resume != nil {
 			// kubelet prepends "<RFC3339Nano> " to each line; split it into its own field so the
 			// client can render it dimmed (and the raw line stays clean for copy).
-			ll.Time, ll.Line = splitLogTimestamp(ll.Line)
+			ll.Time, ll.Line, stamp = splitLogTimestamp(ll.Line)
+		}
+		stamped := ll.Time != ""
+		if remaining != nil && stamped {
+			if stamp.Before(previous) {
+				continue
+			}
+			if stamp.Equal(previous) && remaining[ll.Line] > 0 {
+				remaining[ll.Line]--
+				continue
+			}
+		}
+		if !timestamps {
+			ll.Time = ""
 		}
 		select {
 		case out <- ll:
+			if resume != nil && stamped {
+				if resume.lines == nil || stamp.After(resume.stamp) {
+					resume.stamp = stamp
+					if resume.lines == nil {
+						resume.lines = make(map[string]int)
+					}
+					clear(resume.lines)
+				}
+				if stamp.Equal(resume.stamp) {
+					resume.lines[ll.Line]++
+				}
+			}
 		case <-ctx.Done():
 			return false
 		}
@@ -408,17 +476,18 @@ func defaultLogContainer(pod *corev1.Pod) string {
 }
 
 // splitLogTimestamp separates the kubelet timestamp prefix ("<RFC3339Nano> message") from the
-// message. It returns ("", line) unchanged when the first token isn't a timestamp, so a stray line
+// message. It returns ("", line, time.Time{}) unchanged when the first token isn't a timestamp, so a stray line
 // without the prefix is never mangled.
-func splitLogTimestamp(line string) (ts, msg string) {
+func splitLogTimestamp(line string) (ts, msg string, stamp time.Time) {
 	tok, rest, ok := strings.Cut(line, " ")
 	if !ok {
-		return "", line
+		return "", line, time.Time{}
 	}
-	if _, err := time.Parse(time.RFC3339Nano, tok); err != nil {
-		return "", line
+	parsed, err := time.Parse(time.RFC3339Nano, tok)
+	if err != nil {
+		return "", line, time.Time{}
 	}
-	return tok, rest
+	return tok, rest, parsed
 }
 
 func parseTail(s string) *int64 {
